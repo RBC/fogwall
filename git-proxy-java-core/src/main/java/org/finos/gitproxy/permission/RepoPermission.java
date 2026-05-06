@@ -13,8 +13,8 @@ import org.finos.gitproxy.db.model.MatchType;
  * {@link #value} at {@link #provider}.
  *
  * <p>{@link #target} selects which part of the repo URL is compared (default {@link MatchTarget#SLUG});
- * {@link #matchType} controls how {@link #value} is interpreted: {@code LITERAL} for exact equality, {@code GLOB} for
- * {@code *}/{@code ?} wildcards, {@code REGEX} for full Java regex.
+ * {@link #matchType} controls how {@link #value} is interpreted: {@code GLOB} for {@code *}/{@code ?} wildcards
+ * (default), {@code LITERAL} for exact equality, {@code REGEX} for full Java regex.
  */
 @Data
 @Builder
@@ -35,9 +35,9 @@ public class RepoPermission {
     /** Pattern to match against the {@link #target} portion of the URL. */
     private String value;
 
-    /** How {@link #value} is interpreted when matching. Defaults to {@link MatchType#LITERAL}. */
+    /** How {@link #value} is interpreted when matching. Defaults to {@link MatchType#GLOB}. */
     @Builder.Default
-    private MatchType matchType = MatchType.LITERAL;
+    private MatchType matchType = MatchType.GLOB;
 
     @Builder.Default
     private Operations operations = Operations.PUSH;
