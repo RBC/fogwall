@@ -191,12 +191,23 @@ jobs:
       - name: Promote build image to release tags
         run: |
           VERSION=${GITHUB_REF_NAME}
-          MAJOR=$(echo ${VERSION} | cut -d. -f1)
-          MINOR=$(echo ${VERSION} | cut -d. -f1-2)
           SOURCE="ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}"
-          docker buildx imagetools create \
-            --tag "ghcr.io/${{ github.repository }}:${VERSION}" \
-            --tag "ghcr.io/${{ github.repository }}:${MINOR}" \
-            --tag "ghcr.io/${{ github.repository }}:${MAJOR}" \
-            --tag "ghcr.io/${{ github.repository }}:latest" \
-            ${SOURCE}
+
+          if [[ "${VERSION}" == *-* ]]; then
+            # Pre-release (contains -): push the explicit version tag only.
+            # Major/minor/latest convenience tags must not point at a pre-release.
+            echo "Pre-release detected (${VERSION}) — skipping major/minor/latest tags"
+            docker buildx imagetools create \
+              --tag "ghcr.io/${{ github.repository }}:${VERSION}" \
+              ${SOURCE}
+          else
+            # Stable release: push all convenience tags.
+            MAJOR=$(echo ${VERSION} | cut -d. -f1)
+            MINOR=$(echo ${VERSION} | cut -d. -f1-2)
+            docker buildx imagetools create \
+              --tag "ghcr.io/${{ github.repository }}:${VERSION}" \
+              --tag "ghcr.io/${{ github.repository }}:${MINOR}" \
+              --tag "ghcr.io/${{ github.repository }}:${MAJOR}" \
+              --tag "ghcr.io/${{ github.repository }}:latest" \
+              ${SOURCE}
+          fi
