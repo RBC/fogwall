@@ -11,7 +11,7 @@ on:
 
 jobs:
   grype-npm:
-    name: CVE / npm
+    name: npm
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -56,7 +56,7 @@ jobs:
           retention-days: 30
 
   grype-gradle:
-    name: CVE / Gradle
+    name: Gradle
     if: true
     runs-on: ubuntu-latest
     permissions:
@@ -103,7 +103,7 @@ jobs:
           retention-days: 30
 
   depcheck:
-    name: CVE / Dependency Check (Gradle)
+    name: Dependency Check (Gradle)
     if: false # disabled — NVD API reliability issues; re-enable when stable
     runs-on: ubuntu-latest
     permissions:

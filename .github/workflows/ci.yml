@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   build-and-test:
-    name: CI / Build & Test
+    name: Build & Test
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -58,7 +58,7 @@ jobs:
           retention-days: 14
 
   docker-smoke-test:
-    name: CI / Docker Smoke Test (${{ matrix.db }})
+    name: Docker Smoke Test (${{ matrix.db }})
     runs-on: ubuntu-latest
     if: >
       github.ref == 'refs/heads/main' ||
@@ -121,7 +121,7 @@ jobs:
           fi
 
   dependency-submission:
-    name: CI / Dependency Submission
+    name: Dependency Submission
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
     permissions:
@@ -140,7 +140,7 @@ jobs:
         uses: gradle/actions/dependency-submission@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # ratchet:gradle/actions/dependency-submission@v6
 
   e2e-test:
-    name: CI / E2E Test
+    name: E2E Test
     runs-on: ubuntu-latest
     # E2E tests spin up containers; only run on push/PR to the main branches
     # to avoid burning minutes on every feature branch commit.
