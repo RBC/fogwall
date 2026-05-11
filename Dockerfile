@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1@sha256:2780b5c3bab67f1f76c781860de469442999ed1a0d7992a5efdf2cffc0e3d769
 
 # ── Build stage ──────────────────────────────────────────────────────────────
-FROM docker.io/eclipse-temurin:25-jdk@sha256:c3a5cfd77c9a43dd95269a266290d365b79b174381d8336a3f76a7ae117beefa AS builder
+FROM docker.io/eclipse-temurin:26-jdk@sha256:2784bd6a3c45161c142eb7cb07dbcde4a45476ba8443920741f31d3d84178fdc AS builder
 
 # Install Node.js directly from the official distribution with SHA256 verification.
 # To update: download the new tarball, verify against nodejs.org/dist/vX.Y.Z/SHASUMS256.txt,
@@ -56,7 +56,7 @@ RUN sed -i \
     git-proxy-java-dashboard/build/install/git-proxy-java-dashboard/bin/git-proxy-java-dashboard
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
-FROM docker.io/eclipse-temurin:25-jre@sha256:671061ae5a8f0d6827816e15bc39d21e224c43ff96998a97cd0d3989c4d17815
+FROM docker.io/eclipse-temurin:26-jre@sha256:ebb7f006e9e5b8a5267b5910eb907922b99c251d702755e3cf3d9e2a2270090c
 
 WORKDIR /app
 
