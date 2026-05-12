@@ -200,7 +200,7 @@ jobs:
 
       - name: Promote build image to release tags
         run: |
-          VERSION=${GITHUB_REF_NAME}
+          VERSION=${GITHUB_REF_NAME#v}
           SOURCE="${IMAGE}@${{ steps.build.outputs.digest }}"
 
           if [[ "${VERSION}" == *-* ]]; then
