@@ -50,6 +50,11 @@ public class DiffGenerationHook implements GitProxyHook {
             }
 
             String refName = cmd.getRefName();
+
+            if (refName.startsWith("refs/tags/")) {
+                log.debug("Skipping diff generation for tag push: {}", refName);
+                continue;
+            }
             String commitFrom = cmd.getOldId().name();
             String commitTo = cmd.getNewId().name();
             boolean isNewBranch = ObjectId.zeroId().equals(cmd.getOldId());

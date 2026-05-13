@@ -171,10 +171,7 @@ export function PushList({ currentUser }: PushListProps) {
   // Reload counts when filter-relevant state changes, with auto-refresh
   useEffect(() => {
     void Promise.resolve().then(() => loadCounts(filterRepo, myPushesOnly))
-    const timer = setInterval(
-      () => loadCounts(filterRepo, myPushesOnly),
-      10_000,
-    )
+    const timer = setInterval(() => loadCounts(filterRepo, myPushesOnly), 10_000)
     return () => clearInterval(timer)
   }, [filterRepo, myPushesOnly, loadCounts])
 

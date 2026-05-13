@@ -272,6 +272,22 @@ class ScanDiffFilterTest {
                 "content should include the matching line, got: " + scanStep.getContent());
     }
 
+    // ---- tag push → skipped entirely, no diff step ----
+
+    @Test
+    void tagPush_skipsDiffGeneration() throws Exception {
+        GitRequestDetails details = pushDetails(baseCommit, cleanCommit);
+        details.setBranch("refs/tags/v1.0.0");
+        FakeResponse resp = new FakeResponse();
+
+        filterNoRules().doHttpFilter(mockRequest(details), resp.mock);
+
+        assertFalse(resp.committed.get());
+        boolean hasDiffStep = details.getSteps().stream().anyMatch(s -> "diff".equals(s.getStepName()));
+        assertFalse(hasDiffStep, "tag push must not generate a diff step");
+        assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
+    }
+
     // ---- diff step content contains the actual diff text ----
 
     @Test

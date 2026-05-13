@@ -63,6 +63,11 @@ public class ScanDiffFilter extends AbstractProviderAwareGitProxyFilter {
             return;
         }
 
+        if (requestDetails.isTagPush()) {
+            log.debug("Skipping diff generation for tag push: {}", requestDetails.getBranch());
+            return;
+        }
+
         String fromCommit = requestDetails.getCommitFrom();
         String toCommit = requestDetails.getCommitTo();
         if (toCommit == null || toCommit.isEmpty()) {
