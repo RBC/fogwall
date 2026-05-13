@@ -34,6 +34,12 @@ export async function fetchPushes(params: URLSearchParams) {
   return res.json()
 }
 
+export async function fetchPushCounts(params: URLSearchParams): Promise<Record<string, number>> {
+  const res = await apiFetch('/api/push/counts?' + params)
+  if (!res.ok) throw new Error('Failed to fetch push counts')
+  return res.json()
+}
+
 export async function fetchPush(id: string) {
   const url = id.includes('_') ? `/api/push/by-ref/${id}` : `/api/push/${id}`
   const res = await apiFetch(url)

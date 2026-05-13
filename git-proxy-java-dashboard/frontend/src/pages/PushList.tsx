@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { approvePush, fetchPushes, rejectPush } from '../api'
+import { approvePush, fetchPushCounts, fetchPushes, rejectPush } from '../api'
 import { StatusBadge } from '../components/StatusBadge'
 import type { CurrentUser, PushRecord, PushStatus } from '../types'
 
@@ -142,17 +142,16 @@ export function PushList({ currentUser }: PushListProps) {
     [currentUser],
   )
 
-  const loadCounts = useCallback(async () => {
-    const results: Partial<Record<string, number>> = {}
-    await Promise.all(
-      STATUSES.map(async (s) => {
-        const params = new URLSearchParams({ status: s, limit: '1000' })
-        const data: PushRecord[] = await fetchPushes(params)
-        results[s] = data.length
-      }),
-    )
-    setCounts(results)
-  }, [])
+  const loadCounts = useCallback(
+    async (search: string, myOnly: boolean) => {
+      const params = new URLSearchParams()
+      if (search) params.set('search', search)
+      if (myOnly && currentUser?.username) params.set('user', currentUser.username)
+      const data = await fetchPushCounts(params)
+      setCounts(data)
+    },
+    [currentUser],
+  )
 
   // Clear selection when leaving PENDING filter
   useEffect(() => {
@@ -169,10 +168,15 @@ export function PushList({ currentUser }: PushListProps) {
     return () => clearInterval(timer)
   }, [filterStatus, filterRepo, myPushesOnly, newestFirst, page, load])
 
-  // Load counts once on mount
+  // Reload counts when filter-relevant state changes, with auto-refresh
   useEffect(() => {
-    void Promise.resolve().then(() => loadCounts())
-  }, [loadCounts])
+    void Promise.resolve().then(() => loadCounts(filterRepo, myPushesOnly))
+    const timer = setInterval(
+      () => loadCounts(filterRepo, myPushesOnly),
+      10_000,
+    )
+    return () => clearInterval(timer)
+  }, [filterRepo, myPushesOnly, loadCounts])
 
   function handleRepoChange(value: string) {
     setFilterRepo(value)

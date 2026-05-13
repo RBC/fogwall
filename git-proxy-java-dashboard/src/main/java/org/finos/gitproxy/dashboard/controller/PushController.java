@@ -86,6 +86,27 @@ public class PushController {
     }
 
     /**
+     * Count push records grouped by status. Accepts the same filter params as {@link #list} except {@code status} —
+     * returns counts for all statuses so the caller can populate all filter tabs in one round trip.
+     */
+    @Operation(operationId = "countPushes", summary = "Count push records by status")
+    @GetMapping("/counts")
+    public Map<String, Long> counts(
+            @RequestParam(required = false) String project,
+            @RequestParam(required = false) String repo,
+            @RequestParam(required = false) String user,
+            @RequestParam(required = false) String search) {
+
+        PushQuery.PushQueryBuilder query = PushQuery.builder();
+        if (project != null && !project.isBlank()) query.project(project);
+        if (repo != null && !repo.isBlank()) query.repoName(repo);
+        if (user != null && !user.isBlank()) query.user(user);
+        if (search != null && !search.isBlank()) query.search(search);
+
+        return pushStore.countByStatus(query.build());
+    }
+
+    /**
      * Look up a push record by its commit reference ({commitFrom}_{commitTo}). Used by the transparent proxy flow where
      * we link to a push before it has been saved with a UUID.
      */
