@@ -18,6 +18,7 @@ import org.eclipse.jgit.transport.PacketLineOut;
 import org.eclipse.jgit.transport.SideBandOutputStream;
 import org.finos.gitproxy.db.model.PushStep;
 import org.finos.gitproxy.db.model.StepStatus;
+import org.finos.gitproxy.git.GitClientUtils;
 import org.finos.gitproxy.git.GitRequestDetails;
 import org.finos.gitproxy.git.HttpOperation;
 // import org.springframework.core.Ordered;
@@ -130,7 +131,7 @@ public interface GitProxyFilter extends Filter {
             // so we must not overwrite that with a spurious PASS.
             int stepsAfter = details != null ? details.getSteps().size() : 0;
             if (stepsAfter == stepsBefore) {
-                recordStep(httpRequest, StepStatus.PASS, null, null);
+                recordStep(httpRequest, StepStatus.PASS, "", "");
             }
         }
         chain.doFilter(request, response);
@@ -222,7 +223,7 @@ public interface GitProxyFilter extends Filter {
                 .stepName(getStepName())
                 .stepOrder(this.getOrder())
                 .status(status)
-                .content(content)
+                .content(GitClientUtils.stripColors(content))
                 .blockedMessage(status == StepStatus.BLOCKED ? reason : null)
                 .errorMessage(status == StepStatus.FAIL ? reason : null)
                 .build();

@@ -45,6 +45,7 @@ public class PushStorePersistenceHook {
      * sort validation steps in the same order as proxy mode.
      */
     private static final Map<String, Integer> HOOK_STEP_ORDER = Map.of(
+            "checkUrlRules", 100,
             "checkAuthorEmails", 2100,
             "checkCommitMessages", 2200,
             "scanDiff", 2300,
@@ -142,7 +143,7 @@ public class PushStorePersistenceHook {
                                     .stepName(issue.hookName())
                                     .stepOrder(stepOrder)
                                     .status(StepStatus.FAIL)
-                                    .content(issue.detail())
+                                    .content(GitClientUtils.stripColors(issue.detail()))
                                     .errorMessage(issue.summary())
                                     .build());
                             fallbackOrder++;

@@ -126,12 +126,18 @@ public class IdentityVerificationHook implements GitProxyHook {
             validationContext.addIssue(
                     STEP_NAME, "Commit identity does not match push user " + user.getUsername(), detail);
         } else {
-            // WARN mode — push proceeds; violations are surfaced via the validation summary, not
-            // immediate per-message streaming, so they appear in the correct order with context.
+            // WARN mode — push proceeds but developer is warned at the terminal and in the dashboard.
             log.warn(
                     "Identity verification warnings for push user '{}': {} mismatch(es)",
                     user.getUsername(),
                     violations.size());
+            rp.sendMessage(GitClientUtils.color(
+                    YELLOW,
+                    sym(WARNING) + "  Identity warning: " + violations.size() + " commit email(s) not registered to "
+                            + user.getUsername()));
+            for (String v : violations) {
+                rp.sendMessage("  " + v);
+            }
             pushContext.addStep(PushStep.builder()
                     .stepName(STEP_NAME)
                     .stepOrder(ORDER)

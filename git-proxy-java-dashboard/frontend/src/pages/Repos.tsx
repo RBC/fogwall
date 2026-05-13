@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { createAccessRule, deleteAccessRule, fetchProviders } from '../api'
+import { createUrlRule, deleteUrlRule, fetchProviders } from '../api'
 
 interface ActiveRepo {
   provider: string
@@ -183,7 +183,7 @@ function AddRuleModal({
       const raw = form.pattern.trim()
       const encoded = form.patternType === 'REGEX' ? `regex:${raw}` : raw
 
-      const payload: Parameters<typeof createAccessRule>[0] = {
+      const payload: Parameters<typeof createUrlRule>[0] = {
         access: form.access,
         operations: form.operations,
         provider: form.provider || undefined,
@@ -193,7 +193,7 @@ function AddRuleModal({
       else if (form.targetType === 'owner') payload.owner = encoded
       else payload.name = encoded
 
-      const created = await createAccessRule(payload)
+      const created = await createUrlRule(payload)
       onCreated(created)
       onClose()
     } catch (e) {
@@ -217,9 +217,9 @@ function AddRuleModal({
         </div>
 
         <div className="space-y-3">
-          {/* Access type */}
+          {/* Rule type */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Access type</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Rule type</label>
             <div className="flex gap-3">
               {(['ALLOW', 'DENY'] as const).map((a) => (
                 <label key={a} className="flex items-center gap-1.5 cursor-pointer">
@@ -412,7 +412,7 @@ export function Repos() {
   }, [tab])
 
   const deleteRule = async (id: string) => {
-    await deleteAccessRule(id)
+    await deleteUrlRule(id)
     setRules((prev) => prev.filter((r) => r.id !== id))
   }
 

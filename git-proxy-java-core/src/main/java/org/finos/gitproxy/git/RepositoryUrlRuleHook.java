@@ -44,7 +44,12 @@ public class RepositoryUrlRuleHook implements GitProxyHook {
         String repoSlug = pushContext.getRepoSlug();
         if (repoSlug == null || repoSlug.isBlank()) {
             log.warn("No repoSlug in push context — cannot evaluate URL rules, blocking push (fail-closed)");
-            blockPush(rp, commands, "Repository path unavailable");
+            blockPush(
+                    rp,
+                    commands,
+                    "Repository path unavailable",
+                    "Push Blocked - Repository Not Allowed",
+                    "Repository path could not be determined. Contact an administrator.");
             return;
         }
 
@@ -59,7 +64,13 @@ public class RepositoryUrlRuleHook implements GitProxyHook {
         switch (result) {
             case UrlRuleEvaluator.Result.Denied d -> {
                 log.debug("Push blocked by deny rule: {}", d.ruleId());
-                blockPush(rp, commands, "Repository denied by access rule");
+                blockPush(
+                        rp,
+                        commands,
+                        "Repository blocked by deny rule",
+                        "Push Blocked - Repository Denied",
+                        "Pushes to this repository are not permitted.\n\n"
+                                + "This repository has been explicitly denied by an administrator.");
             }
             case UrlRuleEvaluator.Result.Allowed a -> {
                 log.debug("Push allowed by rule: {}", a.ruleId());
@@ -67,22 +78,24 @@ public class RepositoryUrlRuleHook implements GitProxyHook {
             }
             case UrlRuleEvaluator.Result.NotAllowed n -> {
                 log.debug("Push blocked — no rule matched");
-                blockPush(rp, commands, "Repository is not in the allow list");
+                blockPush(
+                        rp,
+                        commands,
+                        "Repository not in allow list",
+                        "Push Blocked - Repository Not Allowed",
+                        "Pushes to this repository are not permitted.\n\n"
+                                + "Contact an administrator to add this repository to the allow rules.");
             }
         }
     }
 
-    private void blockPush(ReceivePack rp, Collection<ReceiveCommand> commands, String reason) {
-        String detail = GitClientUtils.format(
-                sym(NO_ENTRY) + "  Push Blocked - Repository Not Allowed",
-                sym(CROSS_MARK)
-                        + "  "
-                        + reason
-                        + ".\n\nContact an administrator to add this repository to the allow rules.",
-                RED,
-                null);
+    private void blockPush(
+            ReceivePack rp, Collection<ReceiveCommand> commands, String reason, String title, String message) {
+        String detail =
+                GitClientUtils.format(sym(NO_ENTRY) + "  " + title, sym(CROSS_MARK) + "  " + message, RED, null);
         if (validationContext != null) {
-            validationContext.addIssue("RepositoryUrlRuleHook", reason, detail);
+            validationContext.addIssue("checkUrlRules", reason, detail);
+            // PushStorePersistenceHook creates the FAIL step from the issue; don't also add it to pushContext
         } else {
             rp.sendMessage(detail);
             for (ReceiveCommand cmd : commands) {
@@ -90,13 +103,13 @@ public class RepositoryUrlRuleHook implements GitProxyHook {
                     cmd.setResult(ReceiveCommand.Result.REJECTED_OTHER_REASON, reason);
                 }
             }
+            pushContext.addStep(PushStep.builder()
+                    .stepName("checkUrlRules")
+                    .stepOrder(ORDER)
+                    .status(StepStatus.FAIL)
+                    .content(reason)
+                    .build());
         }
-        pushContext.addStep(PushStep.builder()
-                .stepName("checkUrlRules")
-                .stepOrder(ORDER)
-                .status(StepStatus.FAIL)
-                .content(reason)
-                .build());
     }
 
     private void recordPass() {

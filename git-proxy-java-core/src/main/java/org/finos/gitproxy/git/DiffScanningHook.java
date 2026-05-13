@@ -61,7 +61,7 @@ public class DiffScanningHook implements GitProxyHook {
 
                 if (!violations.isEmpty()) {
                     for (Violation violation : violations) {
-                        validationContext.addIssue("scanDiff", violation.reason(), "ref: " + cmd.getRefName());
+                        validationContext.addIssue("scanDiff", violation.reason(), violation.formattedDetail());
                         logs.add("FAIL: " + violation.reason());
                     }
                     anyFailed = true;

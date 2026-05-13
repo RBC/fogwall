@@ -34,6 +34,8 @@ public class SecretScanningHook implements GitProxyHook {
 
     private static final int ORDER = 340;
     private static final String STEP_NAME = "scanSecrets";
+    private static final String REMEDIATION_HINT =
+            "→ Rotate any exposed credentials and remove the secret from your commit history before pushing.";
 
     private final SecretScanConfig config;
     private final ValidationContext validationContext;
@@ -68,7 +70,7 @@ public class SecretScanningHook implements GitProxyHook {
 
             for (GitleaksRunner.Finding f : result.get()) {
                 String msg = f.toMessage();
-                allViolations.add(new Violation(msg, msg, sym(CROSS_MARK) + "  " + msg));
+                allViolations.add(new Violation(msg, msg, sym(CROSS_MARK) + "  " + msg + "\n" + REMEDIATION_HINT));
             }
         }
 
@@ -76,7 +78,7 @@ public class SecretScanningHook implements GitProxyHook {
             if (config.isEnabled()) {
                 String msg = "Secret scanning failed — scanner error or unavailable. "
                         + "Push blocked because secret-scan is enabled. Check server logs for details.";
-                allViolations.add(new Violation(msg, msg, sym(CROSS_MARK) + "  " + msg));
+                allViolations.add(new Violation(msg, msg, sym(CROSS_MARK) + "  " + msg + "\n" + REMEDIATION_HINT));
             } else {
                 pushContext.addStep(PushStep.builder()
                         .stepName(STEP_NAME)

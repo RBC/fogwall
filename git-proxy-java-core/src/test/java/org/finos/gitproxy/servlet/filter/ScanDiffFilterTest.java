@@ -244,6 +244,34 @@ class ScanDiffFilterTest {
         assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
     }
 
+    // ---- blocked step has specific errorMessage and matching line in content ----
+
+    @Test
+    void blockedLiteral_stepHasSpecificErrorMessageAndMatchingLine() throws Exception {
+        GitRequestDetails details = pushDetails(cleanCommit, blockedCommit);
+        FakeResponse resp = new FakeResponse();
+
+        filterWithLiteral("supersecret").doHttpFilter(mockRequest(details), resp.mock);
+
+        PushStep scanStep = details.getSteps().stream()
+                .filter(s -> "scanDiff".equals(s.getStepName()) && s.getStatus() == StepStatus.FAIL)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("scanDiff FAIL step not found"));
+
+        assertNotNull(scanStep.getErrorMessage(), "errorMessage must be set");
+        assertTrue(
+                scanStep.getErrorMessage().contains("supersecret"),
+                "errorMessage should name the blocked term, got: " + scanStep.getErrorMessage());
+        assertFalse(
+                scanStep.getErrorMessage().equals("Diff contains blocked content"),
+                "errorMessage must be violation-specific, not a generic label");
+
+        assertNotNull(scanStep.getContent(), "content must be set");
+        assertTrue(
+                scanStep.getContent().contains("supersecret"),
+                "content should include the matching line, got: " + scanStep.getContent());
+    }
+
     // ---- diff step content contains the actual diff text ----
 
     @Test

@@ -33,6 +33,8 @@ import org.finos.gitproxy.git.HttpOperation;
 public class SecretScanningFilter extends AbstractGitProxyFilter {
 
     private static final int ORDER = 340;
+    private static final String REMEDIATION_HINT =
+            "→ Rotate any exposed credentials and remove the secret from your commit history before pushing.";
 
     private final Supplier<SecretScanConfig> configSupplier;
     private final GitleaksRunner runner;
@@ -114,7 +116,7 @@ public class SecretScanningFilter extends AbstractGitProxyFilter {
         log.warn("Secret scan found {} finding(s)", findings.size());
         for (GitleaksRunner.Finding f : findings) {
             String msg = f.toMessage();
-            recordIssue(request, msg, sym(CROSS_MARK) + "  " + msg);
+            recordIssue(request, msg, sym(CROSS_MARK) + "  " + msg + "\n" + REMEDIATION_HINT);
         }
     }
 }

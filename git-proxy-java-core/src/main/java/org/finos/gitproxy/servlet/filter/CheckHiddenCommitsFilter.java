@@ -109,7 +109,7 @@ public class CheckHiddenCommitsFilter extends AbstractProviderAwareGitProxyFilte
 
         } catch (Exception e) {
             log.warn("Skipping hidden commits check: {}", e.getMessage());
-            recordStep(request, StepStatus.SKIPPED, null, e.getMessage());
+            recordStep(request, StepStatus.SKIPPED, "", e.getMessage());
         }
     }
 

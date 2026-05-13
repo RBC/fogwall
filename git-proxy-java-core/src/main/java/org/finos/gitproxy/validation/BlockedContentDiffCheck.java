@@ -1,9 +1,9 @@
 package org.finos.gitproxy.validation;
 
-import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.finos.gitproxy.config.CommitConfig;
@@ -28,7 +28,8 @@ public class BlockedContentDiffCheck implements DiffCheck {
             return Optional.of(List.of());
         }
 
-        Set<String> violations = new LinkedHashSet<>();
+        // Map from violation summary → first matching line (putIfAbsent deduplicates per pattern+file)
+        Map<String, String> violations = new LinkedHashMap<>();
         String currentFile = null;
 
         for (String line : diff.lines().toList()) {
@@ -45,20 +46,21 @@ public class BlockedContentDiffCheck implements DiffCheck {
             for (String literal : block.getLiterals()) {
                 if (content.toLowerCase().contains(literal.toLowerCase())) {
                     String location = currentFile != null ? " in " + currentFile : "";
-                    violations.add("blocked term: \"" + literal + "\"" + location);
+                    violations.putIfAbsent("blocked term: \"" + literal + "\"" + location, content.strip());
                 }
             }
 
             for (Pattern pattern : block.getPatterns()) {
                 if (pattern.matcher(content).find()) {
                     String location = currentFile != null ? " in " + currentFile : "";
-                    violations.add("blocked pattern: " + pattern.pattern() + location);
+                    violations.putIfAbsent("blocked pattern: " + pattern.pattern() + location, content.strip());
                 }
             }
         }
 
-        return Optional.of(
-                violations.stream().map(v -> new Violation(v, v, null)).collect(java.util.stream.Collectors.toList()));
+        return Optional.of(violations.entrySet().stream()
+                .map(e -> new Violation(e.getKey(), e.getKey(), e.getKey() + "\n  " + e.getValue()))
+                .collect(java.util.stream.Collectors.toList()));
     }
 
     /** Extracts the {@code b/} path from a {@code diff --git a/... b/...} header line. */

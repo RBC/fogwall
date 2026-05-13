@@ -191,7 +191,7 @@ public class GitClientUtils {
         return content;
     }
 
-    private static String stripColors(String content) {
+    public static String stripColors(String content) {
         for (var color : AnsiColor.values()) {
             content = content.replace(color.getValue(), "");
         }

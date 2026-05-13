@@ -121,16 +121,15 @@ public class UrlRuleAggregateFilter extends AbstractProviderAwareGitProxyFilter 
     private void sendNotAllowed(HttpServletRequest request, HttpServletResponse response, HttpOperation operation)
             throws java.io.IOException {
         String action = operation == HttpOperation.PUSH ? "Push" : "Fetch";
-        String title = action + " blocked - Repository Not Allowed";
+        String title = sym(NO_ENTRY) + "  " + action + " Blocked - Repository Not Allowed";
         String verb = operation == HttpOperation.PUSH ? "Pushes to" : "Fetches from";
         String message = verb + " this repository are not permitted.\n"
                 + "\n"
-                + "Contact an administrator to add this repository\n"
-                + "to the allow rules.";
+                + "Contact an administrator to add this repository to the allow rules.";
         rejectAndSendError(
                 request,
                 response,
-                "Repository not in allow rules",
+                "Repository not in allow list",
                 GitClientUtils.formatForOperation(title, message, GitClientUtils.AnsiColor.RED, operation));
     }
 

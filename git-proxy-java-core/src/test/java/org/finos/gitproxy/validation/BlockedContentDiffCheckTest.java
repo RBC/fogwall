@@ -101,6 +101,35 @@ class BlockedContentDiffCheckTest {
     }
 
     @Test
+    void violationFormattedDetailIncludesMatchingLine() {
+        BlockedContentDiffCheck check = checkWithLiterals("secret");
+        List<Violation> violations = check.check(SAMPLE_DIFF).orElseThrow();
+        assertEquals(1, violations.size());
+        String detail = violations.get(0).formattedDetail();
+        assertNotNull(detail);
+        assertTrue(detail.contains("src/Foo.java"), "detail must reference the file");
+        assertTrue(detail.contains("added line with secret content"), "detail must include the matching line");
+    }
+
+    @Test
+    void deduplication_formattedDetailContainsFirstMatchingLine() {
+        String diff = """
+                diff --git a/a.txt b/a.txt
+                --- a/a.txt
+                +++ b/a.txt
+                @@ -1 +1,2 @@
+                +first password occurrence
+                +second password occurrence
+                """;
+        BlockedContentDiffCheck check = checkWithLiterals("password");
+        List<Violation> violations = check.check(diff).orElseThrow();
+        assertEquals(1, violations.size());
+        assertTrue(
+                violations.get(0).formattedDetail().contains("first password occurrence"),
+                "formattedDetail should show the first matching line");
+    }
+
+    @Test
     void extractFileName_standardHeader() {
         assertEquals(
                 "src/Foo.java", BlockedContentDiffCheck.extractFileName("diff --git a/src/Foo.java b/src/Foo.java"));
