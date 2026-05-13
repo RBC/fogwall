@@ -3,6 +3,7 @@ package org.finos.gitproxy.db.jdbc;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -15,6 +16,7 @@ import org.finos.gitproxy.db.jdbc.mapper.PushStepRowMapper;
 import org.finos.gitproxy.db.model.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -81,52 +83,71 @@ public class JdbcPushStore implements PushStore {
 
     @Override
     public List<PushRecord> find(PushQuery query) {
-        StringBuilder sql = new StringBuilder("SELECT * FROM push_records WHERE 1=1");
         MapSqlParameterSource params = new MapSqlParameterSource();
-
-        if (query.getStatus() != null) {
-            sql.append(" AND status = :status");
-            params.addValue("status", query.getStatus().name());
-        }
-        if (query.getProject() != null) {
-            sql.append(" AND project = :project");
-            params.addValue("project", query.getProject());
-        }
-        if (query.getRepoName() != null) {
-            sql.append(" AND repo_name = :repoName");
-            params.addValue("repoName", query.getRepoName());
-        }
-        if (query.getBranch() != null) {
-            sql.append(" AND branch = :branch");
-            params.addValue("branch", query.getBranch());
-        }
-        if (query.getCommitTo() != null) {
-            sql.append(" AND commit_to = :commitTo");
-            params.addValue("commitTo", query.getCommitTo());
-        }
-        if (query.getUser() != null) {
-            sql.append(" AND resolved_user = :user");
-            params.addValue("user", query.getUser());
-        }
-        if (query.getAuthorEmail() != null) {
-            sql.append(" AND author_email = :authorEmail");
-            params.addValue("authorEmail", query.getAuthorEmail());
-        }
-        if (query.getSearch() != null && !query.getSearch().isBlank()) {
-            sql.append(
-                    " AND (LOWER(provider) LIKE :search OR LOWER(project) LIKE :search OR LOWER(repo_name) LIKE :search)");
-            params.addValue("search", "%" + query.getSearch().toLowerCase() + "%");
-        }
-
-        sql.append(" ORDER BY timestamp ");
-        sql.append(query.isNewestFirst() ? "DESC" : "ASC");
-        sql.append(" LIMIT :limit OFFSET :offset");
+        String where = buildWhere(query, params);
+        String sql = "SELECT * FROM push_records" + where
+                + " ORDER BY timestamp " + (query.isNewestFirst() ? "DESC" : "ASC")
+                + " LIMIT :limit OFFSET :offset";
         params.addValue("limit", query.getLimit());
         params.addValue("offset", query.getOffset());
 
-        List<PushRecord> results = jdbc.query(sql.toString(), params, PushRecordRowMapper.INSTANCE);
+        List<PushRecord> results = jdbc.query(sql, params, PushRecordRowMapper.INSTANCE);
         results.forEach(this::hydrate);
         return results;
+    }
+
+    @Override
+    public List<RepoPushSummary> summarizeByRepo() {
+        return jdbc.query(
+                """
+                SELECT provider, project, repo_name, COUNT(*) AS total
+                FROM push_records
+                GROUP BY provider, project, repo_name
+                ORDER BY total DESC
+                """,
+                (rs, rowNum) -> new RepoPushSummary(
+                        rs.getString("provider"),
+                        rs.getString("project"),
+                        rs.getString("repo_name"),
+                        rs.getLong("total")));
+    }
+
+    @Override
+    public Map<String, Long> countByStatus(PushQuery query) {
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        // Strip status so we get counts for all statuses
+        PushQuery noStatus = PushQuery.builder()
+                .project(query.getProject())
+                .repoName(query.getRepoName())
+                .branch(query.getBranch())
+                .user(query.getUser())
+                .authorEmail(query.getAuthorEmail())
+                .commitTo(query.getCommitTo())
+                .search(query.getSearch())
+                .build();
+        String where = buildWhere(noStatus, params);
+        Map<String, Long> result = new LinkedHashMap<>();
+        jdbc.query(
+                "SELECT status, COUNT(*) AS total FROM push_records" + where + " GROUP BY status",
+                params,
+                (RowCallbackHandler) rs -> result.put(rs.getString("status"), rs.getLong("total")));
+        return result;
+    }
+
+    @Override
+    public Map<String, Map<String, Long>> countPushStatusByUser() {
+        Map<String, Map<String, Long>> result = new LinkedHashMap<>();
+        jdbc.query("""
+                SELECT resolved_user, status, COUNT(*) AS total
+                FROM push_records
+                WHERE resolved_user IS NOT NULL
+                GROUP BY resolved_user, status
+                """, rs -> {
+            String user = rs.getString("resolved_user");
+            String status = rs.getString("status");
+            result.computeIfAbsent(user, k -> new LinkedHashMap<>()).put(status, rs.getLong("total"));
+        });
+        return result;
     }
 
     @Override
@@ -178,6 +199,50 @@ public class JdbcPushStore implements PushStore {
     }
 
     // --- Private helpers ---
+
+    /**
+     * Builds a SQL WHERE clause from the query and populates {@code params}. Returns the clause string starting with
+     * {@code " WHERE 1=1 ..."} (or just {@code " WHERE 1=1"} if no filters are set).
+     */
+    private static String buildWhere(PushQuery query, MapSqlParameterSource params) {
+        StringBuilder sql = new StringBuilder(" WHERE 1=1");
+
+        if (query.getStatus() != null) {
+            sql.append(" AND status = :status");
+            params.addValue("status", query.getStatus().name());
+        }
+        if (query.getProject() != null) {
+            sql.append(" AND project = :project");
+            params.addValue("project", query.getProject());
+        }
+        if (query.getRepoName() != null) {
+            sql.append(" AND repo_name = :repoName");
+            params.addValue("repoName", query.getRepoName());
+        }
+        if (query.getBranch() != null) {
+            sql.append(" AND branch = :branch");
+            params.addValue("branch", query.getBranch());
+        }
+        if (query.getCommitTo() != null) {
+            sql.append(" AND commit_to = :commitTo");
+            params.addValue("commitTo", query.getCommitTo());
+        }
+        if (query.getUser() != null) {
+            sql.append(" AND resolved_user = :user");
+            params.addValue("user", query.getUser());
+        }
+        if (query.getAuthorEmail() != null) {
+            sql.append(" AND author_email = :authorEmail");
+            params.addValue("authorEmail", query.getAuthorEmail());
+        }
+        if (query.getSearch() != null && !query.getSearch().isBlank()) {
+            sql.append(
+                    " AND (LOWER(provider) LIKE :search OR LOWER(project) LIKE :search OR LOWER(repo_name) LIKE :search)");
+            params.addValue("search", "%" + query.getSearch().toLowerCase() + "%");
+        }
+
+        return sql.toString();
+    }
 
     private PushRecord updateStatus(String id, PushStatus status, Attestation attestation) {
         tx.executeWithoutResult(txStatus -> {

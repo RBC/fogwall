@@ -4,10 +4,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import org.finos.gitproxy.db.PushStore;
 import org.finos.gitproxy.db.model.PushQuery;
-import org.finos.gitproxy.db.model.PushRecord;
 import org.finos.gitproxy.user.EmailConflictException;
 import org.finos.gitproxy.user.LockedByConfigException;
 import org.finos.gitproxy.user.ReadOnlyUserStore;
@@ -37,7 +35,10 @@ public class UserController {
     @Operation(operationId = "listUsers", summary = "List all users")
     @GetMapping
     public List<UserSummary> list() {
-        return userStore.findAll().stream().map(this::toSummary).toList();
+        Map<String, Map<String, Long>> allPushCounts = pushStore.countPushStatusByUser();
+        return userStore.findAll().stream()
+                .map(u -> toSummary(u, allPushCounts.getOrDefault(u.getUsername(), Map.of())))
+                .toList();
     }
 
     @Operation(operationId = "getUser", summary = "Get user details")
@@ -206,14 +207,13 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
-    private UserSummary toSummary(UserEntry u) {
+    private UserSummary toSummary(UserEntry u, Map<String, Long> pushCounts) {
         String primaryEmail = u.getEmails().isEmpty() ? null : u.getEmails().get(0);
         List<String> scmProviders = u.getScmIdentities().stream()
                 .map(id -> id.getProvider())
                 .filter(p -> !"proxy".equals(p))
                 .distinct()
                 .toList();
-        Map<String, Long> pushCounts = countPushesByStatus(u.getUsername());
         return new UserSummary(u.getUsername(), primaryEmail, scmProviders, pushCounts);
     }
 
@@ -238,14 +238,9 @@ public class UserController {
                     .toList();
         }
 
-        Map<String, Long> pushCounts = countPushesByStatus(u.getUsername());
+        Map<String, Long> pushCounts = pushStore.countByStatus(
+                PushQuery.builder().user(u.getUsername()).build());
         return new UserDetail(u.getUsername(), emails, scmIdentities, pushCounts);
-    }
-
-    private Map<String, Long> countPushesByStatus(String username) {
-        List<PushRecord> pushes =
-                pushStore.find(PushQuery.builder().user(username).limit(10000).build());
-        return pushes.stream().collect(Collectors.groupingBy(p -> p.getStatus().name(), Collectors.counting()));
     }
 
     public record UserSummary(

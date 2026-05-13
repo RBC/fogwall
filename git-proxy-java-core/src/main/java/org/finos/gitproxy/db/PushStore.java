@@ -1,6 +1,8 @@
 package org.finos.gitproxy.db;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.finos.gitproxy.db.model.Attestation;
 import org.finos.gitproxy.db.model.PushQuery;
@@ -66,4 +68,64 @@ public interface PushStore {
 
     /** Close resources. Called on shutdown. */
     default void close() {}
+
+    /**
+     * Summarise push activity grouped by provider + project + repo_name. Returns one entry per distinct repo with total
+     * push count. Default implementation is correct but unoptimised; JDBC override uses a SQL aggregate.
+     */
+    default List<RepoPushSummary> summarizeByRepo() {
+        record Key(String provider, String owner, String repoName) {}
+        Map<Key, Long> counts = new java.util.LinkedHashMap<>();
+        for (PushRecord r : find(PushQuery.builder().limit(Integer.MAX_VALUE).build())) {
+            Key k = new Key(
+                    r.getProvider() != null ? r.getProvider() : "",
+                    r.getProject() != null ? r.getProject() : "",
+                    r.getRepoName() != null ? r.getRepoName() : "");
+            counts.merge(k, 1L, Long::sum);
+        }
+        return counts.entrySet().stream()
+                .map(e -> new RepoPushSummary(
+                        e.getKey().provider(), e.getKey().owner(), e.getKey().repoName(), e.getValue()))
+                .toList();
+    }
+
+    /**
+     * Count push records for a user grouped by status. Accepts the same filters as {@link #find(PushQuery)} except
+     * {@code status} is ignored — counts are returned for all statuses. Default implementation is correct but
+     * unoptimised; JDBC override uses a SQL aggregate.
+     */
+    default Map<String, Long> countByStatus(PushQuery query) {
+        PushQuery noStatus = PushQuery.builder()
+                .project(query.getProject())
+                .repoName(query.getRepoName())
+                .branch(query.getBranch())
+                .user(query.getUser())
+                .authorEmail(query.getAuthorEmail())
+                .commitTo(query.getCommitTo())
+                .search(query.getSearch())
+                .limit(Integer.MAX_VALUE)
+                .build();
+        Map<String, Long> result = new HashMap<>();
+        for (PushRecord r : find(noStatus)) {
+            result.merge(r.getStatus().name(), 1L, Long::sum);
+        }
+        return result;
+    }
+
+    /**
+     * Aggregate push status counts for all users in a single pass, returning a map of username → (status → count).
+     * Default implementation is correct but unoptimised; JDBC override uses a SQL aggregate.
+     */
+    default Map<String, Map<String, Long>> countPushStatusByUser() {
+        Map<String, Map<String, Long>> result = new HashMap<>();
+        for (PushRecord r : find(PushQuery.builder().limit(Integer.MAX_VALUE).build())) {
+            if (r.getResolvedUser() == null) continue;
+            result.computeIfAbsent(r.getResolvedUser(), k -> new HashMap<>())
+                    .merge(r.getStatus().name(), 1L, Long::sum);
+        }
+        return result;
+    }
+
+    /** Per-repo aggregate returned by {@link #summarizeByRepo()}. */
+    record RepoPushSummary(String provider, String owner, String repoName, long total) {}
 }

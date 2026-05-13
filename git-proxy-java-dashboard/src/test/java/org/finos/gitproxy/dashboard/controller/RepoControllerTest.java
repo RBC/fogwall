@@ -1,7 +1,6 @@
 package org.finos.gitproxy.dashboard.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -11,9 +10,9 @@ import java.util.Optional;
 import org.finos.gitproxy.db.FetchStore;
 import org.finos.gitproxy.db.FetchStore.RepoFetchSummary;
 import org.finos.gitproxy.db.PushStore;
+import org.finos.gitproxy.db.PushStore.RepoPushSummary;
 import org.finos.gitproxy.db.UrlRuleRegistry;
 import org.finos.gitproxy.db.model.AccessRule;
-import org.finos.gitproxy.db.model.PushRecord;
 import org.finos.gitproxy.provider.GitProxyProvider;
 import org.finos.gitproxy.provider.ProviderRegistry;
 import org.junit.jupiter.api.Nested;
@@ -160,26 +159,21 @@ class RepoControllerTest {
 
         @Test
         void empty_returnsEmptyList() {
-            when(pushStore.find(any())).thenReturn(List.of());
+            when(pushStore.summarizeByRepo()).thenReturn(List.of());
             when(fetchStore.summarizeByRepo()).thenReturn(List.of());
 
             assertEquals(List.of(), controller.activeRepos());
         }
 
         @Test
-        void pushRecords_aggregatedByRepo() {
-            var push = PushRecord.builder()
-                    .upstreamUrl("https://github.com/acme/myrepo.git")
-                    .project("acme")
-                    .repoName("myrepo")
-                    .build();
-            when(pushStore.find(any())).thenReturn(List.of(push, push)); // two pushes to same repo
+        void pushSummary_appearsInResults() {
+            when(pushStore.summarizeByRepo()).thenReturn(List.of(new RepoPushSummary("github", "acme", "myrepo", 2L)));
             when(fetchStore.summarizeByRepo()).thenReturn(List.of());
 
             var result = controller.activeRepos();
 
             assertEquals(1, result.size());
-            assertEquals("github.com", result.get(0).get("provider"));
+            assertEquals("github", result.get(0).get("provider"));
             assertEquals("acme", result.get(0).get("owner"));
             assertEquals("myrepo", result.get(0).get("repoName"));
             assertEquals(2L, result.get(0).get("pushCount"));
@@ -188,14 +182,9 @@ class RepoControllerTest {
 
         @Test
         void fetchSummaries_mergedWithPushData() {
-            var push = PushRecord.builder()
-                    .upstreamUrl("https://github.com/acme/myrepo.git")
-                    .project("acme")
-                    .repoName("myrepo")
-                    .build();
-            var fetchSummary = new RepoFetchSummary("github.com", "acme", "myrepo", 10L, 2L);
-            when(pushStore.find(any())).thenReturn(List.of(push));
-            when(fetchStore.summarizeByRepo()).thenReturn(List.of(fetchSummary));
+            when(pushStore.summarizeByRepo()).thenReturn(List.of(new RepoPushSummary("github", "acme", "myrepo", 1L)));
+            when(fetchStore.summarizeByRepo())
+                    .thenReturn(List.of(new RepoFetchSummary("github", "acme", "myrepo", 10L, 2L)));
 
             var result = controller.activeRepos();
 
@@ -207,70 +196,33 @@ class RepoControllerTest {
 
         @Test
         void fetchOnly_repo_appearsInResults() {
-            when(pushStore.find(any())).thenReturn(List.of());
+            when(pushStore.summarizeByRepo()).thenReturn(List.of());
             when(fetchStore.summarizeByRepo())
-                    .thenReturn(List.of(new RepoFetchSummary("gitlab.com", "org", "repo", 5L, 0L)));
+                    .thenReturn(List.of(new RepoFetchSummary("gitlab", "org", "repo", 5L, 0L)));
 
             var result = controller.activeRepos();
 
             assertEquals(1, result.size());
-            assertEquals("gitlab.com", result.get(0).get("provider"));
+            assertEquals("gitlab", result.get(0).get("provider"));
             assertEquals(0L, result.get(0).get("pushCount"));
             assertEquals(5L, result.get(0).get("fetchCount"));
         }
 
         @Test
         void sortedByTotalActivityDescending() {
-            var busy = PushRecord.builder()
-                    .upstreamUrl("https://github.com/acme/busy.git")
-                    .project("acme")
-                    .repoName("busy")
-                    .build();
-            var quiet = PushRecord.builder()
-                    .upstreamUrl("https://github.com/acme/quiet.git")
-                    .project("acme")
-                    .repoName("quiet")
-                    .build();
-            // busy gets 3 pushes + 10 fetches = 13; quiet gets 1 push + 0 fetches = 1
-            when(pushStore.find(any())).thenReturn(List.of(busy, busy, busy, quiet));
+            when(pushStore.summarizeByRepo())
+                    .thenReturn(List.of(
+                            new RepoPushSummary("github", "acme", "busy", 3L),
+                            new RepoPushSummary("github", "acme", "quiet", 1L)));
+            // busy also has 10 fetches = 13 total; quiet has 1 push + 0 fetches = 1
             when(fetchStore.summarizeByRepo())
-                    .thenReturn(List.of(new RepoFetchSummary("github.com", "acme", "busy", 10L, 0L)));
+                    .thenReturn(List.of(new RepoFetchSummary("github", "acme", "busy", 10L, 0L)));
 
             var result = controller.activeRepos();
 
             assertEquals(2, result.size());
             assertEquals("busy", result.get(0).get("repoName"));
             assertEquals("quiet", result.get(1).get("repoName"));
-        }
-
-        @Test
-        void nullUpstreamUrl_usesUnknownProvider() {
-            var push = PushRecord.builder()
-                    .upstreamUrl(null)
-                    .project("acme")
-                    .repoName("myrepo")
-                    .build();
-            when(pushStore.find(any())).thenReturn(List.of(push));
-            when(fetchStore.summarizeByRepo()).thenReturn(List.of());
-
-            var result = controller.activeRepos();
-
-            assertEquals("unknown", result.get(0).get("provider"));
-        }
-
-        @Test
-        void malformedUpstreamUrl_usesUnknownProvider() {
-            var push = PushRecord.builder()
-                    .upstreamUrl("not a valid url ::::")
-                    .project("acme")
-                    .repoName("myrepo")
-                    .build();
-            when(pushStore.find(any())).thenReturn(List.of(push));
-            when(fetchStore.summarizeByRepo()).thenReturn(List.of());
-
-            var result = controller.activeRepos();
-
-            assertEquals("unknown", result.get(0).get("provider"));
         }
     }
 }

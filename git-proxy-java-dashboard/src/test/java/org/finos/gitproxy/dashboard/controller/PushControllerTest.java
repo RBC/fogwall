@@ -548,4 +548,37 @@ class PushControllerTest {
             assertEquals(HttpStatus.OK, controller.cancel("p1", null).getStatusCode());
         }
     }
+
+    // ── GET /api/push/counts ──────────────────────────────────────────────────────
+
+    @Nested
+    class Counts {
+        @Test
+        void noFilters_delegatesToStoreWithNoStatusFilter() {
+            when(pushStore.countByStatus(any())).thenReturn(Map.of("PENDING", 3L, "APPROVED", 1L));
+
+            var result = controller.counts(null, null, null, null);
+
+            assertEquals(Map.of("PENDING", 3L, "APPROVED", 1L), result);
+            verify(pushStore).countByStatus(argThat(q -> q.getStatus() == null && q.getUser() == null));
+        }
+
+        @Test
+        void userFilter_passedToQuery() {
+            when(pushStore.countByStatus(any())).thenReturn(Map.of());
+
+            controller.counts(null, null, "alice", null);
+
+            verify(pushStore).countByStatus(argThat(q -> "alice".equals(q.getUser())));
+        }
+
+        @Test
+        void searchFilter_passedToQuery() {
+            when(pushStore.countByStatus(any())).thenReturn(Map.of());
+
+            controller.counts(null, null, null, "myrepo");
+
+            verify(pushStore).countByStatus(argThat(q -> "myrepo".equals(q.getSearch())));
+        }
+    }
 }

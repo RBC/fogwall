@@ -14,10 +14,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.finos.gitproxy.db.FetchStore;
 import org.finos.gitproxy.db.FetchStore.RepoFetchSummary;
 import org.finos.gitproxy.db.PushStore;
+import org.finos.gitproxy.db.PushStore.RepoPushSummary;
 import org.finos.gitproxy.db.UrlRuleRegistry;
 import org.finos.gitproxy.db.model.AccessRule;
-import org.finos.gitproxy.db.model.PushQuery;
-import org.finos.gitproxy.db.model.PushRecord;
 import org.finos.gitproxy.provider.ProviderRegistry;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -127,27 +126,20 @@ public class RepoController {
         // Keyed by "provider|owner|repoName"
         Map<String, Map<String, Object>> byRepo = new HashMap<>();
 
-        // Aggregate push records. Use the stored provider ID where available; fall back to
-        // parsing the upstream URL for records created before the provider field was populated.
-        List<PushRecord> pushRecords =
-                pushStore.find(PushQuery.builder().limit(5000).build());
-        for (PushRecord pr : pushRecords) {
-            String provider = (pr.getProvider() != null && !pr.getProvider().isBlank())
-                    ? pr.getProvider()
-                    : providerFromUrl(pr.getUpstreamUrl());
-            String owner = pr.getProject(); // project = owner (see PushRecordMapper)
-            String key = provider + "|" + owner + "|" + pr.getRepoName();
-            byRepo.computeIfAbsent(key, k -> {
-                Map<String, Object> entry = new HashMap<>();
-                entry.put("provider", provider);
-                entry.put("owner", owner);
-                entry.put("repoName", pr.getRepoName());
-                entry.put("pushCount", 0L);
-                entry.put("fetchCount", 0L);
-                entry.put("blockedFetchCount", 0L);
-                return entry;
+        // Aggregate push records using a single SQL GROUP BY query.
+        for (RepoPushSummary summary : pushStore.summarizeByRepo()) {
+            String key = summary.provider() + "|" + summary.owner() + "|" + summary.repoName();
+            Map<String, Object> entry = byRepo.computeIfAbsent(key, k -> {
+                Map<String, Object> e = new HashMap<>();
+                e.put("provider", summary.provider());
+                e.put("owner", summary.owner());
+                e.put("repoName", summary.repoName());
+                e.put("pushCount", 0L);
+                e.put("fetchCount", 0L);
+                e.put("blockedFetchCount", 0L);
+                return e;
             });
-            byRepo.get(key).merge("pushCount", 1L, (a, b) -> (long) a + (long) b);
+            entry.put("pushCount", summary.total());
         }
 
         // Merge fetch summaries
@@ -174,14 +166,5 @@ public class RepoController {
                                         (long) e.get("pushCount") + (long) e.get("fetchCount"))
                                 .reversed())
                         .collect(Collectors.toList());
-    }
-
-    private static String providerFromUrl(String url) {
-        if (url == null || url.isBlank()) return "unknown";
-        try {
-            return new java.net.URI(url).getHost();
-        } catch (Exception e) {
-            return "unknown";
-        }
     }
 }
