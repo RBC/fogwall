@@ -251,9 +251,9 @@ export async function addUserPermission(
 export async function createUrlRule(rule: {
   access: 'ALLOW' | 'DENY'
   operations: 'BOTH' | 'PUSH' | 'FETCH'
-  slug?: string
-  owner?: string
-  name?: string
+  target: 'SLUG' | 'OWNER' | 'NAME'
+  value: string
+  matchType: 'LITERAL' | 'GLOB' | 'REGEX'
   provider?: string
   description?: string
   ruleOrder?: number

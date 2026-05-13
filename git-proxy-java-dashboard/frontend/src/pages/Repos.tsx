@@ -13,9 +13,9 @@ interface ActiveRepo {
 interface Rule {
   id: string
   provider: string | null
-  slug: string | null
-  owner: string | null
-  name: string | null
+  target: 'SLUG' | 'OWNER' | 'NAME'
+  value: string | null
+  matchType: 'LITERAL' | 'GLOB' | 'REGEX'
   access: 'ALLOW' | 'DENY'
   operations: 'FETCH' | 'PUSH' | 'BOTH'
   description: string | null
@@ -178,20 +178,15 @@ function AddRuleModal({
     setSubmitting(true)
     setError(null)
     try {
-      // Encode the pattern as the filter expects: regex: prefix for REGEX,
-      // raw string for GLOB (glob chars trigger detection), raw for LITERAL.
-      const raw = form.pattern.trim()
-      const encoded = form.patternType === 'REGEX' ? `regex:${raw}` : raw
-
       const payload: Parameters<typeof createUrlRule>[0] = {
         access: form.access,
         operations: form.operations,
+        target: form.targetType.toUpperCase() as 'SLUG' | 'OWNER' | 'NAME',
+        value: form.pattern.trim(),
+        matchType: form.patternType,
         provider: form.provider || undefined,
         ruleOrder: form.ruleOrder,
       }
-      if (form.targetType === 'slug') payload.slug = encoded
-      else if (form.targetType === 'owner') payload.owner = encoded
-      else payload.name = encoded
 
       const created = await createUrlRule(payload)
       onCreated(created)
@@ -297,11 +292,6 @@ function AddRuleModal({
               }`}
             />
             {regexError && <p className="mt-1 text-xs text-amber-600">⚠ {regexError}</p>}
-            {form.patternType === 'REGEX' && !regexError && form.pattern && (
-              <p className="mt-1 text-xs text-gray-400">
-                Stored as <code className="font-mono">regex:{form.pattern}</code>
-              </p>
-            )}
             {form.targetType === 'slug' && (
               <p className="mt-1 text-xs text-gray-400">
                 Slug rules match the full URL path — must start with{' '}
@@ -539,13 +529,17 @@ export function Repos() {
                     <div className="flex flex-col min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs text-gray-400 shrink-0">
-                          {rule.slug ? 'slug' : rule.owner ? 'owner' : rule.name ? 'name' : 'any'}:
+                          {(rule.target ?? 'SLUG').toLowerCase()}:
                         </span>
                         <span className="font-mono text-sm text-gray-800 truncate">
-                          {rule.slug ?? rule.owner ?? rule.name ?? '*'}
+                          {rule.value ?? '*'}
                         </span>
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs text-gray-400">
+                          {(rule.matchType ?? 'GLOB').toLowerCase()}
+                        </span>
+                        <span className="text-xs text-gray-300">·</span>
                         <span className="text-xs text-gray-400">
                           provider:{' '}
                           <span className="text-gray-600">
