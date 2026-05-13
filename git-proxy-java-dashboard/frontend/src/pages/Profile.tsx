@@ -346,7 +346,7 @@ export function Profile() {
             >
               {providers.map((p) => (
                 <option key={p.name} value={p.id}>
-                  {p.host}
+                  {p.name}
                 </option>
               ))}
             </select>

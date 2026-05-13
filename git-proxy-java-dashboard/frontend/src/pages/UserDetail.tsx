@@ -171,7 +171,7 @@ function AddScmIdentityModal({
               {providers.length === 0 && <option value="">Loading…</option>}
               {providers.map((p) => (
                 <option key={p.name} value={p.id}>
-                  {p.host}
+                  {p.name}
                 </option>
               ))}
             </select>
@@ -656,7 +656,7 @@ function AddPermissionModal({
               {providers.length === 0 && <option value="">Loading…</option>}
               {providers.map((p) => (
                 <option key={p.name} value={p.id}>
-                  {p.host}
+                  {p.name}
                 </option>
               ))}
             </select>

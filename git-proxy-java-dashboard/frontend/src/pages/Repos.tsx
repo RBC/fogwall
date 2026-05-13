@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createUrlRule, deleteUrlRule, fetchProviders } from '../api'
+import type { Provider } from '../types'
 
 interface ActiveRepo {
   provider: string
@@ -129,11 +130,11 @@ function AddRuleModal({
   const [error, setError] = useState<string | null>(null)
   const [regexError, setRegexError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [providers, setProviders] = useState<{ name: string; id: string; host: string }[]>([])
+  const [providers, setProviders] = useState<Provider[]>([])
 
   useEffect(() => {
     fetchProviders()
-      .then((data: { name: string; id: string; host: string }[]) => setProviders(data))
+      .then((data: Provider[]) => setProviders(data))
       .catch(() => {})
   }, [])
 
@@ -312,7 +313,7 @@ function AddRuleModal({
               <option value="">— All providers (applies to any) —</option>
               {providers.map((p) => (
                 <option key={p.name} value={p.id}>
-                  {p.host}
+                  {p.name}
                 </option>
               ))}
             </select>
@@ -381,11 +382,11 @@ export function Repos() {
   const [rules, setRules] = useState<Rule[]>([])
   const [loadedTab, setLoadedTab] = useState<Tab | null>(null)
   const [showAddRule, setShowAddRule] = useState(false)
-  const [providers, setProviders] = useState<{ name: string; id: string; host: string }[]>([])
+  const [providers, setProviders] = useState<Provider[]>([])
 
   useEffect(() => {
     fetchProviders()
-      .then((data: { name: string; id: string; host: string }[]) => setProviders(data))
+      .then((data: Provider[]) => setProviders(data))
       .catch(() => {})
   }, [])
 
@@ -464,7 +465,7 @@ export function Repos() {
                 >
                   <div>
                     <div className="text-xs text-gray-400 mb-0.5">
-                      {providers.find((p) => p.id === repo.provider)?.host ?? repo.provider}
+                      {providers.find((p) => p.id === repo.provider)?.name ?? repo.provider}
                     </div>
                     <div className="font-semibold text-gray-800">
                       {repo.owner}/{repo.repoName}
@@ -488,7 +489,7 @@ export function Repos() {
                       )}
                     </div>
                     <CloneButton
-                      cloneUrl={`${window.location.origin}/proxy/${providers.find((p) => p.id === repo.provider)?.host ?? repo.provider.split('/').slice(1).join('/')}/${repo.owner}/${repo.repoName}.git`}
+                      cloneUrl={`${window.location.origin}${providers.find((p) => p.id === repo.provider)?.proxyPath ?? '/proxy/' + repo.provider}/${repo.owner}/${repo.repoName}.git`}
                     />
                   </div>
                 </div>
@@ -544,7 +545,7 @@ export function Repos() {
                           provider:{' '}
                           <span className="text-gray-600">
                             {rule.provider
-                              ? (providers.find((p) => p.id === rule.provider)?.host ??
+                              ? (providers.find((p) => p.id === rule.provider)?.name ??
                                 rule.provider)
                               : 'all'}
                           </span>
