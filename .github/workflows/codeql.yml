@@ -44,7 +44,7 @@ jobs:
           cache-dependency-path: git-proxy-java-dashboard/frontend/package-lock.json
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@68bde559dea0fdcac2102bfdf6230c5f70eb485e # ratchet:github/codeql-action/init@v4
+        uses: github/codeql-action/init@9e0d7b8d25671d64c341c19c0152d693099fb5ba # ratchet:github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.language == 'java-kotlin' && 'manual' || 'none' }}
@@ -54,6 +54,6 @@ jobs:
         run: ./gradlew classes testClasses --no-build-cache
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@68bde559dea0fdcac2102bfdf6230c5f70eb485e # ratchet:github/codeql-action/analyze@v4
+        uses: github/codeql-action/analyze@9e0d7b8d25671d64c341c19c0152d693099fb5ba # ratchet:github/codeql-action/analyze@v4
         with:
           category: "/language:${{matrix.language}}"
