@@ -11,6 +11,7 @@ plugins {
     id 'com.diffplug.spotless' version '8.4.0' apply false
     id 'org.cyclonedx.bom' version '3.2.4'
     id 'com.github.node-gradle.node' version '7.1.0' apply false
+    id 'com.github.jk1.dependency-license-report' version '2.9' apply false
 }
 
 ext {
@@ -105,6 +106,20 @@ tasks.register('installGitHooks') {
 subprojects {
     apply plugin: 'com.diffplug.spotless'
     apply plugin: 'jacoco-report-aggregation'
+    apply plugin: 'com.github.jk1.dependency-license-report'
+
+    licenseReport {
+        allowedLicensesFile = rootProject.file('gradle-allowed-licenses.json')
+        configurations = ['runtimeClasspath']
+        excludeOwnGroup = true
+        excludeBoms = true
+        // These deps have malformed POM license declarations (null name or quoted MIME-style string)
+        // but are confirmed Apache-2.0. Overrides in gradle-license-overrides.txt fix the HTML report.
+        excludes = ['org.jspecify:jspecify', 'com.nimbusds:oauth2-oidc-sdk']
+        renderers = [new com.github.jk1.license.render.InventoryHtmlReportRenderer(
+                         'index.html', 'git-proxy-java', rootProject.file('gradle-license-overrides.txt')),
+                     new com.github.jk1.license.render.JsonReportRenderer('licenses.json')]
+    }
 
     spotless {
         java {
