@@ -442,10 +442,16 @@ public class JettyConfigurationBuilder {
         cachedRepoPermissionService = new RepoPermissionService(store);
 
         List<RepoPermission> configPerms = buildConfigPermissions(config);
+        ensurePermissionUsersExist(configPerms);
         cachedRepoPermissionService.seedFromConfig(configPerms);
 
         log.info("RepoPermissionService initialized with {} config permission(s)", configPerms.size());
         return cachedRepoPermissionService;
+    }
+
+    private void ensurePermissionUsersExist(List<RepoPermission> permissions) {
+        UserStore us = buildUserStore();
+        permissions.stream().map(RepoPermission::getUsername).distinct().forEach(us::upsertUser);
     }
 
     /**

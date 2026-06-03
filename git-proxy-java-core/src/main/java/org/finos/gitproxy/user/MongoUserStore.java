@@ -143,7 +143,14 @@ public class MongoUserStore implements UserStore {
         if (result.getDeletedCount() == 0) {
             throw new IllegalArgumentException("User not found: " + username);
         }
-        log.info("Deleted user '{}'", username);
+        long permDeleted = database.getCollection("repo_permissions")
+                .deleteMany(Filters.eq("username", username))
+                .getDeletedCount();
+        if (permDeleted > 0) {
+            log.info("Deleted user '{}' and {} orphaned permission(s)", username, permDeleted);
+        } else {
+            log.info("Deleted user '{}'", username);
+        }
     }
 
     @Override

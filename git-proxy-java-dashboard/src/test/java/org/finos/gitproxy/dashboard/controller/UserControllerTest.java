@@ -45,6 +45,38 @@ class UserControllerTest {
             .roles(List.of("USER"))
             .build();
 
+    // ── POST /api/users/provision ──────────────────────────────────────────────
+
+    @Test
+    void provision_success_returns200() {
+        var resp = controller.provision(new UserController.ProvisionUserRequest("newuser@corp.com"));
+
+        assertEquals(HttpStatus.OK, resp.getStatusCode());
+        verify(userStore).upsertUser("newuser@corp.com");
+    }
+
+    @Test
+    void provision_blankUsername_returns400() {
+        var resp = controller.provision(new UserController.ProvisionUserRequest("  "));
+
+        assertEquals(HttpStatus.BAD_REQUEST, resp.getStatusCode());
+    }
+
+    @Test
+    void provision_nullUsername_returns400() {
+        var resp = controller.provision(new UserController.ProvisionUserRequest(null));
+
+        assertEquals(HttpStatus.BAD_REQUEST, resp.getStatusCode());
+    }
+
+    @Test
+    void provision_existingUser_isIdempotent() {
+        var resp = controller.provision(new UserController.ProvisionUserRequest("alice"));
+
+        assertEquals(HttpStatus.OK, resp.getStatusCode());
+        verify(userStore).upsertUser("alice");
+    }
+
     // ── POST /api/users/{username}/emails ────────────────────────────────────────
 
     @Test

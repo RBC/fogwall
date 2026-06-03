@@ -41,7 +41,8 @@ public class DatabaseMigrator {
                     "2.1", "widen provider columns", "db/migration-postgresql/V2_1__widen_provider_columns.sql", true),
             new Migration("3", "email unique constraint", "db/migration/V3__email_unique.sql", false),
             new Migration("4", "spring session tables", "db/migration/V4__spring_session.sql", false),
-            new Migration("5", "unified rule shape", "db/migration/V5__unified_rule_shape.sql", false));
+            new Migration("5", "unified rule shape", "db/migration/V5__unified_rule_shape.sql", false),
+            new Migration("6", "repo permissions FK", "db/migration/V6__repo_permissions_fk.sql", false));
 
     // ---------------------------------------------------------------------------
 
