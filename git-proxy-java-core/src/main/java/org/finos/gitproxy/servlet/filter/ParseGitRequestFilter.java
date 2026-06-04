@@ -109,6 +109,11 @@ public class ParseGitRequestFilter extends AbstractProviderAwareGitProxyFilter {
                 var pli = new PacketLineIn(request.getInputStream());
                 String packetLine = pli.readStringRaw();
 
+                // Skip shallow pkt-lines sent by shallow-clone clients before the ref update
+                while (packetLine.startsWith("shallow ")) {
+                    packetLine = pli.readStringRaw();
+                }
+
                 // CVE-2025-54583: Reject multi-ref pushes. Read the next pkt-line — it must
                 // be a flush packet (0000). If it's another ref update, the client is pushing
                 // multiple branches and we must reject.
