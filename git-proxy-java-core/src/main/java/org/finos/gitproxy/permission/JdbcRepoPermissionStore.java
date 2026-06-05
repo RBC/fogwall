@@ -23,10 +23,25 @@ public class JdbcRepoPermissionStore implements RepoPermissionStore {
 
     @Override
     public void save(RepoPermission p) {
+        // Config-defined users are never seeded into proxy_users at startup, so INSERT a
+        // placeholder row on first permission grant to satisfy the FK constraint.
+        // We only insert — never update — so existing DB users' roles are not touched.
+        ensureUserRow(p.getUsername());
         jdbc.update("""
                 INSERT INTO repo_permissions (id, username, provider, target, match_value, match_type, operations, source)
                 VALUES (:id, :username, :provider, :target, :matchValue, :matchType, :operations, :source)
                 """, params(p));
+    }
+
+    private void ensureUserRow(String username) {
+        boolean exists = !jdbc.queryForList(
+                        "SELECT username FROM proxy_users WHERE username = :u", Map.of("u", username), String.class)
+                .isEmpty();
+        if (!exists) {
+            jdbc.update(
+                    "INSERT INTO proxy_users (username, password_hash, roles) VALUES (:u, NULL, 'USER')",
+                    Map.of("u", username));
+        }
     }
 
     @Override
