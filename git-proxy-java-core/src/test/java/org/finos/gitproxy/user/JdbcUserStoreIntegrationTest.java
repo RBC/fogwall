@@ -9,6 +9,8 @@ import java.util.UUID;
 import javax.sql.DataSource;
 import org.finos.gitproxy.db.jdbc.DataSourceFactory;
 import org.finos.gitproxy.db.jdbc.JdbcPushStore;
+import org.finos.gitproxy.permission.JdbcRepoPermissionStore;
+import org.finos.gitproxy.permission.RepoPermission;
 import org.finos.gitproxy.service.JdbcScmTokenCache;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,6 +24,7 @@ import org.junit.jupiter.api.Test;
 class JdbcUserStoreIntegrationTest {
 
     JdbcUserStore store;
+    JdbcRepoPermissionStore permissionStore;
 
     @BeforeEach
     void setUp() {
@@ -29,6 +32,7 @@ class JdbcUserStoreIntegrationTest {
         JdbcPushStore pushStore = new JdbcPushStore(ds);
         pushStore.initialize();
         store = new JdbcUserStore(ds, new JdbcScmTokenCache(ds, Duration.ofDays(1)));
+        permissionStore = new JdbcRepoPermissionStore(ds);
     }
 
     private static UserEntry user(String username, List<String> emails, List<ScmIdentity> scmIdentities) {
@@ -354,5 +358,27 @@ class JdbcUserStoreIntegrationTest {
         var ex = assertThrows(
                 ScmIdentityConflictException.class, () -> store.addScmIdentity("bob", "github", "shared-handle"));
         assertEquals("alice", ex.getOwner());
+    }
+
+    // ---- deleteUser cascades to repo_permissions ----
+
+    @Test
+    void deleteUser_cascadesPermissions() {
+        store.upsertAll(List.of(user("alice", List.of(), List.of()), user("bob", List.of(), List.of())));
+        permissionStore.save(RepoPermission.builder()
+                .username("alice")
+                .provider("github")
+                .value("org/repo")
+                .build());
+        permissionStore.save(RepoPermission.builder()
+                .username("bob")
+                .provider("github")
+                .value("org/repo")
+                .build());
+
+        store.deleteUser("alice");
+
+        assertTrue(permissionStore.findByUsername("alice").isEmpty());
+        assertEquals(1, permissionStore.findByUsername("bob").size());
     }
 }

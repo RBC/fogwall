@@ -482,22 +482,24 @@ function OverviewTab({
 
       {actionError && <p className="text-xs text-red-500">{actionError}</p>}
 
-      {isLocalAuth && (
+      {isAdmin && (
         <section className="border-t border-gray-100 pt-4">
           <h3 className="text-sm font-semibold text-gray-700 mb-2">Account Actions</h3>
           <div className="flex gap-2">
-            <button
-              onClick={() => setShowResetPw(true)}
-              className="px-3 py-1.5 rounded border border-gray-200 text-xs text-gray-600 hover:bg-gray-50"
-            >
-              Reset Password
-            </button>
+            {isLocalAuth && (
+              <button
+                onClick={() => setShowResetPw(true)}
+                className="px-3 py-1.5 rounded border border-gray-200 text-xs text-gray-600 hover:bg-gray-50"
+              >
+                Reset Password
+              </button>
+            )}
             <button
               onClick={handleDelete}
               disabled={deleting}
               className="px-3 py-1.5 rounded border border-red-200 text-xs text-red-600 hover:bg-red-50 disabled:opacity-40"
             >
-              {deleting ? 'Deleting…' : 'Delete User'}
+              {deleting ? 'Deleting…' : 'Delete User & Permissions'}
             </button>
           </div>
         </section>

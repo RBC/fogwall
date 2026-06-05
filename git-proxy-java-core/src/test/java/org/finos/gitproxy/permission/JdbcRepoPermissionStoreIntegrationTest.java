@@ -11,6 +11,7 @@ import org.finos.gitproxy.db.model.MatchTarget;
 import org.finos.gitproxy.db.model.MatchType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 /**
  * Integration tests for {@link JdbcRepoPermissionStore} backed by an H2 in-memory database.
@@ -20,12 +21,20 @@ import org.junit.jupiter.api.Test;
 class JdbcRepoPermissionStoreIntegrationTest {
 
     JdbcRepoPermissionStore store;
+    NamedParameterJdbcTemplate jdbc;
 
     @BeforeEach
     void setUp() {
         DataSource ds = DataSourceFactory.h2InMemory("perm-test-" + UUID.randomUUID());
         DatabaseMigrator.migrate(ds);
         store = new JdbcRepoPermissionStore(ds);
+        jdbc = new NamedParameterJdbcTemplate(ds);
+        seedUser("alice");
+        seedUser("bob");
+    }
+
+    private void seedUser(String username) {
+        jdbc.update("INSERT INTO proxy_users (username, roles) VALUES (:u, 'USER')", java.util.Map.of("u", username));
     }
 
     private RepoPermission perm(String username, String provider, String value) {

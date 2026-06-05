@@ -76,6 +76,26 @@ public class UserController {
         }
     }
 
+    @Operation(
+            operationId = "provisionUser",
+            summary = "Pre-provision a user row for IdP-backed accounts",
+            description = "Creates a proxy_users row with default USER role and no password so that "
+                    + "repo_permissions can be assigned before the user's first login. "
+                    + "Idempotent — returns 200 whether the user was created or already existed. "
+                    + "Roles and email are synced from the IdP on first login.")
+    @PostMapping("/provision")
+    public ResponseEntity<?> provision(@RequestBody ProvisionUserRequest req) {
+        if (!(userStore instanceof UserStore jdbc)) {
+            return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
+                    .body(Map.of("error", "User provisioning requires a mutable user store"));
+        }
+        if (req.username() == null || req.username().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "username is required"));
+        }
+        jdbc.upsertUser(req.username());
+        return ResponseEntity.ok(Map.of("username", req.username()));
+    }
+
     @Operation(operationId = "deleteUser", summary = "Delete a user")
     @DeleteMapping("/{username}")
     public ResponseEntity<?> delete(@PathVariable String username) {
@@ -259,4 +279,6 @@ public class UserController {
     public record ScmIdentityRequest(String provider, String scmUsername) {}
 
     public record AddEmailRequest(String email) {}
+
+    public record ProvisionUserRequest(String username) {}
 }

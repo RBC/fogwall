@@ -6,7 +6,7 @@ test('add and remove a permission from the user detail page', async ({ page }) =
   await page.goto('/dashboard/users/admin')
 
   // Switch to the Permissions tab
-  await page.getByRole('button', { name: 'Permissions' }).click()
+  await page.getByRole('button', { name: 'Permissions', exact: true }).click()
   await expect(page.getByRole('button', { name: '+ Add Permission' })).toBeVisible()
 
   // Open the modal and fill in the path; provider/matchType/operations use their defaults

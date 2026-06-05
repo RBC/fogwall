@@ -392,7 +392,13 @@ public class LiveConfigLoader {
             log.warn("repoPermissionService not available — permissions reload skipped");
             return;
         }
-        repoPermissionService.seedFromConfig(builder.buildConfigPermissions(newConfig));
+        var configPerms = builder.buildConfigPermissions(newConfig);
+        var userStore = builder.buildUserStore();
+        configPerms.stream()
+                .map(org.finos.gitproxy.permission.RepoPermission::getUsername)
+                .distinct()
+                .forEach(userStore::upsertUser);
+        repoPermissionService.seedFromConfig(configPerms);
         log.info("Permissions reloaded from config");
     }
 

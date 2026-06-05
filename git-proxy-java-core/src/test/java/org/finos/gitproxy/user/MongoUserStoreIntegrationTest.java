@@ -2,10 +2,13 @@ package org.finos.gitproxy.user;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.finos.gitproxy.permission.MongoRepoPermissionStore;
+import org.finos.gitproxy.permission.RepoPermission;
 import org.junit.jupiter.api.*;
 import org.testcontainers.containers.MongoDBContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -20,13 +23,16 @@ class MongoUserStoreIntegrationTest {
     static final MongoDBContainer MONGO = new MongoDBContainer(DockerImageName.parse("mongo:7.0"));
 
     MongoUserStore store;
+    MongoRepoPermissionStore permissionStore;
 
     @BeforeEach
     void setUp() {
-        store = new MongoUserStore(
-                MongoClients.create(MONGO.getConnectionString()),
-                "testdb_" + UUID.randomUUID().toString().replace("-", ""));
+        MongoClient client = MongoClients.create(MONGO.getConnectionString());
+        String dbName = "testdb_" + UUID.randomUUID().toString().replace("-", "");
+        store = new MongoUserStore(client, dbName);
         store.initialize();
+        permissionStore = new MongoRepoPermissionStore(client, dbName);
+        permissionStore.initialize();
     }
 
     // ── basic CRUD ──────────────────────────────────────────────────────────────
@@ -186,5 +192,28 @@ class MongoUserStoreIntegrationTest {
         assertEquals(1, identities.size());
         assertEquals("github", identities.get(0).get("provider"));
         assertEquals("alice-gh", identities.get(0).get("username"));
+    }
+
+    // ── deleteUser cascades to repo_permissions ─────────────────────────────────
+
+    @Test
+    void deleteUser_cascadesPermissions() {
+        store.createUser("alice", null, "USER");
+        store.createUser("bob", null, "USER");
+        permissionStore.save(RepoPermission.builder()
+                .username("alice")
+                .provider("github")
+                .value("org/repo")
+                .build());
+        permissionStore.save(RepoPermission.builder()
+                .username("bob")
+                .provider("github")
+                .value("org/repo")
+                .build());
+
+        store.deleteUser("alice");
+
+        assertTrue(permissionStore.findByUsername("alice").isEmpty());
+        assertEquals(1, permissionStore.findByUsername("bob").size());
     }
 }
