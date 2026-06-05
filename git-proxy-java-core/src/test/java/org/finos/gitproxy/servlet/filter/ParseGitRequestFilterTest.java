@@ -344,6 +344,49 @@ class ParseGitRequestFilterTest {
         assertEquals(GitClientUtils.ZERO_OID, details.getCommitTo());
     }
 
+    // ---- shallow clone push (single ref preceded by shallow pkt-lines) ----
+
+    @Test
+    void parse_shallowClonePush_oneShallowLine_isNotRejected() throws Exception {
+        byte[] existingBody = loadResource("push-sample-01-body.bin");
+        byte[] packData = extractPackData(existingBody);
+
+        byte[] body = buildBody(
+                new String[] {"shallow " + PUSH1_OLD, PUSH1_OLD + " " + PUSH1_NEW + " " + PUSH1_REF + "\0 report-status"
+                },
+                packData);
+
+        RequestBodyWrapper wrapper = wrapBody(body, "/owner/repo.git/git-receive-pack");
+        GitRequestDetails details = makeFilter().parse(wrapper);
+
+        assertNotEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+        assertEquals(PUSH1_REF, details.getBranch());
+        assertEquals(PUSH1_OLD, details.getCommitFrom());
+        assertEquals(PUSH1_NEW, details.getCommitTo());
+    }
+
+    @Test
+    void parse_shallowClonePush_multipleShallowLines_isNotRejected() throws Exception {
+        byte[] existingBody = loadResource("push-sample-01-body.bin");
+        byte[] packData = extractPackData(existingBody);
+
+        byte[] body = buildBody(
+                new String[] {
+                    "shallow " + PUSH1_OLD,
+                    "shallow " + PUSH1_NEW,
+                    PUSH1_OLD + " " + PUSH1_NEW + " " + PUSH1_REF + "\0 report-status"
+                },
+                packData);
+
+        RequestBodyWrapper wrapper = wrapBody(body, "/owner/repo.git/git-receive-pack");
+        GitRequestDetails details = makeFilter().parse(wrapper);
+
+        assertNotEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+        assertEquals(PUSH1_REF, details.getBranch());
+        assertEquals(PUSH1_OLD, details.getCommitFrom());
+        assertEquals(PUSH1_NEW, details.getCommitTo());
+    }
+
     // ---- tag push (single ref) ----
 
     @Test
