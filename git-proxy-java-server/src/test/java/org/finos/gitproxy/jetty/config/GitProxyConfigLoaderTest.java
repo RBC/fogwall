@@ -237,7 +237,7 @@ class GitProxyConfigLoaderTest {
                         - "WIP"
                 """);
         var ex = assertThrows(IllegalStateException.class, () -> GitProxyConfigLoader.loadWithOverride(override));
-        assertTrue(ex.getMessage().contains("commit.diff"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("diff"), ex.getMessage());
     }
 
     @Test

@@ -88,7 +88,7 @@ dependencies {
     testRuntimeOnly "com.h2database:h2:${h2Version}"
     testImplementation "org.mockito:mockito-core:${mockitoVersion}"
     testImplementation "org.junit.jupiter:junit-jupiter-params:${junitVersion}"
-    testRuntimeOnly "org.junit.platform:junit-platform-launcher:${junitPlatformVersion}"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher:${junitVersion}"
     testImplementation "org.mongodb:mongodb-driver-sync:${mongoVersion}"
     testImplementation "org.testcontainers:testcontainers:${testContainersVersion}"
     testImplementation "org.testcontainers:testcontainers-junit-jupiter:${testContainersVersion}"
