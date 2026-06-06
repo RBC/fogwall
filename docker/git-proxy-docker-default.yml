@@ -153,17 +153,18 @@ commit:
       # Commit messages matching any of these patterns are rejected.
       patterns:
         - '(?i)(password|secret|token)\s*[=:]\s*\S+'
-  diff:
-    block:
-      # Example: block internal hostnames/URLs from leaking into public repos.
-      literals:
-        - "internal.corp.example.com"
-      patterns:
-        - '(?i)https?://[a-z0-9.-]*\.corp\.example\.com\b'
-  # Enables Gitleaks secret scanning. Full configuration reference can be found in the docs:
-  #  docs/CONFIGURATION.md#commit-validation
-  secret-scan:
-    enabled: true
+
+diff-scan:
+  block:
+    # Example: block internal hostnames/URLs from leaking into public repos.
+    literals:
+      - "internal.corp.example.com"
+    patterns:
+      - '(?i)https?://[a-z0-9.-]*\.corp\.example\.com\b'
+
+# Enables Gitleaks secret scanning. Full configuration reference: docs/CONFIGURATION.md#secret-scanning
+secret-scan:
+  enabled: true
 
 rules:
   allow:

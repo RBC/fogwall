@@ -1,5 +1,6 @@
 package org.finos.gitproxy.jetty.config;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
@@ -56,6 +57,8 @@ public final class GitProxyConfigLoader {
      * @throws GestaltException if the base config cannot be parsed
      */
     public static GitProxyConfig load() throws GestaltException {
+        YamlStructureValidator.validateClasspathResource(BASE_CONFIG);
+
         var builder = new GestaltBuilder()
                 .setTreatMissingValuesAsErrors(false)
                 .setTreatMissingDiscretionaryValuesAsErrors(false);
@@ -71,6 +74,7 @@ public final class GitProxyConfigLoader {
             for (String profile : profilesEnv.split(",")) {
                 String profileConfig = "git-proxy-" + profile.trim() + ".yml";
                 if (GitProxyConfigLoader.class.getClassLoader().getResource(profileConfig) != null) {
+                    YamlStructureValidator.validateClasspathResource(profileConfig);
                     builder.addSource(ClassPathConfigSourceBuilder.builder()
                             .setResource(profileConfig)
                             .build());
@@ -108,6 +112,12 @@ public final class GitProxyConfigLoader {
      * @throws GestaltException if the base or override config cannot be parsed
      */
     public static GitProxyConfig loadWithOverride(Path overrideFile) throws GestaltException {
+        try {
+            YamlStructureValidator.validateFile(overrideFile);
+        } catch (IOException e) {
+            throw new GestaltException("Cannot read override config file: " + overrideFile, e);
+        }
+
         var builder = new GestaltBuilder()
                 .setTreatMissingValuesAsErrors(false)
                 .setTreatMissingDiscretionaryValuesAsErrors(false);

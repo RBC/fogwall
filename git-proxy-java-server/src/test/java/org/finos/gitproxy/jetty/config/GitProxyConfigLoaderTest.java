@@ -183,7 +183,9 @@ class GitProxyConfigLoaderTest {
                 permissions:
                   - username: test-user
                     provider: github
-                    path: /org/repo
+                    match:
+                      target: SLUG
+                      value: /org/repo
                     operations: PUSH
                 """);
         var config = GitProxyConfigLoader.loadWithOverride(override);
@@ -214,6 +216,58 @@ class GitProxyConfigLoaderTest {
         assertTrue(config.getProviders().containsKey("github"));
         assertTrue(config.getProviders().get("github").isEnabled());
         assertTrue(config.getSecretScan().isEnabled());
+    }
+
+    // --- unknown-key validation ---
+
+    @Test
+    void loadWithOverride_unknownTopLevelKey_throws() throws IOException {
+        Path override = writeYaml("typo-key: invalid\n");
+        var ex = assertThrows(IllegalStateException.class, () -> GitProxyConfigLoader.loadWithOverride(override));
+        assertTrue(ex.getMessage().contains("typo-key"), ex.getMessage());
+    }
+
+    @Test
+    void loadWithOverride_unknownNestedKey_throws() throws IOException {
+        Path override = writeYaml("""
+                commit:
+                  diff:
+                    block:
+                      literals:
+                        - "WIP"
+                """);
+        var ex = assertThrows(IllegalStateException.class, () -> GitProxyConfigLoader.loadWithOverride(override));
+        assertTrue(ex.getMessage().contains("commit.diff"), ex.getMessage());
+    }
+
+    @Test
+    void loadWithOverride_unknownProviderKey_throws() throws IOException {
+        Path override = writeYaml("""
+                providers:
+                  github:
+                    enabled: true
+                    unknown-option: true
+                """);
+        var ex = assertThrows(IllegalStateException.class, () -> GitProxyConfigLoader.loadWithOverride(override));
+        assertTrue(ex.getMessage().contains("unknown-option"), ex.getMessage());
+    }
+
+    @Test
+    void loadWithOverride_validKeys_noException() throws GestaltException, IOException {
+        Path override = writeYaml("""
+                server:
+                  port: 9090
+                secret-scan:
+                  enabled: false
+                diff-scan:
+                  block:
+                    literals:
+                      - "BLOCKED"
+                """);
+        // must not throw
+        var config = GitProxyConfigLoader.loadWithOverride(override);
+        assertEquals(9090, config.getServer().getPort());
+        assertFalse(config.getSecretScan().isEnabled());
     }
 
     private Path writeYaml(String yaml) throws IOException {

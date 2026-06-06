@@ -16,11 +16,15 @@ import type { CurrentUser } from './types'
 export default function App() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
   const [authProvider, setAuthProvider] = useState<string>('local')
+  const [bulkReview, setBulkReview] = useState<boolean>(false)
 
   useEffect(() => {
     fetchMe().then(setCurrentUser).catch(console.error)
     fetchConfig()
-      .then((c) => setAuthProvider(c.authProvider))
+      .then((c) => {
+        setAuthProvider(c.authProvider)
+        setBulkReview(c.bulkReview ?? false)
+      })
       .catch(console.error)
   }, [])
 
@@ -30,7 +34,10 @@ export default function App() {
         <Nav currentUser={currentUser} />
         <main className="flex-1">
           <Routes>
-            <Route path="/" element={<PushList currentUser={currentUser} />} />
+            <Route
+              path="/"
+              element={<PushList currentUser={currentUser} bulkReviewEnabled={bulkReview} />}
+            />
             <Route path="/push/:id" element={<PushDetail currentUser={currentUser} />} />
             <Route path="/push/:id/diff" element={<PushDiff />} />
             <Route path="/providers" element={<Providers />} />

@@ -36,9 +36,10 @@ function formatTime(ts: string | number | undefined) {
 
 interface PushListProps {
   currentUser: CurrentUser | null
+  bulkReviewEnabled?: boolean
 }
 
-export function PushList({ currentUser }: PushListProps) {
+export function PushList({ currentUser, bulkReviewEnabled = false }: PushListProps) {
   const navigate = useNavigate()
   const [pushes, setPushes] = useState<PushRecord[]>([])
   const [filterStatus, setFilterStatus] = useState<string>('')
@@ -56,8 +57,8 @@ export function PushList({ currentUser }: PushListProps) {
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Only allow selection when viewing PENDING pushes
-  const selectionEnabled = filterStatus === 'PENDING'
+  // Only allow selection when bulk review is enabled and viewing PENDING pushes
+  const selectionEnabled = bulkReviewEnabled && filterStatus === 'PENDING'
 
   function toggleSelect(id: string, e: React.MouseEvent) {
     e.stopPropagation()
