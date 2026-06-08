@@ -90,6 +90,8 @@ tasks.register('copyFrontend', Copy) {
     exclude('login.html')
 }
 
+def appVersion = project.version
+
 tasks.named('processResources') {
     // Skip the frontend build when running locally against the Vite dev server.
     // Usage: ./gradlew :git-proxy-java-dashboard:run -PskipFrontend
@@ -100,7 +102,7 @@ tasks.named('processResources') {
     }
     // Inject the project version into version.properties so OpenApiController can read it at runtime.
     filesMatching('version.properties') {
-        expand(appVersion: project.version)
+        expand(appVersion: appVersion)
     }
     // Inject the Swagger UI WebJar version into swagger-ui.html so the asset paths are correct.
     filesMatching('**/swagger-ui.html') {

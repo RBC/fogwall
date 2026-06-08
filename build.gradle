@@ -91,7 +91,7 @@ allprojects {
 
 
 cyclonedxBom {
-    projectType = 'application'
+    projectType = org.cyclonedx.model.Component.Type.APPLICATION
 }
 
 tasks.register('installGitHooks') {
