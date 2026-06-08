@@ -203,3 +203,10 @@ users:
 #     file-path: git-proxy.yml
 #     # Polling interval in seconds. Set to 0 to disable polling (manual reload only via POST /api/config/reload).
 #     interval-seconds: 300
+
+# Dashboard UI feature flags. All features default to disabled — opt in per deployment.
+#
+# dashboard:
+#   # bulk-review: enable checkboxes on the push list so reviewers can approve/reject multiple
+#   # PENDING pushes at once. Disable (default) when your audit policy requires individual sign-off.
+#   bulk-review: false

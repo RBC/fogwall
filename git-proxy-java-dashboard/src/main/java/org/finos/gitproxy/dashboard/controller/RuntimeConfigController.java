@@ -31,6 +31,7 @@ public class RuntimeConfigController {
     public Map<String, Object> runtimeConfig() {
         List<String> allowedOrigins = gitProxyConfig.getServer().getAllowedOrigins();
         String authProvider = gitProxyConfig.getAuth().getProvider();
-        return Map.of("allowedOrigins", allowedOrigins, "authProvider", authProvider);
+        boolean bulkReview = gitProxyConfig.getDashboard().isBulkReview();
+        return Map.of("allowedOrigins", allowedOrigins, "authProvider", authProvider, "bulkReview", bulkReview);
     }
 }

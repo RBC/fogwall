@@ -66,4 +66,10 @@ public class GitProxyConfig {
      * server. Provider, server, and database changes always require a restart.
      */
     private ReloadConfig reload = new ReloadConfig();
+
+    /**
+     * Optional dashboard UI feature flags. Controls which experimental or opt-in features are visible to reviewers.
+     * Defaults to all features disabled.
+     */
+    private DashboardConfig dashboard = new DashboardConfig();
 }

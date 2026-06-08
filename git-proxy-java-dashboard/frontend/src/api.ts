@@ -67,7 +67,11 @@ export async function triggerConfigReload(section: string = 'all'): Promise<{ me
   return res.json()
 }
 
-export async function fetchConfig(): Promise<{ authProvider: string; allowedOrigins: string[] }> {
+export async function fetchConfig(): Promise<{
+  authProvider: string
+  allowedOrigins: string[]
+  bulkReview: boolean
+}> {
   const res = await fetch('/api/runtime-config')
   if (!res.ok) throw new Error('Failed to fetch config')
   return res.json()
