@@ -25,7 +25,6 @@ public class GitRequestDetails {
     private Repository localRepository;
 
     private String branch; // null for fetch requests
-    private Commit commit; // Head/parent commit from the push
     private String commitFrom; // Old ref SHA from the packet line (the push range start)
     private String commitTo; // New ref SHA from the packet line (the push range end)
     private List<Commit> pushedCommits = new ArrayList<>(); // All commits received in this push

@@ -281,4 +281,63 @@ class EnrichPushCommitsFilterTest {
         assertFalse(details.getPushedCommits().isEmpty(), "Pack must be unpacked despite PACK in ref name");
         assertEquals(toSha, details.getPushedCommits().get(0).getSha());
     }
+
+    // ---- fail-closed behaviour ----
+
+    /** Ref deletions (commitTo = all zeros) must skip enrichment entirely and leave result PENDING. */
+    @Test
+    void doHttpFilter_refDeletion_skipsEnrichment() throws Exception {
+        LocalRepositoryCache mockCache = mock(LocalRepositoryCache.class);
+        GitRequestDetails details =
+                makeDetails(ObjectId.zeroId().name(), ObjectId.zeroId().name());
+
+        RequestBodyWrapper request = wrapRequest(new byte[0], details);
+        HttpServletResponse response = mock(HttpServletResponse.class);
+
+        new EnrichPushCommitsFilter(new GitHubProvider("/proxy"), mockCache).doHttpFilter(request, response);
+
+        verifyNoInteractions(mockCache);
+        assertTrue(details.getPushedCommits().isEmpty());
+        assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
+    }
+
+    /** If the cache throws an exception, the push must be marked ERROR — not silently passed through. */
+    @Test
+    void doHttpFilter_cacheThrows_errorsRequest() throws Exception {
+        LocalRepositoryCache mockCache = mock(LocalRepositoryCache.class);
+        when(mockCache.getOrClone(any())).thenThrow(new RuntimeException("network unreachable"));
+
+        GitRequestDetails details = makeDetails(ObjectId.zeroId().name(), "abc1234abc1234abc1234abc1234abc1234abc123");
+
+        RequestBodyWrapper request = wrapRequest(new byte[0], details);
+        HttpServletResponse response = mock(HttpServletResponse.class);
+
+        new EnrichPushCommitsFilter(new GitHubProvider("/proxy"), mockCache).doHttpFilter(request, response);
+
+        assertEquals(GitRequestDetails.GitResult.ERROR, details.getResult());
+        assertNotNull(details.getReason());
+        assertTrue(details.getPushedCommits().isEmpty());
+    }
+
+    /** An empty commit range (objects not resolvable) must error the push, not pass it through. */
+    @Test
+    void doHttpFilter_emptyCommitRange_errorsRequest() throws Exception {
+        // Bare cache repo with no objects — commit range will resolve to empty.
+        Repository emptyRepo =
+                Git.init().setBare(true).setDirectory(cacheDir.toFile()).call().getRepository();
+        LocalRepositoryCache mockCache = mock(LocalRepositoryCache.class);
+        when(mockCache.getOrClone(any())).thenReturn(emptyRepo);
+
+        String toSha = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+        GitRequestDetails details = makeDetails(ObjectId.zeroId().name(), toSha);
+
+        RequestBodyWrapper request = wrapRequest(new byte[0], details);
+        HttpServletResponse response = mock(HttpServletResponse.class);
+
+        new EnrichPushCommitsFilter(new GitHubProvider("/proxy"), mockCache).doHttpFilter(request, response);
+
+        assertEquals(GitRequestDetails.GitResult.ERROR, details.getResult());
+        assertNotNull(details.getReason());
+        assertTrue(details.getPushedCommits().isEmpty());
+    }
 }
