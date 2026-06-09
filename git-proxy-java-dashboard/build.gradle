@@ -143,12 +143,13 @@ tasks.register('stop') {
 }
 
 // Force Netty to a patched version — transitively pulled in by lettuce-core via spring-session-data-redis.
-// Resolves GHSA-mj4r-2hfc-f8p6 (netty-codec) and GHSA-cm33-6792-r9fm (netty-codec-dns).
+// Resolves GHSA-3qp7-7mw8-wx86, GHSA-x4gw-5cx5-pgmh (netty-handler) and GHSA-5pvg-856g-cp85,
+// GHSA-676x-f7gg-47vc, GHSA-xmv7-r254-6q78 (netty-resolver-dns).
 configurations.configureEach {
     resolutionStrategy.eachDependency { DependencyResolveDetails details ->
         if (details.requested.group == 'io.netty') {
-            details.useVersion '4.1.133.Final'
-            details.because 'CVE fix: GHSA-mj4r-2hfc-f8p6, GHSA-cm33-6792-r9fm'
+            details.useVersion '4.1.135.Final'
+            details.because 'CVE fix: GHSA-3qp7-7mw8-wx86, GHSA-x4gw-5cx5-pgmh, GHSA-5pvg-856g-cp85, GHSA-676x-f7gg-47vc, GHSA-xmv7-r254-6q78'
         }
     }
 }
