@@ -162,16 +162,6 @@ class ParseGitRequestFilterTest {
     }
 
     @Test
-    void parse_pushRequest_hasNonNullCommit() throws Exception {
-        byte[] body = loadResource("push-sample-01-body.bin");
-        RequestBodyWrapper wrapper = wrapBody(body, "/owner/repo.git/git-receive-pack");
-
-        GitRequestDetails details = makeFilter().parse(wrapper);
-
-        assertNotNull(details.getCommit(), "Parsed commit must not be null");
-    }
-
-    @Test
     void parse_secondSample_extractsOldSha() throws Exception {
         byte[] body = loadResource("push-sample-02-body.bin");
         RequestBodyWrapper wrapper = wrapBody(body, "/owner/repo.git/git-receive-pack");
@@ -297,20 +287,6 @@ class ParseGitRequestFilterTest {
         assertEquals("refs/heads/PACK-evil", details.getBranch());
         assertEquals(PUSH1_OLD, details.getCommitFrom());
         assertEquals(PUSH1_NEW, details.getCommitTo());
-    }
-
-    @Test
-    void parse_refNameContainingPACK_commitStillParsed() throws Exception {
-        byte[] existingBody = loadResource("push-sample-01-body.bin");
-        byte[] packData = extractPackData(existingBody);
-
-        byte[] body = buildBody(
-                new String[] {PUSH1_OLD + " " + PUSH1_NEW + " refs/heads/PACK-evil\0 report-status"}, packData);
-
-        RequestBodyWrapper wrapper = wrapBody(body, "/owner/repo.git/git-receive-pack");
-        GitRequestDetails details = makeFilter().parse(wrapper);
-
-        assertNotNull(details.getCommit(), "Commit should be parsed despite PACK in ref name");
     }
 
     // ---- single-ref push still works after changes ----

@@ -13,9 +13,9 @@ import org.eclipse.jgit.lib.NullProgressMonitor;
 import org.eclipse.jgit.lib.ObjectInserter;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.transport.PackParser;
+import org.eclipse.jgit.transport.PacketLineIn;
 import org.finos.gitproxy.git.Commit;
 import org.finos.gitproxy.git.CommitInspectionService;
-import org.finos.gitproxy.git.GitReceivePackParser;
 import org.finos.gitproxy.git.GitRequestDetails;
 import org.finos.gitproxy.git.HttpOperation;
 import org.finos.gitproxy.git.LocalRepositoryCache;
@@ -66,6 +66,12 @@ public class EnrichPushCommitsFilter extends AbstractProviderAwareGitProxyFilter
             return;
         }
 
+        // Ref deletions have no new objects to inspect — skip enrichment entirely.
+        if (requestDetails.isRefDeletion()) {
+            log.debug("Ref deletion push — skipping commit enrichment");
+            return;
+        }
+
         try {
             String remoteUrl = constructRemoteUrl(requestDetails);
             log.info("Enriching push commits from repository: {}", remoteUrl);
@@ -85,16 +91,21 @@ public class EnrichPushCommitsFilter extends AbstractProviderAwareGitProxyFilter
             List<Commit> commits = CommitInspectionService.getCommitRange(repository, fromCommit, toCommit);
 
             if (commits.isEmpty()) {
-                log.warn("No commits found in range {}..{}", fromCommit, toCommit);
-                addFallbackCommit(requestDetails);
-            } else {
-                log.info("Extracted {} commits from repository", commits.size());
-                requestDetails.getPushedCommits().addAll(commits);
+                log.warn("No commits found in range {}..{} — erroring push", fromCommit, toCommit);
+                requestDetails.setResult(GitRequestDetails.GitResult.ERROR);
+                requestDetails.setReason("Push error: the proxy could not inspect any commits in this push. "
+                        + "Please retry or contact your administrator.");
+                return;
             }
+
+            log.info("Extracted {} commits from repository", commits.size());
+            requestDetails.getPushedCommits().addAll(commits);
 
         } catch (Exception e) {
             log.warn("Failed to enrich push commits: {}", e.getMessage());
-            addFallbackCommit(requestDetails);
+            requestDetails.setResult(GitRequestDetails.GitResult.ERROR);
+            requestDetails.setReason("Push error: commit inspection failed (" + e.getMessage() + "). "
+                    + "Please retry or contact your administrator.");
         }
     }
 
@@ -114,7 +125,7 @@ public class EnrichPushCommitsFilter extends AbstractProviderAwareGitProxyFilter
         }
 
         // Walk past pkt-lines to find the PACK data boundary
-        int packOffset = GitReceivePackParser.findPackDataOffset(body);
+        int packOffset = findPackDataOffset(body);
         if (packOffset < 0) {
             log.debug("No PACK signature found in request body");
             return;
@@ -149,10 +160,35 @@ public class EnrichPushCommitsFilter extends AbstractProviderAwareGitProxyFilter
         return null;
     }
 
-    private void addFallbackCommit(GitRequestDetails requestDetails) {
-        if (requestDetails.getCommit() != null) {
-            requestDetails.getPushedCommits().add(requestDetails.getCommit());
+    /**
+     * Find the byte offset of the PACK signature in a git receive-pack request body. Uses JGit's {@link PacketLineIn}
+     * to walk pkt-line framing, which prevents CVE-2025-54584 (a crafted ref name containing "PACK" could otherwise
+     * fool a naive byte scan).
+     *
+     * @return byte offset of the PACK signature, or -1 if not found
+     */
+    private static int findPackDataOffset(byte[] data) {
+        if (data == null || data.length < 4) return -1;
+        if (data[0] == 'P' && data[1] == 'A' && data[2] == 'C' && data[3] == 'K') return 0;
+        ByteArrayInputStream bais = new ByteArrayInputStream(data);
+        PacketLineIn pli = new PacketLineIn(bais);
+        try {
+            while (true) {
+                String line = pli.readString();
+                if (PacketLineIn.isEnd(line)) break;
+            }
+        } catch (IOException e) {
+            return -1;
         }
+        int pos = data.length - bais.available();
+        if (pos + 4 <= data.length
+                && data[pos] == 'P'
+                && data[pos + 1] == 'A'
+                && data[pos + 2] == 'C'
+                && data[pos + 3] == 'K') {
+            return pos;
+        }
+        return -1;
     }
 
     private String constructRemoteUrl(GitRequestDetails requestDetails) {

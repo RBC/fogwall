@@ -11,6 +11,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.finos.gitproxy.db.memory.InMemoryPushStore;
 import org.finos.gitproxy.db.model.Attestation;
 import org.finos.gitproxy.db.model.PushRecord;
+import org.finos.gitproxy.git.Commit;
+import org.finos.gitproxy.git.Contributor;
 import org.finos.gitproxy.git.GitRequestDetails;
 import org.junit.jupiter.api.Test;
 
@@ -34,18 +36,19 @@ class AllowApprovedPushFilterTest {
                 .name(repoName)
                 .slug("/owner/" + repoName)
                 .build());
-        details.setCommit(org.finos.gitproxy.git.Commit.builder()
-                .sha(commitTo)
-                .author(org.finos.gitproxy.git.Contributor.builder()
-                        .name("Dev")
-                        .email("dev@example.com")
-                        .build())
-                .committer(org.finos.gitproxy.git.Contributor.builder()
-                        .name("Dev")
-                        .email("dev@example.com")
-                        .build())
-                .message("test")
-                .build());
+        details.getPushedCommits()
+                .add(Commit.builder()
+                        .sha(commitTo)
+                        .author(Contributor.builder()
+                                .name("Dev")
+                                .email("dev@example.com")
+                                .build())
+                        .committer(Contributor.builder()
+                                .name("Dev")
+                                .email("dev@example.com")
+                                .build())
+                        .message("test")
+                        .build());
         return details;
     }
 

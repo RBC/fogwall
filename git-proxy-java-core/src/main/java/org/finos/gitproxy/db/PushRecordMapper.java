@@ -63,16 +63,15 @@ public final class PushRecordMapper {
             builder.scmUsername(details.getScmUsername());
         }
 
-        // Map commit author info from the head commit
-        if (details.getCommit() != null) {
-            Commit head = details.getCommit();
+        // Map pushed commits and author info from the head commit (index 0, newest-first)
+        if (details.getPushedCommits() != null && !details.getPushedCommits().isEmpty()) {
+            Commit head = details.getPushedCommits().get(0);
             if (head.getAuthor() != null) {
                 builder.author(head.getAuthor().getName());
                 builder.authorEmail(head.getAuthor().getEmail());
             }
         }
 
-        // Map pushed commits
         if (details.getPushedCommits() != null && !details.getPushedCommits().isEmpty()) {
             String pushId = details.getId().toString();
             List<PushCommit> commits = details.getPushedCommits().stream()
