@@ -42,7 +42,7 @@ ext {
     jacksonBomVersion = '3.1.4'
 
     // Spring
-    springVersion = '7.0.7'
+    springVersion = '7.0.8'
     springSecurityVersion = '7.0.5'
     springSessionVersion = '4.0.3'
     lettuceVersion = '6.8.2.RELEASE'
