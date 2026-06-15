@@ -30,10 +30,13 @@ jobs:
       # Single scan — fail on high+, emit template report and JSON in one pass.
       # SARIF upload intentionally omitted — OS-layer CVEs are triaged with application
       # context; uploading creates misleading noise in the GitHub Security tab.
+      - name: Set image name
+        run: echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
       - name: Scan image
         if: always()
         run: |
-          grype ghcr.io/coopernetes/git-proxy-java:latest \
+          grype "${IMAGE}:edge" \
             --config .grype.yaml \
             -o "template=grype-report.txt" \
             -o "json=grype-report.json"
