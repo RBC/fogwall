@@ -79,7 +79,7 @@ ext {
 
 allprojects {
     group = 'org.finos.gitproxy'
-    version = '1.0.0-rc.7'
+    version = '1.0.0'
     
     repositories {
         mavenCentral()
