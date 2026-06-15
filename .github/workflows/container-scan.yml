@@ -36,7 +36,7 @@ jobs:
       - name: Scan image
         if: always()
         run: |
-          grype "${IMAGE}:edge" \
+          grype "${IMAGE}:latest" \
             --config .grype.yaml \
             -o "template=grype-report.txt" \
             -o "json=grype-report.json"
