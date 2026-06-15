@@ -46,7 +46,20 @@ Arguments passed: `$ARGUMENTS`
 
 4. **Verify the tag doesn't already exist.** Run `git tag -l v<version>`. If it exists, stop and tell the user.
 
-5. **Create the signed annotated tag.** Attempt a signed tag first:
+5. **Sync with origin/main and verify HEAD.** Run:
+   ```
+   git fetch origin main
+   git rev-parse HEAD
+   git rev-parse origin/main
+   ```
+   If the two SHAs differ, **stop** and tell the user:
+   > Your local HEAD (`<local sha>`) is not the same commit as `origin/main` (`<remote sha>`).
+   > The Docker build ran on `origin/main`. Tagging a different commit will break the promote-not-rebuild flow.
+   > Run `git checkout main && git reset --hard origin/main` to fix this, then re-run `/release-tag`.
+
+   Only proceed once HEAD == origin/main.
+
+6. **Create the signed annotated tag.** Attempt a signed tag first:
    ```
    git tag -s v<version> -m "Release v<version>"
    ```
@@ -55,13 +68,13 @@ Arguments passed: `$ARGUMENTS`
    git tag -a v<version> -m "Release v<version>"
    ```
 
-6. **Show and confirm.** Show the user:
+7. **Show and confirm.** Show the user:
    - `git show v<version> --stat`
 
    Then ask: "Ready to push the tag? This will trigger the Docker publish workflow."
    If they confirm, run `git push origin v<version>`. If they decline, remind them to push manually.
 
-7. **Create GitHub release with auto-generated notes.**
+8. **Create GitHub release with auto-generated notes.**
    ```
    gh release create v<version> \
      --title "v<version>" \

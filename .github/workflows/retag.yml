@@ -38,12 +38,15 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # ratchet:docker/setup-buildx-action@v4
 
+      - name: Set image name
+        run: echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
       - name: Retag
         run: |
-          SOURCE="ghcr.io/${{ github.repository }}@${{ inputs.source-digest }}"
+          SOURCE="${IMAGE}@${{ inputs.source-digest }}"
           TAG_ARGS=""
           for tag in ${{ inputs.target-tags }}; do
-            TAG_ARGS="$TAG_ARGS --tag ghcr.io/${{ github.repository }}:${tag}"
+            TAG_ARGS="$TAG_ARGS --tag ${IMAGE}:${tag}"
           done
           echo "Retagging ${SOURCE} -> ${{ inputs.target-tags }}"
           docker buildx imagetools create ${TAG_ARGS} ${SOURCE}
