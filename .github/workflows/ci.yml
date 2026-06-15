@@ -179,7 +179,7 @@ jobs:
           cache: gradle
 
       - name: Submit dependency graph
-        uses: gradle/actions/dependency-submission@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # ratchet:gradle/actions/dependency-submission@v6
+        uses: gradle/actions/dependency-submission@3f131e8634966bd73d06cc69884922b02e6faf92 # ratchet:gradle/actions/dependency-submission@v6
 
   e2e-test:
     name: E2E Test
