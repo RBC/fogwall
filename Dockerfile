@@ -58,9 +58,19 @@ RUN sed -i \
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM docker.io/eclipse-temurin:25-jre-noble@sha256:f9bd8815e73632c22985ebb133ec49b9fc4ad5ffe0657594ac02748ad0431ab7
 
+# Packages to upgrade beyond what the base image ships, space-separated.
+# Used to patch CVEs that are fixed in Ubuntu's repos but not yet picked up by
+# the upstream temurin image rebuild. Clear once the base image catches up.
+ARG SECURITY_UPGRADE_PKGS="libssl3t64 openssl"
+
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && if [ -n "${SECURITY_UPGRADE_PKGS}" ]; then \
+         apt-get install -y --only-upgrade ${SECURITY_UPGRADE_PKGS}; \
+       fi \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy the built distribution
 COPY --from=builder \
