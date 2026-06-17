@@ -102,7 +102,7 @@ public class EnrichPushCommitsFilter extends AbstractProviderAwareGitProxyFilter
             requestDetails.getPushedCommits().addAll(commits);
 
         } catch (Exception e) {
-            log.warn("Failed to enrich push commits: {}", e.getMessage());
+            log.error("Failed to enrich push commits", e);
             requestDetails.setResult(GitRequestDetails.GitResult.ERROR);
             requestDetails.setReason("Push error: commit inspection failed (" + e.getMessage() + "). "
                     + "Please retry or contact your administrator.");

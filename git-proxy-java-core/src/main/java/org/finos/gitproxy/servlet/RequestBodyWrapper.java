@@ -28,7 +28,7 @@ public class RequestBodyWrapper extends HttpServletRequestWrapper {
                 bufferedInputStream = new BufferedInputStream(inputStream);
                 byte[] byteBuffer = new byte[128];
                 int bytesRead = -1;
-                while ((bytesRead = bufferedInputStream.read(byteBuffer)) > 0) {
+                while ((bytesRead = bufferedInputStream.read(byteBuffer)) != -1) {
                     byteArrayOutputStream.write(byteBuffer, 0, bytesRead);
                 }
             }
