@@ -52,7 +52,7 @@ public class LocalRepositoryCache {
 
     /** Default constructor that uses system temp directory with shutdown hook. */
     public LocalRepositoryCache() throws IOException {
-        this(Files.createTempDirectory("git-proxy-java-cache-"), DEFAULT_CLONE_DEPTH, true);
+        this(Files.createTempDirectory("fogwall-cache-"), DEFAULT_CLONE_DEPTH, true);
     }
 
     /**

@@ -23,7 +23,7 @@ echo "  URL: http://localhost:8080/push/${GIT_REPO}"
 echo "=========================================================="
 sleep 2
 
-echo "→ Cloning repository (${PUSH_URL//${GIT_PASSWORD}/***}) via git-proxy..."
+echo "→ Cloning repository (${PUSH_URL//${GIT_PASSWORD}/***}) via fogwall..."
 git clone "${PUSH_URL}" "${REPO_DIR}"
 sleep 2
 

@@ -26,7 +26,7 @@ fogwall-server
   Standalone Jetty application (FogwallJettyApplication). Registers both proxy modes for
   every configured provider, loads YAML config via Gestalt, and starts a plain Jetty server.
   No Spring, no dashboard, no REST API. This module also owns the shared servlet registrar
-  (GitProxyServletRegistrar) and configuration builder (JettyConfigurationBuilder) used by
+  (FogwallServletRegistrar) and configuration builder (JettyConfigurationBuilder) used by
   the dashboard module.
 
 fogwall-dashboard
@@ -36,9 +36,9 @@ fogwall-dashboard
   is always UI-driven in this mode.
 ```
 
-The server module defines a `GitProxyContext` record that bundles all runtime singletons (push store, user store,
+The server module defines a `FogwallContext` record that bundles all runtime singletons (push store, user store,
 approval gateway, identity resolver, repository caches, TLS config). Both application entry points build this context
-from config and pass it to `GitProxyServletRegistrar`, which registers the same servlets and filters regardless of
+from config and pass it to `FogwallServletRegistrar`, which registers the same servlets and filters regardless of
 whether the dashboard is present.
 
 ---
@@ -129,7 +129,7 @@ git push → /proxy/<provider>/<owner>/<repo>.git
        PushFinalizerFilter        save push record; wait for approval if required
              │
              ▼
-     GitProxyServlet (Jetty AsyncProxyServlet)
+     FogwallServlet (Jetty AsyncProxyServlet)
        • HTTP proxy pass-through to upstream
        • on response: update push record → FORWARDED or ERROR
 ```
@@ -160,7 +160,7 @@ and are reported together.
 
 ## Core abstractions
 
-### Provider (`GitProxyProvider`)
+### Provider (`FogwallProvider`)
 
 A provider represents one upstream Git hosting service. It carries the upstream base URI, the URL path prefix the proxy
 listens on, and optional API calls for identity resolution.
@@ -230,7 +230,7 @@ Backends: static YAML list, JDBC (H2/Postgres), MongoDB, or a composite that che
 ### Proxy only (`fogwall-server`)
 
 `FogwallJettyApplication` boots a plain Jetty server. It loads YAML config (base `fogwall.yml` + profile overlays +
-environment variable overrides), builds the `GitProxyContext`, and registers both proxy modes for every provider. There
+environment variable overrides), builds the `FogwallContext`, and registers both proxy modes for every provider. There
 is no Spring context, no dashboard, and no REST API — just the git servlets on `/push/*` and `/proxy/*`.
 
 The approval gateway defaults to `AutoApprovalGateway` — clean pushes go straight through with no human review. A
@@ -249,7 +249,7 @@ environments, or setups where an external system like ServiceNow handles approva
 
 ### Proxy + dashboard (`fogwall-dashboard`)
 
-`FogwallDashboardApplication` builds the same `GitProxyContext` and calls the same `GitProxyServletRegistrar`, then
+`FogwallDashboardApplication` builds the same `FogwallContext` and calls the same `FogwallServletRegistrar`, then
 layers on a Spring MVC `DispatcherServlet` at `/*`. Jetty's servlet path-matching rules give the more-specific git paths
 (`/push/*`, `/proxy/*`) precedence, so the Spring servlet only handles `/api/*`, `/dashboard/*`, `/login`, and static
 assets.

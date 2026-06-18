@@ -3,7 +3,7 @@ package com.rbc.fogwall.jetty.config;
 import com.rbc.fogwall.db.jdbc.PoolConfig;
 import lombok.Data;
 
-/** Binds the {@code database:} block in git-proxy.yml. */
+/** Binds the {@code database:} block in fogwall.yml. */
 @Data
 public class DatabaseConfig {
 

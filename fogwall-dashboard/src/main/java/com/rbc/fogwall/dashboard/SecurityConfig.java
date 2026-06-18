@@ -90,7 +90,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 /**
  * Spring Security configuration for the dashboard module.
  *
- * <p>The active authentication provider is selected from {@code auth.provider} in {@code git-proxy.yml}:
+ * <p>The active authentication provider is selected from {@code auth.provider} in {@code fogwall.yml}:
  *
  * <ul>
  *   <li>{@code local} (default) — form login validated against BCrypt password hashes in {@code users:}
@@ -230,7 +230,7 @@ public class SecurityConfig {
             Map<String, List<String>> roleMappings)
             throws Exception {
         if (ldapCfg.getUrl().isBlank()) {
-            throw new IllegalStateException("auth.provider=ldap requires auth.ldap.url to be set in git-proxy.yml");
+            throw new IllegalStateException("auth.provider=ldap requires auth.ldap.url to be set in fogwall.yml");
         }
 
         var contextSource = new DefaultSpringSecurityContextSource(ldapCfg.getUrl());
@@ -304,7 +304,7 @@ public class SecurityConfig {
             Map<String, List<String>> roleMappings)
             throws Exception {
         if (adCfg.getDomain().isBlank()) {
-            throw new IllegalStateException("auth.provider=ad requires auth.ad.domain to be set in git-proxy.yml");
+            throw new IllegalStateException("auth.provider=ad requires auth.ad.domain to be set in fogwall.yml");
         }
 
         String adUrl = adCfg.getUrl().isBlank() ? null : adCfg.getUrl();
@@ -363,7 +363,7 @@ public class SecurityConfig {
             throws Exception {
         if (oidcCfg.getIssuerUri().isBlank() || oidcCfg.getClientId().isBlank()) {
             throw new IllegalStateException(
-                    "auth.provider=oidc requires auth.oidc.issuer-uri and auth.oidc.client-id in git-proxy.yml");
+                    "auth.provider=oidc requires auth.oidc.issuer-uri and auth.oidc.client-id in fogwall.yml");
         }
 
         boolean usePrivateKeyJwt = !oidcCfg.getPrivateKeyPath().isBlank();
@@ -499,7 +499,7 @@ public class SecurityConfig {
     }
 
     /**
-     * Builds an {@link OidcUserService} that maps IdP group memberships to git-proxy-java roles. The configured
+     * Builds an {@link OidcUserService} that maps IdP group memberships to fogwall roles. The configured
      * {@code groupsClaim} is read from the OIDC token; any group present in {@code roleMappings} results in a
      * corresponding {@code ROLE_xxx} authority being added to the session.
      *
@@ -557,8 +557,7 @@ public class SecurityConfig {
     }
 
     /**
-     * Maps IdP-supplied group authorities (from LDAP/AD group search) to git-proxy-java roles using
-     * {@code roleMappings}.
+     * Maps IdP-supplied group authorities (from LDAP/AD group search) to fogwall roles using {@code roleMappings}.
      *
      * <p>If {@code roleMappings} is empty the operator has not configured group-based access control, so
      * {@code ROLE_USER} is granted to every authenticated user (open mode). If {@code roleMappings} is non-empty,

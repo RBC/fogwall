@@ -46,14 +46,14 @@ RUN --mount=type=cache,target=/root/.gradle/caches \
       arm64) GITLEAKS_TARGET=linux_arm64 ;; \
       *)     GITLEAKS_TARGET=linux_x64   ;; \
     esac \
-    && ./gradlew clean :git-proxy-java-dashboard:installDist \
+    && ./gradlew clean :fogwall-dashboard:installDist \
        -PgitleaksTargets=${GITLEAKS_TARGET} --no-daemon -q
 
-# Prepend a conf/ directory to the classpath so that a mounted git-proxy-local.yml
+# Prepend a conf/ directory to the classpath so that a mounted fogwall-local.yml
 # is picked up by JettyConfigurationLoader at runtime.
 RUN sed -i \
     's|^CLASSPATH=\$APP_HOME/lib|CLASSPATH=$APP_HOME/conf:$APP_HOME/lib|' \
-    git-proxy-java-dashboard/build/install/git-proxy-java-dashboard/bin/git-proxy-java-dashboard
+    fogwall-dashboard/build/install/fogwall-dashboard/bin/fogwall-dashboard
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM docker.io/eclipse-temurin:25-jre-noble@sha256:f9bd8815e73632c22985ebb133ec49b9fc4ad5ffe0657594ac02748ad0431ab7
@@ -74,11 +74,11 @@ RUN apt-get update \
 
 # Copy the built distribution
 COPY --from=builder \
-    /workspace/git-proxy-java-dashboard/build/install/git-proxy-java-dashboard/ /app/
+    /workspace/fogwall-dashboard/build/install/fogwall-dashboard/ /app/
 
-# Create the conf directory; mount a git-proxy-{profile}.yml here to override config.
-# Example: -v ./docker/git-proxy-local.yml:/app/conf/git-proxy-local.yml:ro
-# docker run -e GITPROXY_CONFIG_PROFILE=local -v ./docker/git-proxy-local.yml:/app/conf/git-proxy-local.yml:ro ...
+# Create the conf directory; mount a fogwall-{profile}.yml here to override config.
+# Example: -v ./docker/fogwall-local.yml:/app/conf/fogwall-local.yml:ro
+# docker run -e GITPROXY_CONFIG_PROFILE=local -v ./docker/fogwall-local.yml:/app/conf/fogwall-local.yml:ro ...
 RUN mkdir -p /app/conf
 
 # Data directory for file-based databases (h2-file, sqlite), log output, and
@@ -95,4 +95,4 @@ EXPOSE 8080
 
 USER 1000
 
-ENTRYPOINT ["/app/bin/git-proxy-java-dashboard"]
+ENTRYPOINT ["/app/bin/fogwall-dashboard"]

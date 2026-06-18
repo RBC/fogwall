@@ -33,7 +33,7 @@ import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
  * </ol>
  *
  * <p>Each reload can target a specific {@link Section} or {@link Section#ALL}. Provider, server, and database changes
- * log a WARNING — those sections require a restart (coopernetes/git-proxy-java#75).
+ * log a WARNING — those sections require a restart (coopernetes/fogwall#75).
  *
  * <p>A concurrent reload guard prevents overlapping reloads.
  */
@@ -248,7 +248,7 @@ public class LiveConfigLoader {
         }
         Path cloneDir = null;
         try {
-            cloneDir = Files.createTempDirectory("git-proxy-java-config-git-");
+            cloneDir = Files.createTempDirectory("fogwall-config-git-");
             Path yamlFile = fetchGitConfig(cloneDir);
             if (yamlFile != null) {
                 FogwallConfig newConfig = FogwallConfigLoader.loadWithOverride(yamlFile);
@@ -414,7 +414,7 @@ public class LiveConfigLoader {
                 .keySet()
                 .equals(startupConfig.getProviders().keySet())) {
             log.warn("Config reload: providers section changed — restart required for the new providers to take effect"
-                    + " (see coopernetes/git-proxy-java#75 for UI-driven hot-swap)");
+                    + " (see coopernetes/fogwall#75 for UI-driven hot-swap)");
         }
         if (newConfig.getServer().getPort() != startupConfig.getServer().getPort()) {
             log.warn("Config reload: server.port changed — restart required");

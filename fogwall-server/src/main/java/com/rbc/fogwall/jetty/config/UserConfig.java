@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.Data;
 
-/** Binds a single entry in the {@code users:} list in git-proxy.yml. */
+/** Binds a single entry in the {@code users:} list in fogwall.yml. */
 @Data
 public class UserConfig {
     private String username = "";

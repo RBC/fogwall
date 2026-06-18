@@ -125,7 +125,7 @@ class JettyProxyFixture implements AutoCloseable {
         server.addConnector(connector);
 
         pushStore = PushStoreFactory.inMemory();
-        var storeForwardCache = new LocalRepositoryCache(Files.createTempDirectory("git-proxy-java-e2e-sf-"), 0, true);
+        var storeForwardCache = new LocalRepositoryCache(Files.createTempDirectory("fogwall-e2e-sf-"), 0, true);
         var proxyCache = new LocalRepositoryCache();
 
         var provider = GenericProxyProvider.builder()

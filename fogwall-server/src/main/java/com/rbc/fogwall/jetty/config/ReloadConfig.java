@@ -2,7 +2,7 @@ package com.rbc.fogwall.jetty.config;
 
 import lombok.Data;
 
-/** Binds the {@code reload:} block in git-proxy.yml. */
+/** Binds the {@code reload:} block in fogwall.yml. */
 @Data
 public class ReloadConfig {
 
@@ -24,7 +24,7 @@ public class ReloadConfig {
          * directory. This file is overlaid on top of the classpath base config, profile configs, and env var overrides,
          * so it takes the highest priority (same as mounting a file into the container).
          *
-         * <p>Example: {@code /app/conf/git-proxy-local.yml} or {@code ./git-proxy-local.yml}
+         * <p>Example: {@code /app/conf/fogwall-local.yml} or {@code ./fogwall-local.yml}
          */
         private String path = "";
     }
@@ -49,8 +49,8 @@ public class ReloadConfig {
         private String branch = "main";
 
         /**
-         * Path within the repository to the YAML config file. Example: {@code config/git-proxy.yml} or just
-         * {@code git-proxy.yml}.
+         * Path within the repository to the YAML config file. Example: {@code config/fogwall.yml} or just
+         * {@code fogwall.yml}.
          */
         private String filePath = "fogwall.yml";
 

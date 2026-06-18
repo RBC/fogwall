@@ -43,7 +43,7 @@ class ProxyModeE2ETest {
         gitea.createTestRepo(); // creates the test-owner org; the per-test repos are added below
 
         proxy = new JettyProxyFixture(gitea.getBaseUri());
-        tempDir = Files.createTempDirectory("git-proxy-java-proxy-e2e-");
+        tempDir = Files.createTempDirectory("fogwall-proxy-e2e-");
     }
 
     @AfterAll

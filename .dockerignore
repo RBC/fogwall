@@ -8,9 +8,9 @@ node_modules/
 
 # Local config overrides
 docker/logback-debug.xml
-docker/git-proxy-local.yml
-docker/git-proxy-postgres.yml
-docker/git-proxy-mongo.yml
+docker/fogwall-local.yml
+docker/fogwall-postgres.yml
+docker/fogwall-mongo.yml
 
 # Dev artifacts
 *.log

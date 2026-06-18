@@ -73,7 +73,7 @@ class PermissionE2ETest {
         var identityResolver = usernameResolver(userStore);
 
         proxy = new JettyProxyFixture(gitea.getBaseUri(), UiApprovalGateway::new, identityResolver, permissionService);
-        tempDir = Files.createTempDirectory("git-proxy-java-perm-e2e-");
+        tempDir = Files.createTempDirectory("fogwall-perm-e2e-");
     }
 
     @AfterAll

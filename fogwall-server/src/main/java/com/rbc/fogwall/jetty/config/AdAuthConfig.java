@@ -2,7 +2,7 @@ package com.rbc.fogwall.jetty.config;
 
 import lombok.Data;
 
-/** Binds the {@code auth.ad} block in git-proxy.yml. */
+/** Binds the {@code auth.ad} block in fogwall.yml. */
 @Data
 public class AdAuthConfig {
 

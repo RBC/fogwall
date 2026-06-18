@@ -181,7 +181,7 @@ public interface FogwallFilter extends Filter {
         // CH_ERROR: causes git client to call die() - keep it short
         try (OutputStream error =
                 new SideBandOutputStream(SideBandOutputStream.CH_ERROR, SideBandOutputStream.MAX_BUF, buf)) {
-            error.write(Constants.encode("push rejected by git-proxy\n"));
+            error.write(Constants.encode("push rejected by fogwall\n"));
             error.flush();
         }
         // pkt-line flush (0000) signals end-of-stream

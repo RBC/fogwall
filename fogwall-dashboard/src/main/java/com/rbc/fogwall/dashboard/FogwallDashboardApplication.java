@@ -38,8 +38,8 @@ import org.springframework.web.servlet.DispatcherServlet;
  * Jetty application that runs the git proxy server together with the Spring MVC dashboard and REST API. This is the
  * entry point to use when you want the approval workflow UI alongside the proxy.
  *
- * <p>For a proxy-only deployment (no UI, no REST API), use {@code fogwallJettyApplication} in
- * {@code git-proxy-java-server} instead.
+ * <p>For a proxy-only deployment (no UI, no REST API), use {@code fogwallJettyApplication} in {@code fogwall-server}
+ * instead.
  *
  * <p>Git servlets are registered at {@code /push/*} and {@code /proxy/*}. Spring's DispatcherServlet is registered at
  * {@code /*} - the more-specific git paths take precedence per the servlet spec, so Spring only handles {@code /api/*},

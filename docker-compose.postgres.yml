@@ -19,9 +19,9 @@ services:
   fogwall:
     environment:
       FOGWALL_DATABASE_TYPE: postgres
-      FOGWALL_DATABASE_URL: "jdbc:postgresql://postgres:5432/gitproxy?sslmode=disable"
-      FOGWALL_DATABASE_USERNAME: gitproxy
-      FOGWALL_DATABASE_PASSWORD: gitproxy
+      FOGWALL_DATABASE_URL: "jdbc:postgresql://postgres:5432/fogwall?sslmode=disable"
+      FOGWALL_DATABASE_USERNAME: fogwall
+      FOGWALL_DATABASE_PASSWORD: fogwall
       FOGWALL_SERVER_SESSION_STORE: jdbc
     depends_on:
       postgres:

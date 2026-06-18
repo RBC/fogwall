@@ -1,4 +1,4 @@
--- Initial schema for git-proxy-java.
+-- Initial schema for fogwall.
 -- Compatible with H2, PostgreSQL, and SQLite.
 
 CREATE TABLE IF NOT EXISTS push_records (

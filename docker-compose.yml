@@ -50,15 +50,15 @@ services:
     image: docker.io/postgres:17-alpine
     profiles: [postgres]
     environment:
-      POSTGRES_DB: gitproxy
-      POSTGRES_USER: gitproxy
-      POSTGRES_PASSWORD: gitproxy
+      POSTGRES_DB: fogwall
+      POSTGRES_USER: fogwall
+      POSTGRES_PASSWORD: fogwall
     ports:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U gitproxy"]
+      test: ["CMD-SHELL", "pg_isready -U fogwall"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -68,9 +68,9 @@ services:
     image: docker.io/mongo:7
     profiles: [mongo]
     environment:
-      MONGO_INITDB_ROOT_USERNAME: gitproxy
-      MONGO_INITDB_ROOT_PASSWORD: gitproxy
-      MONGO_INITDB_DATABASE: gitproxy
+      MONGO_INITDB_ROOT_USERNAME: fogwall
+      MONGO_INITDB_ROOT_PASSWORD: fogwall
+      MONGO_INITDB_DATABASE: fogwall
     ports:
       - "27017:27017"
     volumes:
@@ -89,9 +89,9 @@ services:
     depends_on:
       - mongo
     environment:
-      ME_CONFIG_MONGODB_ADMINUSERNAME: gitproxy
-      ME_CONFIG_MONGODB_ADMINPASSWORD: gitproxy
-      ME_CONFIG_MONGODB_URL: mongodb://gitproxy:gitproxy@mongo:27017/
+      ME_CONFIG_MONGODB_ADMINUSERNAME: fogwall
+      ME_CONFIG_MONGODB_ADMINPASSWORD: fogwall
+      ME_CONFIG_MONGODB_URL: mongodb://fogwall:fogwall@mongo:27017/
       ME_CONFIG_BASICAUTH: "false"
     ports:
       - "8081:8081"

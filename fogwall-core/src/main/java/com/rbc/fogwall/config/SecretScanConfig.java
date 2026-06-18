@@ -25,7 +25,7 @@ public class SecretScanConfig {
     @Builder.Default
     private boolean autoInstall = true;
 
-    /** Directory where gitleaks is cached when auto-installed. Defaults to {@code ~/.cache/git-proxy-java/gitleaks}. */
+    /** Directory where gitleaks is cached when auto-installed. Defaults to {@code ~/.cache/fogwall/gitleaks}. */
     private String installDir;
 
     /** Version of gitleaks to download when auto-installing. */

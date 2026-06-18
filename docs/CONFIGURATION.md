@@ -824,7 +824,7 @@ rules:
       provider: github
       match:
         target: SLUG
-        value: /finos/git-proxy
+        value: /RBC/fogwall
         type: LITERAL
 
     # All repos under an owner — fetch only, any provider

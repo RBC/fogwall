@@ -16,7 +16,7 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
  * misplaced keys are caught immediately instead of being silently ignored.
  *
  * <p>Uses Jackson's {@code FAIL_ON_UNKNOWN_PROPERTIES} feature with kebab-case property name mapping, which matches the
- * YAML key convention used throughout git-proxy.yml.
+ * YAML key convention used throughout fogwall.yml.
  */
 @Slf4j
 final class YamlStructureValidator {

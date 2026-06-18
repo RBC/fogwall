@@ -14,7 +14,8 @@ This project is a Java reimplementation of [FINOS git-proxy](https://github.com/
 pioneered the concept of an enterprise-grade, policy-enforcing git push gateway. fogwall builds on the same core ideas
 (validation pipeline, push approval lifecycle, multi-provider support) while targeting JVM-based environments, using
 [JGit](https://github.com/eclipse-jgit/jgit) for native git protocol handling,
-[Jetty](https://github.com/jetty/jetty.project) for the HTTP layer, and [Spring](https://spring.io/) for the dashboard.
+[Jetty](https://github.com/jetty/jetty.project) for the HTTP layer, and [Spring](https://spring.io/),
+[React](https://react.dev/) & [Tailwind](https://tailwindcss.com/) for the dashboard.
 
 ![Store-and-forward — validation failure and fix](https://github.com/RBC/fogwall/releases/download/demo-assets/demo-push-fix-message.gif)
 
@@ -22,7 +23,7 @@ pioneered the concept of an enterprise-grade, policy-enforcing git push gateway.
 
 ### Prerequisites
 
-- Java 21+
+- Java 25+
 - Node 24+ (for the dashboard frontend)
 - Gradle (wrapper included)
 
@@ -84,15 +85,15 @@ walks through PAT setup, allow rules, permissions, and running the smoke test sc
 fogwall proxies arbitrary upstream Git repositories over HTTPS. For each upstream provider (e.g. `github.com`,
 `gitlab.com`), a distinct URL is mapped by hostname. The remainder of the URL is the repository path:
 
-- Original repository: `https://github.com/finos/git-proxy`
-- Proxy: `http[s]://{fogwall-server}/{proxy,push*}/github.com/finos/git-proxy`
+- Original repository: `https://github.com/RBC/fogwall`
+- Proxy: `http[s]://{fogwall-server}/{proxy,push*}/github.com/RBC/fogwall`
 
 This makes it simple for a developer to add a new [git remote](https://git-scm.com/docs/git-remote) and start pushing
 through the proxy:
 
 ```shell
-git clone https://github.com/finos/git-proxy && cd git-proxy
-git remote add proxy http://localhost:8080/push/github.com/finos/git-proxy
+git clone https://github.com/RBC/fogwall && cd fogwall
+git remote add proxy http://localhost:8080/push/github.com/RBC/fogwall
 ```
 
 > \*Note: the base URL determines which proxying mode is in use. See below for details.

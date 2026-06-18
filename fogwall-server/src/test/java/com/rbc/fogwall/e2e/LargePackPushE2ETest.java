@@ -67,7 +67,7 @@ class LargePackPushE2ETest {
         gitea.start();
         gitea.createAdminUser();
         gitea.createTestRepo();
-        tempDir = Files.createTempDirectory("git-proxy-java-largpack-e2e-");
+        tempDir = Files.createTempDirectory("fogwall-largpack-e2e-");
     }
 
     @AfterAll

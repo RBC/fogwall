@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.Data;
 
-/** Binds the {@code rules:} block in git-proxy.yml. */
+/** Binds the {@code rules:} block in fogwall.yml. */
 @Data
 public class RulesConfig {
 

@@ -70,7 +70,7 @@ class BasicAuthChallengeFilterTest {
 
         filter.doFilter(req, resp, chain);
 
-        verify(resp).setHeader("WWW-Authenticate", "Basic realm=\"git-proxy\"");
+        verify(resp).setHeader("WWW-Authenticate", "Basic realm=\"fogwall\"");
         verify(resp).sendError(HttpServletResponse.SC_UNAUTHORIZED);
         verifyNoInteractions(chain);
     }

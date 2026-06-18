@@ -38,7 +38,7 @@ import org.eclipse.jgit.http.server.GitServlet;
 /**
  * Utility class that registers the git proxy servlets and filters onto a Jetty {@link ServletContextHandler}. Shared
  * between the standalone server ({@link FogwallJettyApplication}) and the server-with-dashboard application in
- * {@code git-proxy-java-dashboard}.
+ * {@code fogwall-dashboard}.
  */
 @Slf4j
 public final class FogwallServletRegistrar {

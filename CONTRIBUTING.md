@@ -375,7 +375,7 @@ http://localhost:8080/proxy/gitea/test-owner/test-repo.git
 Clone example:
 
 ```shell
-git clone http://gitproxyadmin:Admin1234!@localhost:8080/push/gitea/test-owner/test-repo.git
+git clone http://fogwalladmin:Admin1234!@localhost:8080/push/gitea/test-owner/test-repo.git
 ```
 
 ### Teardown

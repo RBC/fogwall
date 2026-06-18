@@ -17,7 +17,7 @@ import java.util.Optional;
  *   <li>{@link TokenPushIdentityResolver} — resolves by calling the provider's user API with the token, then matching
  *       the returned SCM login against {@code user_scm_identities}.
  *   <li>{@link ChainedPushIdentityResolver} — tries a list of resolvers in order; intended for multi-SCM environments
- *       where different identity sources must be consulted (see coopernetes/git-proxy-java#125).
+ *       where different identity sources must be consulted (see coopernetes/fogwall#125).
  * </ul>
  */
 public interface PushIdentityResolver {

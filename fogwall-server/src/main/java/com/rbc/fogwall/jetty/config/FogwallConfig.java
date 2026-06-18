@@ -7,7 +7,7 @@ import java.util.Map;
 import lombok.Data;
 
 /**
- * Root configuration POJO. Bound from {@code git-proxy.yml} (and optional {@code git-proxy-local.yml} overrides) via
+ * Root configuration POJO. Bound from {@code fogwall.yml} (and optional {@code fogwall-local.yml} overrides) via
  * Gestalt.
  *
  * <p>Top-level structure:

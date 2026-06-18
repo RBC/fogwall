@@ -37,8 +37,8 @@ import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 /**
- * Serves the OpenAPI 3 specification for the git-proxy-java REST API. The spec is generated at startup by walking
- * Spring's {@link RequestMappingHandlerMapping}, so it always reflects the actual registered routes.
+ * Serves the OpenAPI 3 specification for the fogwall REST API. The spec is generated at startup by walking Spring's
+ * {@link RequestMappingHandlerMapping}, so it always reflects the actual registered routes.
  *
  * <ul>
  *   <li>{@code GET /api/openapi.yaml} — YAML format (machine-readable)

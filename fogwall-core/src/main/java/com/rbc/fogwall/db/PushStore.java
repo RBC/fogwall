@@ -13,7 +13,7 @@ import java.util.Optional;
 /**
  * Storage abstraction for push records. Implementations exist for in-memory, JDBC (H2, SQLite, Postgres), and MongoDB.
  *
- * <p>This is the Java equivalent of git-proxy's Sink interface.
+ * <p>This is the Java equivalent of fogwall's Sink interface.
  */
 public interface PushStore {
 

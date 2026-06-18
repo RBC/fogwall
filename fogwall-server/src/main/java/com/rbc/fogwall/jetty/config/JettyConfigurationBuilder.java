@@ -158,7 +158,7 @@ public class JettyConfigurationBuilder {
         });
 
         if (providers.isEmpty()) {
-            log.warn("No providers configured. Add providers to git-proxy.yml to enable proxying.");
+            log.warn("No providers configured. Add providers to fogwall.yml to enable proxying.");
         }
         cachedProviders = providers;
         return cachedProviders;
@@ -317,7 +317,7 @@ public class JettyConfigurationBuilder {
     }
 
     /**
-     * Builds the {@link DiffScanConfig} from {@code diff-scan:} in git-proxy.yml. Compiles literal and regex-pattern
+     * Builds the {@link DiffScanConfig} from {@code diff-scan:} in fogwall.yml. Compiles literal and regex-pattern
      * block lists applied against push diff added-lines.
      */
     public DiffScanConfig buildDiffScanConfig() {
@@ -331,7 +331,7 @@ public class JettyConfigurationBuilder {
         return cfg;
     }
 
-    /** Builds the {@link SecretScanConfig} from {@code secret-scan:} in git-proxy.yml. */
+    /** Builds the {@link SecretScanConfig} from {@code secret-scan:} in fogwall.yml. */
     public SecretScanConfig buildSecretScanConfig() {
         SecretScanSettings ss = config.getSecretScan();
         String inlineConfig = ss.getInlineConfig();
@@ -375,7 +375,7 @@ public class JettyConfigurationBuilder {
         FetchStore fs = buildFetchStore();
         UserStore us = buildUserStore();
         UrlRuleRegistry rr = buildUrlRuleRegistry();
-        var storeForwardCache = new LocalRepositoryCache(Files.createTempDirectory("git-proxy-java-sf-"), 0, true);
+        var storeForwardCache = new LocalRepositoryCache(Files.createTempDirectory("fogwall-sf-"), 0, true);
         log.info("Initialized store-and-forward LocalRepositoryCache (full clone)");
         var proxyCache = new LocalRepositoryCache();
         log.info("Initialized proxy LocalRepositoryCache (shallow clone)");

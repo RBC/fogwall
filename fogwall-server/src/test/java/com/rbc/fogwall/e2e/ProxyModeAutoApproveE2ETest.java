@@ -34,7 +34,7 @@ class ProxyModeAutoApproveE2ETest {
         gitea.createTestRepo();
 
         proxy = new JettyProxyFixture(gitea.getBaseUri(), AutoApprovalGateway::new);
-        tempDir = Files.createTempDirectory("git-proxy-java-proxy-auto-e2e-");
+        tempDir = Files.createTempDirectory("fogwall-proxy-auto-e2e-");
     }
 
     @AfterAll

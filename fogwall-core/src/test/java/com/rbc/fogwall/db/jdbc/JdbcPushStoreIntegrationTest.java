@@ -320,8 +320,8 @@ class JdbcPushStoreIntegrationTest {
     @Test
     void find_bySearch_matchesProjectAndRepoName() {
         PushRecord r1 = PushRecord.builder()
-                .project("finos")
-                .repoName("git-proxy")
+                .project("RBC")
+                .repoName("fogwall")
                 .commitTo("a")
                 .branch("refs/heads/main")
                 .build();
@@ -334,10 +334,9 @@ class JdbcPushStoreIntegrationTest {
         store.save(r1);
         store.save(r2);
 
-        List<PushRecord> results =
-                store.find(PushQuery.builder().search("finos").build());
+        List<PushRecord> results = store.find(PushQuery.builder().search("RBC").build());
         assertEquals(1, results.size());
-        assertEquals("finos", results.get(0).getProject());
+        assertEquals("RBC", results.get(0).getProject());
 
         List<PushRecord> byRepo =
                 store.find(PushQuery.builder().search("widget").build());

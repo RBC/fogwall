@@ -332,8 +332,8 @@ class MongoPushStoreIntegrationTest {
         PushRecord r = PushRecord.builder()
                 .id(id)
                 .provider("github")
-                .project("finos")
-                .repoName("git-proxy")
+                .project("RBC")
+                .repoName("fogwall")
                 .branch("refs/heads/main")
                 .status(PushStatus.RECEIVED)
                 .timestamp(Instant.now())
@@ -341,16 +341,16 @@ class MongoPushStoreIntegrationTest {
         store.save(r);
 
         // matches repoName
-        assertTrue(store.find(PushQuery.builder().search("git-proxy").build()).stream()
+        assertTrue(store.find(PushQuery.builder().search("fogwall").build()).stream()
                 .anyMatch(x -> x.getId().equals(id)));
         // matches project
-        assertTrue(store.find(PushQuery.builder().search("finos").build()).stream()
+        assertTrue(store.find(PushQuery.builder().search("RBC").build()).stream()
                 .anyMatch(x -> x.getId().equals(id)));
         // matches provider
         assertTrue(store.find(PushQuery.builder().search("github").build()).stream()
                 .anyMatch(x -> x.getId().equals(id)));
         // case-insensitive
-        assertTrue(store.find(PushQuery.builder().search("GIT-PROXY").build()).stream()
+        assertTrue(store.find(PushQuery.builder().search("fogwall").build()).stream()
                 .anyMatch(x -> x.getId().equals(id)));
         // no match
         assertTrue(store.find(PushQuery.builder().search("gitlab").build()).stream()

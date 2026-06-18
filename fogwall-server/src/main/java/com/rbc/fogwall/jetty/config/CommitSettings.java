@@ -4,7 +4,7 @@ import com.rbc.fogwall.config.CommitConfig;
 import lombok.Data;
 
 /**
- * Binds the {@code commit:} block in git-proxy.yml. This is the raw YAML DTO — all pattern strings are kept as
+ * Binds the {@code commit:} block in fogwall.yml. This is the raw YAML DTO — all pattern strings are kept as
  * {@code String} fields and compiled to {@link java.util.regex.Pattern} by {@link JettyConfigurationBuilder} when
  * constructing the core {@link CommitConfig}.
  *

@@ -4,7 +4,7 @@ server:
   #   auto        — immediately approves every clean push; no dashboard required (default)
   #   ui          — polls the push store waiting for a human reviewer via the REST API
   #   servicenow  — delegates to a ServiceNow approval workflow
-  # Note: when running GitProxyWithDashboardApplication, 'ui' mode is always used regardless of this setting.
+  # Note: when running FogwallDashboardApplication, 'ui' mode is always used regardless of this setting.
   approval-mode: auto
   # Heartbeat interval in seconds for store-and-forward sideband keepalives.
   # Sends a "." progress packet periodically to prevent idle-timeout disconnects during long validation steps
@@ -28,15 +28,15 @@ server:
   # Origins allowed to make cross-origin requests to the dashboard REST API.
   # Required when the frontend is served from a different hostname than the backend (e.g. behind a load balancer).
   # Default (empty): same-origin only. Override per-deployment in fogwall-local.yml or via
-  # GITPROXY_SERVER_ALLOWEDORIGINS env var (comma-separated list treated as a single value — use the YAML key for
+  # FOGWALL_SERVER_ALLOWEDORIGINS env var (comma-separated list treated as a single value — use the YAML key for
   # multiple origins).
   # allowed-origins:
   #   - https://dashboard.example.com
 
 # Database configuration for push audit storage.
 # Supported types: h2-mem, h2-file, postgres, mongo
-# h2-file persists to ./.data/gitproxy.mv.db relative to the working directory.
-# Use h2-mem for ephemeral/CI environments, or override with GITPROXY_DATABASE_TYPE=h2-mem.
+# h2-file persists to ./.data/fogwall.mv.db relative to the working directory.
+# Use h2-mem for ephemeral/CI environments, or override with FOGWALL_DATABASE_TYPE=h2-mem.
 database:
   type: h2-file
   # Connection pool tuning — applies to all JDBC backends (h2-mem, h2-file, postgres).

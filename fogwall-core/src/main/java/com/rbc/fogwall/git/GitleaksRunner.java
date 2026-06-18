@@ -51,7 +51,7 @@ public class GitleaksRunner {
 
     /**
      * Default gitleaks version used for auto-install. Keep in sync with {@code gitleaksVersion} in
-     * {@code git-proxy-java-core/build.gradle}.
+     * {@code fogwall-core/build.gradle}.
      */
     public static final String DEFAULT_VERSION = "8.30.1";
 
@@ -409,7 +409,7 @@ public class GitleaksRunner {
                 return null;
             }
 
-            Path tempDir = Files.createTempDirectory("git-proxy-java-gitleaks-");
+            Path tempDir = Files.createTempDirectory("fogwall-gitleaks-");
             Path binaryPath = tempDir.resolve("gitleaks");
             try (resource) {
                 Files.copy(resource, binaryPath);

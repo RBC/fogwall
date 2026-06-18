@@ -47,8 +47,8 @@ services:
       - ./docker/fogwall-oidc.yml:/app/conf/fogwall-oidc.yml:ro
     environment:
       FOGWALL_CONFIG_PROFILES: docker-default,oidc
-      FOGWALL_AUTH_OIDC_CLIENT__ID: gitproxy-client
-      FOGWALL_AUTH_OIDC_CLIENT__SECRET: gitproxy-secret
+      FOGWALL_AUTH_OIDC_CLIENT__ID: fogwall-client
+      FOGWALL_AUTH_OIDC_CLIENT__SECRET: fogwall-secret
     depends_on:
       mock-oauth2:
         condition: service_healthy

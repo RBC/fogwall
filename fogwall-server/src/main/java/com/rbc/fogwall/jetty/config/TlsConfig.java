@@ -3,7 +3,7 @@ package com.rbc.fogwall.jetty.config;
 import lombok.Data;
 
 /**
- * Binds the {@code server.tls:} block in git-proxy.yml.
+ * Binds the {@code server.tls:} block in fogwall.yml.
  *
  * <p>Two independent concerns live here:
  *

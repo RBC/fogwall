@@ -18,7 +18,7 @@ import org.junit.jupiter.api.*;
  * End-to-end tests for URL allow/deny rule enforcement through both the transparent proxy path ({@code /proxy/...}) and
  * the store-and-forward path ({@code /push/...}).
  *
- * <p>Rule set mirrors {@code docker/git-proxy-docker-default.yml}:
+ * <p>Rule set mirrors {@code docker/fogwall-docker-default.yml}:
  *
  * <ul>
  *   <li>Allow slug {@code /test-owner/test-repo} — PUSH and FETCH
@@ -58,7 +58,7 @@ class UrlRuleE2ETest {
         gitea.createRepo("otherorg", "other-secret");
 
         proxy = new JettyProxyFixture(gitea.getBaseUri(), buildRules(gitea.getBaseUri()));
-        tempDir = Files.createTempDirectory("git-proxy-java-urlrule-e2e-");
+        tempDir = Files.createTempDirectory("fogwall-urlrule-e2e-");
     }
 
     @AfterAll
@@ -300,7 +300,7 @@ class UrlRuleE2ETest {
         assertFalse(result.succeeded(), "S&F push to secret-store should be blocked by regex deny rule");
     }
 
-    // ── Rule set — mirrors docker/git-proxy-docker-default.yml ───────────────
+    // ── Rule set — mirrors docker/fogwall-docker-default.yml ───────────────
 
     /**
      * Builds the URL rule set used by this test class.

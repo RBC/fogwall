@@ -60,7 +60,7 @@ class ConfigHotReloadE2ETest {
     void setUp() throws Exception {
         repoName = "hotreload-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         gitea.createRepo(GiteaContainer.TEST_ORG, repoName);
-        tempDir = Files.createTempDirectory("git-proxy-java-hotreload-e2e-");
+        tempDir = Files.createTempDirectory("fogwall-hotreload-e2e-");
 
         var configHolder = new ConfigHolder(
                 CommitConfig.defaultConfig(),

@@ -6,7 +6,7 @@ GIT_USERNAME=${GIT_USERNAME:-"me"}
 source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
 resolve_pat ~/.github-pat
 GIT_REPO=${GIT_REPO:-"github.com/coopernetes/test-repo.git"}
-GITPROXY_API_KEY=${GITPROXY_API_KEY:-"change-me-in-production"}
+FOGWALL_API_KEY=${FOGWALL_API_KEY:-"change-me-in-production"}
 
 
 PROXY_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/proxy/${GIT_REPO}"
@@ -45,7 +45,7 @@ echo "==> Push ID: ${PUSH_ID}"
 APPROVE_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
     -X POST "http://localhost:8080/api/push/${PUSH_ID}/authorise" \
     -H "Content-Type: application/json" \
-    -H "X-Api-Key: ${GITPROXY_API_KEY}" \
+    -H "X-Api-Key: ${FOGWALL_API_KEY}" \
     -d '{"reviewerUsername":"test-script","reason":"auto-approved by proxy-pass.sh"}')
 if [ "${APPROVE_RESPONSE}" != "200" ]; then
     echo "ERROR: Approval API returned HTTP ${APPROVE_RESPONSE}"

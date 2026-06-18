@@ -19,8 +19,8 @@ services:
   fogwall:
     environment:
       FOGWALL_DATABASE_TYPE: mongo
-      FOGWALL_DATABASE_URL: mongodb://gitproxy:gitproxy@mongo:27017
-      FOGWALL_DATABASE_NAME: gitproxy
+      FOGWALL_DATABASE_URL: mongodb://fogwall:fogwall@mongo:27017
+      FOGWALL_DATABASE_NAME: fogwall
       FOGWALL_SERVER_SESSION_STORE: mongo
     depends_on:
       mongo:

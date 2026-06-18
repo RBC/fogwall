@@ -12,8 +12,8 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * Tests for {@link FogwallConfigLoader}.
  *
- * <p>Verifies that the base config ({@code git-proxy.yml}) is loaded and merged with local overrides
- * ({@code git-proxy-local.yml}) correctly. Environment variable overrides are exercised in the e2e suite.
+ * <p>Verifies that the base config ({@code fogwall.yml}) is loaded and merged with local overrides
+ * ({@code fogwall-local.yml}) correctly. Environment variable overrides are exercised in the e2e suite.
  */
 class FogwallConfigLoaderTest {
 

@@ -19,9 +19,9 @@ import org.github.gestalt.config.source.MapConfigSourceBuilder;
  * <p>Source priority (lowest → highest):
  *
  * <ol>
- *   <li>{@code git-proxy.yml} — base defaults shipped with the jar
+ *   <li>{@code fogwall.yml} — base defaults shipped with the jar
  *   <li>Profile configs named in {@code FOGWALL_CONFIG_PROFILES} — comma-separated list of profile names; each loads
- *       {@code git-proxy-{profile}.yml} from the classpath in order (optional, silently skipped if absent). Later
+ *       {@code fogwall-{profile}.yml} from the classpath in order (optional, silently skipped if absent). Later
  *       profiles take priority over earlier ones.
  *   <li>Environment variables with {@code FOGWALL_} prefix (highest priority)
  * </ol>
@@ -29,7 +29,7 @@ import org.github.gestalt.config.source.MapConfigSourceBuilder;
  * <p>Examples:
  *
  * <ul>
- *   <li>{@code FOGWALL_CONFIG_PROFILES=local} — local dev (loads {@code git-proxy-local.yml})
+ *   <li>{@code FOGWALL_CONFIG_PROFILES=local} — local dev (loads {@code fogwall-local.yml})
  *   <li>{@code FOGWALL_CONFIG_PROFILES=docker-default,ldap} — Docker + LDAP auth
  * </ul>
  *
@@ -69,7 +69,7 @@ public final class FogwallConfigLoader {
         log.info("Loaded base configuration from {}", BASE_CONFIG);
 
         // Profile configs: FOGWALL_CONFIG_PROFILES=docker-default,ldap
-        // loads git-proxy-docker-default.yml then git-proxy-ldap.yml (later = higher priority)
+        // loads fogwall-docker-default.yml then fogwall-ldap.yml (later = higher priority)
         String profilesEnv = System.getenv(PROFILES_ENV_VAR);
         if (profilesEnv != null && !profilesEnv.isBlank()) {
             for (String profile : profilesEnv.split(",")) {

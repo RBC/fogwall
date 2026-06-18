@@ -2,7 +2,7 @@ package com.rbc.fogwall.jetty.config;
 
 import lombok.Data;
 
-/** Binds a single entry under {@code rules.allow[]} (or {@code rules.deny[]}) in git-proxy.yml. */
+/** Binds a single entry under {@code rules.allow[]} (or {@code rules.deny[]}) in fogwall.yml. */
 @Data
 public class RuleConfig {
 

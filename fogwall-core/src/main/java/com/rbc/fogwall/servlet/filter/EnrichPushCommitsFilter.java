@@ -23,7 +23,7 @@ import org.eclipse.jgit.transport.PackParser;
 import org.eclipse.jgit.transport.PacketLineIn;
 
 /**
- * Filter that enriches push requests with full commit information. Replicates git-proxy's {@code writePack} approach:
+ * Filter that enriches push requests with full commit information. Replicates fogwall's {@code writePack} approach:
  *
  * <ol>
  *   <li>Clone/fetch the upstream repo into a local cache
@@ -83,7 +83,7 @@ public class EnrichPushCommitsFilter extends AbstractProviderAwareFogwallFilter 
 
             // Step 2: Unpack the inflight push's pack data into the local clone.
             // The pushed objects don't exist upstream yet - this is the equivalent of
-            // git-proxy's writePack processor that pipes the request body into git receive-pack.
+            // fogwall's writePack processor that pipes the request body into git receive-pack.
             unpackPushData(request, repository);
 
             log.debug("Extracting commits from {} to {}", fromCommit, toCommit);
@@ -114,8 +114,8 @@ public class EnrichPushCommitsFilter extends AbstractProviderAwareFogwallFilter 
      * protocol packet lines followed by pack data (starting with the "PACK" signature). We extract the pack portion and
      * feed it to JGit's {@link PackParser} to insert the objects into the local object store.
      *
-     * <p>This is the JGit equivalent of git-proxy's {@code writePack} processor which runs {@code git receive-pack}
-     * with the request body as stdin.
+     * <p>This is the JGit equivalent of fogwall's {@code writePack} processor which runs {@code git receive-pack} with
+     * the request body as stdin.
      */
     private void unpackPushData(HttpServletRequest request, Repository repository) throws IOException {
         byte[] body = getRequestBody(request);

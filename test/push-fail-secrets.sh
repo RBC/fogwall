@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Test script: gitleaks secret scanning failures via store-and-forward
 # Uses the push path (/push/...) which runs JGit ReceivePack with sideband
-# Requires secret-scanning.enabled: true in git-proxy.yml / git-proxy-local.yml
+# Requires secret-scanning.enabled: true in fogwall.yml / fogwall-local.yml
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"

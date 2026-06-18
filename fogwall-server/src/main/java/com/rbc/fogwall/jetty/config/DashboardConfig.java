@@ -2,7 +2,7 @@ package com.rbc.fogwall.jetty.config;
 
 import lombok.Data;
 
-/** Binds the {@code dashboard:} block in git-proxy.yml. Controls optional dashboard UI features. */
+/** Binds the {@code dashboard:} block in fogwall.yml. Controls optional dashboard UI features. */
 @Data
 public class DashboardConfig {
 

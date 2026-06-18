@@ -23,7 +23,7 @@ echo "  URL: http://localhost:8080/proxy/${GIT_REPO}"
 echo "=========================================================="
 sleep 2
 
-echo "→ Cloning repository (${PROXY_URL//${GIT_PASSWORD}/***}) via git-proxy..."
+echo "→ Cloning repository (${PROXY_URL//${GIT_PASSWORD}/***}) via fogwall..."
 git clone "${PROXY_URL}" "${REPO_DIR}"
 sleep 2
 

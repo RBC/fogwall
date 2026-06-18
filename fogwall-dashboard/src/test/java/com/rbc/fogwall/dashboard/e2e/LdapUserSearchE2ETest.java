@@ -18,7 +18,7 @@ import org.junit.jupiter.api.*;
  * End-to-end tests for LDAP authentication using the search-first approach ({@code userSearchFilter} +
  * {@code userSearchBase}).
  *
- * <p>This tests the path added in <a href="https://github.com/coopernetes/git-proxy-java/issues/120">#120</a>: when
+ * <p>This tests the path added in <a href="https://github.com/coopernetes/fogwall/issues/120">#120</a>: when
  * {@code auth.ldap.user-search-filter} is set, Spring Security uses
  * {@link org.springframework.security.ldap.search.FilterBasedLdapUserSearch} instead of constructing a DN directly from
  * {@code userDnPatterns}. This is necessary for large Active Directory forests where users are spread across many OUs

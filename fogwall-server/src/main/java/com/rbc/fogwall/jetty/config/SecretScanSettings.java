@@ -3,7 +3,7 @@ package com.rbc.fogwall.jetty.config;
 import lombok.Data;
 
 /**
- * Binds the {@code secret-scan:} block in git-proxy.yml. Controls gitleaks secret scanning applied to every push diff.
+ * Binds the {@code secret-scan:} block in fogwall.yml. Controls gitleaks secret scanning applied to every push diff.
  *
  * <p>This is a push-level check, distinct from the per-commit checks under {@code commit:}.
  *

@@ -7,7 +7,7 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   webServer: {
-    command: 'GITPROXY_DATABASE_TYPE=h2-mem ./gradlew :git-proxy-java-dashboard:run',
+    command: 'FOGWALL_DATABASE_TYPE=h2-mem ./gradlew :fogwall-dashboard:run',
     cwd: '../../',
     url: 'http://localhost:8080/api/health',
     timeout: 120_000,

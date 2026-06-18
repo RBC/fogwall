@@ -23,7 +23,7 @@ import lombok.extern.slf4j.Slf4j;
  * </ul>
  *
  * <p>Provider, server, and database changes log a warning and require a restart (or the UI-driven provider hot-swap
- * from coopernetes/git-proxy-java#75).
+ * from coopernetes/fogwall#75).
  *
  * <p>Filters, hooks and controllers access config via typed getters, typically passed as method references (e.g.
  * {@code configHolder::getCommitConfig}).

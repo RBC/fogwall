@@ -86,7 +86,7 @@ class IdentityResolutionE2ETest {
                 .operations(RepoPermission.Operations.PUSH)
                 .build());
 
-        tempDir = Files.createTempDirectory("git-proxy-java-ident-e2e-");
+        tempDir = Files.createTempDirectory("fogwall-ident-e2e-");
     }
 
     @AfterAll

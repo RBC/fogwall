@@ -28,10 +28,10 @@ import org.eclipse.jetty.util.thread.QueuedThreadPool;
  * </ul>
  *
  * <p>This entry point runs the proxy only - no dashboard, no REST API. For the full stack including the approval
- * workflow UI, use {@code fogwallWithDashboardApplication} from the {@code git-proxy-java-dashboard} module.
+ * workflow UI, use {@code fogwallWithDashboardApplication} from the {@code fogwall-dashboard} module.
  *
- * <p>Configuration is loaded from {@code git-proxy.yml} and {@code git-proxy-local.yml}, overridable with
- * {@code fogwall_} environment variables.
+ * <p>Configuration is loaded from {@code fogwall.yml} and {@code fogwall-local.yml}, overridable with {@code fogwall_}
+ * environment variables.
  */
 @Slf4j
 public class FogwallJettyApplication {
@@ -123,7 +123,7 @@ public class FogwallJettyApplication {
         return connector;
     }
 
-    /** Write PID file so {@code ./gradlew :git-proxy-java-server:stop} can find and kill this process. */
+    /** Write PID file so {@code ./gradlew :fogwall-server:stop} can find and kill this process. */
     public static void writePidFile() {
         String pidFilePath = System.getProperty("fogwall.pidfile");
         if (pidFilePath == null) return;

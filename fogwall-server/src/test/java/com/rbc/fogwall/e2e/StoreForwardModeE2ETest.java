@@ -35,7 +35,7 @@ class StoreForwardModeE2ETest {
         gitea.createTestRepo();
 
         proxy = new JettyProxyFixture(gitea.getBaseUri());
-        tempDir = Files.createTempDirectory("git-proxy-java-sf-e2e-");
+        tempDir = Files.createTempDirectory("fogwall-sf-e2e-");
     }
 
     @AfterAll
@@ -258,7 +258,7 @@ class StoreForwardModeE2ETest {
     @Disabled("requires user store configuration with identity verification enabled")
     void resolvedUser_isPopulatedOnPushRecord() throws Exception {
         // This test validates that when a push is made by a user with a registered SCM identity
-        // (configured in git-proxy-local.yml), the push record's resolvedUser field is populated.
+        // (configured in fogwall-local.yml), the push record's resolvedUser field is populated.
         // Requires: dev1 user with dev1-gh SCM identity for the test provider.
         // Expected: resolvedUser == "dev1" on the persisted push record.
         assertTrue(

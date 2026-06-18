@@ -64,8 +64,7 @@ class HotReloadJettyFixture implements AutoCloseable {
         server.addConnector(connector);
 
         pushStore = PushStoreFactory.inMemory();
-        var storeForwardCache =
-                new LocalRepositoryCache(Files.createTempDirectory("git-proxy-java-hotreload-sf-"), 0, true);
+        var storeForwardCache = new LocalRepositoryCache(Files.createTempDirectory("fogwall-hotreload-sf-"), 0, true);
         var proxyCache = new LocalRepositoryCache();
 
         var provider = GenericProxyProvider.builder()

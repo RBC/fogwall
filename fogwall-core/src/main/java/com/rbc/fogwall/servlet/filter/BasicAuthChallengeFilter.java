@@ -26,7 +26,7 @@ public class BasicAuthChallengeFilter implements Filter {
         if (isReceivePackRequest(httpReq)) {
             String auth = httpReq.getHeader("Authorization");
             if (auth == null || auth.isBlank()) {
-                httpResp.setHeader("WWW-Authenticate", "Basic realm=\"git-proxy\"");
+                httpResp.setHeader("WWW-Authenticate", "Basic realm=\"fogwall\"");
                 httpResp.sendError(HttpServletResponse.SC_UNAUTHORIZED);
                 return;
             }

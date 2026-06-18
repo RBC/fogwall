@@ -13,7 +13,7 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <p>Intended for multi-SCM environments where identity must be verified against different upstream sources depending
  * on the user — for example, subsidiary developers whose tokens belong to a separate SCM instance (see
- * coopernetes/git-proxy-java#125). Token resolution via the upstream provider is always the implicit default.
+ * coopernetes/fogwall#125). Token resolution via the upstream provider is always the implicit default.
  */
 @Slf4j
 @RequiredArgsConstructor

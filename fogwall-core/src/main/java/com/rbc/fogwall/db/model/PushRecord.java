@@ -9,7 +9,7 @@ import lombok.Data;
 
 /**
  * Represents a single push operation through the proxy. This is the primary audit record, equivalent to the Action
- * class in git-proxy (Node.js).
+ * class in fogwall (Node.js).
  */
 @Data
 @Builder
@@ -31,10 +31,10 @@ public class PushRecord {
     /** Provider name (e.g., "github", "gitlab"). */
     private String provider;
 
-    /** Project/organization name (e.g., "finos"). */
+    /** Project/organization name (e.g., "RBC"). */
     private String project;
 
-    /** Repository name (e.g., "git-proxy"). */
+    /** Repository name (e.g., "fogwall"). */
     private String repoName;
 
     /** Target branch (e.g., "refs/heads/main"). */

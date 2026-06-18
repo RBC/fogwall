@@ -5,9 +5,9 @@ import lombok.Data;
 /**
  * HikariCP connection pool settings, bound from the {@code database.pool:} config block.
  *
- * <p>The default pool size is intentionally small. git-proxy-java push workloads are sequential per user — one push
- * produces one short-lived transaction — so a large pool buys nothing and drives up aggregate connection counts when
- * multiple instances share a database. See the <a
+ * <p>The default pool size is intentionally small. fogwall push workloads are sequential per user — one push produces
+ * one short-lived transaction — so a large pool buys nothing and drives up aggregate connection counts when multiple
+ * instances share a database. See the <a
  * href="https://github.com/brettwooldridge/HikariCP/wiki/About-Pool-Sizing">HikariCP pool sizing guide</a>.
  */
 @Data

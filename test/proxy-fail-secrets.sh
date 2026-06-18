@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Test script: gitleaks secret scanning failures via transparent proxy
 # Uses the proxy path (/proxy/...) which runs the servlet filter chain
-# Requires secret-scanning.enabled: true in git-proxy.yml / git-proxy-local.yml
+# Requires secret-scanning.enabled: true in fogwall.yml / fogwall-local.yml
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"

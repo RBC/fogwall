@@ -6,7 +6,7 @@ import java.util.Map;
 import lombok.Data;
 
 /**
- * Binds the {@code auth:} block in git-proxy.yml. Selects the active authentication provider and holds its settings.
+ * Binds the {@code auth:} block in fogwall.yml. Selects the active authentication provider and holds its settings.
  *
  * <p>Supported providers:
  *
@@ -34,8 +34,8 @@ public class AuthConfig {
     private String provider = "local";
 
     /**
-     * Maps git-proxy-java role names to lists of IdP group names. When a user belongs to any listed group, the
-     * corresponding role is granted. Applies to OIDC (via {@code groups-claim}) and LDAP (via group search).
+     * Maps fogwall role names to lists of IdP group names. When a user belongs to any listed group, the corresponding
+     * role is granted. Applies to OIDC (via {@code groups-claim}) and LDAP (via group search).
      *
      * <p>Example:
      *

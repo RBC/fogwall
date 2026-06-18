@@ -3,7 +3,7 @@ package com.rbc.fogwall.jetty.config;
 import lombok.Data;
 
 /**
- * Binds a single entry in the {@code permissions:} list in git-proxy.yml.
+ * Binds a single entry in the {@code permissions:} list in fogwall.yml.
  *
  * <p>Example:
  *

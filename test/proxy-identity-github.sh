@@ -13,7 +13,7 @@ GIT_USERNAME=${GIT_USERNAME:-"me"}
 source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
 resolve_pat ~/.github-pat
 GITHUB_REPO=${GITHUB_REPO:-"github.com/coopernetes/test-repo.git"}
-GITPROXY_API_KEY=${GITPROXY_API_KEY:-"change-me-in-production"}
+FOGWALL_API_KEY=${FOGWALL_API_KEY:-"change-me-in-production"}
 PROXY_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/proxy/${GITHUB_REPO}"
 TEST_BRANCH="test/proxy-identity-github-$(date +%s)"
 REPO_DIR=$(mktemp -d "${TMPDIR:-/tmp}/proxy-identity-github-XXXX")
@@ -48,7 +48,7 @@ echo "==> Push ID: ${PUSH_ID}"
 APPROVE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
     -X POST "http://localhost:8080/api/push/${PUSH_ID}/authorise" \
     -H "Content-Type: application/json" \
-    -H "X-Api-Key: ${GITPROXY_API_KEY}" \
+    -H "X-Api-Key: ${FOGWALL_API_KEY}" \
     -d '{"reason":"auto-approved by proxy-identity-github.sh","attestations":{"reviewed-content":"true","policy-compliance":"true"}}')
 if [ "${APPROVE_STATUS}" != "200" ]; then
     echo "ERROR: approval returned HTTP ${APPROVE_STATUS}"

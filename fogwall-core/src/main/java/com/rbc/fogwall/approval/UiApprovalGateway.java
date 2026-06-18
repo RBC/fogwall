@@ -7,8 +7,8 @@ import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Default approval gateway that waits for a human reviewer to approve or reject via the git-proxy UI/API. Polls the
- * push store every 5 seconds and sends heartbeat sideband messages to keep the git client connection alive.
+ * Default approval gateway that waits for a human reviewer to approve or reject via the fogwall UI/API. Polls the push
+ * store every 5 seconds and sends heartbeat sideband messages to keep the git client connection alive.
  */
 @Slf4j
 public class UiApprovalGateway implements ApprovalGateway {

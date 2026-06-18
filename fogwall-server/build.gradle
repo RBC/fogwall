@@ -22,7 +22,7 @@ application {
 }
 
 tasks.named('run') {
-    // Default to the 'local' profile so git-proxy-local.yml is loaded in local dev.
+    // Default to the 'local' profile so fogwall-local.yml is loaded in local dev.
     // Override by setting FOGWALL_CONFIG_PROFILES in your shell before running.
     environment 'FOGWALL_CONFIG_PROFILES', System.getenv('FOGWALL_CONFIG_PROFILES') ?: 'local'
     jvmArgs "-Dlog4j2.configurationFile=${projectDir}/src/main/resources/log4j2-local.xml"

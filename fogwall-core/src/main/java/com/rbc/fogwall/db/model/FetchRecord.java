@@ -26,7 +26,7 @@ public class FetchRecord {
     /** HTTP Basic username supplied by the git client. Always arbitrary — do not use for identity. */
     private String pushUsername;
 
-    /** Resolved git-proxy-java username, if the client's token was matched to a user account. */
+    /** Resolved fogwall username, if the client's token was matched to a user account. */
     private String resolvedUser;
 
     public enum Result {

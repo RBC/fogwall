@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Spin up git-proxy-java + Gitea + MongoDB, run the full test/... suite, then tear down.
+# Spin up fogwall + Gitea + MongoDB, run the full test/... suite, then tear down.
 #
 # Usage:
 #   bash test/run-mongo.sh               # build, test, tear down
@@ -18,7 +18,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE="docker compose --profile mongo -f ${REPO_ROOT}/docker-compose.yml -f ${REPO_ROOT}/docker-compose.mongo.yml"
 
 # Credentials set by docker/gitea-setup.sh
-ADMIN_USER="gitproxyadmin"
+ADMIN_USER="fogwalladmin"
 ADMIN_PASS="Admin1234!"
 TEST_ORG="test-owner"
 TEST_REPO="test-repo"
@@ -28,7 +28,7 @@ teardown() {
         echo ""
         echo "==> --no-teardown: environment left running."
         echo "    GIT_USERNAME=${ADMIN_USER}  GIT_PASSWORD=${ADMIN_PASS}"
-        echo "    GIT_REPO=gitea/${TEST_ORG}/${TEST_REPO}.git  GITPROXY_API_KEY=change-me-in-production"
+        echo "    GIT_REPO=gitea/${TEST_ORG}/${TEST_REPO}.git  FOGWALL_API_KEY=change-me-in-production"
         echo "    Stop with: $COMPOSE down -v"
     else
         echo "==> Tearing down..."
@@ -41,7 +41,7 @@ echo "==> Cleaning up any previous run..."
 $COMPOSE down -v --remove-orphans 2>/dev/null || true
 
 echo "==> Building image..."
-$COMPOSE build git-proxy-java
+$COMPOSE build fogwall
 
 echo "==> Starting services..."
 $COMPOSE up -d
@@ -49,13 +49,13 @@ $COMPOSE up -d
 echo "==> Running Gitea setup..."
 bash "${REPO_ROOT}/docker/gitea-setup.sh"
 
-echo "==> Waiting for git-proxy-java to be healthy..."
+echo "==> Waiting for fogwall to be healthy..."
 for i in $(seq 1 30); do
     if curl -sf "http://localhost:8080/login.html" -o /dev/null 2>&1; then
-        echo "    git-proxy-java is up."
+        echo "    fogwall is up."
         break
     fi
-    [ "$i" -eq 30 ] && { echo "ERROR: git-proxy-java did not become healthy"; exit 1; }
+    [ "$i" -eq 30 ] && { echo "ERROR: fogwall did not become healthy"; exit 1; }
     sleep 3
 done
 
@@ -63,7 +63,7 @@ done
 export GIT_USERNAME="$ADMIN_USER"
 export GIT_PASSWORD="$ADMIN_PASS"
 export GIT_REPO="gitea/${TEST_ORG}/${TEST_REPO}.git"
-export GITPROXY_API_KEY="change-me-in-production"
+export FOGWALL_API_KEY="change-me-in-production"
 
 # push-pass* scripts expect store-and-forward to forward immediately, but the dashboard
 # always uses UiApprovalGateway so they would hang waiting for approval. Skip them here.

@@ -28,7 +28,7 @@ import org.springframework.session.web.http.SessionRepositoryFilter;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Wires the HTTP session store based on {@code server.session-store} in git-proxy.yml.
+ * Wires the HTTP session store based on {@code server.session-store} in fogwall.yml.
  *
  * <ul>
  *   <li>{@code none} (default) — in-memory {@link MapSessionRepository}; sessions are lost on restart

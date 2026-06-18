@@ -20,7 +20,7 @@ import org.eclipse.jgit.transport.http.JDKHttpConnectionFactory;
  *
  * <p>Install at startup via {@code HttpTransport.setConnectionFactory(new
  * SslAwareHttpConnectionFactory(upstreamTls.trustManagers()))} before the server starts accepting connections. This
- * affects all JGit HTTP/HTTPS transport in the JVM, which is acceptable because git-proxy-java owns the entire process.
+ * affects all JGit HTTP/HTTPS transport in the JVM, which is acceptable because fogwall owns the entire process.
  */
 public class SslAwareHttpConnectionFactory implements HttpConnectionFactory {
 
