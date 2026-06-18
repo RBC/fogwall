@@ -1,0 +1,67 @@
+package com.rbc.fogwall.git;
+
+import com.rbc.fogwall.provider.BitbucketProvider;
+import com.rbc.fogwall.provider.ScmUserInfo;
+import java.util.Collection;
+import java.util.Optional;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.eclipse.jgit.transport.ReceiveCommand;
+import org.eclipse.jgit.transport.ReceivePack;
+
+/**
+ * Pre-receive hook that resolves the Bitbucket push user's upstream username and stores it in the repository config
+ * ({@code fogwall.upstreamUser}) for use by {@link ForwardingPostReceiveHook}.
+ *
+ * <p>Bitbucket does not validate the HTTP Basic-auth username on git pushes — only the token is checked. The proxy
+ * convention is that the username field carries the user's Bitbucket account email. This hook calls {@code GET
+ * /2.0/user} using that email and the push token to retrieve the auto-generated {@code username} field that Bitbucket
+ * recognises for git authentication.
+ *
+ * <p>{@link ForwardingPostReceiveHook} reads {@code fogwall.upstreamUser} and rewrites the outbound credentials from
+ * {@code email:token} to {@code username:token} before pushing to Bitbucket upstream.
+ *
+ * <p>Runs at order 148, before {@link CheckUserPushPermissionHook} (150).
+ */
+@Slf4j
+@RequiredArgsConstructor
+public class BitbucketCredentialRewriteHook implements FogwallHook {
+
+    private static final int ORDER = 148;
+
+    private final BitbucketProvider provider;
+    private final PushContext pushContext;
+
+    @Override
+    public int getOrder() {
+        return ORDER;
+    }
+
+    @Override
+    public String getName() {
+        return "bitbucketCredentialRewrite";
+    }
+
+    @Override
+    public void onPreReceive(ReceivePack rp, Collection<ReceiveCommand> commands) {
+        String pushEmail = pushContext.getPushUser();
+        String pushToken = pushContext.getPushToken();
+
+        if (pushEmail == null || pushToken == null) {
+            log.debug("No push credentials in context — skipping Bitbucket upstream username resolution");
+            return;
+        }
+
+        Optional<ScmUserInfo> identity = provider.fetchScmIdentity(pushEmail, pushToken);
+        if (identity.isEmpty()) {
+            log.debug(
+                    "Could not resolve Bitbucket upstream username for '{}' — credentials will be forwarded as-is",
+                    pushEmail);
+            return;
+        }
+
+        String upstreamUser = identity.get().login();
+        pushContext.setUpstreamUser(upstreamUser);
+        log.debug("Stored Bitbucket upstream username '{}' for push email '{}'", upstreamUser, pushEmail);
+    }
+}

@@ -16,13 +16,13 @@
 #
 # Adminer (database UI) is available at http://localhost:8082.
 services:
-  git-proxy-java:
+  fogwall:
     environment:
-      GITPROXY_DATABASE_TYPE: postgres
-      GITPROXY_DATABASE_URL: "jdbc:postgresql://postgres:5432/gitproxy?sslmode=disable"
-      GITPROXY_DATABASE_USERNAME: gitproxy
-      GITPROXY_DATABASE_PASSWORD: gitproxy
-      GITPROXY_SERVER_SESSION_STORE: jdbc
+      FOGWALL_DATABASE_TYPE: postgres
+      FOGWALL_DATABASE_URL: "jdbc:postgresql://postgres:5432/gitproxy?sslmode=disable"
+      FOGWALL_DATABASE_USERNAME: gitproxy
+      FOGWALL_DATABASE_PASSWORD: gitproxy
+      FOGWALL_SERVER_SESSION_STORE: jdbc
     depends_on:
       postgres:
         condition: service_healthy

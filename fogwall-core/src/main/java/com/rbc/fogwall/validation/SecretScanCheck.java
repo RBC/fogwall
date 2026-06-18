@@ -1,0 +1,63 @@
+package com.rbc.fogwall.validation;
+
+import static com.rbc.fogwall.git.GitClientUtils.SymbolCodes.*;
+import static com.rbc.fogwall.git.GitClientUtils.sym;
+
+import com.rbc.fogwall.config.SecretScanConfig;
+import com.rbc.fogwall.git.GitleaksRunner;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+/**
+ * Scans a unified diff for secrets using gitleaks. Implements {@link DiffCheck} so it can be used in both the
+ * transparent-proxy filter chain and the store-and-forward pre-receive hook chain without duplication.
+ *
+ * <p>Returns {@link Optional#empty()} (fail-open) if the scanner is unavailable or execution fails - pushes are never
+ * blocked because the scanner is misconfigured.
+ */
+@Slf4j
+@RequiredArgsConstructor
+public class SecretScanCheck implements DiffCheck {
+
+    private final SecretScanConfig config;
+    private final GitleaksRunner runner;
+
+    public SecretScanCheck(SecretScanConfig config) {
+        this(config, new GitleaksRunner());
+    }
+
+    @Override
+    public Optional<List<Violation>> check(String diff) {
+        if (!config.isEnabled()) {
+            log.debug("Secret scanning disabled - skipping");
+            return Optional.of(List.of());
+        }
+
+        if (diff == null || diff.isBlank()) {
+            log.debug("No diff available for secret scanning - skipping");
+            return Optional.of(List.of());
+        }
+
+        Optional<List<GitleaksRunner.Finding>> result = runner.scan(diff, config);
+
+        if (result.isEmpty()) {
+            // Fail-open: scanner unavailable or errored - GitleaksRunner already logged the detail
+            return Optional.empty();
+        }
+
+        List<GitleaksRunner.Finding> findings = result.get();
+        if (findings.isEmpty()) {
+            return Optional.of(List.of());
+        }
+
+        log.warn("Secret scan found {} finding(s)", findings.size());
+        List<Violation> violations = findings.stream()
+                .map(f -> new Violation(f.toMessage(), f.toMessage(), sym(CROSS_MARK) + "  " + f.toMessage()))
+                .collect(Collectors.toList());
+
+        return Optional.of(violations);
+    }
+}

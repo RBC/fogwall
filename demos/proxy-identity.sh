@@ -9,7 +9,7 @@
 #
 # Requires:
 #   - Proxy running locally (http://localhost:8080)
-#   - GITPROXY_API_KEY env var or default ("change-me-in-production")
+#   - FOGWALL_API_KEY env var or default ("change-me-in-production")
 #   - GIT_REPO set to the upstream repo (e.g. github.com/coopernetes/test-repo.git)
 #   - GIT_PASSWORD set to the PAT for the linked user (scenario A)
 #   - GIT_PASSWORD_UNLINKED set to a PAT for a user NOT in the proxy user store
@@ -68,7 +68,7 @@ echo "→ Approving via API..."
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
     -X POST "http://localhost:8080/api/push/${PUSH_ID}/authorise" \
     -H "Content-Type: application/json" \
-    -H "X-Api-Key: ${GITPROXY_API_KEY}" \
+    -H "X-Api-Key: ${FOGWALL_API_KEY}" \
     -d '{"user":"demo","comment":"identity demo approval"}')
 if [ "${HTTP_CODE}" != "200" ]; then
     echo "ERROR: Approval API returned HTTP ${HTTP_CODE}"

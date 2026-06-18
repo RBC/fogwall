@@ -1,0 +1,125 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+        vendor = JvmVendorSpec.ADOPTIUM
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+application {
+    mainClass = 'com.rbc.fogwall.jetty.FogwallJettyApplication'
+    applicationDefaultJvmArgs = ["-Dfogwall.pidfile=${buildDir}/fogwall.pid"]
+}
+
+tasks.named('run') {
+    // Default to the 'local' profile so git-proxy-local.yml is loaded in local dev.
+    // Override by setting FOGWALL_CONFIG_PROFILES in your shell before running.
+    environment 'FOGWALL_CONFIG_PROFILES', System.getenv('FOGWALL_CONFIG_PROFILES') ?: 'local'
+    jvmArgs "-Dlog4j2.configurationFile=${projectDir}/src/main/resources/log4j2-local.xml"
+    jvmArgs "-Dfogwall.pidfile=${buildDir}/fogwall.pid"
+}
+
+tasks.register('stop') {
+    group = 'application'
+    description = 'Stops the running fogwall server'
+    doLast {
+        def pf = file("${buildDir}/fogwall.pid")
+        if (pf.exists()) {
+            def pid = pf.text.trim()
+            logger.lifecycle("Stopping fogwall (PID: ${pid})...")
+            try {
+                def proc = new ProcessBuilder('kill', pid).start()
+                def exitCode = proc.waitFor()
+                if (exitCode == 0) {
+                    logger.lifecycle("Stopped fogwall server")
+                } else {
+                    logger.warn("Process ${pid} not found — may have already stopped")
+                }
+            } catch (Exception e) {
+                logger.warn("Failed to kill process: ${e.message}")
+            }
+            pf.delete()
+        } else {
+            logger.warn("No PID file found. Is the server running?")
+        }
+    }
+}
+
+dependencies {
+    // Core module
+    implementation project(':fogwall-core')
+
+    // Gestalt config (YAML source brings SnakeYAML transitively)
+    implementation "com.github.gestalt-config:gestalt-core:${gestaltVersion}"
+    implementation "com.github.gestalt-config:gestalt-yaml:${gestaltVersion}"
+
+    // Jackson YAML — validates config structure before Gestalt loads it; BOM pins the version
+    implementation "tools.jackson.dataformat:jackson-dataformat-yaml"
+
+    // Database drivers - include all so standalone Jetty server can use any backend
+    runtimeOnly "com.h2database:h2:${h2Version}"
+    runtimeOnly "org.postgresql:postgresql:${postgresVersion}"
+    runtimeOnly "org.mongodb:mongodb-driver-sync:${mongoVersion}"
+
+    // Lombok
+    compileOnly "org.projectlombok:lombok:${lombokVersion}"
+    annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+
+    // Testing
+    testImplementation "org.junit.jupiter:junit-jupiter-api:${junitVersion}"
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:${junitVersion}"
+    testImplementation "org.mockito:mockito-core:${mockitoVersion}"
+    testImplementation "org.junit.jupiter:junit-jupiter-params:${junitVersion}"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher:${junitVersion}"
+    testCompileOnly "org.projectlombok:lombok:${lombokVersion}"
+    testAnnotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+
+    // Testcontainers for e2e tests
+    testImplementation "org.testcontainers:testcontainers:${testContainersVersion}"
+    testImplementation "org.testcontainers:testcontainers-junit-jupiter:${testContainersVersion}"
+
+    // H2 available at test runtime so the in-process proxy can use it
+    testRuntimeOnly "com.h2database:h2:${h2Version}"
+
+    // Include core coverage in the aggregated JaCoCo report
+    jacocoAggregation project(':fogwall-core')
+}
+
+tasks.named('test') {
+    useJUnitPlatform {
+        excludeTags 'e2e'
+    }
+}
+
+tasks.register('e2eTest', Test) {
+    group = 'verification'
+    description = 'Runs end-to-end tests that require a running container runtime'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'e2e'
+    }
+    // Container startup can be slow
+    timeout = java.time.Duration.ofMinutes(10)
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('testCodeCoverageReport', JacocoReport)
+}
+
+// testCodeCoverageReport aggregates fogwall-core's source sets, which include the
+// generated-resources directory produced by downloadGitleaks. Declare the dependency
+// explicitly so Gradle's task-ordering validation passes.
+tasks.named('testCodeCoverageReport') {
+    dependsOn ':fogwall-core:downloadGitleaks'
+}

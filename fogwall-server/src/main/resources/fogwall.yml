@@ -1,0 +1,212 @@
+server:
+  port: 8080
+  # Approval mode for store-and-forward pushes. Options:
+  #   auto        — immediately approves every clean push; no dashboard required (default)
+  #   ui          — polls the push store waiting for a human reviewer via the REST API
+  #   servicenow  — delegates to a ServiceNow approval workflow
+  # Note: when running GitProxyWithDashboardApplication, 'ui' mode is always used regardless of this setting.
+  approval-mode: auto
+  # Heartbeat interval in seconds for store-and-forward sideband keepalives.
+  # Sends a "." progress packet periodically to prevent idle-timeout disconnects during long validation steps
+  # (e.g. secret scanning, approval polling). Set to 0 to disable.
+  heartbeat-interval-seconds: 10
+  # HTTP session persistence backend. Options:
+  #   none   — in-memory sessions (default); sessions are lost on restart and not shared across instances
+  #   jdbc   — persisted to the configured JDBC database (h2-file or postgres);
+  #   redis  — persisted to a Redis or Valkey instance; configure connection via server.redis.*
+  # Use jdbc or redis when running multiple instances sharing a database so that authenticated sessions
+  # survive pod restarts and remain valid across all pods.
+  # session-store: none
+
+  # Redis connection — required when session-store: redis
+  # redis:
+  #   host: redis.cluster.local
+  #   port: 6379
+  #   password: ""
+  #   ssl: false
+
+  # Origins allowed to make cross-origin requests to the dashboard REST API.
+  # Required when the frontend is served from a different hostname than the backend (e.g. behind a load balancer).
+  # Default (empty): same-origin only. Override per-deployment in fogwall-local.yml or via
+  # GITPROXY_SERVER_ALLOWEDORIGINS env var (comma-separated list treated as a single value — use the YAML key for
+  # multiple origins).
+  # allowed-origins:
+  #   - https://dashboard.example.com
+
+# Database configuration for push audit storage.
+# Supported types: h2-mem, h2-file, postgres, mongo
+# h2-file persists to ./.data/gitproxy.mv.db relative to the working directory.
+# Use h2-mem for ephemeral/CI environments, or override with GITPROXY_DATABASE_TYPE=h2-mem.
+database:
+  type: h2-file
+  # Connection pool tuning — applies to all JDBC backends (h2-mem, h2-file, postgres).
+  # Default pool size is 3: git pushes are sequential per-user so a small pool is sufficient,
+  # and a low default keeps aggregate connections manageable when multiple instances share a database.
+  # Raise maximum-pool-size only if you observe connection-wait pressure under load.
+  # pool:
+  #   maximum-pool-size: 3      # default: 3 (raise for high-concurrency dashboard workloads)
+  #   minimum-idle: 1           # default: matches maximum-pool-size; set lower to release idle connections
+  #   connection-timeout: 30000 # ms — fail fast if the pool is exhausted (default: 30000)
+  #   idle-timeout: 600000      # ms — retire idle connections after this period (default: 600000)
+  #   max-lifetime: 1800000     # ms — rotate connections to avoid stale TCP/auth state (default: 1800000)
+
+# By default, the app supports proxying to GitHub, GitLab, codeberg.org & gitea.com out of the box
+# Private or alternative providers can be added (e.g. internal GitHub Enterprise or GitLab EE) by adding a new entry
+providers:
+  github:
+    enabled: true
+  # Additional providers that may host FOSS projects.
+  gitlab:
+    enabled: true
+  codeberg:
+    enabled: true
+  gitea:
+    enabled: true
+  # bitbucket.org support is limited due to lack of free (non-commercial) access. Disabled by default.
+  # Bitbucket Server/Data Center instances can be added as custom providers
+  bitbucket:
+    enabled: false
+#  internal-gitlab:
+#    enabled: true
+#    type: gitlab
+#    uri: https://gitlab.internal.example.com
+#  debian-gitlab:
+#    enabled: true
+#    servlet-path: /debian
+#    uri: https://salsa.debian.org/
+
+# Global attestation questions shown to reviewers in the dashboard approval form before they can
+# approve a push. Applies to all providers — per-provider variants are a future enhancement.
+# Supported types: checkbox (default), text, dropdown. Required questions block submission until answered.
+# Hot-reloadable via POST /api/config/reload?section=attestations.
+attestations: []
+#  - id: reviewed-content
+#    type: checkbox
+#    label: "I have reviewed the diff and it contains no sensitive or proprietary information"
+#    required: true
+#  - id: policy-compliance
+#    type: checkbox
+#    label: "This push complies with our open source contribution policy"
+#    required: true
+#  - id: ticket-ref
+#    type: text
+#    label: "Internal ticket or justification reference"
+#    required: false
+
+# Per-commit validation rules applied by both the store-and-forward and transparent proxy pipelines.
+# These checks run once per commit in a push (author email, commit message content).
+commit:
+  author:
+    email:
+      # Regex that the email domain must match. Omit (or leave blank) to allow all domains.
+      # Example: "(corp\\.example\\.com|contractors\\.example\\.com)$"
+      domain:
+        allow: ""
+      # Regex that blocks matching local-parts (the part before @).
+      local:
+        block: "^(noreply|no-reply|bot|nobody)$"
+  message:
+    block:
+      # Block commit messages containing any of these strings (case-insensitive).
+      literals: []
+#        - "WIP"
+      # Block commit messages matching any of these regex patterns.
+      patterns: []
+#        - '(?i)(password|secret|token)\s*[=:]\s*\S+'
+
+  # Resolves the pusher's real SCM identity by calling the upstream provider's user API with the
+  # supplied token, then cross-checks the returned username and all commit author/committer emails
+  # against the authenticated fogwall user's scm-identities and emails.
+  #   warn   — allow the push but emit a sideband warning (default; safe starting point)
+  #   strict — block the push if identity cannot be verified (use this in production)
+  #   off    — disable the check entirely
+  # NOTE: 'warn' is not a security control — pushes succeed regardless of outcome.
+  # See docs/CONFIGURATION.md#identity-verification for token scope requirements and rollout guidance.
+  # identity-verification: warn
+
+# Push-level diff content scanning. Runs once per push against the aggregate diff (all commits combined).
+# Blocks pushes that introduce lines matching any configured literal or regex pattern.
+diff-scan:
+  block:
+    # Literals and patterns scanned against added lines (+) in the push diff.
+    # Add entries here to block internal hostnames, hardcoded strings, etc.
+    literals: []
+#      - "internal.corp.example.com"
+    patterns: []
+#      - '(?i)https?://[a-z0-9.-]*\.corp\.example\.com\b'
+
+# Secret scanning via gitleaks (https://github.com/gitleaks/gitleaks).
+# Runs once per push. The JAR ships with a bundled gitleaks binary so scanning works out of the box.
+# Binary resolution order:
+#   1. scanner-path — explicit path, bypasses everything else
+#   2. version-pinned download — if version + auto-install: true, downloads it on startup
+#   3. bundled JAR binary — always present (DEFAULT_VERSION)
+#   4. system PATH — gitleaks already installed on host/container
+secret-scan:
+  enabled: true
+  # version: 8.22.0        # pin a specific version; combined with auto-install: true, downloads it on startup
+  # auto-install: true     # allow downloading the version above (default: true); set false to use bundled or PATH only
+  # install-dir: ~/.cache/fogwall/gitleaks  # where to cache downloaded versions
+  # scanner-path: /usr/local/bin/gitleaks       # skip all resolution, use this binary directly
+  # config-file: /app/conf/.gitleaks.toml       # external TOML rules; ignored when inline-config is set
+  # inline-config: |                            # inline TOML (wins over config-file); hot-reloadable
+  #   title = "my-org"
+  #   [extend]
+  #   useDefault = true
+  #   [[rules]]
+  #   id = "my-org-api-key"
+  #   regex = '''MY_ORG_[A-Z0-9]{32}'''
+  # timeout-seconds: 30
+
+# User accounts for authentication and push authorization.
+# When this list is non-empty, only listed users may authenticate to the dashboard
+# and only commits whose author email matches a registered user are permitted.
+# When empty (default), the proxy runs in open/permissive mode (legacy behaviour).
+#
+# password-hash supports Spring Security encoding prefixes:
+#   {noop}plaintext   — no hashing, for local dev only
+#   {bcrypt}$2a$12$.. — bcrypt; generate with: htpasswd -bnBC 12 "" yourpassword | tr -d ':\n'
+#
+# Enable local auth with a single admin user. Not recommended for production!
+auth:
+  provider: local
+
+users:
+ - username: admin
+   password-hash: "{noop}admin"
+   roles:
+     - ADMIN           # grants dashboard admin access (user CRUD, password reset, etc.)
+#   - username: alice
+#     password-hash: "{bcrypt}$2a$12$..."
+#     emails:
+#       - alice@example.com
+#     push-usernames:
+#       - alice           # HTTP Basic-auth username used when pushing via git
+#     scm-identities:
+#       - provider: github          # use the friendly name from providers: config
+#         username: alice-gh        # (or the type/host ID "github/github.com" also works)
+
+# Live config reload. Allows hot-reloading commit rules and auth config without restarting the server.
+# Provider, server, and database changes always require a restart.
+#
+# reload:
+#   file:
+#     # Watch a local filesystem path and reload on modification.
+#     # Relative paths are resolved from the working directory.
+#     enabled: false
+#     path: /app/conf/fogwall-local.yml
+#   git:
+#     # Periodically clone / pull a git repository and read a YAML file from it.
+#     enabled: false
+#     url: https://github.com/myorg/config.git
+#     branch: main
+#     file-path: fogwall.yml
+#     # Polling interval in seconds. Set to 0 to disable polling (manual reload only via POST /api/config/reload).
+#     interval-seconds: 300
+
+# Dashboard UI feature flags. All features default to disabled — opt in per deployment.
+#
+# dashboard:
+#   # bulk-review: enable checkboxes on the push list so reviewers can approve/reject multiple
+#   # PENDING pushes at once. Disable (default) when your audit policy requires individual sign-off.
+#   bulk-review: false

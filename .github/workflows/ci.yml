@@ -33,7 +33,7 @@ jobs:
         with:
           node-version: '24.15.0'
           cache: npm
-          cache-dependency-path: git-proxy-java-dashboard/frontend/package-lock.json
+          cache-dependency-path: fogwall-dashboard/frontend/package-lock.json
 
       - name: Build and test
         run: ./gradlew build
@@ -115,9 +115,9 @@ jobs:
           DB: ${{ matrix.db }}
         run: |
           if [[ "$DB" != "default" ]]; then
-            bash compose.sh --db "$DB" -- logs git-proxy-java
+            bash compose.sh --db "$DB" -- logs fogwall
           else
-            bash compose.sh -- logs git-proxy-java
+            bash compose.sh -- logs fogwall
           fi
 
   playwright-test:
@@ -140,26 +140,26 @@ jobs:
         with:
           node-version: '24.15.0'
           cache: npm
-          cache-dependency-path: git-proxy-java-dashboard/frontend/package-lock.json
+          cache-dependency-path: fogwall-dashboard/frontend/package-lock.json
 
       - name: Install frontend dependencies
         run: npm ci
-        working-directory: git-proxy-java-dashboard/frontend
+        working-directory: fogwall-dashboard/frontend
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
-        working-directory: git-proxy-java-dashboard/frontend
+        working-directory: fogwall-dashboard/frontend
 
       - name: Run Playwright tests
         run: npm run test:e2e
-        working-directory: git-proxy-java-dashboard/frontend
+        working-directory: fogwall-dashboard/frontend
 
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # ratchet:actions/upload-artifact@v7
         with:
           name: playwright-report
-          path: git-proxy-java-dashboard/frontend/playwright-report/
+          path: fogwall-dashboard/frontend/playwright-report/
           retention-days: 14
 
   dependency-submission:
@@ -201,7 +201,7 @@ jobs:
           cache: gradle
 
       - name: Run e2e tests
-        run: ./gradlew :git-proxy-java-server:e2eTest
+        run: ./gradlew :fogwall-server:e2eTest
         timeout-minutes: 5
 
       - name: Publish e2e test results
@@ -209,5 +209,5 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # ratchet:actions/upload-artifact@v7
         with:
           name: e2e-test-reports
-          path: "git-proxy-java-server/build/reports/tests/e2eTest/"
+          path: "fogwall-server/build/reports/tests/e2eTest/"
           retention-days: 14

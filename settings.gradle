@@ -1,5 +1,5 @@
-rootProject.name = 'git-proxy-java'
+rootProject.name = 'fogwall'
 
-include 'git-proxy-java-core'
-include 'git-proxy-java-server'
-include 'git-proxy-java-dashboard'
+include 'fogwall-core'
+include 'fogwall-server'
+include 'fogwall-dashboard'

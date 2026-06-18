@@ -78,7 +78,7 @@ ext {
 }
 
 allprojects {
-    group = 'org.finos.gitproxy'
+    group = 'com.rbc.fogwall'
     version = '1.0.0'
     
     repositories {
@@ -117,7 +117,7 @@ subprojects {
         // but are confirmed Apache-2.0. Overrides in gradle-license-overrides.txt fix the HTML report.
         excludes = ['org.jspecify:jspecify', 'com.nimbusds:oauth2-oidc-sdk']
         renderers = [new com.github.jk1.license.render.InventoryHtmlReportRenderer(
-                         'index.html', 'git-proxy-java', rootProject.file('gradle-license-overrides.txt')),
+                         'index.html', 'fogwall', rootProject.file('gradle-license-overrides.txt')),
                      new com.github.jk1.license.render.JsonReportRenderer('licenses.json')]
     }
 

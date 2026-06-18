@@ -2,7 +2,7 @@
 # Environment defaults and credential resolution for test scripts
 
 export GIT_USERNAME=${GIT_USERNAME:-"me"}
-export GITPROXY_API_KEY=${GITPROXY_API_KEY:-"change-me-in-production"}
+export FOGWALL_API_KEY=${FOGWALL_API_KEY:-"change-me-in-production"}
 # Used by identity smoke tests to set git config user.name/email.
 # Override to match your own registered proxy user email.
 export GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME:-"Thomas Cooper"}

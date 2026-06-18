@@ -1,0 +1,54 @@
+package com.rbc.fogwall.validation;
+
+import static com.rbc.fogwall.git.GitClientUtils.SymbolCodes.*;
+import static com.rbc.fogwall.git.GitClientUtils.sym;
+
+import com.rbc.fogwall.config.CommitConfig;
+import com.rbc.fogwall.git.Commit;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
+import lombok.RequiredArgsConstructor;
+
+/** Validates that no commit message contains blocked literals or patterns. */
+@RequiredArgsConstructor
+public class CommitMessageCheck implements CommitCheck {
+
+    private final CommitConfig config;
+
+    @Override
+    public List<Violation> check(List<Commit> commits) {
+        List<Violation> violations = new ArrayList<>();
+        for (Commit commit : commits) {
+            String reason = violationReason(commit.getMessage());
+            if (reason != null) {
+                String subject = commit.getMessage().lines().findFirst().orElse("(empty)");
+                String detail = sym(CROSS_MARK) + "  " + subject + ": " + reason + "\n"
+                        + "  \u2192 Messages must not contain: WIP, fixup!, squash!, DO NOT MERGE";
+                violations.add(new Violation(subject, reason, detail));
+            }
+        }
+        return violations;
+    }
+
+    /** Returns the reason the message is rejected, or {@code null} if it is allowed. */
+    private String violationReason(String message) {
+        if (message == null || message.isEmpty()) {
+            return "empty commit message";
+        }
+
+        for (String literal : config.getMessage().getBlock().getLiterals()) {
+            if (message.toLowerCase().contains(literal.toLowerCase())) {
+                return "contains blocked term: \"" + literal + "\"";
+            }
+        }
+
+        for (Pattern pattern : config.getMessage().getBlock().getPatterns()) {
+            if (pattern.matcher(message).find()) {
+                return "matches blocked pattern: " + pattern.pattern();
+            }
+        }
+
+        return null;
+    }
+}

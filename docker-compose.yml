@@ -1,20 +1,20 @@
 services:
 
-  # ── git-proxy-java ────────────────────────────────────────────────────────────
-  git-proxy-java:
+  # ── fogwall ───────────────────────────────────────────────────────────────────
+  fogwall:
     build: .
     ports:
       - "8080:8080"
     volumes:
-      - ./docker/git-proxy-docker-default.yml:/app/conf/git-proxy-docker-default.yml:ro
+      - ./docker/fogwall-docker-default.yml:/app/conf/fogwall-docker-default.yml:ro
       # Uncomment to enable debug logging (see docker/log4j2-debug.xml):
 #      - ./docker/log4j2-debug.xml:/app/conf/log4j2-debug.xml:ro
     depends_on:
       gitea:
         condition: service_healthy
     environment:
-      GITPROXY_API_KEY: "change-me-in-production"
-      GITPROXY_CONFIG_PROFILES: docker-default
+      FOGWALL_API_KEY: "change-me-in-production"
+      FOGWALL_CONFIG_PROFILES: docker-default
       # Uncomment together with the volume mount above to activate debug logging:
 #      JAVA_TOOL_OPTIONS: -Dlog4j2.configurationFile=/app/conf/log4j2-debug.xml
     healthcheck:

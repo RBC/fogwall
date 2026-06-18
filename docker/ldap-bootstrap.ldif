@@ -7,7 +7,7 @@ dn: ou=groups,dc=example,dc=com
 objectClass: organizationalUnit
 ou: groups
 
-# --- Primary test users (referenced in git-proxy-ldap.yml) ---
+# --- Primary test users (referenced in fogwall-ldap.yml) ---
 # Login: testuser / testpass123,  admin / admin
 
 dn: cn=testuser,ou=users,dc=example,dc=com
@@ -91,9 +91,9 @@ userPassword: testpass123
 
 # --- Groups ---
 
-dn: cn=git_proxy_admins,ou=groups,dc=example,dc=com
+dn: cn=fogwall_admins,ou=groups,dc=example,dc=com
 objectClass: groupOfNames
-cn: git_proxy_admins
+cn: fogwall_admins
 member: cn=admin,ou=users,dc=example,dc=com
 member: cn=user2,ou=users,dc=example,dc=com
 member: cn=user5,ou=users,dc=example,dc=com

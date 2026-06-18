@@ -1,0 +1,85 @@
+package com.rbc.fogwall.git;
+
+import static com.rbc.fogwall.git.GitClientUtils.AnsiColor.*;
+import static com.rbc.fogwall.git.GitClientUtils.SymbolCodes.*;
+import static com.rbc.fogwall.git.GitClientUtils.color;
+import static com.rbc.fogwall.git.GitClientUtils.sym;
+
+import com.rbc.fogwall.config.GpgConfig;
+import com.rbc.fogwall.db.model.PushStep;
+import com.rbc.fogwall.db.model.StepStatus;
+import com.rbc.fogwall.validation.GpgSignatureCheck;
+import com.rbc.fogwall.validation.Violation;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.eclipse.jgit.lib.ObjectId;
+import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.transport.ReceiveCommand;
+import org.eclipse.jgit.transport.ReceivePack;
+
+/**
+ * S&F-mode adapter for {@link GpgSignatureCheck}. Reads commits from the JGit repository, sends per-violation sideband
+ * feedback, and records results in the shared {@link ValidationContext} and {@link PushContext}.
+ */
+@Slf4j
+@RequiredArgsConstructor
+public class GpgSignatureHook implements FogwallHook {
+
+    private static final int ORDER = 320;
+
+    private final GpgConfig config;
+    private final ValidationContext validationContext;
+    private final PushContext pushContext;
+
+    @Override
+    public void onPreReceive(ReceivePack rp, Collection<ReceiveCommand> commands) {
+        var check = new GpgSignatureCheck(config);
+        Repository repo = rp.getRepository();
+        List<Violation> allViolations = new ArrayList<>();
+
+        for (ReceiveCommand cmd : commands) {
+            if (cmd.getType() == ReceiveCommand.Type.DELETE) continue;
+            try {
+                List<Violation> violations = check.check(getCommits(repo, cmd));
+                for (Violation v : violations) {
+                    rp.sendMessage(color(RED, "" + sym(CROSS_MARK) + "  " + v.subject() + " - " + v.reason()));
+                    validationContext.addIssue("GpgSignatureHook", v.reason(), v.formattedDetail());
+                    allViolations.add(v);
+                }
+            } catch (Exception e) {
+                log.error("Failed to check GPG signatures for {}", cmd.getRefName(), e);
+                rp.sendMessage(color(YELLOW, "" + sym(WARNING) + "  Could not check GPG signature: " + e.getMessage()));
+            }
+        }
+
+        if (allViolations.isEmpty()) {
+            pushContext.addStep(PushStep.builder()
+                    .stepName("checkSignatures")
+                    .stepOrder(ORDER)
+                    .status(StepStatus.PASS)
+                    .build());
+        }
+    }
+
+    @Override
+    public int getOrder() {
+        return ORDER;
+    }
+
+    @Override
+    public String getName() {
+        return "GpgSignatureHook";
+    }
+
+    private List<Commit> getCommits(Repository repo, ReceiveCommand cmd) throws Exception {
+        if (ObjectId.zeroId().equals(cmd.getOldId())) {
+            return List.of(CommitInspectionService.getCommitDetails(
+                    repo, cmd.getNewId().name()));
+        }
+        return CommitInspectionService.getCommitRange(
+                repo, cmd.getOldId().name(), cmd.getNewId().name());
+    }
+}

@@ -1,0 +1,41 @@
+{
+  "name": "fogwall-ui",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "format": "prettier --write src",
+    "format:check": "prettier --check src",
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "license-check": "license-checker-rseidelsohn --production --excludePrivatePackages --summary --onlyAllow \"MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;0BSD;Unlicense;CC0-1.0;MPL-2.0;EPL-1.0;EPL-2.0;WTFPL;BlueOak-1.0.0;Python-2.0;Artistic-2.0;Zlib;W3C;Unicode-DFS-2017;OFL-1.1\""
+  },
+  "dependencies": {
+    "diff2html": "^3.4.56",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-router-dom": "^7.17.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/node": "^24.12.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.4.0",
+    "tailwindcss": "^4.2.2",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.57.0",
+    "vite": "^8.0.16",
+    "prettier": "^3.5.3",
+    "@playwright/test": "^1.49.0",
+    "license-checker-rseidelsohn": "^4.2.2"
+  }
+}

@@ -8,7 +8,7 @@
           "requestParam": "sub",
           "match": "admin",
           "claims": {
-            "groups": ["git_proxy_admins"]
+            "groups": ["fogwall_admins"]
           }
         }
       ]

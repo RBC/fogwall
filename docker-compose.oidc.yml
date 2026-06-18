@@ -4,7 +4,7 @@
 # username (no password required at the login form).
 #
 # ── One-time /etc/hosts setup ─────────────────────────────────────────────────
-# Add the following line so your browser and git-proxy-java both resolve "mock-oauth2"
+# Add the following line so your browser and fogwall both resolve "mock-oauth2"
 # to the same host (required for a consistent OIDC issuer URL):
 #
 #   127.0.0.1  mock-oauth2
@@ -23,10 +23,10 @@ services:
   mock-oauth2:
     image: ghcr.io/navikt/mock-oauth2-server:3.0.1
     environment:
-      # Bind the server to port 9090 (avoids conflict with git-proxy-java on 8080).
+      # Bind the server to port 9090 (avoids conflict with fogwall on 8080).
       # mock-oauth2-server uses the incoming request's Host header as the issuer base,
       # so accessing it as http://mock-oauth2:9090 produces a consistent issuer URL
-      # from both git-proxy-java (Docker DNS) and the browser (/etc/hosts).
+      # from both fogwall (Docker DNS) and the browser (/etc/hosts).
       SERVER_PORT: "9090"
       # Pre-configured token callbacks: logging in as "admin" injects a groups claim
       # so that auth.role-mappings can grant ROLE_ADMIN automatically.
@@ -42,13 +42,13 @@ services:
       retries: 10
       start_period: 5s
 
-  git-proxy-java:
+  fogwall:
     volumes:
-      - ./docker/git-proxy-oidc.yml:/app/conf/git-proxy-oidc.yml:ro
+      - ./docker/fogwall-oidc.yml:/app/conf/fogwall-oidc.yml:ro
     environment:
-      GITPROXY_CONFIG_PROFILES: docker-default,oidc
-      GITPROXY_AUTH_OIDC_CLIENT__ID: gitproxy-client
-      GITPROXY_AUTH_OIDC_CLIENT__SECRET: gitproxy-secret
+      FOGWALL_CONFIG_PROFILES: docker-default,oidc
+      FOGWALL_AUTH_OIDC_CLIENT__ID: gitproxy-client
+      FOGWALL_AUTH_OIDC_CLIENT__SECRET: gitproxy-secret
     depends_on:
       mock-oauth2:
         condition: service_healthy

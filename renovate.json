@@ -5,7 +5,7 @@
   "packageRules": [
     {
       "matchManagers": ["npm"],
-      "matchFileNames": ["git-proxy-java-dashboard/frontend/package.json"],
+      "matchFileNames": ["fogwall-dashboard/frontend/package.json"],
       "labels": ["dependencies", "frontend"],
       "groupName": "frontend npm dependencies"
     },
