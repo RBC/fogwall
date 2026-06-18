@@ -67,6 +67,7 @@ ext {
     junitPlatformVersion = '6.1.0'
     mockitoVersion = '5.23.0'
     testContainersVersion = '2.0.5'
+    toxiproxyJavaVersion = '2.1.7'
 
     // Gitleaks (bundled binary)
     gitleaksVersion = '8.30.1'

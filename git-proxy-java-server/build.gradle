@@ -87,6 +87,7 @@ dependencies {
     // Testcontainers for e2e tests
     testImplementation "org.testcontainers:testcontainers:${testContainersVersion}"
     testImplementation "org.testcontainers:testcontainers-junit-jupiter:${testContainersVersion}"
+    testImplementation "eu.rekawek.toxiproxy:toxiproxy-java:${toxiproxyJavaVersion}"
 
     // H2 available at test runtime so the in-process proxy can use it
     testRuntimeOnly "com.h2database:h2:${h2Version}"
