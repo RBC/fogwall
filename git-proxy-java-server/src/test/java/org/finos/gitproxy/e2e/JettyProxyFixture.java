@@ -13,7 +13,6 @@ import org.eclipse.jetty.ee11.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee11.servlet.ServletHolder;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
-import org.eclipse.jetty.server.handler.EagerContentHandler;
 import org.eclipse.jgit.http.server.GitServlet;
 import org.finos.gitproxy.approval.ApprovalGateway;
 import org.finos.gitproxy.approval.AutoApprovalGateway;
@@ -29,6 +28,7 @@ import org.finos.gitproxy.db.model.AccessRule;
 import org.finos.gitproxy.db.model.MatchTarget;
 import org.finos.gitproxy.db.model.MatchType;
 import org.finos.gitproxy.git.*;
+import org.finos.gitproxy.jetty.BlockingContentHandler;
 import org.finos.gitproxy.permission.RepoPermissionService;
 import org.finos.gitproxy.provider.GenericProxyProvider;
 import org.finos.gitproxy.service.PushIdentityResolver;
@@ -217,10 +217,7 @@ class JettyProxyFixture implements AutoCloseable {
         addFilter(context, proxyMapping, new PushFinalizerFilter(serviceUrl, proxyGatewayFactory.apply(pushStore)));
         addFilter(context, proxyMapping, new AuditLogFilter());
 
-        // Buffer up to 50 MB before dispatching — ensures the full pack is available
-        // to RequestBodyWrapper.readAllBytes() without any blocking reads mid-body.
-        server.setHandler(new EagerContentHandler(
-                context, new EagerContentHandler.RetainedContentLoaderFactory(50 * 1024 * 1024, -1, false)));
+        server.setHandler(new BlockingContentHandler(context));
         server.start();
 
         port = ((ServerConnector) server.getConnectors()[0]).getLocalPort();

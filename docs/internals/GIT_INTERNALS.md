@@ -381,6 +381,106 @@ These failures are caught by the `try/catch` in `parsePush()`, and `PushInfo.com
 `EnrichPushCommitsFilter` downstream recovers full commit data from the local clone anyway — the pack-parsed commit is
 just an early-availability optimization for `ParseGitRequestFilter`.
 
+---
+
+## Large pushes and chunked transfer encoding
+
+### The problem
+
+When a push's pack data exceeds the git client's `http.postBuffer` (default 1 MiB), git switches from a single
+`Content-Length` POST to `Transfer-Encoding: chunked`. The body content is identical — pkt-line ref updates + flush +
+PACK data — but the HTTP framing changes from "here's N bytes" to "here are chunks of variable size, terminated by a
+zero-length chunk."
+
+Many reverse proxies deployed in front of git-proxy-java do not faithfully forward chunked request bodies. Observed
+failure modes (confirmed on HAProxy-based OpenShift Routes):
+
+- **Early termination**: the proxy forwards the first HTTP chunk (a few bytes of pkt-line data), then sends the chunked
+  terminator. The server receives a valid but tiny body — just the pkt-line length prefix — and `ParseGitRequestFilter`
+  fails with `EOFException: Short read of block`.
+- **Request splitting**: the proxy dechunks the body, buffers the remainder, and forwards it as a separate
+  `Content-Length` request. The server sees two requests: one with a few bytes of pkt-line data, and a second with raw
+  PACK binary (no pkt-line prefix). The second request fails with `Invalid packet line header` because the body starts
+  mid-stream.
+- **Keepalive contamination**: when the server doesn't consume the full body of the truncated first request, leftover
+  bytes bleed into the next request on the same TCP connection. The next request's body starts with binary PACK data
+  instead of pkt-line headers.
+
+Small pushes (< 1 MiB) use `Content-Length` and are unaffected — the proxy forwards the body as a single unit.
+
+This is not a Jetty bug or a git-proxy-java bug. The same issue affects any HTTP backend behind a proxy that doesn't
+support chunked request forwarding. GitHub, GitLab, and Gitea avoid this because they either terminate HTTP at the edge
+(no generic proxy in the path) or explicitly configure their proxy layer for streaming uploads.
+
+### Server-side mitigation: `BlockingContentHandler`
+
+`BlockingContentHandler` is a Jetty `Handler.Wrapper` that reads the full request body at the core Handler level before
+the servlet layer sees it. It uses Jetty 12's `Content.Source.read()` / `Content.Source.demand()` cycle directly on the
+`Request` object:
+
+1. Call `read()` — returns a `Content.Chunk` or `null`
+2. If `null`: call `demand()` with a `CountDownLatch` callback, then `await()` until more data arrives from the network
+3. If a chunk: copy its bytes into a `ByteArrayOutputStream`, release the chunk
+4. Repeat until a chunk with `isLast()=true`
+
+The accumulated body is wrapped in a `BufferedBodyRequest` (a `Request.Wrapper` that overrides the `Content.Source`
+methods) so the servlet layer's `HttpInput` reads from the buffered copy. Both the transparent proxy filter chain
+(`RequestBodyWrapper.readAllBytes()`) and the store-and-forward path (JGit's `ReceivePack`) get the complete body without
+touching the network.
+
+GET requests pass through without buffering.
+
+#### Why not use Jetty's `EagerContentHandler`?
+
+`EagerContentHandler` was the first attempted fix. It is designed to eagerly buffer the full body before dispatching to
+the servlet. However, its internal `RetainedContentLoader.getInvocationType()` returns `NON_BLOCKING`, which causes
+`doHandle()` to be called synchronously on Jetty 12's EPC (Execute-Produce-Consume) reserved thread — where blocking I/O
+does not work. The body was still truncated in production.
+
+#### Why not just dispatch to a blocking thread?
+
+The second attempt used a simple `Handler.Wrapper` that called `request.getContext().execute(...)` to move servlet
+execution to a `QueuedThreadPool` worker thread, then relied on the servlet layer's `HttpInput.readAllBytes()`. This also
+failed — `HttpInput` returned `-1` prematurely even on a blocking thread.
+
+The third attempt used `Content.Source.asInputStream(request).readAllBytes()` at the Handler level, bypassing `HttpInput`.
+This also returned truncated data — `ContentSourceInputStream` wraps the same `Content.Source` and exhibited the same
+premature EOF behaviour.
+
+The working approach reads from `Content.Source` directly using the `read()`/`demand()` loop, which is the lowest-level
+API available and handles partial delivery correctly regardless of transfer encoding or proxy reframing.
+
+### Client-side workaround
+
+Increasing the git client's post buffer avoids chunked encoding entirely:
+
+```bash
+git config --global http.postBuffer 524288000
+```
+
+This forces git to buffer the entire pack in memory and send it as a single `Content-Length` POST, which all proxies
+handle correctly. The tradeoff is higher client memory usage for large pushes.
+
+### Proxy-side fixes
+
+If you control the reverse proxy, configure it to buffer the full request before forwarding to the backend:
+
+**nginx**:
+```
+proxy_request_buffering on;   # buffer the full request before forwarding (default)
+client_max_body_size 500m;    # allow large pack uploads
+```
+
+**HAProxy**:
+```
+option http-buffer-request     # buffer the full request before forwarding
+timeout http-request 300s      # allow time for large chunked uploads to complete
+```
+
+Consult your proxy's documentation for equivalent settings if you use a different load balancer.
+
+---
+
 ### Why the pack parser exists alongside `EnrichPushCommitsFilter`
 
 `ParseGitRequestFilter` runs at order `MIN_VALUE + 1` — it's the first filter. It needs to populate `GitRequestDetails`
