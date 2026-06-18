@@ -1,4 +1,4 @@
-# Contributing to git-proxy-java
+# Contributing to fogwall
 
 ## Prerequisites
 
@@ -29,8 +29,8 @@ When working on Java-only changes in the dashboard module, pass `-PskipFrontend`
 steps (requires Node to be available otherwise):
 
 ```shell
-./gradlew :git-proxy-java-dashboard:compileJava -PskipFrontend
-./gradlew :git-proxy-java-dashboard:build -PskipFrontend
+./gradlew :fogwall-dashboard:compileJava -PskipFrontend
+./gradlew :fogwall-dashboard:build -PskipFrontend
 ```
 
 ## Running the server locally
@@ -38,25 +38,25 @@ steps (requires Node to be available otherwise):
 ### Proxy only (no dashboard)
 
 ```shell
-./gradlew :git-proxy-java-server:run
+./gradlew :fogwall-server:run
 ```
 
-Listens on `http://localhost:8080`. Logs go to `git-proxy-java-server/logs/application.log`. Stop with:
+Listens on `http://localhost:8080`. Logs go to `fogwall-server/logs/application.log`. Stop with:
 
 ```shell
-./gradlew :git-proxy-java-server:stop
+./gradlew :fogwall-server:stop
 ```
 
 ### Dashboard + REST API
 
 ```shell
-./gradlew :git-proxy-java-dashboard:run
+./gradlew :fogwall-dashboard:run
 ```
 
 Opens the approval dashboard at `http://localhost:8080/`. Stop with:
 
 ```shell
-./gradlew :git-proxy-java-dashboard:stop
+./gradlew :fogwall-dashboard:stop
 ```
 
 The dashboard module always uses UI-mode approval (pushes block until manually approved). The standalone server defaults
@@ -64,8 +64,8 @@ to auto-approve.
 
 ### Local config override
 
-Place overrides in `git-proxy-java-server/src/main/resources/git-proxy-local.yml`. The local file takes priority over
-`git-proxy.yml`. At minimum, add an allow rule for your test repo and a permission entry for your proxy user:
+Place overrides in `fogwall-server/src/main/resources/fogwall-local.yml`. The local file takes priority over
+`fogwall.yml`. At minimum, add an allow rule for your test repo and a permission entry for your proxy user:
 
 ```yaml
 rules:
@@ -103,7 +103,7 @@ Unit tests live under each module's `src/test/`. They run without containers.
 ```
 
 These start a containerised Gitea instance and a live Jetty proxy in-process. They are tagged `@Tag("e2e")` and live in
-`git-proxy-java-server/src/test/java/org/finos/gitproxy/e2e/`.
+`fogwall-server/src/test/java/com/rbc/fogwall/e2e/`.
 
 ### Manual integration test scripts (`test/`)
 
@@ -117,15 +117,15 @@ are organized into logical groupings by test outcome (pass/fail) and proxy mode 
 
 All scripts share these variables:
 
-| Variable           | Default                                           | Description                                        |
-| ------------------ | ------------------------------------------------- | -------------------------------------------------- |
-| `GIT_USERNAME`     | `me`                                              | HTTP Basic-auth username (arbitrary for the proxy) |
-| `GIT_PASSWORD`     | _(read from PAT file, see below)_                 | Personal access token for the upstream SCM         |
-| `GIT_REPO`         | `github.com/coopernetes/test-repo.git`            | Target repo for GitHub pass/fail scripts           |
-| `GITHUB_REPO`      | `github.com/coopernetes/test-repo.git`            | Target repo for GitHub identity scripts            |
-| `GITLAB_REPO`      | `gitlab.com/coopernetes/test-repo-gitlab.git`     | Target repo for GitLab identity scripts            |
-| `CODEBERG_REPO`    | `codeberg.org/coopernetes/test-repo-codeberg.git` | Target repo for Codeberg identity scripts          |
-| `GITPROXY_API_KEY` | `change-me-in-production`                         | API key used by approval scripts                   |
+| Variable          | Default                                           | Description                                        |
+| ----------------- | ------------------------------------------------- | -------------------------------------------------- |
+| `GIT_USERNAME`    | `me`                                              | HTTP Basic-auth username (arbitrary for the proxy) |
+| `GIT_PASSWORD`    | _(read from PAT file, see below)_                 | Personal access token for the upstream SCM         |
+| `GIT_REPO`        | `github.com/coopernetes/test-repo.git`            | Target repo for GitHub pass/fail scripts           |
+| `GITHUB_REPO`     | `github.com/coopernetes/test-repo.git`            | Target repo for GitHub identity scripts            |
+| `GITLAB_REPO`     | `gitlab.com/coopernetes/test-repo-gitlab.git`     | Target repo for GitLab identity scripts            |
+| `CODEBERG_REPO`   | `codeberg.org/coopernetes/test-repo-codeberg.git` | Target repo for Codeberg identity scripts          |
+| `FOGWALL_API_KEY` | `change-me-in-production`                         | API key used by approval scripts                   |
 
 Scripts read the upstream PAT from a file if `GIT_PASSWORD` is not set:
 
@@ -188,7 +188,7 @@ The scripts default to repos owned by the project maintainer. To run them agains
    chmod 600 ~/.github-pat ~/.gitlab-pat ~/.codeberg-pat
    ```
 
-3. **Allow rules and permissions** in `git-proxy-local.yml` — add your repo slug to the `rules.allow` slugs list and add
+3. **Allow rules and permissions** in `fogwall-local.yml` — add your repo slug to the `rules.allow` slugs list and add
    `PUSH`/`REVIEW` permission entries for your proxy user. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the
    full reference.
 
@@ -226,8 +226,8 @@ bash test/push-fail-secrets.sh
 
 #### Full suite runners
 
-Two scripts spin up a complete Docker Compose environment (git-proxy-java + Gitea + database), run all test groups, then
-tear down:
+Two scripts spin up a complete Docker Compose environment (fogwall + Gitea + database), run all test groups, then tear
+down:
 
 ```shell
 bash test/run-postgres.sh             # PostgreSQL backend
@@ -241,12 +241,12 @@ These build the Docker image from source, so no pre-existing server is needed.
 
 ## Docker Compose (local Gitea)
 
-The Compose setup runs git-proxy-java against a local Gitea instance. Overlay files are independent mixins — one for the
-auth provider, one for the database backend. They can be combined freely.
+The Compose setup runs fogwall against a local Gitea instance. Overlay files are independent mixins — one for the auth
+provider, one for the database backend. They can be combined freely.
 
 ### Overlay files
 
-**Auth overlays** — each mounts a different `git-proxy-local.yml` config into the container:
+**Auth overlays** — each mounts a different `fogwall-local.yml` config into the container:
 
 | File                      | Auth provider                      | Default database |
 | ------------------------- | ---------------------------------- | ---------------- |
@@ -254,7 +254,7 @@ auth provider, one for the database backend. They can be combined freely.
 | `docker-compose.ldap.yml` | OpenLDAP                           | H2 in-memory     |
 | `docker-compose.oidc.yml` | OIDC (mock-oauth2-server)          | H2 in-memory     |
 
-**Database overlays** — each sets `GITPROXY_DATABASE_*` environment variables; no config file swap needed:
+**Database overlays** — each sets `FOGWALL_DATABASE_*` environment variables; no config file swap needed:
 
 | File                          | Backend      | Profile flag         | UI                     |
 | ----------------------------- | ------------ | -------------------- | ---------------------- |
@@ -328,7 +328,7 @@ docker compose --profile mongo \
 
 #### Static auth
 
-Log in at `http://localhost:8080` with `admin` / `admin` (defined in `docker/git-proxy-local.yml`).
+Log in at `http://localhost:8080` with `admin` / `admin` (defined in `docker/fogwall-local.yml`).
 
 #### LDAP auth
 
@@ -354,8 +354,8 @@ docker compose -f docker-compose.yml -f docker-compose.ldap.yml up -d openldap
 Uses [navikt/mock-oauth2-server](https://github.com/navikt/mock-oauth2-server), which accepts any username with no
 password required.
 
-**One-time `/etc/hosts` entry** — required so the OIDC issuer URL is the same from your browser and from git-proxy-java
-inside Docker:
+**One-time `/etc/hosts` entry** — required so the OIDC issuer URL is the same from your browser and from fogwall inside
+Docker:
 
 ```text
 127.0.0.1  mock-oauth2
@@ -400,8 +400,8 @@ Formatting uses [Prettier](https://prettier.io/), lint checks use [ESLint](https
 that use the same Node binary as the build:
 
 ```shell
-./gradlew :git-proxy-java-dashboard:npmFormat   # auto-format src/ with Prettier
-./gradlew :git-proxy-java-dashboard:npmLint     # ESLint check (fails on errors)
+./gradlew :fogwall-dashboard:npmFormat   # auto-format src/ with Prettier
+./gradlew :fogwall-dashboard:npmLint     # ESLint check (fails on errors)
 ```
 
 ### Pre-commit hook
@@ -420,11 +420,11 @@ This sets `core.hooksPath` to `.githooks/`. The hook runs on every `git commit`:
 
 ## Project layout
 
-| Module                     | Purpose                                                                                    |
-| -------------------------- | ------------------------------------------------------------------------------------------ |
-| `git-proxy-java-core`      | Shared library: filter chain, JGit hooks, push store, provider model, approval abstraction |
-| `git-proxy-java-server`    | Standalone proxy-only server — no dashboard, no Spring                                     |
-| `git-proxy-java-dashboard` | Dashboard + REST API — Spring MVC, approval UI                                             |
+| Module              | Purpose                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------ |
+| `fogwall-core`      | Shared library: filter chain, JGit hooks, push store, provider model, approval abstraction |
+| `fogwall-server`    | Standalone proxy-only server — no dashboard, no Spring                                     |
+| `fogwall-dashboard` | Dashboard + REST API — Spring MVC, approval UI                                             |
 
 See [docs/internals/JGIT_INFRASTRUCTURE.md](docs/internals/JGIT_INFRASTRUCTURE.md) for the store-and-forward
 architecture and [docs/internals/GIT_INTERNALS.md](docs/internals/GIT_INTERNALS.md) for wire-protocol details.
@@ -448,5 +448,5 @@ merged.
 
 ## Issues and pull requests
 
-The issue tracker is at [coopernetes/git-proxy-java](https://github.com/coopernetes/git-proxy-java/issues). Reference
-the upstream Node.js implementation at [finos/git-proxy](https://github.com/finos/git-proxy) when porting features.
+The issue tracker is at [RBC/fogwall](https://github.com/RBC/fogwall/issues). Reference the upstream Node.js
+implementation at [finos/git-proxy](https://github.com/finos/git-proxy) when porting features.

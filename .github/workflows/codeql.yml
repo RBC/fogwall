@@ -41,7 +41,7 @@ jobs:
         with:
           node-version: '24.15.0'
           cache: npm
-          cache-dependency-path: git-proxy-java-dashboard/frontend/package-lock.json
+          cache-dependency-path: fogwall-dashboard/frontend/package-lock.json
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # ratchet:github/codeql-action/init@v4

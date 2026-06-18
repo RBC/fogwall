@@ -1,6 +1,6 @@
-# git-proxy-java — Demo Gallery
+# fogwall — Demo Gallery
 
-[Demo assets hosted on GitHub Releases](https://github.com/coopernetes/git-proxy-java/releases/tag/demo-assets)
+[Demo assets hosted on GitHub Releases](https://github.com/RBC/fogwall/releases/tag/demo-assets)
 
 ---
 
@@ -12,7 +12,7 @@ upstream on approval.
 > **Note:** API approval via admin key is used here for demonstration purposes — approval is normally performed through
 > the dashboard UI.
 
-![Store-and-forward — successful push](https://github.com/coopernetes/git-proxy-java/releases/download/demo-assets/push_mode_pass_email_unregistered.gif)
+![Store-and-forward — successful push](https://github.com/RBC/fogwall/releases/download/demo-assets/push_mode_pass_email_unregistered.gif)
 
 ---
 
@@ -21,7 +21,7 @@ upstream on approval.
 Push rejected with multiple simultaneous failures — blocked email local-part, blocked commit message (`WIP`), diff
 containing an internal hostname, and a leaked secret detected by secret scanning.
 
-![Push — validation failures detail](https://github.com/coopernetes/git-proxy-java/releases/download/demo-assets/demo-push-fix-message.gif)
+![Push — validation failures detail](https://github.com/RBC/fogwall/releases/download/demo-assets/demo-push-fix-message.gif)
 
 ---
 
@@ -32,7 +32,7 @@ A push through the `/proxy/` path. Validation passes, the push waits for review,
 > **Note:** API approval via admin key is used here for demonstration purposes — approval is normally performed through
 > the dashboard UI.
 
-![Proxy mode — golden path](https://github.com/coopernetes/git-proxy-java/releases/download/demo-assets/demo-proxy-pass.gif)
+![Proxy mode — golden path](https://github.com/RBC/fogwall/releases/download/demo-assets/demo-proxy-pass.gif)
 
 ---
 
@@ -40,7 +40,7 @@ A push through the `/proxy/` path. Validation passes, the push waits for review,
 
 Proxy mode push rejected for a blocked commit message. The error is returned synchronously in the git push response.
 
-![Proxy mode — commit message failure](https://github.com/coopernetes/git-proxy-java/releases/download/demo-assets/demo-proxy-fail-message.gif)
+![Proxy mode — commit message failure](https://github.com/RBC/fogwall/releases/download/demo-assets/demo-proxy-fail-message.gif)
 
 ---
 
@@ -48,7 +48,7 @@ Proxy mode push rejected for a blocked commit message. The error is returned syn
 
 Multiple validation failures surfaced together in a single proxy mode response.
 
-![Proxy mode — grouped validation failures](https://github.com/coopernetes/git-proxy-java/releases/download/demo-assets/proxy_mode_grouped_failures.gif)
+![Proxy mode — grouped validation failures](https://github.com/RBC/fogwall/releases/download/demo-assets/proxy_mode_grouped_failures.gif)
 
 ---
 
@@ -57,7 +57,7 @@ Multiple validation failures surfaced together in a single proxy mode response.
 Identity verification running against multiple SCM providers (GitHub, GitLab, Codeberg) in a single proxy push. Shows
 resolved and unresolved identity states per provider.
 
-![Proxy mode — identity verification all providers](https://github.com/coopernetes/git-proxy-java/releases/download/demo-assets/demo-proxy-identity-all.gif)
+![Proxy mode — identity verification all providers](https://github.com/RBC/fogwall/releases/download/demo-assets/demo-proxy-identity-all.gif)
 
 ---
 
@@ -65,7 +65,7 @@ resolved and unresolved identity states per provider.
 
 An admin attempts to approve their own push and is blocked. The UI prevents self-approval regardless of role.
 
-![Store-and-forward — self-review prevention](https://github.com/coopernetes/git-proxy-java/releases/download/demo-assets/push_mode_prevent_self_review.gif)
+![Store-and-forward — self-review prevention](https://github.com/RBC/fogwall/releases/download/demo-assets/push_mode_prevent_self_review.gif)
 
 ---
 
@@ -76,7 +76,7 @@ An admin attempts to approve their own push and is blocked. The UI prevents self
 Dashboard overview of all push records with status badges (Forwarded, Approved, Received, Rejected) and identity
 resolution indicators.
 
-![Push records list](https://github.com/coopernetes/git-proxy-java/releases/download/demo-assets/ui_pushrecordslist.png)
+![Push records list](https://github.com/RBC/fogwall/releases/download/demo-assets/ui_pushrecordslist.png)
 
 ---
 
@@ -85,7 +85,7 @@ resolution indicators.
 A push that passed all validation checks and is held for human review. Timeline shows: Push received → Validation passed
 (10 checks) → Blocked — pending review.
 
-![Push detail — blocked pending review](https://github.com/coopernetes/git-proxy-java/releases/download/demo-assets/ui_pushdetails_all_green_blocked.png)
+![Push detail — blocked pending review](https://github.com/RBC/fogwall/releases/download/demo-assets/ui_pushdetails_all_green_blocked.png)
 
 ---
 
@@ -94,7 +94,7 @@ A push that passed all validation checks and is held for human review. Timeline 
 The full push detail view showing the diff, reviewer identity, and Approve / Reject controls with an optional reason
 field.
 
-![Push detail — diff review](https://github.com/coopernetes/git-proxy-java/releases/download/demo-assets/ui_pushdetails_diff_review.png)
+![Push detail — diff review](https://github.com/RBC/fogwall/releases/download/demo-assets/ui_pushdetails_diff_review.png)
 
 ---
 
@@ -102,7 +102,7 @@ field.
 
 A rejected push showing the high-level failure summary (5 validation issues) and identity resolution status.
 
-![Push detail — failed summary](https://github.com/coopernetes/git-proxy-java/releases/download/demo-assets/ui_pushdetails_failed_summary.png)
+![Push detail — failed summary](https://github.com/RBC/fogwall/releases/download/demo-assets/ui_pushdetails_failed_summary.png)
 
 ---
 
@@ -111,7 +111,7 @@ A rejected push showing the high-level failure summary (5 validation issues) and
 Expanded view of individual validation step failures: blocked email local-part (`noreply`), blocked commit message
 (`WIP`), diff containing an internal hostname pattern, and a leaked secret detected by secret scanning.
 
-![Push detail — validation step details](https://github.com/coopernetes/git-proxy-java/releases/download/demo-assets/ui_pushdetails_failed_validation_details.png)
+![Push detail — validation step details](https://github.com/RBC/fogwall/releases/download/demo-assets/ui_pushdetails_failed_validation_details.png)
 
 ---
 
@@ -120,7 +120,7 @@ Expanded view of individual validation step failures: blocked email local-part (
 Push rejected because the pusher's token could not be resolved to a known proxy user. The `checkUserPermission`
 validation step fails and the push is blocked with an "Identity not linked" warning.
 
-![Push detail — identity not linked](https://github.com/coopernetes/git-proxy-java/releases/download/demo-assets/ui_pushdetail_failed_identity_not_linked.png)
+![Push detail — identity not linked](https://github.com/RBC/fogwall/releases/download/demo-assets/ui_pushdetail_failed_identity_not_linked.png)
 
 ---
 
@@ -128,7 +128,7 @@ validation step fails and the push is blocked with an "Identity not linked" warn
 
 Admin view of all registered users with email addresses, SCM identity badges, and push activity counters.
 
-![User list](https://github.com/coopernetes/git-proxy-java/releases/download/demo-assets/ui_user_list.png)
+![User list](https://github.com/RBC/fogwall/releases/download/demo-assets/ui_user_list.png)
 
 ---
 
@@ -136,4 +136,4 @@ Admin view of all registered users with email addresses, SCM identity badges, an
 
 Per-user admin page showing email addresses, linked SCM identities (GitHub, GitLab), and push summary stats.
 
-![User detail — admin view](https://github.com/coopernetes/git-proxy-java/releases/download/demo-assets/ui_admin_userdetails.png)
+![User detail — admin view](https://github.com/RBC/fogwall/releases/download/demo-assets/ui_admin_userdetails.png)

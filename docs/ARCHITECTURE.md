@@ -1,12 +1,12 @@
 # Architecture
 
-git-proxy-java is a Git push proxy that sits between developers and upstream Git hosting providers (GitHub, GitLab,
+fogwall is a Git push proxy that sits between developers and upstream Git hosting providers (GitHub, GitLab,
 Bitbucket, Forgejo, etc.). Every push travels through a validation and approval pipeline before reaching the upstream
 remote. Fetch/clone traffic is audited but not blocked.
 
 If you're familiar with [finos/git-proxy](https://github.com/finos/git-proxy), the Java rewrite shares the same
 conceptual model: an ordered chain of steps that inspect and act on each push, a push store for audit and approval
-state, and pluggable providers for different Git hosts. The main structural difference is that git-proxy-java offers two
+state, and pluggable providers for different Git hosts. The main structural difference is that fogwall offers two
 distinct proxy modes with different tradeoffs.
 
 ---
@@ -17,20 +17,20 @@ The codebase is a multi-module Gradle build. Dependencies flow upward — `core`
 depended on by `dashboard`.
 
 ```
-git-proxy-java-core
+fogwall-core
   Shared library. Contains all validation logic (hooks + filters), the push store, provider
   model, identity resolution, approval abstraction, and database migrations (Flyway). Both
   proxy modes are implemented here. No application entry point — this is a library.
 
-git-proxy-java-server
-  Standalone Jetty application (GitProxyJettyApplication). Registers both proxy modes for
+fogwall-server
+  Standalone Jetty application (FogwallJettyApplication). Registers both proxy modes for
   every configured provider, loads YAML config via Gestalt, and starts a plain Jetty server.
   No Spring, no dashboard, no REST API. This module also owns the shared servlet registrar
   (GitProxyServletRegistrar) and configuration builder (JettyConfigurationBuilder) used by
   the dashboard module.
 
-git-proxy-java-dashboard
-  Full application (GitProxyWithDashboardApplication). Depends on both core and server.
+fogwall-dashboard
+  Full application (FogwallDashboardApplication). Depends on both core and server.
   Adds Spring MVC (DispatcherServlet at /*), Spring Security, a REST API (/api/*), and a
   React SPA (built with Vite, bundled into the JAR as static resources). Approval workflow
   is always UI-driven in this mode.
@@ -227,9 +227,9 @@ Backends: static YAML list, JDBC (H2/Postgres), MongoDB, or a composite that che
 
 ## Deployment modes
 
-### Proxy only (`git-proxy-java-server`)
+### Proxy only (`fogwall-server`)
 
-`GitProxyJettyApplication` boots a plain Jetty server. It loads YAML config (base `git-proxy.yml` + profile overlays +
+`FogwallJettyApplication` boots a plain Jetty server. It loads YAML config (base `fogwall.yml` + profile overlays +
 environment variable overrides), builds the `GitProxyContext`, and registers both proxy modes for every provider. There
 is no Spring context, no dashboard, and no REST API — just the git servlets on `/push/*` and `/proxy/*`.
 
@@ -243,13 +243,13 @@ makes it well-suited for enforcement-only deployments where configuration is man
 environments, or setups where an external system like ServiceNow handles approval.
 
 ```
-./gradlew :git-proxy-java-server:run     # start (GITPROXY_CONFIG_PROFILES=local by default)
-./gradlew :git-proxy-java-server:stop    # stop via PID file
+./gradlew :fogwall-server:run     # start (FOGWALL_CONFIG_PROFILES=local by default)
+./gradlew :fogwall-server:stop    # stop via PID file
 ```
 
-### Proxy + dashboard (`git-proxy-java-dashboard`)
+### Proxy + dashboard (`fogwall-dashboard`)
 
-`GitProxyWithDashboardApplication` builds the same `GitProxyContext` and calls the same `GitProxyServletRegistrar`, then
+`FogwallDashboardApplication` builds the same `GitProxyContext` and calls the same `GitProxyServletRegistrar`, then
 layers on a Spring MVC `DispatcherServlet` at `/*`. Jetty's servlet path-matching rules give the more-specific git paths
 (`/push/*`, `/proxy/*`) precedence, so the Spring servlet only handles `/api/*`, `/dashboard/*`, `/login`, and static
 assets.
@@ -271,15 +271,15 @@ The React frontend is built by Vite at Gradle build time and copied into the JAR
 development, Vite's dev server can run separately and proxy `/api` calls to the backend.
 
 ```
-./gradlew :git-proxy-java-dashboard:run  # start (dashboard at http://localhost:8080/)
-./gradlew :git-proxy-java-dashboard:stop # stop via PID file
+./gradlew :fogwall-dashboard:run  # start (dashboard at http://localhost:8080/)
+./gradlew :fogwall-dashboard:stop # stop via PID file
 ```
 
 ### Docker
 
 The primary production distribution is a Docker image. The Dockerfile builds the dashboard module's distribution
 (including the frontend), producing a self-contained image with a Temurin JRE. Config overrides are mounted at
-`/app/conf/git-proxy-local.yml`.
+`/app/conf/fogwall-local.yml`.
 
 ---
 

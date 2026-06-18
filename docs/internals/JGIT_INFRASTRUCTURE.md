@@ -1,6 +1,6 @@
 # JGit infrastructure
 
-How git-proxy-java uses [Eclipse JGit](https://github.com/eclipse-jgit/jgit) to implement the store-and-forward proxy mode
+How fogwall uses [Eclipse JGit](https://github.com/eclipse-jgit/jgit) to implement the store-and-forward proxy mode
 and to support commit inspection in the transparent proxy mode.
 
 For low-level details on git wire-protocol behaviour and how individual hooks/filters handle edge cases (tags, new
@@ -41,7 +41,7 @@ Client: git push http://proxy:8080/push/github.com/owner/repo.git
 StoreAndForwardRepositoryResolver.open()
     - Extract credentials from Authorization header (in-memory only)
     - Clone/fetch upstream WITHOUT credentials (public repos only)
-    - Store upstream URL in repo config (gitproxy.upstreamUrl)
+    - Store upstream URL in repo config (fogwall.upstreamUrl)
     |
     v
 JGit GitServlet receives pack data
@@ -112,10 +112,10 @@ Client receives result
    the `/proxy/` path.
 
 2. **Credential extraction** — reads HTTP Basic auth (or URL userinfo) and stores it as a request attribute
-   (`org.finos.gitproxy.credentials`). Credentials live in memory only for the duration of the request and are never
+   (`com.rbc.fogwall.credentials`). Credentials live in memory only for the duration of the request and are never
    written to disk or repo config.
 
-The upstream URL is stored in the repository's git config (`gitproxy.upstreamUrl`) so downstream hooks can read it
+The upstream URL is stored in the repository's git config (`fogwall.upstreamUrl`) so downstream hooks can read it
 without access to the HTTP request.
 
 ---
@@ -192,7 +192,7 @@ Post-receive hooks run only for commands with `Result.OK` (refs that were succes
 
 The "forward" half of store-and-forward. For each accepted `ReceiveCommand`:
 
-1. Opens a JGit `Transport` to the upstream URL (read from `gitproxy.upstreamUrl` in repo config)
+1. Opens a JGit `Transport` to the upstream URL (read from `fogwall.upstreamUrl` in repo config)
 2. Sets the `CredentialsProvider` extracted from the original client request
 3. Builds `RemoteRefUpdate` objects:
    - `CREATE` / `UPDATE` — same source and destination ref
@@ -233,7 +233,7 @@ the push audit trail.
 Credentials are handled carefully to avoid writing secrets to disk:
 
 1. **`StoreAndForwardRepositoryResolver.open()`** — extracts from Authorization header or URL userinfo. Stores as
-   request attribute `org.finos.gitproxy.credentials`. Never used for cloning.
+   request attribute `com.rbc.fogwall.credentials`. Never used for cloning.
 2. **`StoreAndForwardReceivePackFactory.create()`** — reads from request attribute (or re-extracts from header). Creates
    `UsernamePasswordCredentialsProvider`.
 3. **`ForwardingPostReceiveHook.pushToUpstream()`** — sets the `CredentialsProvider` on JGit's `Transport` before

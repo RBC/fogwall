@@ -1,6 +1,6 @@
 # Configuration Reference
 
-git-proxy-java uses layered YAML configuration merged at startup. A base file ships with the jar; additional profile files
+fogwall uses layered YAML configuration merged at startup. A base file ships with the jar; additional profile files
 and environment variable overrides are applied on top in a defined order.
 
 ## Configuration files and profiles
@@ -9,41 +9,41 @@ and environment variable overrides are applied on top in a defined order.
 
 | Layer | Source                               | When loaded                                           |
 | ----- | ------------------------------------ | ----------------------------------------------------- |
-| 1     | `git-proxy.yml`                      | Always — base defaults bundled in the jar             |
-| 2     | `git-proxy-{profile}.yml`            | For each profile listed in `GITPROXY_CONFIG_PROFILES` |
-| 3     | Environment variables (`GITPROXY_*`) | Always — highest priority                             |
+| 1     | `fogwall.yml`                      | Always — base defaults bundled in the jar             |
+| 2     | `fogwall-{profile}.yml`            | For each profile listed in `FOGWALL_CONFIG_PROFILES` |
+| 3     | Environment variables (`FOGWALL_*`) | Always — highest priority                             |
 
-### `GITPROXY_CONFIG_PROFILES`
+### `FOGWALL_CONFIG_PROFILES`
 
-Set this environment variable to a comma-separated list of profile names. For each name, git-proxy-java looks for
-`git-proxy-{name}.yml` on the classpath (including any files mounted into `/app/conf/` in Docker). Unknown or missing
+Set this environment variable to a comma-separated list of profile names. For each name, fogwall looks for
+`fogwall-{name}.yml` on the classpath (including any files mounted into `/app/conf/` in Docker). Unknown or missing
 profile files are silently skipped.
 
 ```bash
-# Local development — loads git-proxy-local.yml
-GITPROXY_CONFIG_PROFILES=local
+# Local development — loads fogwall-local.yml
+FOGWALL_CONFIG_PROFILES=local
 
-# Docker with LDAP auth — loads git-proxy-docker-default.yml then git-proxy-ldap.yml
-GITPROXY_CONFIG_PROFILES=docker-default,ldap
+# Docker with LDAP auth — loads fogwall-docker-default.yml then fogwall-ldap.yml
+FOGWALL_CONFIG_PROFILES=docker-default,ldap
 
 # Docker with OIDC auth and PostgreSQL
-GITPROXY_CONFIG_PROFILES=docker-default,oidc
-# (postgres settings come from GITPROXY_DATABASE_* env vars, no profile file needed)
+FOGWALL_CONFIG_PROFILES=docker-default,oidc
+# (postgres settings come from FOGWALL_DATABASE_* env vars, no profile file needed)
 ```
 
-Later profiles take priority over earlier ones. All profiles take priority over `git-proxy.yml`. Environment variables
+Later profiles take priority over earlier ones. All profiles take priority over `fogwall.yml`. Environment variables
 override everything.
 
 ### Bundled profiles
 
 | Profile name     | File                           | Purpose                                                   |
 | ---------------- | ------------------------------ | --------------------------------------------------------- |
-| `local`          | `git-proxy-local.yml`          | Local development: dev users, Vite CORS, test allow rules |
-| `docker-default` | `git-proxy-docker-default.yml` | Docker base: admin user, Gitea provider, validation rules |
-| `ldap`           | `git-proxy-ldap.yml`           | LDAP authentication config (used with `docker-default`)   |
-| `oidc`           | `git-proxy-oidc.yml`           | OIDC authentication config (used with `docker-default`)   |
+| `local`          | `fogwall-local.yml`          | Local development: dev users, Vite CORS, test allow rules |
+| `docker-default` | `fogwall-docker-default.yml` | Docker base: admin user, Gitea provider, validation rules |
+| `ldap`           | `fogwall-ldap.yml`           | LDAP authentication config (used with `docker-default`)   |
+| `oidc`           | `fogwall-oidc.yml`           | OIDC authentication config (used with `docker-default`)   |
 
-> When running via `./gradlew run`, `GITPROXY_CONFIG_PROFILES=local` is set automatically. In Docker, set it explicitly
+> When running via `./gradlew run`, `FOGWALL_CONFIG_PROFILES=local` is set automatically. In Docker, set it explicitly
 > via the Compose file or your deployment config.
 
 ### Docker Compose
@@ -66,26 +66,26 @@ docker compose --profile postgres \
 
 ## Environment variable overrides
 
-Strip the `GITPROXY_` prefix, lowercase, and replace `_` with `.` to get the config path.
+Strip the `FOGWALL_` prefix, lowercase, and replace `_` with `.` to get the config path.
 
 | Environment Variable                | Config path                 | Example                   |
 | ----------------------------------- | --------------------------- | ------------------------- |
-| `GITPROXY_CONFIG_PROFILES`          | _(meta — not a config key)_ | `docker-default,ldap`     |
-| `GITPROXY_SERVER_PORT`              | `server.port`               | `9090`                    |
-| `GITPROXY_SERVER_APPROVAL_MODE`     | `server.approvalMode`       | `ui`                      |
-| `GITPROXY_SERVER_SERVICE_URL`       | `server.serviceUrl`         | `https://gitproxy.example.com/dashboard` |
-| `GITPROXY_DATABASE_TYPE`                    | `database.type`                    | `postgres`                |
-| `GITPROXY_DATABASE_URL`                     | `database.url`                     | `jdbc:postgresql://...`   |
-| `GITPROXY_DATABASE_HOST`                    | `database.host`                    | `db.internal`             |
-| `GITPROXY_DATABASE_POOL_MAXIMUMPOOLSIZE`    | `database.pool.maximum-pool-size`  | `3`                       |
-| `GITPROXY_DATABASE_POOL_MINIMUMIDLE`        | `database.pool.minimum-idle`       | `1`                       |
-| `GITPROXY_DATABASE_POOL_CONNECTIONTIMEOUT`  | `database.pool.connection-timeout` | `30000`                   |
-| `GITPROXY_SERVER_SESSIONSTORE`              | `server.session-store`             | `jdbc`                    |
-| `GITPROXY_SERVER_REDIS_HOST`                | `server.redis.host`                | `redis.cluster.local`     |
-| `GITPROXY_SERVER_REDIS_PORT`                | `server.redis.port`                | `6379`                    |
-| `GITPROXY_SERVER_ALLOWEDORIGINS`            | `server.allowed-origins`    | `https://dashboard.example.com` |
-| `GITPROXY_PROVIDERS_GITHUB_ENABLED` | `providers.github.enabled`  | `false`                   |
-| `GITPROXY_PROVIDERS_<NAME>_URI`     | `providers.<name>.uri`      | `https://gitlab.corp.com` |
+| `FOGWALL_CONFIG_PROFILES`          | _(meta — not a config key)_ | `docker-default,ldap`     |
+| `FOGWALL_SERVER_PORT`              | `server.port`               | `9090`                    |
+| `FOGWALL_SERVER_APPROVAL_MODE`     | `server.approvalMode`       | `ui`                      |
+| `FOGWALL_SERVER_SERVICE_URL`       | `server.serviceUrl`         | `https://fogwall.example.com/dashboard` |
+| `FOGWALL_DATABASE_TYPE`                    | `database.type`                    | `postgres`                |
+| `FOGWALL_DATABASE_URL`                     | `database.url`                     | `jdbc:postgresql://...`   |
+| `FOGWALL_DATABASE_HOST`                    | `database.host`                    | `db.internal`             |
+| `FOGWALL_DATABASE_POOL_MAXIMUMPOOLSIZE`    | `database.pool.maximum-pool-size`  | `3`                       |
+| `FOGWALL_DATABASE_POOL_MINIMUMIDLE`        | `database.pool.minimum-idle`       | `1`                       |
+| `FOGWALL_DATABASE_POOL_CONNECTIONTIMEOUT`  | `database.pool.connection-timeout` | `30000`                   |
+| `FOGWALL_SERVER_SESSIONSTORE`              | `server.session-store`             | `jdbc`                    |
+| `FOGWALL_SERVER_REDIS_HOST`                | `server.redis.host`                | `redis.cluster.local`     |
+| `FOGWALL_SERVER_REDIS_PORT`                | `server.redis.port`                | `6379`                    |
+| `FOGWALL_SERVER_ALLOWEDORIGINS`            | `server.allowed-origins`    | `https://dashboard.example.com` |
+| `FOGWALL_PROVIDERS_GITHUB_ENABLED` | `providers.github.enabled`  | `false`                   |
+| `FOGWALL_PROVIDERS_<NAME>_URI`     | `providers.<name>.uri`      | `https://gitlab.corp.com` |
 
 > Complex nested structures (URL rules, full commit validation blocks) are not overridable via env vars. Use YAML
 > profile files instead.
@@ -100,7 +100,7 @@ server:
   #   auto       — approves every clean push immediately (default; no dashboard required)
   #   ui         — waits for a human reviewer via the REST API
   #   servicenow — delegates to a ServiceNow approval workflow
-  # Note: GitProxyWithDashboardApplication always uses 'ui' regardless of this setting.
+  # Note: FogwallDashboardApplication always uses 'ui' regardless of this setting.
   approval-mode: auto
 
   # Sideband keepalive interval in seconds for store-and-forward operations.
@@ -111,7 +111,7 @@ server:
   # Base URL of the dashboard, used in links sent to clients via sideband messages.
   # Should include the /dashboard path prefix.
   # Defaults to http://localhost:<port>/dashboard if not set.
-  # service-url: https://gitproxy.internal.example.com/dashboard
+  # service-url: https://fogwall.internal.example.com/dashboard
 
   # When false (default), any authenticated user may review any push they did not push
   # themselves. Set to true to require an explicit REVIEW permission entry for the repo.
@@ -160,7 +160,7 @@ server:
 
 database:
   type: postgres
-  url: jdbc:postgresql://db.internal:5432/gitproxy
+  url: jdbc:postgresql://db.internal:5432/fogwall
   pool:
     maximum-pool-size: 3
     minimum-idle: 1
@@ -190,7 +190,7 @@ server:
 
 database:
   type: mongo
-  url: mongodb://gitproxy:secret@mongo.internal:27017/gitproxy
+  url: mongodb://fogwall:secret@mongo.internal:27017/fogwall
 ```
 
 Sessions are stored in the `proxy_sessions` collection alongside the other `proxy_*` collections. A TTL index on `expireAt` lets MongoDB expire idle sessions server-side — no background cleanup task runs in the proxy. The session store reuses the same connection pool as the rest of the MongoDB-backed stores, so no extra configuration is needed. Requires `database.type: mongo`.
@@ -199,7 +199,7 @@ Sessions are stored in the `proxy_sessions` collection alongside the other `prox
 
 ### Server HTTPS listener
 
-By default git-proxy-java listens on plain HTTP. To enable HTTPS, add a `server.tls` block.
+By default fogwall listens on plain HTTP. To enable HTTPS, add a `server.tls` block.
 
 **PEM-based (preferred — no keytool required):**
 
@@ -207,8 +207,8 @@ By default git-proxy-java listens on plain HTTP. To enable HTTPS, add a `server.
 server:
   tls:
     port: 8443
-    certificate: /etc/gitproxy/tls/server.pem      # X.509 certificate or chain, PEM
-    key: /etc/gitproxy/tls/server-key.pem           # PKCS8 private key, unencrypted PEM
+    certificate: /etc/fogwall/tls/server.pem      # X.509 certificate or chain, PEM
+    key: /etc/fogwall/tls/server-key.pem           # PKCS8 private key, unencrypted PEM
 ```
 
 The private key must be in PKCS8 format. Convert a PKCS1 key with:
@@ -224,7 +224,7 @@ server:
   tls:
     port: 8443
     keystore:
-      path: /etc/gitproxy/tls/keystore.p12
+      path: /etc/fogwall/tls/keystore.p12
       password: changeit
       type: PKCS12   # or JKS
 ```
@@ -234,13 +234,13 @@ Plain HTTP on `server.port` remains active when HTTPS is configured — both lis
 ### Custom upstream CA trust
 
 Enterprise PKIs typically issue certificates that Java's built-in truststore doesn't include, causing
-`SSLHandshakeException` on upstream connections to internal GitLab/Bitbucket/Forgejo instances. git-proxy-java
+`SSLHandshakeException` on upstream connections to internal GitLab/Bitbucket/Forgejo instances. fogwall
 supports trusting a custom CA bundle without touching the JVM truststore or running `keytool`.
 
 ```yaml
 server:
   tls:
-    trust-ca-bundle: /etc/gitproxy/tls/internal-ca.pem
+    trust-ca-bundle: /etc/fogwall/tls/internal-ca.pem
 ```
 
 The PEM file may contain one or more `-----BEGIN CERTIFICATE-----` blocks (a full CA chain is fine). Custom
@@ -263,9 +263,9 @@ database:
 
 | Type       | Description                 | Extra keys                                                              |
 | ---------- | --------------------------- | ----------------------------------------------------------------------- |
-| `h2-mem`   | H2 in-memory (default)      | `name` (default: `gitproxy`)                                            |
-| `h2-file`  | H2 persisted to disk        | `path` (default: `./.data/gitproxy`)                                    |
-| `sqlite`   | SQLite file                 | `path` (default: `./.data/gitproxy.db`)                                 |
+| `h2-mem`   | H2 in-memory (default)      | `name` (default: `fogwall`)                                            |
+| `h2-file`  | H2 persisted to disk        | `path` (default: `./.data/fogwall`)                                    |
+| `sqlite`   | SQLite file                 | `path` (default: `./.data/fogwall.db`)                                 |
 | `postgres` | PostgreSQL                  | `url` **or** `host`, `port`, `name`, `username`, `password`             |
 | `mongo`    | MongoDB                     | `url` (required); `name` optional if the database is in the URI path    |
 
@@ -282,7 +282,7 @@ covers this in depth.
 ```yaml
 database:
   type: postgres
-  url: jdbc:postgresql://db.internal:5432/gitproxy
+  url: jdbc:postgresql://db.internal:5432/fogwall
   pool:
     maximum-pool-size: 3      # per-instance connections; multiply by instance count for total DB load
     minimum-idle: 1           # release idle connections; omit to keep the full pool warm
@@ -301,27 +301,27 @@ database:
   type: postgres
   host: db.internal
   port: 5432
-  name: gitproxy
-  username: gitproxy
+  name: fogwall
+  username: fogwall
   password: secret
 
 # Postgres — connection string (use this for sslmode, certificates, etc.)
 database:
   type: postgres
-  url: jdbc:postgresql://db.internal:5432/gitproxy?sslmode=verify-full&sslrootcert=/certs/ca.crt
-  username: gitproxy
+  url: jdbc:postgresql://db.internal:5432/fogwall?sslmode=verify-full&sslrootcert=/certs/ca.crt
+  username: fogwall
   password: secret
 
 # Mongo — connection string (name extracted from URI path)
 database:
   type: mongo
-  url: mongodb://gitproxy:secret@mongo.internal:27017/gitproxy?tls=true&tlsCAFile=/certs/ca.crt
+  url: mongodb://fogwall:secret@mongo.internal:27017/fogwall?tls=true&tlsCAFile=/certs/ca.crt
 
 # Mongo — connection string with separate name field
 database:
   type: mongo
-  url: mongodb://gitproxy:secret@mongo.internal:27017
-  name: gitproxy
+  url: mongodb://fogwall:secret@mongo.internal:27017
+  name: fogwall
 ```
 
 ### MongoDB: coexisting with the upstream Node.js git-proxy
@@ -382,7 +382,7 @@ auth:
     # LDAP filter for group membership. {0} = user full DN, {1} = username.
     group-search-filter: "(member={0})"
 
-  # Map git-proxy-java role names to lists of LDAP group CNs.
+  # Map fogwall role names to lists of LDAP group CNs.
   # When a user is a member of any listed group, the role is granted.
   role-mappings:
     ADMIN:
@@ -431,18 +431,18 @@ auth:
     # OIDC issuer URI — Spring Security fetches {issuerUri}/.well-known/openid-configuration at startup.
     issuer-uri: https://accounts.example.com
 
-    client-id: gitproxy-client
-    client-secret: gitproxy-secret
+    client-id: fogwall-client
+    client-secret: fogwall-secret
 
     # Optional: path to a PKCS#8 PEM RSA private key for private_key_jwt client auth.
     # When set, client-secret is not required.
-    # private-key-path: /run/secrets/gitproxy-oidc-private-key.pem
+    # private-key-path: /run/secrets/fogwall-oidc-private-key.pem
 
     # Optional: path to the X.509 certificate (PEM) matching private-key-path.
     # Required for Entra ID — Entra matches registered certificates by x5t thumbprint, not kid.
     # Without this, every token exchange fails with AADSTS700027.
     # Generate: openssl req -new -x509 -key private.pem -out cert.pem -days 365
-    # cert-path: /run/secrets/gitproxy-oidc-cert.pem
+    # cert-path: /run/secrets/fogwall-oidc-cert.pem
 
     # Optional: explicit kid to embed in the private_key_jwt assertion header.
     # Use this for providers that match the assertion against a registered JWKS by kid
@@ -457,7 +457,7 @@ auth:
   # which is standard for Keycloak, Okta, and most Entra ID configurations.
   groups-claim: groups
 
-  # Map git-proxy-java role names to lists of OIDC group values from the claim above.
+  # Map fogwall role names to lists of OIDC group values from the claim above.
   role-mappings:
     ADMIN:
       - git-admins
@@ -465,7 +465,7 @@ auth:
 
 #### Entra ID (Azure AD)
 
-Entra ID requires two extra settings. The `jwk-set-uri` field is the key signal — when it is set, git-proxy-java skips OIDC
+Entra ID requires two extra settings. The `jwk-set-uri` field is the key signal — when it is set, fogwall skips OIDC
 discovery and issuer validation. This is necessary because Entra issues tokens with
 `iss=https://sts.windows.net/{tenant}/` rather than the discovery base URL, which would cause Spring Security to reject
 them otherwise.
@@ -492,7 +492,7 @@ auth:
 
 > **App registration checklist:**
 >
-> 1. Platform: Web — redirect URI `https://<your-host>/login/oauth2/code/gitproxy`
+> 1. Platform: Web — redirect URI `https://<your-host>/login/oauth2/code/fogwall`
 > 2. API permissions: `openid`, `profile`, `email` (delegated)
 > 3. Token configuration → add Groups claim → select "Security groups"
 
@@ -645,7 +645,7 @@ secret-scan:
   enabled: false
   # version: 8.22.0
   # auto-install: true
-  # install-dir: ~/.cache/git-proxy-java/gitleaks
+  # install-dir: ~/.cache/fogwall/gitleaks
   # scanner-path: /usr/local/bin/gitleaks
 
   # External TOML rules file. Ignored when inline-config is set.
@@ -675,12 +675,12 @@ Selected config sections can be reloaded at runtime without restarting the serve
 reload:
   file:
     enabled: false
-    path: /app/conf/git-proxy-local.yml   # watched for modifications
+    path: /app/conf/fogwall-local.yml   # watched for modifications
   git:
     enabled: false
     url: https://github.com/myorg/config.git
     branch: main
-    file-path: git-proxy.yml
+    file-path: fogwall.yml
     interval-seconds: 300   # 0 = manual trigger only
 ```
 
@@ -689,8 +689,8 @@ reload:
 For private repositories, set these environment variables — no config file changes needed:
 
 ```
-GITPROXY_RELOAD_GIT_AUTH_USERNAME=<username or token placeholder>
-GITPROXY_RELOAD_GIT_AUTH_PASSWORD=<personal access token or password>
+FOGWALL_RELOAD_GIT_AUTH_USERNAME=<username or token placeholder>
+FOGWALL_RELOAD_GIT_AUTH_PASSWORD=<personal access token or password>
 ```
 
 Both variables must be set together; if only one is present a warning is logged and the clone/pull proceeds
@@ -735,12 +735,12 @@ For every push, the proxy runs two checks:
 
 1. **SCM login check** — calls the upstream provider's user API with the token supplied in the git credentials (the HTTP
    Basic-auth password). The returned login (e.g. GitHub `login`, GitLab `username`) is matched against the
-   authenticated git-proxy-java user's `scm-identities`. This check is **always enforced** regardless of the
+   authenticated fogwall user's `scm-identities`. This check is **always enforced** regardless of the
    `identity-verification` mode — a push from a token that cannot be matched to a registered proxy user is always
    blocked.
 
 2. **Commit email check** — every author and committer email in the pushed commits is checked against the authenticated
-   git-proxy-java user's `emails` list. These emails are populated independently of the SCM: they come from the IdP on
+   fogwall user's `emails` list. These emails are populated independently of the SCM: they come from the IdP on
    LDAP/OIDC login, or from additional associations added via the dashboard. This is what ties commit attribution back
    to a verified real person. The `identity-verification` mode controls this check only.
 
@@ -754,7 +754,7 @@ For every push, the proxy runs two checks:
 
 | Mode     | Behaviour                                                                                                      | Use when                                                                       |
 | -------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `strict` | Blocks the push if any commit email cannot be matched to the authenticated git-proxy-java user   | Production — enforces that every commit is attributed to the person who pushed |
+| `strict` | Blocks the push if any commit email cannot be matched to the authenticated fogwall user   | Production — enforces that every commit is attributed to the person who pushed |
 | `warn`   | Allows the push through but emits a sideband warning to the git client and records the mismatch                | Rolling out to an existing team — lets you observe mismatches before enforcing |
 | `off`    | Commit email check is disabled entirely                                                                        | Migrations or environments where email data is not yet populated               |
 
@@ -807,7 +807,7 @@ users:
 
 ## URL rules
 
-URL rules control which repositories are accessible through the proxy. git-proxy-java is **default-deny**: if no allow
+URL rules control which repositories are accessible through the proxy. fogwall is **default-deny**: if no allow
 rules are configured for a provider, all pushes and fetches to that provider are rejected. At least one allow rule
 must match for a request to proceed.
 
@@ -1117,7 +1117,7 @@ GLOB on `target: SLUG` follows slug path conventions:
 | `/acme/service-*`             | `/acme/service-api`, `/acme/service-worker` | `/acme/repo`   |
 | `/*/proj0-*`                  | `/acme/proj0-api`, `/other/proj0-db`   | `/acme/other`       |
 
-> **Conflict detection:** At config load time and when saving via the dashboard API, git-proxy-java rejects any
+> **Conflict detection:** At config load time and when saving via the dashboard API, fogwall rejects any
 > new permission entry whose pattern overlaps with an existing entry for the same user and provider. Two entries overlap
 > when they are equal, or when one is a GLOB/REGEX pattern that would match the other's value. This prevents
 > silent misconfiguration where the effective permission depends on evaluation order.
@@ -1260,25 +1260,25 @@ Set `attestations: []` (or omit the key) to disable attestations entirely.
 
 ```bash
 # Proxy only (no dashboard):
-./gradlew :git-proxy-java-server:run
+./gradlew :fogwall-server:run
 
 # Proxy + dashboard + REST API:
-./gradlew :git-proxy-java-dashboard:run
+./gradlew :fogwall-dashboard:run
 
 # Override port via environment variable:
-GITPROXY_SERVER_PORT=9090 ./gradlew :git-proxy-java-server:run
+FOGWALL_SERVER_PORT=9090 ./gradlew :fogwall-server:run
 ```
 
-Logs: `git-proxy-java-server/logs/application.log`
+Logs: `fogwall-server/logs/application.log`
 
 ## Logging
 
-git-proxy-java uses Log4j2 for logging. To override the bundled config without rebuilding the image, mount
+fogwall uses Log4j2 for logging. To override the bundled config without rebuilding the image, mount
 a custom `log4j2.xml` and point the JVM at it:
 
 ```bash
 # Local run
-JAVA_TOOL_OPTIONS=-Dlog4j2.configurationFile=/path/to/log4j2.xml ./gradlew :git-proxy-java-dashboard:run
+JAVA_TOOL_OPTIONS=-Dlog4j2.configurationFile=/path/to/log4j2.xml ./gradlew :fogwall-dashboard:run
 
 # Docker — mount your config and set the env var
 volumes:
@@ -1295,20 +1295,20 @@ comments in that file for how to activate it.
 
 ## Git client output
 
-git-proxy-java sends validation results and status messages to the git client via sideband (the `remote:`
+fogwall sends validation results and status messages to the git client via sideband (the `remote:`
 lines visible during a push). Two environment variables control the formatting of these messages:
 
 | Variable | Effect |
 | -------- | ------ |
 | `NO_COLOR` | Disables ANSI colour in sideband output. Follows the [no-color.org](https://no-color.org) convention — set to any value to disable. |
-| `GITPROXY_NO_EMOJI` | Replaces emoji symbols (✅ ❌ ⛔ 🔑 etc.) with plain ASCII equivalents. Useful when pushing through terminals or CI systems that do not render Unicode correctly. |
+| `FOGWALL_NO_EMOJI` | Replaces emoji symbols (✅ ❌ ⛔ 🔑 etc.) with plain ASCII equivalents. Useful when pushing through terminals or CI systems that do not render Unicode correctly. |
 
 Both are read at runtime from the server's environment — no restart is required if set before the process
 starts, but they cannot be changed while the server is running.
 
 ```bash
-# Docker Compose — add to the git-proxy-java service environment block
+# Docker Compose — add to the fogwall service environment block
 environment:
   NO_COLOR: "1"
-  GITPROXY_NO_EMOJI: "1"
+  FOGWALL_NO_EMOJI: "1"
 ```

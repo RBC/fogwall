@@ -3,7 +3,7 @@
 Notes on git/JGit behaviour that inform how filters and hooks are written. Add a section here when you hit a non-obvious
 edge case so the next person doesn't have to rediscover it.
 
-For an overview of how git-proxy-java uses JGit's server-side APIs (ReceivePackFactory, hook chain, forwarding, credential
+For an overview of how fogwall uses JGit's server-side APIs (ReceivePackFactory, hook chain, forwarding, credential
 flow), see [JGIT_INFRASTRUCTURE.md](JGIT_INFRASTRUCTURE.md).
 
 ---

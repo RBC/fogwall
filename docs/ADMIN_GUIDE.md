@@ -1,6 +1,6 @@
 # Administrator and Operator Guide
 
-This guide covers deploying, configuring, and operating git-proxy-java. It is written for the person responsible
+This guide covers deploying, configuring, and operating fogwall. It is written for the person responsible
 for running the proxy — setting up user accounts, configuring providers and rules, diagnosing problems, and keeping
 the service healthy.
 
@@ -11,7 +11,7 @@ For developers pushing through the proxy, see [USER_GUIDE.md](USER_GUIDE.md).
 
 ## Conceptual model: three independent layers
 
-Before diving into configuration details, it helps to understand that access control in git-proxy-java is three
+Before diving into configuration details, it helps to understand that access control in fogwall is three
 orthogonal layers that all must pass before a push is forwarded:
 
 ```text
@@ -41,7 +41,7 @@ scanning. These apply to everyone regardless of permissions.
 
 ## User accounts
 
-git-proxy-java supports four authentication backends. **LDAP, AD, and OIDC are the expected production choices.**
+fogwall supports four authentication backends. **LDAP, AD, and OIDC are the expected production choices.**
 Local auth manages users in the database (add/remove users, reset passwords via the dashboard) with passwords
 defined in YAML config. It is self-contained and requires no external directory, but every user must be
 provisioned manually. It is suitable for small teams or single-operator deployments; LDAP, AD, or OIDC are
@@ -111,7 +111,7 @@ access to all directory members.
 your org's IdP or IAM process. Self-approval requires **both** this role and a per-repo `SELF_CERTIFY`
 permission entry — neither alone is sufficient. This separation lets organisations externalise the capability
 grant (who is trusted to self-certify at all) to their existing directory/IAM procedures, while the per-repo
-entitlement remains managed inside git-proxy-java.
+entitlement remains managed inside fogwall.
 
 How to grant `ROLE_SELF_CERTIFY`:
 
@@ -320,7 +320,7 @@ self-review their own push in the dashboard. The review step still happens — t
 own approval. This signals to operators and the audit log that the pusher has reviewed and accepted
 responsibility for the changes. Other users' pushes still require a peer reviewer.
 
-The dashboard module (`git-proxy-java-dashboard`) always uses `ui` mode. The standalone server module defaults to `auto`.
+The dashboard module (`fogwall-dashboard`) always uses `ui` mode. The standalone server module defaults to `auto`.
 
 ---
 
@@ -330,10 +330,10 @@ The dashboard module (`git-proxy-java-dashboard`) always uses `ui` mode. The sta
 
 | Environment | Log output |
 | ----------- | ---------- |
-| `./gradlew run` | `git-proxy-java-server/logs/application.log` + console |
+| `./gradlew run` | `fogwall-server/logs/application.log` + console |
 | Docker / production | console only (stdout); redirect or use a log driver |
 
-The default Log4j2 config logs `org.finos.gitproxy` at `DEBUG` and everything else at `INFO`.
+The default Log4j2 config logs `com.rbc.fogwall` at `DEBUG` and everything else at `INFO`.
 
 ### Enabling debug logging for specific subsystems
 
@@ -342,7 +342,7 @@ Override the bundled `log4j2.xml` at runtime — no rebuild required:
 ```bash
 # Local run
 JAVA_TOOL_OPTIONS=-Dlog4j2.configurationFile=/path/to/my-log4j2.xml \
-  ./gradlew :git-proxy-java-dashboard:run
+  ./gradlew :fogwall-dashboard:run
 
 # Docker
 volumes:
@@ -410,7 +410,7 @@ The `requestId` is also printed in the sideband output to the git client, so you
 log lines.
 
 > **Roadmap:** OpenTelemetry tracing support (propagating trace/span IDs into the log MDC and exporting spans
-> to a collector) is tracked in [#106](https://github.com/coopernetes/git-proxy-java/issues/106). Once
+> to a collector) is tracked in [#106](https://github.com/RBC/fogwall/issues/106). Once
 > implemented, the `requestId` will be correlatable across distributed systems without manual log grepping.
 
 ### Git client output formatting
@@ -420,7 +420,7 @@ Two environment variables control the `remote:` sideband messages sent to git cl
 | Variable | Effect |
 | -------- | ------ |
 | `NO_COLOR` | Disables ANSI colour. Follows the [no-color.org](https://no-color.org) convention — set to any non-empty value. |
-| `GITPROXY_NO_EMOJI` | Replaces emoji (✅ ❌ ⛔ 🔑) with plain ASCII. Useful for CI systems or terminals that do not render Unicode. |
+| `FOGWALL_NO_EMOJI` | Replaces emoji (✅ ❌ ⛔ 🔑) with plain ASCII. Useful for CI systems or terminals that do not render Unicode. |
 
 Set on the server process, not on the client. See [CONFIGURATION.md — Git client output](CONFIGURATION.md#git-client-output)
 for Docker Compose examples.
@@ -502,7 +502,7 @@ to the bundled binary.
 
 ## Externalized configuration
 
-git-proxy-java follows 12-factor config principles: the application ships with safe defaults baked into the JAR,
+fogwall follows 12-factor config principles: the application ships with safe defaults baked into the JAR,
 and operators layer environment-specific values on top without modifying the image.
 
 ### How config is loaded
@@ -511,9 +511,9 @@ Sources are merged in priority order (lowest → highest):
 
 | Priority | Source | Mechanism |
 |---|---|---|
-| 1 (lowest) | `git-proxy.yml` | Bundled in the JAR — base defaults |
-| 2 | Profile YAMLs named in `GITPROXY_CONFIG_PROFILES` | Classpath lookup (see below) |
-| 3 | `GITPROXY_*` environment variables | Strip prefix, lowercase, `_` → `.` |
+| 1 (lowest) | `fogwall.yml` | Bundled in the JAR — base defaults |
+| 2 | Profile YAMLs named in `FOGWALL_CONFIG_PROFILES` | Classpath lookup (see below) |
+| 3 | `FOGWALL_*` environment variables | Strip prefix, lowercase, `_` → `.` |
 | 4 (highest) | Hot-reload overlay (`reload.file.path` or `reload.git`) | Filesystem path; applied on every reload |
 
 A higher-priority source only overrides the specific keys it defines — other base values are preserved.
@@ -528,9 +528,9 @@ classpath resource and loaded automatically when its profile is activated.
 ```yaml
 # docker-compose.yml or Kubernetes pod spec
 volumes:
-  - ./my-config.yml:/app/conf/git-proxy-my-config.yml:ro
+  - ./my-config.yml:/app/conf/fogwall-my-config.yml:ro
 # Or in Kubernetes, mount a ConfigMap:
-# - name: git-proxy-config
+# - name: fogwall-config
 #   mountPath: /app/conf
 ```
 
@@ -538,22 +538,22 @@ volumes:
 
 ```yaml
 environment:
-  GITPROXY_CONFIG_PROFILES: my-config
+  FOGWALL_CONFIG_PROFILES: my-config
 ```
 
-The loader looks for `git-proxy-{profile}.yml` on the classpath. With `/app/conf/` prepended, your mounted file
+The loader looks for `fogwall-{profile}.yml` on the classpath. With `/app/conf/` prepended, your mounted file
 is found first.
 
 > **Important:** a file mounted at `/app/conf/` is silently ignored unless the matching profile name is set in
-> `GITPROXY_CONFIG_PROFILES`. There is no auto-discovery — the profile name is the activation key.
+> `FOGWALL_CONFIG_PROFILES`. There is no auto-discovery — the profile name is the activation key.
 
 **Multiple profiles** are comma-separated; later profiles take priority over earlier ones:
 
 ```
-GITPROXY_CONFIG_PROFILES=docker-default,ldap
+FOGWALL_CONFIG_PROFILES=docker-default,ldap
 ```
 
-This loads `git-proxy-docker-default.yml` then `git-proxy-ldap.yml`; `ldap` wins on any key both files define.
+This loads `fogwall-docker-default.yml` then `fogwall-ldap.yml`; `ldap` wins on any key both files define.
 
 > **List merge caveat:** Gestalt replaces lists at the key level — it does not append. If two profile files both
 > define `permissions:`, the later file's list replaces the earlier one entirely. Keep all entries for a given
@@ -563,13 +563,13 @@ This loads `git-proxy-docker-default.yml` then `git-proxy-ldap.yml`; `ldap` wins
 
 ### Environment variable overrides
 
-Any `GITPROXY_` prefixed env var overrides the equivalent config key at the highest priority (above profiles,
-below hot-reload overlays). The mapping is: strip `GITPROXY_`, lowercase, replace `_` with `.`:
+Any `FOGWALL_` prefixed env var overrides the equivalent config key at the highest priority (above profiles,
+below hot-reload overlays). The mapping is: strip `FOGWALL_`, lowercase, replace `_` with `.`:
 
 ```
-GITPROXY_SERVER_PORT=9090              → server.port
-GITPROXY_DATABASE_TYPE=postgres        → database.type
-GITPROXY_SECRET__SCAN_ENABLED=false   → secret-scan.enabled
+FOGWALL_SERVER_PORT=9090              → server.port
+FOGWALL_DATABASE_TYPE=postgres        → database.type
+FOGWALL_SECRET__SCAN_ENABLED=false   → secret-scan.enabled
 ```
 
 Use env vars for values that differ per-environment (secrets, hostnames, ports) and profile YAML files for
@@ -586,7 +586,7 @@ The overlay file path can be a ConfigMap mount too:
 reload:
   file:
     enabled: true
-    path: /app/conf/git-proxy-runtime.yml
+    path: /app/conf/fogwall-runtime.yml
 ```
 
 This lets operations teams push rule or permission changes by updating a ConfigMap and triggering
@@ -596,7 +596,7 @@ This lets operations teams push rule or permission changes by updating a ConfigM
 
 ## Network requirements
 
-git-proxy-java opens outbound connections to upstream SCM providers (GitHub, GitLab, Bitbucket, Gitea) from the
+fogwall opens outbound connections to upstream SCM providers (GitHub, GitLab, Bitbucket, Gitea) from the
 **server**, not from the developer's workstation. Your network team needs to allow egress from the proxy host, not from
 individual developer machines.
 
@@ -615,7 +615,7 @@ identity via the API.
 ### Corporate HTTP proxy
 
 If outbound internet access requires routing through a corporate HTTP proxy, set the standard environment variables
-before starting git-proxy-java:
+before starting fogwall:
 
 ```bash
 export HTTPS_PROXY=http://proxy.corp.example.com:8080
@@ -623,14 +623,14 @@ export HTTP_PROXY=http://proxy.corp.example.com:8080
 export NO_PROXY=localhost,127.0.0.1,*.internal.example.com
 ```
 
-git-proxy-java reads these at startup and configures all three outbound paths accordingly. No YAML config is needed.
+fogwall reads these at startup and configures all three outbound paths accordingly. No YAML config is needed.
 
 Many organisations run a local proxy relay (cntlm, Alpaca) that handles NTLM/Kerberos authentication to the corporate
-proxy transparently. Point `HTTPS_PROXY` at the relay (e.g. `http://localhost:3128`) and git-proxy-java will work
+proxy transparently. Point `HTTPS_PROXY` at the relay (e.g. `http://localhost:3128`) and fogwall will work
 without any auth configuration.
 
 > **Note:** Full proxy authentication (Basic, NTLM) in YAML config is tracked in
-> [#158](https://github.com/coopernetes/git-proxy-java/issues/158).
+> [#158](https://github.com/RBC/fogwall/issues/158).
 
 ### Connectivity diagnostics (dashboard)
 
@@ -660,7 +660,7 @@ that can be copied directly into a ticket for the network team.
 
 Some enterprises deploy DLP (Data Loss Prevention) appliances that inspect or selectively block outbound HTTPS traffic.
 A common policy blocks anything other than GET requests to `github.com` or similar SCM hosts — this will prevent
-git-proxy-java from forwarding pushes upstream even if the proxy can reach the host.
+fogwall from forwarding pushes upstream even if the proxy can reach the host.
 
 Symptoms: clones through the proxy succeed, but pushes fail at the upstream forwarding step with a 403 or a TCP reset.
 The git probe in the targeted connectivity check will show this as a TIMEOUT or RESET on the `git-receive-pack` step
@@ -682,21 +682,21 @@ Default `h2-mem` loses all push records on restart. For production:
 # PostgreSQL — recommended
 database:
   type: postgres
-  url: jdbc:postgresql://db.internal:5432/gitproxy?sslmode=verify-full&sslrootcert=/certs/ca.crt
-  username: gitproxy
+  url: jdbc:postgresql://db.internal:5432/fogwall?sslmode=verify-full&sslrootcert=/certs/ca.crt
+  username: fogwall
   password: secret
 
 # H2 file — zero external dependencies, persistent
 database:
   type: h2-file
-  path: /app/.data/gitproxy
+  path: /app/.data/fogwall
 ```
 
 Schema is applied automatically via Flyway on startup.
 
 ### TLS
 
-Put git-proxy-java behind a reverse proxy (nginx, Caddy, Envoy) for TLS termination in production. The application
+Put fogwall behind a reverse proxy (nginx, Caddy, Envoy) for TLS termination in production. The application
 can also terminate TLS directly if preferred — see [CONFIGURATION.md — TLS](CONFIGURATION.md#tls).
 
 For upstream connections to internal GitLab/Bitbucket/Forgejo instances with a corporate CA:
@@ -704,7 +704,7 @@ For upstream connections to internal GitLab/Bitbucket/Forgejo instances with a c
 ```yaml
 server:
   tls:
-    trust-ca-bundle: /etc/gitproxy/tls/internal-ca.pem
+    trust-ca-bundle: /etc/fogwall/tls/internal-ca.pem
 ```
 
 This merges the corporate CA with the JVM's built-in trust anchors so public providers (GitHub, GitLab SaaS)
@@ -718,7 +718,7 @@ The dashboard module exposes an unauthenticated health endpoint:
 GET /api/health   → 200 OK with status payload when the server is up
 ```
 
-The standalone server module (`git-proxy-java-server`) does not expose a health endpoint — use a TCP
+The standalone server module (`fogwall-server`) does not expose a health endpoint — use a TCP
 check against the proxy port instead.
 
 For Kubernetes (dashboard module):
@@ -754,7 +754,7 @@ the default before going to production:
 
 ```yaml
 # In config or via env var:
-GITPROXY_API_KEY: "your-secret-key"
+FOGWALL_API_KEY: "your-secret-key"
 ```
 
 The shared key is a stopgap for automation until proper machine auth is available. It carries no user
@@ -762,7 +762,7 @@ identity — all calls made with it are unattributed. Prefer session-based acces
 account) for any automation that needs an audit trail.
 
 > **Roadmap:** Per-user and per-service API keys, and an OAuth2 resource server mode for machine-to-machine
-> auth, are tracked in [#57](https://github.com/coopernetes/git-proxy-java/issues/57). Until then, treat the
+> auth, are tracked in [#57](https://github.com/RBC/fogwall/issues/57). Until then, treat the
 > shared key as a temporary measure and rotate it regularly.
 
 ---
@@ -807,7 +807,7 @@ by `identity-verification`:
 ### OIDC login fails / redirect loop
 
 1. Enable the Spring Security debug profile (`docker/log4j2-debug.xml`) — see [Debug profiles](#debug-profiles-by-problem-area).
-2. Check the redirect URI registered in the IdP matches `https://<your-host>/login/oauth2/code/gitproxy` exactly.
+2. Check the redirect URI registered in the IdP matches `https://<your-host>/login/oauth2/code/fogwall` exactly.
 3. For Entra ID: verify `jwk-set-uri` is set — without it, token issuer validation fails silently.
 
 ### Gitleaks produces no output / scan appears to be skipped
