@@ -219,8 +219,8 @@ class JettyProxyFixture implements AutoCloseable {
 
         // Buffer up to 50 MB before dispatching — ensures the full pack is available
         // to RequestBodyWrapper.readAllBytes() without any blocking reads mid-body.
-        server.setHandler(new EagerContentHandler(context,
-                new EagerContentHandler.RetainedContentLoaderFactory(50 * 1024 * 1024, -1, false)));
+        server.setHandler(new EagerContentHandler(
+                context, new EagerContentHandler.RetainedContentLoaderFactory(50 * 1024 * 1024, -1, false)));
         server.start();
 
         port = ((ServerConnector) server.getConnectors()[0]).getLocalPort();

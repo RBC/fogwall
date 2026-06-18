@@ -32,8 +32,7 @@ public class RequestBodyWrapper extends HttpServletRequestWrapper {
         } else {
             body = new byte[0];
         }
-        log.debug("RequestBodyWrapper: Content-Length={}, cached {} bytes",
-                request.getContentLength(), body.length);
+        log.debug("RequestBodyWrapper: Content-Length={}, cached {} bytes", request.getContentLength(), body.length);
     }
 
     @Override
