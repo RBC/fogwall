@@ -4,9 +4,15 @@ import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletRequestWrapper;
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Getter
 public class RequestBodyWrapper extends HttpServletRequestWrapper {
 
@@ -20,30 +26,13 @@ public class RequestBodyWrapper extends HttpServletRequestWrapper {
      */
     public RequestBodyWrapper(HttpServletRequest request) throws IOException {
         super(request);
-        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        BufferedInputStream bufferedInputStream = null;
-        try {
-            InputStream inputStream = request.getInputStream();
-            if (inputStream != null) {
-                bufferedInputStream = new BufferedInputStream(inputStream);
-                byte[] byteBuffer = new byte[128];
-                int bytesRead = -1;
-                while ((bytesRead = bufferedInputStream.read(byteBuffer)) != -1) {
-                    byteArrayOutputStream.write(byteBuffer, 0, bytesRead);
-                }
-            }
-        } catch (IOException ex) {
-            throw ex;
-        } finally {
-            if (bufferedInputStream != null) {
-                try {
-                    bufferedInputStream.close();
-                } catch (IOException ex) {
-                    throw ex;
-                }
-            }
+        InputStream inputStream = request.getInputStream();
+        if (inputStream != null) {
+            body = inputStream.readAllBytes();
+        } else {
+            body = new byte[0];
         }
-        body = byteArrayOutputStream.toByteArray();
+        log.debug("RequestBodyWrapper: Content-Length={}, cached {} bytes", request.getContentLength(), body.length);
     }
 
     @Override

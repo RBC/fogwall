@@ -13,6 +13,7 @@ import org.eclipse.jetty.ee11.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee11.servlet.ServletHolder;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.server.handler.EagerContentHandler;
 import org.eclipse.jgit.http.server.GitServlet;
 import org.finos.gitproxy.approval.ApprovalGateway;
 import org.finos.gitproxy.approval.AutoApprovalGateway;
@@ -216,7 +217,10 @@ class JettyProxyFixture implements AutoCloseable {
         addFilter(context, proxyMapping, new PushFinalizerFilter(serviceUrl, proxyGatewayFactory.apply(pushStore)));
         addFilter(context, proxyMapping, new AuditLogFilter());
 
-        server.setHandler(context);
+        // Buffer up to 50 MB before dispatching — ensures the full pack is available
+        // to RequestBodyWrapper.readAllBytes() without any blocking reads mid-body.
+        server.setHandler(new EagerContentHandler(
+                context, new EagerContentHandler.RetainedContentLoaderFactory(50 * 1024 * 1024, -1, false)));
         server.start();
 
         port = ((ServerConnector) server.getConnectors()[0]).getLocalPort();

@@ -8,6 +8,7 @@ import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.server.SslConnectionFactory;
+import org.eclipse.jetty.server.handler.EagerContentHandler;
 import org.eclipse.jetty.util.component.LifeCycle;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
@@ -86,7 +87,11 @@ public class GitProxyJettyApplication {
             }
         });
 
-        server.setHandler(context);
+        // EagerContentHandler ensures Jetty sends "100 Continue" and begins buffering the request
+        // body before dispatching to the filter chain. Without this, git pushes using
+        // Expect: 100-continue (packs > http.postBuffer, default 1 MiB) arrive with an empty or
+        // partial body because Jetty dispatches before the body has been transmitted.
+        server.setHandler(new EagerContentHandler(context));
         server.start();
 
         log.info("JGit Proxy started on port {}", connector.getPort());
