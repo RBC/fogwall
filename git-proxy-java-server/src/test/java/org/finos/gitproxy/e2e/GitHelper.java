@@ -49,6 +49,21 @@ class GitHelper {
         git(repoDir, "add", fileName);
     }
 
+    /** Writes {@code content} to {@code fileName} in {@code repoDir} without staging. */
+    void write(Path repoDir, String fileName, String content) throws IOException {
+        Files.writeString(repoDir.resolve(fileName), content);
+    }
+
+    /** Stages all changes in {@code repoDir} ({@code git add -A}). */
+    void stageAll(Path repoDir) throws IOException, InterruptedException {
+        git(repoDir, "add", "-A");
+    }
+
+    /** Sets a local git config value in {@code repoDir}. */
+    void config(Path repoDir, String key, String value) throws IOException, InterruptedException {
+        git(repoDir, "config", key, value);
+    }
+
     /** Creates a commit with {@code message} in {@code repoDir}. */
     void commit(Path repoDir, String message) throws IOException, InterruptedException {
         git(repoDir, "commit", "-m", message);

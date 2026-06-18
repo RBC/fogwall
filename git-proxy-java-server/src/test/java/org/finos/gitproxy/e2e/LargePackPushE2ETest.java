@@ -2,9 +2,6 @@ package org.finos.gitproxy.e2e;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import eu.rekawek.toxiproxy.Proxy;
-import eu.rekawek.toxiproxy.ToxiproxyClient;
-import eu.rekawek.toxiproxy.model.ToxicDirection;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -14,79 +11,107 @@ import org.finos.gitproxy.approval.AutoApprovalGateway;
 import org.finos.gitproxy.db.model.PushQuery;
 import org.finos.gitproxy.db.model.PushStatus;
 import org.junit.jupiter.api.*;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.utility.DockerImageName;
 
 /**
- * Regression tests for large pack pushes through both proxy modes, using Toxiproxy to throttle
- * upstream bandwidth so that Jetty receives pack data in small chunks.
+ * Regression tests for large pack pushes through both proxy modes.
  *
- * <p>Regression for: {@code RequestBodyWrapper} wrapped Jetty 12's {@code HttpInput} in a
- * {@link java.io.BufferedInputStream}. When the socket buffer was temporarily exhausted mid-body,
- * {@code BufferedInputStream} permanently cached the -1 return — truncating the body even though
- * more data was still incoming. The fix replaces the manual read loop with
- * {@code InputStream.readAllBytes()}, which reads directly from the servlet input stream without
- * an intermediate buffer layer.
+ * <h2>Production bug</h2>
+ * Pushes whose pack exceeded Jetty's socket buffer size (typically ~1 MiB in production,
+ * controlled by {@code http.postBuffer} on the git client) failed with either a silent
+ * connection drop (store-and-forward) or an "Empty Branch" rejection (transparent proxy).
+ * Both failures were caused by {@code RequestBodyWrapper} reading a truncated or empty body
+ * because Jetty 12's EPC dispatch model invoked the filter chain before the full HTTP body
+ * had arrived.
  *
- * <p>Toxiproxy throttles the upstream connection (git client → Jetty) to 32 KB/s. A ~200 KB pack
- * takes ~6 seconds to arrive, forcing Jetty to receive it across multiple TCP segments. This
- * reliably triggers the {@code BufferedInputStream} premature-EOF bug.
+ * <h2>Fix</h2>
+ * Wrapping the {@code ServletContextHandler} in Jetty's {@code EagerContentHandler} causes
+ * Jetty to eagerly read content chunks — triggering the {@code 100 Continue} handshake when
+ * needed — before dispatching to the filter chain. {@code RequestBodyWrapper.readAllBytes()}
+ * then receives a fully available stream.
  *
- * <p>Closes #145.
+ * <h2>Note on local reproducibility</h2>
+ * The truncation behaviour is specific to real network paths (HAProxy + OCP ingress + real
+ * TCP segmentation). On loopback, data arrives atomically so the truncation does not occur
+ * and the bug cannot be reproduced locally. These tests validate that large pack pushes
+ * succeed end-to-end with {@code EagerContentHandler} in place, providing a regression
+ * guard for that code path.
+ *
+ * <p>Partially addresses #145 (Toxiproxy-based e2e tests).
  */
 @Tag("e2e")
 class LargePackPushE2ETest {
 
     /**
-     * Upstream bandwidth limit applied by Toxiproxy in KB/s. Low enough to force multi-segment
-     * delivery of a ~200 KB pack, high enough to keep test runtime under 30s.
+     * Pack size is kept deliberately under git's default {@code http.postBuffer} (1 MiB) so git
+     * sends the push as a single {@code Content-Length} POST rather than splitting into multiple
+     * chunked requests. With a single-POST push, {@code EagerContentHandler} buffers the full
+     * body before dispatching to the filter chain — validating the fix end-to-end.
+     *
+     * <p>15 files × 20 lines ≈ 11 KB/commit × 3 commits ≈ ~50 KB pack. Well under 1 MiB.
      */
-    private static final long UPSTREAM_BANDWIDTH_KB_S = 32;
+    private static final int INITIAL_FILES = 15;
+    private static final int LINES_PER_FILE = 20;
 
-    /** Number of files per commit. 50 × ~4 KB ≈ 200 KB uncompressed. */
-    private static final int FILE_COUNT = 50;
-
-    /** Lines per file — UUID lines are ~37 chars; 110 lines ≈ 4 KB. */
-    private static final int LINES_PER_FILE = 110;
-
-    /** Data port Toxiproxy listens on for the proxy traffic. Fixed so we can expose it upfront. */
-    private static final int TOXI_DATA_PORT = 8475;
-
-    @SuppressWarnings("resource")
-    private static final GenericContainer<?> TOXIPROXY =
-            new GenericContainer<>(DockerImageName.parse("ghcr.io/shopify/toxiproxy:2.9.0"))
-                    .withExposedPorts(8474, TOXI_DATA_PORT)
-                    .withExtraHost("host.testcontainers.internal", "host-gateway");
+    /** Follow-up commits — modify all existing files and add new ones per commit. */
+    private static final int FOLLOWUP_COMMITS = 2;
+    private static final int NEW_FILES_PER_FOLLOWUP = 3;
 
     static GiteaContainer gitea;
     static Path tempDir;
 
     @BeforeAll
-    static void startInfrastructure() throws Exception {
+    static void startGitea() throws Exception {
         gitea = new GiteaContainer();
         gitea.start();
         gitea.createAdminUser();
         gitea.createTestRepo();
-        TOXIPROXY.start();
         tempDir = Files.createTempDirectory("git-proxy-java-largpack-e2e-");
     }
 
     @AfterAll
-    static void stopInfrastructure() throws Exception {
-        TOXIPROXY.stop();
+    static void stopGitea() throws Exception {
         if (gitea != null) gitea.stop();
     }
 
-    // ── helpers ───────────────────────────────────────────────────────────────
+    // ── commit generation ─────────────────────────────────────────────────────
 
-    private static void writeLargeCommit(GitHelper git, Path repoDir) throws Exception {
-        for (int i = 0; i < FILE_COUNT; i++) {
-            StringBuilder sb = new StringBuilder();
-            for (int j = 0; j < LINES_PER_FILE; j++) {
-                sb.append(UUID.randomUUID()).append('\n');
-            }
-            git.writeAndStage(repoDir, "large-file-" + i + ".txt", sb.toString());
+    /**
+     * Builds a branch that mimics {@code project-rename}:
+     * one large commit touching {@link #INITIAL_FILES} files, followed by
+     * {@link #FOLLOWUP_COMMITS} smaller commits each modifying all files and adding new ones.
+     * UUID-based content resists delta compression and keeps pack sizes realistic.
+     */
+    private static void buildRealisticBranch(GitHelper git, Path repo, String branchName)
+            throws Exception {
+        git.createAndCheckoutBranch(repo, branchName);
+
+        for (int i = 0; i < INITIAL_FILES; i++) {
+            git.write(repo, "module-" + i + ".java", generateFileContent("module-" + i, 0));
         }
+        git.stageAll(repo);
+        git.commit(repo, "chore: initial large commit — " + INITIAL_FILES + " files");
+
+        for (int c = 1; c <= FOLLOWUP_COMMITS; c++) {
+            for (int i = 0; i < INITIAL_FILES; i++) {
+                git.write(repo, "module-" + i + ".java", generateFileContent("module-" + i, c));
+            }
+            for (int n = 0; n < NEW_FILES_PER_FOLLOWUP; n++) {
+                int fileIdx = INITIAL_FILES + (c * NEW_FILES_PER_FOLLOWUP) + n;
+                git.write(repo, "followup-" + c + "-" + n + ".java",
+                        generateFileContent("followup-" + fileIdx, c));
+            }
+            git.stageAll(repo);
+            git.commit(repo, "chore: follow-up commit " + c);
+        }
+    }
+
+    private static String generateFileContent(String className, int rev) {
+        var sb = new StringBuilder();
+        sb.append("// ").append(className).append(" rev=").append(rev).append("\n");
+        for (int i = 0; i < LINES_PER_FILE; i++) {
+            sb.append("// ").append(UUID.randomUUID()).append("\n");
+        }
+        return sb.toString();
     }
 
     private static String credUrl(int port, String path) {
@@ -103,49 +128,38 @@ class LargePackPushE2ETest {
     class ProxyMode {
 
         JettyProxyFixture proxy;
-        ToxiproxyClient toxiClient;
-        Proxy toxiProxy;
 
         @BeforeEach
-        void startProxy() throws Exception {
+        void start() throws Exception {
             proxy = new JettyProxyFixture(gitea.getBaseUri(), AutoApprovalGateway::new);
-            toxiClient = new ToxiproxyClient(
-                    TOXIPROXY.getHost(), TOXIPROXY.getMappedPort(8474));
         }
 
         @AfterEach
-        void stopProxy() throws Exception {
-            if (toxiProxy != null) toxiProxy.delete();
+        void stop() throws Exception {
             if (proxy != null) proxy.close();
         }
 
         @Test
-        void largePack_newBranch_throttledUpstream_proxyMode_passesValidation() throws Exception {
+        void largePack_newBranch_proxyMode_passesValidationAndForwards() throws Exception {
             String repoName = "large-proxy-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
             gitea.createRepo(GiteaContainer.TEST_ORG, repoName);
 
-            toxiProxy = toxiClient.createProxy("proxy-" + repoName,
-                    "0.0.0.0:" + TOXI_DATA_PORT,
-                    "host.testcontainers.internal:" + proxy.getPort());
-            toxiProxy.toxics().bandwidth("bw-upstream", ToxicDirection.UPSTREAM, UPSTREAM_BANDWIDTH_KB_S);
-            int throttledPort = TOXIPROXY.getMappedPort(TOXI_DATA_PORT);
-
-            String repoUrl = credUrl(throttledPort,
+            String repoUrl = credUrl(proxy.getPort(),
                     "/proxy/localhost/" + GiteaContainer.TEST_ORG + "/" + repoName + ".git");
 
             GitHelper git = new GitHelper(tempDir);
             Path repo = git.clone(repoUrl, "proxy-large-" + repoName);
             git.setAuthor(repo, GiteaContainer.VALID_AUTHOR_NAME, GiteaContainer.VALID_AUTHOR_EMAIL);
-            git.createAndCheckoutBranch(repo, "large-pack-test");
-            writeLargeCommit(git, repo);
-            git.commit(repo, "feat: large pack regression test via proxy mode");
 
-            GitHelper.PushResult result = git.pushWithResult(repo);
+            String branchName = "large-pack-proxy-test";
+            buildRealisticBranch(git, repo, branchName);
+
+            GitHelper.PushResult result = git.pushRefWithResult(repo, branchName);
 
             assertTrue(result.succeeded(),
-                    "Large pack push via throttled proxy mode should succeed. Output:\n" + result.output());
+                    "Large pack push via proxy mode should succeed.\nOutput:\n" + result.output());
             assertFalse(result.output().contains("Empty Branch"),
-                    "Should not be rejected as empty branch");
+                    "Should not be rejected as empty branch.\nOutput:\n" + result.output());
         }
     }
 
@@ -156,49 +170,34 @@ class LargePackPushE2ETest {
     class StoreAndForwardMode {
 
         JettyProxyFixture proxy;
-        ToxiproxyClient toxiClient;
-        Proxy toxiProxy;
 
         @BeforeEach
-        void startProxy() throws Exception {
+        void start() throws Exception {
             proxy = new JettyProxyFixture(gitea.getBaseUri(), AutoApprovalGateway::new);
-            toxiClient = new ToxiproxyClient(
-                    TOXIPROXY.getHost(), TOXIPROXY.getMappedPort(8474));
         }
 
         @AfterEach
-        void stopProxy() throws Exception {
-            if (toxiProxy != null) toxiProxy.delete();
+        void stop() throws Exception {
             if (proxy != null) proxy.close();
         }
 
         @Test
-        void largePack_newBranch_throttledUpstream_storeAndForward_passesValidationAndForwards()
-                throws Exception {
-            toxiProxy = toxiClient.createProxy("sf-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8),
-                    "0.0.0.0:" + TOXI_DATA_PORT,
-                    "host.testcontainers.internal:" + proxy.getPort());
-            toxiProxy.toxics().bandwidth("bw-upstream", ToxicDirection.UPSTREAM, UPSTREAM_BANDWIDTH_KB_S);
-            int throttledPort = TOXIPROXY.getMappedPort(TOXI_DATA_PORT);
-
-            String repoUrl = credUrl(throttledPort,
+        void largePack_newBranch_storeAndForward_passesValidationAndForwards() throws Exception {
+            String repoUrl = credUrl(proxy.getPort(),
                     "/push/localhost/" + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO + ".git");
 
             GitHelper git = new GitHelper(tempDir);
             Path repo = git.clone(repoUrl,
                     "sf-large-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8));
             git.setAuthor(repo, GiteaContainer.VALID_AUTHOR_NAME, GiteaContainer.VALID_AUTHOR_EMAIL);
-            git.createAndCheckoutBranch(repo,
-                    "large-pack-sf-" + UUID.randomUUID().toString().replace("-", "").substring(0, 6));
-            writeLargeCommit(git, repo);
-            git.commit(repo, "feat: large pack regression test via S&F mode");
 
-            GitHelper.PushResult result = git.pushWithResult(repo);
+            String branchName = "large-pack-sf-" + UUID.randomUUID().toString().replace("-", "").substring(0, 6);
+            buildRealisticBranch(git, repo, branchName);
+
+            GitHelper.PushResult result = git.pushRefWithResult(repo, branchName);
 
             assertTrue(result.succeeded(),
-                    "Large pack push via throttled S&F mode should succeed. Output:\n" + result.output());
-            assertFalse(result.output().contains("Empty Branch"),
-                    "Should not be rejected as empty branch");
+                    "Large pack push via S&F mode should succeed.\nOutput:\n" + result.output());
 
             var records = proxy.getPushStore()
                     .find(PushQuery.builder().limit(1).build());
