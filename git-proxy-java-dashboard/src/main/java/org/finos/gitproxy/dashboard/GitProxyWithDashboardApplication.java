@@ -11,11 +11,11 @@ import org.eclipse.jetty.ee11.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee11.servlet.ServletHolder;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
-import org.eclipse.jetty.server.handler.EagerContentHandler;
 import org.eclipse.jetty.util.component.LifeCycle;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.finos.gitproxy.approval.UiApprovalGateway;
 import org.finos.gitproxy.db.UrlRuleRegistry;
+import org.finos.gitproxy.jetty.BlockingContentHandler;
 import org.finos.gitproxy.jetty.GitProxyContext;
 import org.finos.gitproxy.jetty.GitProxyJettyApplication;
 import org.finos.gitproxy.jetty.GitProxyServletRegistrar;
@@ -123,7 +123,7 @@ public class GitProxyWithDashboardApplication {
                 jdbcDataSource,
                 mongoFactory);
 
-        server.setHandler(new EagerContentHandler(context));
+        server.setHandler(new BlockingContentHandler(context));
         server.start();
 
         log.info("JGit Proxy with Dashboard started on port {}", connector.getPort());

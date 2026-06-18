@@ -83,7 +83,8 @@ RUN mkdir -p /app/conf
 
 # Data directory for file-based databases (h2-file, sqlite), log output, and
 # JGit home (used for lock files and system config). Owned by GID 0 with
-# group-write so the image works under OpenShift's arbitrary-UID security model.
+# group-write so the image works under restricted security contexts that run
+# containers as an arbitrary non-root UID.
 RUN bash -c 'mkdir -p /app/{.data,logs,home} \
     && chown -R 1000:0 /app/{.data,logs,home} \
     && chmod g+rwX /app/{.data,logs,home}'
