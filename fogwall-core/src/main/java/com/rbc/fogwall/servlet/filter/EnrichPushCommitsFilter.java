@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.lib.NullProgressMonitor;
+import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectInserter;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.transport.PackParser;
@@ -37,7 +38,10 @@ import org.eclipse.jgit.transport.PacketLineIn;
 @Slf4j
 public class EnrichPushCommitsFilter extends AbstractProviderAwareFogwallFilter {
 
-    private static final int ORDER = Integer.MIN_VALUE + 2; // Run after ParseGitRequestFilter
+    // Order 60 — runs after AllowApprovedPushFilter (50) so that re-pushes of approved pushes are
+    // short-circuited by FogwallFilter before enrichment runs again. Must stay before content
+    // validation filters (200+) which depend on localRepository and pushedCommits being set.
+    private static final int ORDER = 60;
     private final LocalRepositoryCache repositoryCache;
 
     public EnrichPushCommitsFilter(FogwallProvider provider, LocalRepositoryCache repositoryCache) {
@@ -85,6 +89,48 @@ public class EnrichPushCommitsFilter extends AbstractProviderAwareFogwallFilter 
             // The pushed objects don't exist upstream yet - this is the equivalent of
             // fogwall's writePack processor that pipes the request body into git receive-pack.
             unpackPushData(request, repository);
+
+            if (requestDetails.isTagPush()) {
+                // Peel the tag ref to its target commit so CheckHiddenCommitsFilter can detect
+                // any commits smuggled in the pack (see #337). An empty range is normal — the
+                // tag's commits were already validated when the branch was pushed. A non-empty
+                // range means new commits arrived exclusively via a tag ref, bypassing branch
+                // validation — reject outright.
+                ObjectId peeled;
+                try {
+                    peeled = repository.resolve(toCommit + "^{commit}");
+                } catch (Exception e) {
+                    log.warn(
+                            "Tag push ({}) — could not peel {} to a commit: {}",
+                            requestDetails.getBranch(),
+                            toCommit,
+                            e.getMessage());
+                    requestDetails.setResult(GitRequestDetails.GitResult.ERROR);
+                    requestDetails.setReason("Push rejected: tag object could not be resolved."
+                            + " Ensure the tag object is included in the push.");
+                    return;
+                }
+                if (peeled == null) {
+                    log.warn("Tag push ({}) — {} did not resolve to a commit", requestDetails.getBranch(), toCommit);
+                    requestDetails.setResult(GitRequestDetails.GitResult.ERROR);
+                    requestDetails.setReason("Push rejected: tag object could not be resolved."
+                            + " Ensure the tag object is included in the push.");
+                    return;
+                }
+                String peeledSha = peeled.getName();
+                log.info("Tag push ({}) — peeled {} to commit {}", requestDetails.getBranch(), toCommit, peeledSha);
+                List<Commit> commits = CommitInspectionService.getCommitRange(repository, fromCommit, peeledSha);
+                if (!commits.isEmpty()) {
+                    log.warn(
+                            "Tag push {} introduces {} unvalidated commit(s) — rejecting",
+                            requestDetails.getBranch(),
+                            commits.size());
+                    requestDetails.setResult(GitRequestDetails.GitResult.ERROR);
+                    requestDetails.setReason("Push rejected: the tag references commits that were not validated through"
+                            + " a branch push. Push the branch first, then re-create the tag.");
+                }
+                return;
+            }
 
             log.debug("Extracting commits from {} to {}", fromCommit, toCommit);
 

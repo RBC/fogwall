@@ -17,6 +17,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.Enumeration;
@@ -45,6 +46,12 @@ class EnrichPushCommitsFilterTest {
 
     @TempDir
     Path cacheDir2;
+
+    @TempDir
+    Path cacheDir3;
+
+    @TempDir
+    Path sourceDir2;
 
     // Minimal ServletInputStream backed by a byte array - mirrors ParseGitRequestFilterTest.
     private static class MockServletInputStream extends ServletInputStream {
@@ -125,6 +132,20 @@ class EnrichPushCommitsFilterTest {
             inserter.flush();
             return commitId.getName();
         }
+    }
+
+    /**
+     * Like {@link #insertCommit(Repository)} but also stores the commit under {@code refs/heads/main}. Required for tag
+     * push tests: {@link com.rbc.fogwall.git.CommitInspectionService#getCommitRange} excludes commits reachable from
+     * {@code refs/heads/*}, so storing the commit there makes it appear "already upstream" to the range walk.
+     */
+    private String insertCommitAsUpstream(Repository repo) throws Exception {
+        String sha = insertCommit(repo);
+        RefUpdate ru = repo.updateRef("refs/heads/main");
+        ru.setNewObjectId(ObjectId.fromString(sha));
+        ru.setExpectedOldObjectId(ObjectId.zeroId());
+        ru.update();
+        return sha;
     }
 
     /**
@@ -283,6 +304,159 @@ class EnrichPushCommitsFilterTest {
     }
 
     // ---- fail-closed behaviour ----
+
+    // ---- Tag push handling (#337) ----
+
+    /**
+     * Normal tag push: annotated tag pointing to a commit that already exists upstream. The commit range is empty
+     * (nothing new to validate). localRepository must be set so CheckHiddenCommitsFilter can run. Result stays PENDING.
+     */
+    @Test
+    void doHttpFilter_tagPush_existingCommit_passesThrough() throws Exception {
+        // Bare cache with a pre-existing commit (simulates the upstream state after the branch was pushed).
+        Repository cacheRepo =
+                Git.init().setBare(true).setDirectory(cacheDir3.toFile()).call().getRepository();
+        String commitSha = insertCommitAsUpstream(cacheRepo);
+
+        // Create an annotated tag object in the cache pointing at that commit.
+        try (ObjectInserter ins = cacheRepo.newObjectInserter()) {
+            TagBuilder tag = new TagBuilder();
+            tag.setTag("v1.0.0");
+            tag.setObjectId(ObjectId.fromString(commitSha), Constants.OBJ_COMMIT);
+            tag.setTagger(new PersonIdent("Tagger", "tagger@example.com"));
+            tag.setMessage("Release v1.0.0\n");
+            ObjectId tagId = ins.insert(tag);
+            ins.flush();
+
+            // The push packet reports the tag object SHA as toCommit.
+            LocalRepositoryCache mockCache = mock(LocalRepositoryCache.class);
+            when(mockCache.getOrClone(any())).thenReturn(cacheRepo);
+
+            GitRequestDetails details = makeDetails(ObjectId.zeroId().name(), tagId.getName());
+            details.setBranch("refs/tags/v1.0.0");
+
+            RequestBodyWrapper request = wrapRequest(new byte[0], details);
+
+            new EnrichPushCommitsFilter(new GitHubProvider("/proxy"), mockCache)
+                    .doHttpFilter(request, mock(HttpServletResponse.class));
+
+            assertEquals(
+                    GitRequestDetails.GitResult.PENDING,
+                    details.getResult(),
+                    "Should pass through — commit already upstream");
+            assertTrue(details.getPushedCommits().isEmpty(), "No new commits expected");
+            assertSame(
+                    cacheRepo,
+                    details.getLocalRepository(),
+                    "localRepository must be set for CheckHiddenCommitsFilter");
+        }
+    }
+
+    /**
+     * Lightweight tag pointing to an existing commit. A lightweight tag ref points directly to a commit SHA (no tag
+     * object), so ^{commit} peeling is a no-op. Result stays PENDING.
+     */
+    @Test
+    void doHttpFilter_lightweightTagPush_existingCommit_passesThrough() throws Exception {
+        Repository cacheRepo =
+                Git.init().setBare(true).setDirectory(cacheDir.toFile()).call().getRepository();
+        String commitSha = insertCommitAsUpstream(cacheRepo);
+
+        LocalRepositoryCache mockCache = mock(LocalRepositoryCache.class);
+        when(mockCache.getOrClone(any())).thenReturn(cacheRepo);
+
+        // Lightweight tag: toCommit is the commit SHA directly (no tag object).
+        GitRequestDetails details = makeDetails(ObjectId.zeroId().name(), commitSha);
+        details.setBranch("refs/tags/v1.0.0");
+
+        RequestBodyWrapper request = wrapRequest(new byte[0], details);
+
+        new EnrichPushCommitsFilter(new GitHubProvider("/proxy"), mockCache)
+                .doHttpFilter(request, mock(HttpServletResponse.class));
+
+        assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
+        assertTrue(details.getPushedCommits().isEmpty());
+        assertSame(cacheRepo, details.getLocalRepository());
+    }
+
+    /**
+     * Tag push introducing new commits that were never pushed through a branch — rejected. A tag should only reference
+     * commits that were already validated via a branch push. Accepting unvalidated commits through a tag ref would
+     * allow bypassing the proxy's commit validation (#337).
+     */
+    @Test
+    void doHttpFilter_tagPush_newCommits_rejected() throws Exception {
+        // Build a source repo with a commit not yet in the cache.
+        Git sourceGit = Git.init().setDirectory(sourceDir2.toFile()).call();
+        sourceGit.getRepository().getConfig().setBoolean("commit", null, "gpgsign", false);
+        sourceGit.getRepository().getConfig().save();
+        Files.writeString(sourceDir2.resolve("secret.txt"), "new content");
+        sourceGit.add().addFilepattern("secret.txt").call();
+        var revCommit = sourceGit
+                .commit()
+                .setMessage("unvalidated commit")
+                .setAuthor("Author", "author@example.com")
+                .call();
+        String commitSha = revCommit.getName();
+
+        // Generate a pack containing the new commit.
+        ByteArrayOutputStream packOut = new ByteArrayOutputStream();
+        try (PackWriter pw = new PackWriter(sourceGit.getRepository())) {
+            pw.setDeltaBaseAsOffset(false);
+            pw.preparePack(NullProgressMonitor.INSTANCE, Set.of(ObjectId.fromString(commitSha)), Set.of());
+            pw.writePack(NullProgressMonitor.INSTANCE, NullProgressMonitor.INSTANCE, packOut);
+        }
+
+        // Empty cache — the commit doesn't exist upstream.
+        Repository cacheRepo =
+                Git.init().setBare(true).setDirectory(cacheDir2.toFile()).call().getRepository();
+        LocalRepositoryCache mockCache = mock(LocalRepositoryCache.class);
+        when(mockCache.getOrClone(any())).thenReturn(cacheRepo);
+
+        // Lightweight tag pointing directly at the new commit.
+        GitRequestDetails details = makeDetails(ObjectId.zeroId().name(), commitSha);
+        details.setBranch("refs/tags/evil-tag");
+
+        RequestBodyWrapper request = wrapRequest(packOut.toByteArray(), details);
+
+        new EnrichPushCommitsFilter(new GitHubProvider("/proxy"), mockCache)
+                .doHttpFilter(request, mock(HttpServletResponse.class));
+
+        assertEquals(
+                GitRequestDetails.GitResult.ERROR, details.getResult(), "Tag push with new commits must be rejected");
+        assertNotNull(details.getReason());
+        assertTrue(details.getReason().contains("branch"), "Error must direct the user to push the branch first");
+        assertTrue(details.getPushedCommits().isEmpty());
+        assertSame(cacheRepo, details.getLocalRepository(), "localRepository must still be set");
+    }
+
+    /**
+     * Tag push where the tag object SHA cannot be resolved to a commit after unpacking (e.g. malformed pack, or the tag
+     * object was deliberately omitted). A legitimate git client always includes the tag object in the pack — a missing
+     * object is suspicious and must be rejected to fail closed.
+     */
+    @Test
+    void doHttpFilter_tagPush_unresolvableTagObject_rejected() throws Exception {
+        Repository emptyRepo =
+                Git.init().setBare(true).setDirectory(cacheDir3.toFile()).call().getRepository();
+        LocalRepositoryCache mockCache = mock(LocalRepositoryCache.class);
+        when(mockCache.getOrClone(any())).thenReturn(emptyRepo);
+
+        // A tag SHA that does not exist in the cache — simulates a missing/omitted tag object.
+        GitRequestDetails details = makeDetails(ObjectId.zeroId().name(), "07697092d36d3323eaaf4be18b3a5b1f276ab0dc");
+        details.setBranch("refs/tags/v1.1.0");
+
+        RequestBodyWrapper request = wrapRequest(new byte[0], details);
+
+        new EnrichPushCommitsFilter(new GitHubProvider("/proxy"), mockCache)
+                .doHttpFilter(request, mock(HttpServletResponse.class));
+
+        assertEquals(
+                GitRequestDetails.GitResult.ERROR, details.getResult(), "Unresolvable tag object must be rejected");
+        assertNotNull(details.getReason());
+        assertTrue(details.getPushedCommits().isEmpty());
+        assertSame(emptyRepo, details.getLocalRepository());
+    }
 
     /** Ref deletions (commitTo = all zeros) must skip enrichment entirely and leave result PENDING. */
     @Test
