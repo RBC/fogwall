@@ -27,6 +27,8 @@ import jakarta.servlet.DispatcherType;
 import java.net.URI;
 import java.nio.file.Files;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.function.Function;
@@ -196,29 +198,40 @@ class JettyProxyFixture implements AutoCloseable {
         proxyHolder.setInitParameter("preserveHost", "false");
         context.addServlet(proxyHolder, proxyMapping);
 
-        // Proxy-mode filter chain - mirrors fogwallServletRegistrar.registerFilters()
+        // Proxy-mode filter chain — mirrors FogwallServletRegistrar.registerCoreFilters().
+        // PushStoreAuditFilter wraps the entire chain via try-finally and implements plain Filter
+        // (not FogwallFilter), so it is registered first, outside the sorted list.
         String serviceUrl = "http://localhost";
         addFilter(context, proxyMapping, new PushStoreAuditFilter(pushStore));
-        addFilter(context, proxyMapping, new ForceGitClientFilter());
-        addFilter(context, proxyMapping, new ParseGitRequestFilter(provider, PROXY_PREFIX));
-        addFilter(context, proxyMapping, new EnrichPushCommitsFilter(provider, proxyCache, PROXY_PREFIX));
-        addFilter(context, proxyMapping, new AllowApprovedPushFilter(pushStore, serviceUrl));
-        addFilter(context, proxyMapping, new UrlRuleAggregateFilter(100, provider, PROXY_PREFIX, urlRuleRegistry));
+
+        // Build the orderable filter list and sort by getOrder() to match production behaviour.
+        // ForceGitClientFilter returns Integer.MIN_VALUE so it sorts to the top automatically.
+        // Note: SecretScanningFilter and FetchStore-backed UrlRuleAggregateFilter are omitted here
+        // because the fixture uses simplified configs that don't need them.
+        List<FogwallFilter> filters = new ArrayList<>();
+        filters.add(new ForceGitClientFilter());
+        filters.add(new ParseGitRequestFilter(provider, PROXY_PREFIX));
+        filters.add(new AllowApprovedPushFilter(pushStore, serviceUrl));
+        filters.add(new EnrichPushCommitsFilter(provider, proxyCache, PROXY_PREFIX));
+        filters.add(new UrlRuleAggregateFilter(100, provider, PROXY_PREFIX, urlRuleRegistry));
         if (identityResolver != null && permissionService != null) {
-            addFilter(context, proxyMapping, new CheckUserPushPermissionFilter(identityResolver, permissionService));
-            addFilter(
-                    context, proxyMapping, new IdentityVerificationFilter(identityResolver, identityVerificationMode));
+            filters.add(new CheckUserPushPermissionFilter(identityResolver, permissionService));
+            filters.add(new IdentityVerificationFilter(identityResolver, identityVerificationMode));
         }
-        addFilter(context, proxyMapping, new CheckEmptyBranchFilter());
-        addFilter(context, proxyMapping, new CheckHiddenCommitsFilter(provider));
-        addFilter(context, proxyMapping, new CheckAuthorEmailsFilter(commitConfig));
-        addFilter(context, proxyMapping, new CheckCommitMessagesFilter(commitConfig));
-        addFilter(context, proxyMapping, new ScanDiffFilter(provider, DiffScanConfig.defaultConfig()));
-        addFilter(context, proxyMapping, new GpgSignatureFilter(GpgConfig.defaultConfig()));
-        addFilter(context, proxyMapping, new ValidationSummaryFilter());
-        addFilter(context, proxyMapping, new FetchFinalizerFilter());
-        addFilter(context, proxyMapping, new PushFinalizerFilter(serviceUrl, proxyGatewayFactory.apply(pushStore)));
-        addFilter(context, proxyMapping, new AuditLogFilter());
+        filters.add(new CheckEmptyBranchFilter());
+        filters.add(new CheckHiddenCommitsFilter(provider));
+        filters.add(new CheckAuthorEmailsFilter(commitConfig));
+        filters.add(new CheckCommitMessagesFilter(commitConfig));
+        filters.add(new ScanDiffFilter(provider, DiffScanConfig.defaultConfig()));
+        filters.add(new GpgSignatureFilter(GpgConfig.defaultConfig()));
+        filters.add(new ValidationSummaryFilter());
+        filters.add(new FetchFinalizerFilter());
+        filters.add(new PushFinalizerFilter(serviceUrl, proxyGatewayFactory.apply(pushStore)));
+        filters.add(new AuditLogFilter());
+        filters.sort(Comparator.comparingInt(FogwallFilter::getOrder));
+        for (FogwallFilter filter : filters) {
+            addFilter(context, proxyMapping, filter);
+        }
 
         server.setHandler(new BlockingContentHandler(context));
         server.start();
