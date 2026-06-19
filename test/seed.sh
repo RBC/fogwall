@@ -8,12 +8,12 @@
 #   CODEBERG_PAT — codeberg.org/coopernetes/test-repo-codeberg.git
 #
 # Optional:
-#   GITPROXY_API_KEY  (default: foobarbaz)
+#   FOGWALL_API_KEY  (default: foobarbaz)
 #   PROXY_HOST        (default: localhost:8080)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-GITPROXY_API_KEY="${GITPROXY_API_KEY:-change-me-in-production}"
+FOGWALL_API_KEY="${FOGWALL_API_KEY:-change-me-in-production}"
 PROXY_HOST="${PROXY_HOST:-localhost:8080}"
 
 # ── PAT resolution ───────────────────────────────────────────────────────────
@@ -92,7 +92,7 @@ run "proxy-pass" \
     env GIT_USERNAME="me" \
         GIT_PASSWORD="${GITHUB_PAT}" \
         GIT_REPO="github.com/coopernetes/test-repo.git" \
-        GITPROXY_API_KEY="${GITPROXY_API_KEY}" \
+        FOGWALL_API_KEY="${FOGWALL_API_KEY}" \
         bash "${SCRIPT_DIR}/proxy-pass.sh"
 
 # 2. Tag push (lightweight + annotated)
@@ -100,7 +100,7 @@ run "proxy-pass-tag" \
     env GIT_USERNAME="me" \
         GIT_PASSWORD="${GITHUB_PAT}" \
         GIT_REPO="github.com/coopernetes/test-repo.git" \
-        GITPROXY_API_KEY="${GITPROXY_API_KEY}" \
+        FOGWALL_API_KEY="${FOGWALL_API_KEY}" \
         bash "${SCRIPT_DIR}/proxy-pass-tag.sh"
 
 # 3. Combined validation failures (author email / commit msg / secrets / diff content)
@@ -115,7 +115,7 @@ run "proxy-identity-github" \
     env GIT_USERNAME="me" \
         GIT_PASSWORD="${GITHUB_PAT}" \
         GIT_REPO="github.com/coopernetes/test-repo.git" \
-        GITPROXY_API_KEY="${GITPROXY_API_KEY}" \
+        FOGWALL_API_KEY="${FOGWALL_API_KEY}" \
         bash "${SCRIPT_DIR}/proxy-identity-github.sh"
 
 # 5. Identity: GitLab — resolved, email warning
@@ -123,7 +123,7 @@ run "proxy-identity-gitlab" \
     env GIT_USERNAME="me" \
         GIT_PASSWORD="${GITLAB_PAT}" \
         GIT_REPO="gitlab.com/coopernetes/test-repo-gitlab.git" \
-        GITPROXY_API_KEY="${GITPROXY_API_KEY}" \
+        FOGWALL_API_KEY="${FOGWALL_API_KEY}" \
         bash "${SCRIPT_DIR}/proxy-identity-gitlab.sh"
 
 # 6. Identity: Codeberg — unresolved, hard block

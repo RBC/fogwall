@@ -3,7 +3,7 @@
 Notes on git/JGit behaviour that inform how filters and hooks are written. Add a section here when you hit a non-obvious
 edge case so the next person doesn't have to rediscover it.
 
-For an overview of how git-proxy-java uses JGit's server-side APIs (ReceivePackFactory, hook chain, forwarding, credential
+For an overview of how fogwall uses JGit's server-side APIs (ReceivePackFactory, hook chain, forwarding, credential
 flow), see [JGIT_INFRASTRUCTURE.md](JGIT_INFRASTRUCTURE.md).
 
 ---
@@ -392,7 +392,7 @@ When a push's pack data exceeds the git client's `http.postBuffer` (default 1 Mi
 PACK data — but the HTTP framing changes from "here's N bytes" to "here are chunks of variable size, terminated by a
 zero-length chunk."
 
-Many reverse proxies deployed in front of git-proxy-java do not faithfully forward chunked request bodies. Observed
+Many reverse proxies deployed in front of fogwall do not faithfully forward chunked request bodies. Observed
 failure modes (confirmed on HAProxy-based OpenShift Routes):
 
 - **Early termination**: the proxy forwards the first HTTP chunk (a few bytes of pkt-line data), then sends the chunked
@@ -408,7 +408,7 @@ failure modes (confirmed on HAProxy-based OpenShift Routes):
 
 Small pushes (< 1 MiB) use `Content-Length` and are unaffected — the proxy forwards the body as a single unit.
 
-This is not a Jetty bug or a git-proxy-java bug. The same issue affects any HTTP backend behind a proxy that doesn't
+This is not a Jetty bug or a fogwall bug. The same issue affects any HTTP backend behind a proxy that doesn't
 support chunked request forwarding. GitHub, GitLab, and Gitea avoid this because they either terminate HTTP at the edge
 (no generic proxy in the path) or explicitly configure their proxy layer for streaming uploads.
 

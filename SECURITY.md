@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-git-proxy-java is currently pre-1.0. Only the latest release is supported with security fixes.
+fogwall is currently pre-1.0. Only the latest release is supported with security fixes.
 
 | Version               | Supported        |
 | --------------------- | ---------------- |
@@ -14,8 +14,7 @@ git-proxy-java is currently pre-1.0. Only the latest release is supported with s
 
 Please **do not** open a public GitHub issue for security vulnerabilities.
 
-Use GitHub's private vulnerability reporting instead: 👉
-https://github.com/coopernetes/git-proxy-java/security/advisories/new
+Use GitHub's private vulnerability reporting instead: 👉 https://github.com/RBC/fogwall/security/advisories/new
 
 Include as much detail as you can: affected component, steps to reproduce, and potential impact. We'll acknowledge the
 report within a few business days and keep you updated on the fix timeline.

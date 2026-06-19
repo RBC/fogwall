@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Test script: pushes that must NOT be blocked by secret scanning (false-positive regression)
 # Validates gitleaks git mode correctly applies path-based allowlists.
-# Requires secret-scanning.enabled: true in git-proxy.yml / git-proxy-local.yml
+# Requires secret-scanning.enabled: true in fogwall.yml / fogwall-local.yml
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"

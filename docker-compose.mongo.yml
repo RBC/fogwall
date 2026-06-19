@@ -16,12 +16,12 @@
 #
 # Mongo Express (database UI) is available at http://localhost:8081.
 services:
-  git-proxy-java:
+  fogwall:
     environment:
-      GITPROXY_DATABASE_TYPE: mongo
-      GITPROXY_DATABASE_URL: mongodb://gitproxy:gitproxy@mongo:27017
-      GITPROXY_DATABASE_NAME: gitproxy
-      GITPROXY_SERVER_SESSION_STORE: mongo
+      FOGWALL_DATABASE_TYPE: mongo
+      FOGWALL_DATABASE_URL: mongodb://fogwall:fogwall@mongo:27017
+      FOGWALL_DATABASE_NAME: fogwall
+      FOGWALL_SERVER_SESSION_STORE: mongo
     depends_on:
       mongo:
         condition: service_healthy

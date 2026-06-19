@@ -1,0 +1,167 @@
+package com.rbc.fogwall.servlet.filter;
+
+import static com.rbc.fogwall.git.GitClientUtils.AnsiColor.*;
+import static com.rbc.fogwall.git.GitClientUtils.SymbolCodes.*;
+import static com.rbc.fogwall.git.GitClientUtils.sym;
+import static com.rbc.fogwall.servlet.FogwallServlet.GIT_REQUEST_ATTR;
+
+import com.rbc.fogwall.db.model.StepStatus;
+import com.rbc.fogwall.git.Commit;
+import com.rbc.fogwall.git.GitClientUtils;
+import com.rbc.fogwall.git.GitRequestDetails;
+import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.provider.FogwallProvider;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
+import org.eclipse.jgit.lib.ObjectId;
+import org.eclipse.jgit.lib.Ref;
+import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.revwalk.RevCommit;
+import org.eclipse.jgit.revwalk.RevWalk;
+
+/**
+ * Filter that detects "hidden" commits - commits present in the push pack (and thus new to the upstream) that fall
+ * outside the explicitly introduced commit range. This catches the case where a branch was built on top of unapproved
+ * commits that weren't pushed to the upstream yet, smuggling them in as pack filler.
+ *
+ * <p>Algorithm:
+ *
+ * <ol>
+ *   <li><b>introduced</b> - {@code requestDetails.getPushedCommits()} as populated by {@link EnrichPushCommitsFilter}.
+ *   <li><b>allNew</b> - commits reachable from {@code commitTo} that are not reachable from any ref in the upstream
+ *       clone (i.e., genuinely new to the upstream); computed via {@link RevWalk} on the cached repository.
+ *   <li><b>hidden</b> = {@code allNew} ∖ {@code introduced}.
+ * </ol>
+ *
+ * <p>This filter short-circuits immediately via {@link #rejectAndSendError} without recording to
+ * {@link ValidationSummaryFilter}. Requires {@link EnrichPushCommitsFilter} to have run first (for both
+ * {@code pushedCommits} and the local repository on {@link GitRequestDetails#getLocalRepository()}).
+ *
+ * <p>Runs at order 220, early in the content validation range (200-399).
+ */
+@Slf4j
+public class CheckHiddenCommitsFilter extends AbstractProviderAwareFogwallFilter {
+
+    private static final int ORDER = 220;
+    private static final String PROXY_PATH_PREFIX = "/proxy";
+
+    public CheckHiddenCommitsFilter(FogwallProvider provider) {
+        super(ORDER, Set.of(HttpOperation.PUSH), provider, PROXY_PATH_PREFIX);
+    }
+
+    @Override
+    public String getStepName() {
+        return "checkHiddenCommits";
+    }
+
+    @Override
+    public void doHttpFilter(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        var requestDetails = (GitRequestDetails) request.getAttribute(GIT_REQUEST_ATTR);
+        if (requestDetails == null) {
+            log.warn("GitRequestDetails not found in request attributes");
+            return;
+        }
+
+        String toCommit = requestDetails.getCommitTo();
+        if (toCommit == null || toCommit.isEmpty() || toCommit.matches("^0+$")) {
+            log.debug("No commitTo in request details, skipping hidden commits check");
+            return;
+        }
+
+        Set<String> introduced = requestDetails.getPushedCommits() == null
+                ? Set.of()
+                : requestDetails.getPushedCommits().stream().map(Commit::getSha).collect(Collectors.toSet());
+
+        try {
+            Repository repository = requestDetails.getLocalRepository();
+            if (repository == null) {
+                log.warn(
+                        "localRepository not set on request - EnrichPushCommitsFilter may not have run; skipping hidden commits check");
+                return;
+            }
+
+            Set<String> allNew = collectAllNewCommits(repository, toCommit, requestDetails.getCommitFrom());
+
+            Set<String> hidden = new HashSet<>(allNew);
+            hidden.removeAll(introduced);
+
+            if (hidden.isEmpty()) {
+                log.debug("checkHiddenCommits: all {} new commit(s) are within the introduced range", allNew.size());
+                return;
+            }
+
+            log.warn("checkHiddenCommits: {} hidden commit(s) detected: {}", hidden.size(), hidden);
+
+            String title = sym(NO_ENTRY) + "  Push Blocked - Hidden Commits Detected";
+            String message = "Unreferenced commits in pack (" + hidden.size() + "): "
+                    + String.join(", ", hidden) + ".\n\n"
+                    + "This usually happens when a branch was made from a commit that hasn't been approved"
+                    + " and pushed to the remote.\n"
+                    + "Please get approval on the commits, push them and try again.";
+
+            rejectAndSendError(
+                    request, response, "Hidden commits detected", GitClientUtils.format(title, message, RED, null));
+
+        } catch (Exception e) {
+            log.warn("Skipping hidden commits check: {}", e.getMessage());
+            recordStep(request, StepStatus.SKIPPED, "", e.getMessage());
+        }
+    }
+
+    /**
+     * Collect all commits reachable from {@code toCommit} that are not reachable from any existing ref in the upstream
+     * clone or from {@code fromCommit} (the old branch tip). These correspond to the commits that were genuinely new
+     * and not already present at the upstream.
+     *
+     * <p>{@code fromCommit} is marked uninteresting explicitly because the local clone's refs may be stale (e.g. after
+     * a recently forwarded push the remote ref has advanced but the cache hasn't been re-fetched). Without this,
+     * commits reachable only from the old tip — but not from any cached ref — would be falsely flagged as hidden.
+     */
+    private Set<String> collectAllNewCommits(Repository repo, String toCommit, String fromCommit) throws IOException {
+        Set<String> result = new HashSet<>();
+
+        try (RevWalk walk = new RevWalk(repo)) {
+            // Dereference annotated tags to their target commit before walking
+            ObjectId tip = repo.resolve(toCommit + "^{commit}");
+            if (tip == null) {
+                log.warn("Could not resolve commitTo {} in cached repository", toCommit);
+                return result;
+            }
+            walk.markStart(walk.parseCommit(tip));
+
+            for (Ref ref : repo.getRefDatabase().getRefsByPrefix("refs/")) {
+                ObjectId id = ref.getObjectId();
+                if (id == null) continue;
+                try {
+                    walk.markUninteresting(walk.parseCommit(id));
+                } catch (Exception e) {
+                    // Not a commit (annotated tag pointing to a blob/tree, etc.) - skip
+                }
+            }
+
+            // Always mark commitFrom (old branch tip) as uninteresting — it is already at the
+            // upstream by definition, even when the local clone's refs are stale.
+            if (fromCommit != null && !fromCommit.isBlank() && !fromCommit.matches("^0+$")) {
+                try {
+                    ObjectId fromId = repo.resolve(fromCommit);
+                    if (fromId != null) {
+                        walk.markUninteresting(walk.parseCommit(fromId));
+                    }
+                } catch (Exception e) {
+                    log.debug("Could not resolve commitFrom {} as uninteresting boundary — skipping", fromCommit);
+                }
+            }
+
+            for (RevCommit commit : walk) {
+                result.add(commit.getName());
+            }
+        }
+
+        return result;
+    }
+}

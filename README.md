@@ -1,28 +1,29 @@
-[![CI](https://github.com/coopernetes/git-proxy-java/actions/workflows/ci.yml/badge.svg)](https://github.com/coopernetes/git-proxy-java/actions/workflows/ci.yml)
-[![CVE Scanning](https://github.com/coopernetes/git-proxy-java/actions/workflows/cve.yml/badge.svg)](https://github.com/coopernetes/git-proxy-java/actions/workflows/cve.yml)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/coopernetes/git-proxy-java/badge)](https://scorecard.dev/viewer/?uri=github.com/coopernetes/git-proxy-java)
-[![License](https://img.shields.io/github/license/coopernetes/git-proxy-java)](https://github.com/coopernetes/git-proxy-java/blob/main/LICENSE)
+[![CI](https://github.com/RBC/fogwall/actions/workflows/ci.yml/badge.svg)](https://github.com/RBC/fogwall/actions/workflows/ci.yml)
+[![CVE Scanning](https://github.com/RBC/fogwall/actions/workflows/cve.yml/badge.svg)](https://github.com/RBC/fogwall/actions/workflows/cve.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/RBC/fogwall/badge)](https://scorecard.dev/viewer/?uri=github.com/RBC/fogwall)
+[![License](https://img.shields.io/github/license/RBC/fogwall)](https://github.com/RBC/fogwall/blob/main/LICENSE)
 
-# git-proxy-java
+# fogwall
 
 Enterprises in regulated industries need their developers to contribute to open-source — but every outbound push must be
-audited, validated, and approved before it leaves the building. git-proxy-java sits between the developer's `git push`
-and the upstream host, enforcing commit policies, scanning for secrets, verifying identities, and gating pushes behind a
-review workflow.
+audited, validated, and approved before it leaves the building. fogwall sits between the developer's `git push` and the
+upstream host, enforcing commit policies, scanning for secrets, verifying identities, and gating pushes behind a review
+workflow.
 
 This project is a Java reimplementation of [FINOS git-proxy](https://github.com/finos/git-proxy) — a Node.js proxy that
-pioneered the concept of an enterprise-grade, policy-enforcing git push gateway. git-proxy-java builds on the same core
-ideas (validation pipeline, push approval lifecycle, multi-provider support) while targeting JVM-based environments,
-using [JGit](https://github.com/eclipse-jgit/jgit) for native git protocol handling,
-[Jetty](https://github.com/jetty/jetty.project) for the HTTP layer, and [Spring](https://spring.io/) for the dashboard.
+pioneered the concept of an enterprise-grade, policy-enforcing git push gateway. fogwall builds on the same core ideas
+(validation pipeline, push approval lifecycle, multi-provider support) while targeting JVM-based environments, using
+[JGit](https://github.com/eclipse-jgit/jgit) for native git protocol handling,
+[Jetty](https://github.com/jetty/jetty.project) for the HTTP layer, and [Spring](https://spring.io/),
+[React](https://react.dev/) & [Tailwind](https://tailwindcss.com/) for the dashboard.
 
-![Store-and-forward — validation failure and fix](https://github.com/coopernetes/git-proxy-java/releases/download/demo-assets/demo-push-fix-message.gif)
+![Store-and-forward — validation failure and fix](https://github.com/RBC/fogwall/releases/download/demo-assets/demo-push-fix-message.gif)
 
 ## Getting Started
 
 ### Prerequisites
 
-- Java 21+
+- Java 25+
 - Node 24+ (for the dashboard frontend)
 - Gradle (wrapper included)
 
@@ -35,8 +36,8 @@ mise install   # installs Java 21 (Temurin) and Node 24 from mise.toml
 ### Clone and build
 
 ```shell
-git clone https://github.com/coopernetes/git-proxy-java.git
-cd git-proxy-java
+git clone https://github.com/RBC/fogwall.git
+cd fogwall
 ./gradlew build
 ```
 
@@ -45,13 +46,13 @@ cd git-proxy-java
 The full application includes the proxy, approval dashboard, and REST API:
 
 ```shell
-./gradlew :git-proxy-java-dashboard:run
+./gradlew :fogwall-dashboard:run
 ```
 
 Open `http://localhost:8080/` in a browser to access the dashboard. Stop with:
 
 ```shell
-./gradlew :git-proxy-java-dashboard:stop
+./gradlew :fogwall-dashboard:stop
 ```
 
 ### Run the proxy server (standalone, no UI or review gates)
@@ -59,13 +60,13 @@ Open `http://localhost:8080/` in a browser to access the dashboard. Stop with:
 If you only need the proxy without the dashboard or management API:
 
 ```shell
-./gradlew :git-proxy-java-server:run
+./gradlew :fogwall-server:run
 ```
 
-Logs are written to `git-proxy-java-server/logs/application.log`. Stop with:
+Logs are written to `fogwall-server/logs/application.log`. Stop with:
 
 ```shell
-./gradlew :git-proxy-java-server:stop
+./gradlew :fogwall-server:stop
 ```
 
 ### Configure and test
@@ -81,18 +82,18 @@ walks through PAT setup, allow rules, permissions, and running the smoke test sc
 
 ### URLs
 
-git-proxy-java proxies arbitrary upstream Git repositories over HTTPS. For each upstream provider (e.g. `github.com`,
+fogwall proxies arbitrary upstream Git repositories over HTTPS. For each upstream provider (e.g. `github.com`,
 `gitlab.com`), a distinct URL is mapped by hostname. The remainder of the URL is the repository path:
 
-- Original repository: `https://github.com/finos/git-proxy`
-- Proxy: `http[s]://{git-proxy-java-server}/{proxy,push*}/github.com/finos/git-proxy`
+- Original repository: `https://github.com/RBC/fogwall`
+- Proxy: `http[s]://{fogwall-server}/{proxy,push*}/github.com/RBC/fogwall`
 
 This makes it simple for a developer to add a new [git remote](https://git-scm.com/docs/git-remote) and start pushing
 through the proxy:
 
 ```shell
-git clone https://github.com/finos/git-proxy && cd git-proxy
-git remote add proxy http://localhost:8080/push/github.com/finos/git-proxy
+git clone https://github.com/RBC/fogwall && cd fogwall
+git remote add proxy http://localhost:8080/push/github.com/RBC/fogwall
 ```
 
 > \*Note: the base URL determines which proxying mode is in use. See below for details.
@@ -183,11 +184,11 @@ See the [Configuration Reference](docs/CONFIGURATION.md#database) for connection
 
 This is a multi-module Gradle project:
 
-| Module                     | Purpose                                                                                    |
-| -------------------------- | ------------------------------------------------------------------------------------------ |
-| `git-proxy-java-core`      | Shared library: filter chain, JGit hooks, push store, provider model, approval abstraction |
-| `git-proxy-java-server`    | Standalone proxy-only server — no dashboard, no Spring                                     |
-| `git-proxy-java-dashboard` | Dashboard + REST API — Spring MVC, approval UI, depends on `git-proxy-java-server`         |
+| Module              | Purpose                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------ |
+| `fogwall-core`      | Shared library: filter chain, JGit hooks, push store, provider model, approval abstraction |
+| `fogwall-server`    | Standalone proxy-only server — no dashboard, no Spring                                     |
+| `fogwall-dashboard` | Dashboard + REST API — Spring MVC, approval UI, depends on `fogwall-server`                |
 
 ## Documentation
 
@@ -203,8 +204,8 @@ This is a multi-module Gradle project:
 
 ## Roadmap
 
-The backlog is tracked in [GitHub Issues](https://github.com/coopernetes/git-proxy-java/issues). The following gists
-cover design rationale and reference material:
+The backlog is tracked in [GitHub Issues](https://github.com/RBC/fogwall/issues). The following gists cover design
+rationale and reference material:
 
 | Document                                                                                        | Description                                                                                                                                                           |
 | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -216,7 +217,7 @@ cover design rationale and reference material:
 This project would not exist without [FINOS git-proxy](https://github.com/finos/git-proxy) and its contributors, who
 designed the original push validation model, approval lifecycle, and multi-provider architecture. The Node.js
 implementation remains the reference for the Action/Step pipeline, Sink interface, and filter chain patterns that
-git-proxy-java builds on. If you're in a Node.js environment, check out the original.
+fogwall builds on. If you're in a Node.js environment, check out the original.
 
 ## Contributing
 

@@ -1,0 +1,302 @@
+package com.rbc.fogwall.servlet.filter;
+
+import static com.rbc.fogwall.servlet.FogwallServlet.*;
+import static jakarta.servlet.http.HttpServletResponse.SC_OK;
+
+import com.rbc.fogwall.db.model.PushStep;
+import com.rbc.fogwall.db.model.StepStatus;
+import com.rbc.fogwall.git.GitClientUtils;
+import com.rbc.fogwall.git.GitRequestDetails;
+import com.rbc.fogwall.git.HttpOperation;
+// import org.springframework.core.Ordered;
+import com.rbc.fogwall.servlet.FogwallServlet;
+import jakarta.servlet.*;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.HashMap;
+import java.util.Set;
+import java.util.function.Predicate;
+import org.eclipse.jgit.http.server.GitSmartHttpTools;
+import org.eclipse.jgit.lib.Constants;
+import org.eclipse.jgit.transport.PacketLineOut;
+import org.eclipse.jgit.transport.SideBandOutputStream;
+
+/**
+ * A {@link Filter} with additional methods that are designed to be registered with a {@link FogwallServlet} for the
+ * purposes of filtering git operations. This interface presumes that the filter is designed to be used with HTTP
+ * requests and provides a method to filter only HTTP requests. Classes implementing this interface signal whether this
+ * filter should be applied to a given request using a {@link Predicate}.
+ *
+ * <p>Custom filters should generally extend {@link AbstractFogwallFilter} or {@link AbstractProviderAwareFogwallFilter}
+ * {@see AbstractfogwallFilter} {@see AbstractProviderAwarefogwallFilter}
+ *
+ * <h2>Filter Order Ranges</h2>
+ *
+ * Filters are executed in order based on their {@link #getOrder()} value. The following ranges are reserved:
+ *
+ * <ul>
+ *   <li><b>System filters (Integer.MIN_VALUE to Integer.MIN_VALUE+99):</b> Core preprocessing filters that must run
+ *       first (e.g., ForceGitClientFilter, ParseGitRequestFilter, EnrichPushCommitsFilter).
+ *   <li><b>Authorization filters (0-199):</b> Filters that determine if a request is allowed (pre-approval check, URL
+ *       allow rules, user push-permission checks). Built-in filters use steps of 50; custom filters can be inserted
+ *       between them.
+ *   <li><b>Content filters (200-399):</b> Core validation filters (empty-branch guard, hidden-commit detection, author
+ *       email, commit message, diff scanning, GPG signatures, secret scanning). Built-in filters use steps of 10-30;
+ *       custom filters can be inserted between them.
+ *   <li><b>Extended filters (400-499):</b> Reserved for user-defined post-content filters.
+ *   <li><b>Terminal filters (Integer.MAX_VALUE-3 to Integer.MAX_VALUE-1):</b> Aggregation and finalizer filters that
+ *       must run after all content filters (ValidationSummaryFilter, FetchFinalizerFilter, PushFinalizerFilter).
+ *   <li><b>Audit filters (Integer.MAX_VALUE):</b> Audit and logging filters that must run last.
+ * </ul>
+ */
+public interface FogwallFilter extends Filter {
+
+    Set<HttpOperation> ALL_OPERATIONS = Set.of(HttpOperation.values());
+
+    /**
+     * Implement the filtering of git operations for HTTP requests. This method is called when the request is determined
+     * to be for the matching provider. The request and response are guaranteed to be of type {@link HttpServletRequest}
+     * and {@link HttpServletResponse} respectively. There is no reason to override the {@link #doFilter(ServletRequest,
+     * ServletResponse, FilterChain)} method.
+     *
+     * @param request The request to filter
+     * @param response
+     * @throws IOException
+     * @throws ServletException
+     */
+    void doHttpFilter(HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException;
+
+    int getOrder();
+
+    /**
+     * From the request details, determine if the filter should be applied. This method is called before the filter is
+     * applied to the request. If the filter should be applied, {@link #doHttpFilter} method is called.
+     *
+     * @return A predicate that determines if the filter should be applied
+     */
+    Predicate<HttpServletRequest> shouldFilter();
+
+    /**
+     * Perform the filter operation for only HTTP requests. This is a convenience method that casts the request and
+     * response to {@link HttpServletRequest} and {@link HttpServletResponse} respectively. There is no reason to
+     * override this method. Whether this filter should be skipped for ref-deletion pushes (commitTo = zero SHA).
+     * Content validation filters return {@code true} (the default) because there are no commits to validate. Auth and
+     * URL rule filters that must still gate deletions should override this to return {@code false}.
+     */
+    default boolean skipForRefDeletion() {
+        return true;
+    }
+
+    @Override
+    default void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+            throws IOException, ServletException {
+        HttpServletRequest httpRequest = (HttpServletRequest) request;
+        HttpServletResponse httpResponse = (HttpServletResponse) response;
+
+        // Short-circuit if a prior filter pre-approved this push (e.g. AllowApprovedPushFilter)
+        if (Boolean.TRUE.equals(httpRequest.getAttribute(PRE_APPROVED_ATTR))) {
+            chain.doFilter(request, response);
+            return;
+        }
+
+        // Skip content filters for ref deletions - there are no commits to validate
+        var detailsForDeletion = (GitRequestDetails) httpRequest.getAttribute(GIT_REQUEST_ATTR);
+        if (detailsForDeletion != null && detailsForDeletion.isRefDeletion() && skipForRefDeletion()) {
+            chain.doFilter(request, response);
+            return;
+        }
+
+        // Only process if this filter should run
+        if (shouldFilter().test(httpRequest)) {
+            addFilterToDetails(httpRequest);
+            var details = (GitRequestDetails) httpRequest.getAttribute(GIT_REQUEST_ATTR);
+            int stepsBefore = details != null ? details.getSteps().size() : 0;
+            // Execute filter logic
+            doHttpFilter(httpRequest, httpResponse);
+
+            // If response was committed (blockAndSendError), stop the chain immediately
+            if (httpResponse.isCommitted()) {
+                return;
+            }
+            // Auto-record PASS only when doHttpFilter didn't record its own step.
+            // Filters using recordIssue() add a BLOCKED step without committing the response,
+            // so we must not overwrite that with a spurious PASS.
+            int stepsAfter = details != null ? details.getSteps().size() : 0;
+            if (stepsAfter == stepsBefore) {
+                recordStep(httpRequest, StepStatus.PASS, "", "");
+            }
+        }
+        chain.doFilter(request, response);
+    }
+
+    /**
+     * Sends a git sideband error message to the client.
+     *
+     * <p>Each line of {@code message} is written as a separate {@code CH_PROGRESS} (0x02) sideband packet, which the
+     * git client prints prefixed with {@code "remote: "}. A short {@code CH_ERROR} (0x03) packet is written last to
+     * trigger {@code die()} on the client side. This matches how GitHub and GitLab produce multi-line {@code remote:}
+     * output in response to a rejected push.
+     *
+     * <p>When used inside a {@link #doHttpFilter} method, always return immediately after calling this:
+     *
+     * <pre>
+     *     sendGitError(httpRequest, httpResponse, "failure message");
+     *     return;
+     * </pre>
+     *
+     * @param httpRequest The request
+     * @param httpResponse The response
+     * @param message The message to send; newlines produce separate {@code remote:} lines
+     */
+    default void sendGitError(HttpServletRequest httpRequest, HttpServletResponse httpResponse, String message)
+            throws IOException {
+        if (GitSmartHttpTools.isUploadPack(httpRequest) || GitSmartHttpTools.isInfoRefs(httpRequest)) {
+            // Sideband is NOT valid for upload-pack outside of packfile transfer (e.g. ls-refs phase).
+            // Use a pkt-line ERR packet with the correct content type instead.
+            ByteArrayOutputStream buf = new ByteArrayOutputStream();
+            new PacketLineOut(buf).writeString("ERR " + message.strip());
+            if (!httpResponse.isCommitted()) {
+                httpResponse.setStatus(SC_OK);
+                httpResponse.setContentType(GitSmartHttpTools.getResponseContentType(httpRequest));
+                httpResponse.setContentLength(buf.size());
+            }
+            try (OutputStream os = httpResponse.getOutputStream()) {
+                buf.writeTo(os);
+            }
+            return;
+        }
+        // receive-pack: multi-line sideband progress messages + error channel
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        // CH_PROGRESS: each line printed by git client as "remote: <line>"
+        try (OutputStream progress =
+                new SideBandOutputStream(SideBandOutputStream.CH_PROGRESS, SideBandOutputStream.MAX_BUF, buf)) {
+            for (String line : message.split("\n", -1)) {
+                progress.write(Constants.encode(line + "\n"));
+                progress.flush(); // one flush per line → one sideband packet → one "remote:" line
+            }
+        }
+        // CH_ERROR: causes git client to call die() - keep it short
+        try (OutputStream error =
+                new SideBandOutputStream(SideBandOutputStream.CH_ERROR, SideBandOutputStream.MAX_BUF, buf)) {
+            error.write(Constants.encode("push rejected by fogwall\n"));
+            error.flush();
+        }
+        // pkt-line flush (0000) signals end-of-stream
+        new PacketLineOut(buf).end();
+        if (!httpResponse.isCommitted()) {
+            httpResponse.setStatus(SC_OK);
+            httpResponse.setContentType("application/x-git-receive-pack-result");
+            httpResponse.setContentLength(buf.size());
+        }
+        try (OutputStream os = httpResponse.getOutputStream()) {
+            buf.writeTo(os);
+        }
+    }
+
+    default String getStepName() {
+        return getClass().getSimpleName();
+    }
+
+    default void recordStep(HttpServletRequest request, StepStatus status, String reason, String content) {
+        var details = (GitRequestDetails) request.getAttribute(GIT_REQUEST_ATTR);
+        if (details == null) return;
+
+        PushStep step = PushStep.builder()
+                .pushId(details.getId().toString())
+                .stepName(getStepName())
+                .stepOrder(this.getOrder())
+                .status(status)
+                .content(GitClientUtils.stripColors(content))
+                .blockedMessage(status == StepStatus.BLOCKED ? reason : null)
+                .errorMessage(status == StepStatus.FAIL ? reason : null)
+                .build();
+        details.getSteps().add(step);
+    }
+
+    /**
+     * Record a validation issue without committing the HTTP response. Use this in the transparent proxy pipeline to
+     * collect all validation failures before sending a combined error via {@link ValidationSummaryFilter}. Unlike
+     * {@link #rejectAndSendError}, this method does not send a response, so subsequent filters continue to run.
+     *
+     * @param request The HTTP request
+     * @param reason Short reason for the block (stored in the DB for querying/reporting)
+     * @param formattedMessage The full formatted message (stored as step content for later display)
+     */
+    default void recordIssue(HttpServletRequest request, String reason, String formattedMessage) {
+        setResult(request, GitRequestDetails.GitResult.REJECTED, reason);
+        recordStep(request, StepStatus.FAIL, reason, formattedMessage);
+    }
+
+    /**
+     * Block the push and send an error response to the git client, recording both the result and the step in one call.
+     * This replaces the three-step pattern of {@code setResult} + {@code sendGitError} + {@code return}.
+     *
+     * <p>Usage:
+     *
+     * <pre>
+     *     blockAndSendError(request, response, "Illegal author emails", formattedMessage);
+     *     return;
+     * </pre>
+     *
+     * @param request The HTTP request
+     * @param response The HTTP response
+     * @param reason Short reason for the block (stored in the DB for querying/reporting)
+     * @param formattedMessage The full formatted message to display to the git client (also stored as step content)
+     */
+    default void rejectAndSendError(
+            HttpServletRequest request, HttpServletResponse response, String reason, String formattedMessage)
+            throws IOException {
+        setResult(request, GitRequestDetails.GitResult.REJECTED, reason);
+        recordStep(request, StepStatus.FAIL, reason, formattedMessage);
+        String serviceUrl = (String) request.getAttribute(SERVICE_URL_ATTR);
+        var details = (GitRequestDetails) request.getAttribute(GIT_REQUEST_ATTR);
+        boolean isPush = details != null && details.getOperation() == HttpOperation.PUSH;
+        String link = isPush && serviceUrl != null ? serviceUrl + "/push/" + details.getId() : null;
+        String fullMessage = link != null ? formattedMessage + "\n\nView push record: " + link : formattedMessage;
+        sendGitError(request, response, fullMessage);
+    }
+
+    /**
+     * Determine the git operation from the request. This is a convenience method that determines the git operation
+     * based on the request. The default implementation uses the {@link GitSmartHttpTools} to determine the operation.
+     *
+     * @param request The request
+     * @return The git operation
+     */
+    default HttpOperation determineOperation(HttpServletRequest request) {
+        if (GitSmartHttpTools.isUploadPack(request)) {
+            return HttpOperation.FETCH;
+        } else if (GitSmartHttpTools.isReceivePack(request)) {
+            return HttpOperation.PUSH;
+        } else if (GitSmartHttpTools.isInfoRefs(request)) {
+            return HttpOperation.INFO;
+        } else {
+            var headers = new HashMap<String, String>();
+            request.getHeaderNames().asIterator().forEachRemaining(name -> headers.put(name, request.getHeader(name)));
+            if (headers.containsKey("Authorization")) {
+                headers.put("Authorization", "REDACTED");
+            }
+            System.out.println("Unknown git operation. " + request.getRequestURI() + " " + request.getPathInfo() + " "
+                    + request.getQueryString() + " " + headers);
+            throw new IllegalArgumentException("Unknown git operation");
+        }
+    }
+
+    default void addFilterToDetails(HttpServletRequest request) {
+        var details = (GitRequestDetails) request.getAttribute(GIT_REQUEST_ATTR);
+        if (details != null) {
+            details.getFilters().add(this);
+        }
+    }
+
+    default void setResult(HttpServletRequest request, GitRequestDetails.GitResult result, String reason) {
+        var details = (GitRequestDetails) request.getAttribute(GIT_REQUEST_ATTR);
+        if (details != null) {
+            details.setResult(result);
+            details.setReason(reason);
+        }
+    }
+}

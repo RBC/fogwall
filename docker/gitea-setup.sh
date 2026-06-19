@@ -17,10 +17,10 @@ COMPOSE="${COMPOSE:-docker compose}"
 COMPOSE_FILE="$(dirname "${BASH_SOURCE[0]}")/../docker-compose.yml"
 GITEA_URL="http://localhost:3000"
 
-# Gitea admin — owns orgs/repos; NOT mapped in git-proxy-java (tests identity-not-linked)
-ADMIN_USER="gitproxyadmin"
+# Gitea admin — owns orgs/repos; NOT mapped in fogwall (tests identity-not-linked)
+ADMIN_USER="fogwalladmin"
 ADMIN_PASSWORD="Admin1234!"
-ADMIN_EMAIL="gitproxyadmin@example.com"
+ADMIN_EMAIL="fogwalladmin@example.com"
 
 # Test users — each mapped to a distinct proxy user for permission testing:
 #
@@ -128,10 +128,10 @@ create_user "${USER3}"     "${USER_PASSWORD}" "${USER3_EMAIL}"
 # ---------------------------------------------------------------------------
 
 echo "==> Generating tokens..."
-TOKEN_TESTUSER=$(generate_token "${TEST_USER}" "gitproxy-smoke")
-TOKEN_USER2=$(generate_token "${USER2}" "gitproxy-smoke")
-TOKEN_USER3=$(generate_token "${USER3}" "gitproxy-smoke")
-TOKEN_ADMIN=$(generate_token "${ADMIN_USER}" "gitproxy-smoke")
+TOKEN_TESTUSER=$(generate_token "${TEST_USER}" "fogwall-smoke")
+TOKEN_USER2=$(generate_token "${USER2}" "fogwall-smoke")
+TOKEN_USER3=$(generate_token "${USER3}" "fogwall-smoke")
+TOKEN_ADMIN=$(generate_token "${ADMIN_USER}" "fogwall-smoke")
 
 for var in TOKEN_TESTUSER TOKEN_USER2 TOKEN_USER3 TOKEN_ADMIN; do
     eval "val=\$$var"
@@ -183,7 +183,7 @@ cat > "${TOKENS_FILE}" <<EOF
 # test-user  → proxy:test-user  → LITERAL /test-owner/test-repo (PUSH)
 # user2      → proxy:user2      → GLOB    /otherorg/*            (PUSH)
 # user3      → proxy:user3      → REGEX   /test-owner/test-repo.*(PUSH)
-# gitproxyadmin → no proxy mapping → identity-not-linked test
+# fogwalladmin → no proxy mapping → identity-not-linked test
 export GITEA_TESTUSER_TOKEN="${TOKEN_TESTUSER}"
 export GITEA_USER2_TOKEN="${TOKEN_USER2}"
 export GITEA_USER3_TOKEN="${TOKEN_USER3}"
@@ -219,5 +219,5 @@ echo "    Tokens written to: ${TOKENS_FILE}"
 echo "    Source before running smoke tests:"
 echo "      source test/gitea/tokens.env"
 echo ""
-echo "    git-proxy-java push path:  http://localhost:8080/push/gitea/${ORG1}/${REPO1}.git"
-echo "    git-proxy-java proxy path: http://localhost:8080/proxy/gitea/${ORG1}/${REPO1}.git"
+echo "    fogwall push path:  http://localhost:8080/push/gitea/${ORG1}/${REPO1}.git"
+echo "    fogwall proxy path: http://localhost:8080/proxy/gitea/${ORG1}/${REPO1}.git"

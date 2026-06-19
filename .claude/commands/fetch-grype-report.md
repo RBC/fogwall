@@ -43,9 +43,9 @@ Fetch the latest grype container scan report from GitHub Actions and update the 
 5. Optionally verify locally that the Dockerfile changes resolve the findings. Build the image first, then scan it (`fail-on-severity`, `sort-by`, and `output-template-file` come from `.grype.yaml`):
    ```
    CONTAINER_TOOL=$(command -v docker || command -v podman)
-   $CONTAINER_TOOL build -t git-proxy-java:local-verify .
+   $CONTAINER_TOOL build -t fogwall:local-verify .
    SCAN_TMP=$(mktemp -d)
-   grype git-proxy-java:local-verify --config .grype.yaml -o "template=$SCAN_TMP/report.txt" -o "json=$SCAN_TMP/report.json"
+   grype fogwall:local-verify --config .grype.yaml -o "template=$SCAN_TMP/report.txt" -o "json=$SCAN_TMP/report.json"
    cat "$SCAN_TMP/report.txt"
    ```
 

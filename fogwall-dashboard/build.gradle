@@ -1,0 +1,255 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'com.github.node-gradle.node'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+        vendor = JvmVendorSpec.ADOPTIUM
+    }
+}
+
+application {
+    mainClass = 'com.rbc.fogwall.dashboard.FogwallDashboardApplication'
+    applicationDefaultJvmArgs = ["-Dfogwall.pidfile=${buildDir}/fogwall.pid"]
+}
+
+// Build the React frontend and copy the output into resources/static so Spring serves it.
+// Runs automatically before processResources (and therefore before `run` and `build`).
+node {
+    // Use Node.js from PATH (managed by mise locally, installed via NodeSource in Docker).
+    // Setting download=false avoids the dependency on repo.eclipse.org.
+    download = false
+    nodeProjectDir = file('frontend')
+}
+
+tasks.register('npmCi', NpmTask) {
+    group = 'build'
+    description = 'Installs frontend dependencies via npm ci'
+    args = ['ci', '--prefer-offline']
+    inputs.file('frontend/package.json')
+    inputs.file('frontend/package-lock.json')
+    outputs.dir('frontend/node_modules')
+}
+
+tasks.register('npmLint', NpmTask) {
+    group = 'verification'
+    description = 'Runs ESLint on the React frontend'
+    dependsOn tasks.named('npmCi')
+    args = ['run', 'lint']
+    inputs.dir('frontend/src')
+    inputs.file('frontend/eslint.config.js')
+    inputs.file('frontend/package.json')
+}
+
+tasks.register('npmFormat', NpmTask) {
+    group = 'formatting'
+    description = 'Runs Prettier on the React frontend source'
+    dependsOn tasks.named('npmCi')
+    args = ['run', 'format']
+    inputs.dir('frontend/src')
+    inputs.file('frontend/.prettierrc')
+    inputs.file('frontend/package.json')
+}
+
+tasks.register('prettierDocs', NpxTask) {
+    group = 'formatting'
+    description = 'Runs Prettier on all Markdown files in the repository'
+    dependsOn tasks.named('npmCi')
+    command = 'prettier'
+    args = ['--write', '**/*.md']
+    workingDir = rootProject.projectDir
+    inputs.files(rootProject.fileTree('.') { include '**/*.md'; exclude '**/node_modules/**', '**/.gradle/**', '**/build/**' })
+    inputs.file(rootProject.file('.prettierrc'))
+    inputs.file(rootProject.file('.prettierignore'))
+}
+
+tasks.register('npmBuild', NpmTask) {
+    group = 'build'
+    description = 'Builds the React frontend with Vite'
+    dependsOn tasks.named('npmCi')
+    args = ['run', 'build']
+    inputs.dir('frontend/src')
+    inputs.file('frontend/package.json')
+    inputs.file('frontend/vite.config.ts')
+    inputs.file('frontend/tsconfig.json')
+    outputs.dir('frontend/dist')
+}
+
+tasks.register('copyFrontend', Copy) {
+    group = 'build'
+    description = 'Copies Vite dist/ output into src/main/resources/static/'
+    dependsOn tasks.named('npmBuild')
+    from('frontend/dist')
+    into('src/main/resources/static')
+    // Exclude the login page managed as a hand-crafted static asset
+    exclude('login.html')
+}
+
+def appVersion = project.version
+
+tasks.named('processResources') {
+    // Skip the frontend build when running locally against the Vite dev server.
+    // Usage: ./gradlew :fogwall-dashboard:run -PskipFrontend
+    // The Vite dev server (npm run dev) proxies /api/* to localhost:8080, so the Spring app
+    // doesn't need the built assets at all during development.
+    if (!project.hasProperty('skipFrontend')) {
+        dependsOn tasks.named('copyFrontend')
+    }
+    // Inject the project version into version.properties so OpenApiController can read it at runtime.
+    filesMatching('version.properties') {
+        expand(appVersion: appVersion)
+    }
+    // Inject the Swagger UI WebJar version into swagger-ui.html so the asset paths are correct.
+    filesMatching('**/swagger-ui.html') {
+        expand(swaggerUiVersion: swaggerUiVersion)
+    }
+}
+
+tasks.named('run') {
+    // Default to the 'local' profile so fogwall-local.yml is loaded in local dev.
+    // Override by setting FOGWALL_CONFIG_PROFILES in your shell before running.
+    environment 'FOGWALL_CONFIG_PROFILES', System.getenv('FOGWALL_CONFIG_PROFILES') ?: 'local'
+    // Pass through API key so test scripts can use X-Api-Key without a session.
+    // Default keeps the dev experience simple; override in shell for a stricter key.
+    environment 'FOGWALL_API_KEY', System.getenv('FOGWALL_API_KEY') ?: 'change-me-in-production'
+    jvmArgs "-Dlog4j2.configurationFile=${rootDir}/fogwall-server/src/main/resources/log4j2-local.xml"
+    jvmArgs "-Dfogwall.pidfile=${buildDir}/fogwall.pid"
+}
+
+tasks.register('stop') {
+    group = 'application'
+    description = 'Stops the running fogwall server'
+    doLast {
+        def pf = file("${buildDir}/fogwall.pid")
+        if (pf.exists()) {
+            def pid = pf.text.trim()
+            logger.lifecycle("Stopping fogwall (PID: ${pid})...")
+            try {
+                def proc = new ProcessBuilder('kill', pid).start()
+                proc.waitFor()
+            } catch (Exception e) {
+                logger.warn("Failed to kill process: ${e.message}")
+            }
+            pf.delete()
+        } else {
+            logger.warn("No PID file found.")
+        }
+    }
+}
+
+// Force Netty to a patched version — transitively pulled in by lettuce-core via spring-session-data-redis.
+// Resolves GHSA-3qp7-7mw8-wx86, GHSA-x4gw-5cx5-pgmh (netty-handler) and GHSA-5pvg-856g-cp85,
+// GHSA-676x-f7gg-47vc, GHSA-xmv7-r254-6q78 (netty-resolver-dns).
+configurations.configureEach {
+    resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+        if (details.requested.group == 'io.netty') {
+            details.useVersion '4.1.135.Final'
+            details.because 'CVE fix: GHSA-3qp7-7mw8-wx86, GHSA-x4gw-5cx5-pgmh, GHSA-5pvg-856g-cp85, GHSA-676x-f7gg-47vc, GHSA-xmv7-r254-6q78'
+        }
+    }
+}
+
+dependencies {
+    // Core library (direct dep — server uses `implementation` so core isn't transitively visible)
+    implementation project(':fogwall-core')
+
+    // Proxy server (for FogwallervletRegistrar and config classes)
+    implementation project(':fogwall-server')
+
+    // Spring MVC for the REST API and dashboard
+    implementation "org.springframework:spring-webmvc:${springVersion}"
+
+    // Spring Security
+    implementation "org.springframework.security:spring-security-web:${springSecurityVersion}"
+    implementation "org.springframework.security:spring-security-config:${springSecurityVersion}"
+    implementation "org.springframework.security:spring-security-ldap:${springSecurityVersion}"
+    implementation "org.springframework.security:spring-security-oauth2-client:${springSecurityVersion}"
+    implementation "org.springframework.security:spring-security-oauth2-jose:${springSecurityVersion}"
+
+    // Spring Session — JDBC and Redis backends for distributed session management
+    implementation "org.springframework.session:spring-session-jdbc:${springSessionVersion}"
+    implementation "org.springframework.session:spring-session-data-redis:${springSessionVersion}"
+
+    // Jackson JSON processing
+    implementation "tools.jackson.core:jackson-databind"
+
+    // Database drivers at runtime (whichever store is configured)
+    runtimeOnly "com.h2database:h2:${h2Version}"
+    runtimeOnly "org.postgresql:postgresql:${postgresVersion}"
+    // MongoDB driver — compile-scoped because MongoSessionRepository uses the sync client directly.
+    implementation "org.mongodb:mongodb-driver-sync:${mongoVersion}"
+
+    implementation "io.lettuce:lettuce-core:${lettuceVersion}"
+
+    // OpenAPI spec generation — core model + YAML/JSON serialisation only (no JAX-RS required).
+    // The spec is built programmatically from Spring's RequestMappingHandlerMapping.
+    implementation "io.swagger.core.v3:swagger-core-jakarta:${swaggerCoreVersion}"
+    // Swagger UI static assets served from /webjars/** via the WebJar resource handler.
+    runtimeOnly "org.webjars:swagger-ui:${swaggerUiVersion}"
+
+    // Gestalt config (needed to catch GestaltException from FogwallConfigLoader)
+    implementation "com.github.gestalt-config:gestalt-core:${gestaltVersion}"
+
+    // Lombok
+    compileOnly "org.projectlombok:lombok:${lombokVersion}"
+    annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+
+    // Testing
+    testImplementation "org.junit.jupiter:junit-jupiter-api:${junitVersion}"
+    testImplementation "org.mockito:mockito-core:${mockitoVersion}"
+    testImplementation "org.mockito:mockito-junit-jupiter:${mockitoVersion}"
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:${junitVersion}"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher:${junitVersion}"
+    testCompileOnly "org.projectlombok:lombok:${lombokVersion}"
+    testAnnotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+    testRuntimeOnly "com.h2database:h2:${h2Version}"
+
+    // Testcontainers for e2e tests (LDAP + OIDC provider integration)
+    testImplementation "org.testcontainers:testcontainers:${testContainersVersion}"
+    testImplementation "org.testcontainers:testcontainers-junit-jupiter:${testContainersVersion}"
+    testImplementation "org.testcontainers:testcontainers-mongodb:${testContainersVersion}"
+
+    // Include core + server coverage in the aggregated JaCoCo report
+    jacocoAggregation project(':fogwall-core')
+    jacocoAggregation project(':fogwall-server')
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs << '-parameters'
+}
+
+tasks.named('test') {
+    useJUnitPlatform {
+        excludeTags 'e2e'
+    }
+}
+
+tasks.register('e2eTest', Test) {
+    group = 'verification'
+    description = 'Runs end-to-end tests that require a running container runtime (LDAP, OIDC)'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'e2e'
+    }
+    // Container startup can be slow
+    timeout = java.time.Duration.ofMinutes(10)
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('testCodeCoverageReport', JacocoReport)
+    dependsOn tasks.named('npmLint')
+}
+
+// testCodeCoverageReport aggregates fogwall-core's source sets, which include the
+// generated-resources directory produced by downloadGitleaks. Declare the dependency
+// explicitly so Gradle's task-ordering validation passes.
+tasks.named('testCodeCoverageReport') {
+    dependsOn ':fogwall-core:downloadGitleaks'
+    dependsOn tasks.named('copyFrontend')
+}

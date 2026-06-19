@@ -1,0 +1,58 @@
+# fogwall LDAP auth configuration.
+# Loaded when FOGWALL_CONFIG_PROFILES includes "ldap" (after "docker-default").
+#
+# Credentials: testuser / testpass123  (authenticated by OpenLDAP)
+#              admin    / admin         (authenticated by OpenLDAP)
+#
+# The password-hash field is ignored when auth.provider=ldap; it is a placeholder so the user
+# record is seeded into the DB (required for /api/me to return profile data).
+#
+# testuser's scm-identity (gitea scm-identity test-user) closes the identity chain:
+#   git push credentials (test-user:<token>) → Gitea API → "test-user"
+#   → scm_identities lookup → proxy user "testuser" → PUSH permission check
+
+auth:
+  provider: ldap
+  ldap:
+    url: ldap://openldap:389/dc=example,dc=com
+    user-dn-patterns: cn={0},ou=users
+    bind-dn: cn=admin,dc=example,dc=com
+    bind-password: adminpassword
+    group-search-base: ou=groups
+  role-mappings:
+    ADMIN:
+      - fogwall_admins
+    USER:
+      - contributors
+
+# Repo permissions for OIDC test users.
+# Mirrors docker-default: testuser pushes, admin approves via dashboard.
+permissions:
+  - username: testuser
+    provider: gitea
+    match:
+      target: SLUG
+      value: /test-owner/test-repo
+      type: LITERAL
+    operations: PUSH
+  - username: testuser
+    provider: gitea
+    match:
+      target: OWNER
+      value: otherorg
+      type: GLOB
+    operations: PUSH
+  - username: admin
+    provider: gitea
+    match:
+      target: SLUG
+      value: /test-owner/test-repo
+      type: LITERAL
+    operations: REVIEW
+  - username: admin
+    provider: gitea
+    match:
+      target: OWNER
+      value: otherorg
+      type: GLOB
+    operations: REVIEW

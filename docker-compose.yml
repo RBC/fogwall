@@ -1,20 +1,20 @@
 services:
 
-  # ── git-proxy-java ────────────────────────────────────────────────────────────
-  git-proxy-java:
+  # ── fogwall ───────────────────────────────────────────────────────────────────
+  fogwall:
     build: .
     ports:
       - "8080:8080"
     volumes:
-      - ./docker/git-proxy-docker-default.yml:/app/conf/git-proxy-docker-default.yml:ro
+      - ./docker/fogwall-docker-default.yml:/app/conf/fogwall-docker-default.yml:ro
       # Uncomment to enable debug logging (see docker/log4j2-debug.xml):
 #      - ./docker/log4j2-debug.xml:/app/conf/log4j2-debug.xml:ro
     depends_on:
       gitea:
         condition: service_healthy
     environment:
-      GITPROXY_API_KEY: "change-me-in-production"
-      GITPROXY_CONFIG_PROFILES: docker-default
+      FOGWALL_API_KEY: "change-me-in-production"
+      FOGWALL_CONFIG_PROFILES: docker-default
       # Uncomment together with the volume mount above to activate debug logging:
 #      JAVA_TOOL_OPTIONS: -Dlog4j2.configurationFile=/app/conf/log4j2-debug.xml
     healthcheck:
@@ -50,15 +50,15 @@ services:
     image: docker.io/postgres:17-alpine
     profiles: [postgres]
     environment:
-      POSTGRES_DB: gitproxy
-      POSTGRES_USER: gitproxy
-      POSTGRES_PASSWORD: gitproxy
+      POSTGRES_DB: fogwall
+      POSTGRES_USER: fogwall
+      POSTGRES_PASSWORD: fogwall
     ports:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U gitproxy"]
+      test: ["CMD-SHELL", "pg_isready -U fogwall"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -68,9 +68,9 @@ services:
     image: docker.io/mongo:7
     profiles: [mongo]
     environment:
-      MONGO_INITDB_ROOT_USERNAME: gitproxy
-      MONGO_INITDB_ROOT_PASSWORD: gitproxy
-      MONGO_INITDB_DATABASE: gitproxy
+      MONGO_INITDB_ROOT_USERNAME: fogwall
+      MONGO_INITDB_ROOT_PASSWORD: fogwall
+      MONGO_INITDB_DATABASE: fogwall
     ports:
       - "27017:27017"
     volumes:
@@ -89,9 +89,9 @@ services:
     depends_on:
       - mongo
     environment:
-      ME_CONFIG_MONGODB_ADMINUSERNAME: gitproxy
-      ME_CONFIG_MONGODB_ADMINPASSWORD: gitproxy
-      ME_CONFIG_MONGODB_URL: mongodb://gitproxy:gitproxy@mongo:27017/
+      ME_CONFIG_MONGODB_ADMINUSERNAME: fogwall
+      ME_CONFIG_MONGODB_ADMINPASSWORD: fogwall
+      ME_CONFIG_MONGODB_URL: mongodb://fogwall:fogwall@mongo:27017/
       ME_CONFIG_BASICAUTH: "false"
     ports:
       - "8081:8081"

@@ -1,3 +1,0 @@
-# Test-only local config — intentionally empty so unit tests see only base defaults.
-# The src/main/resources/git-proxy-local.yml is for local development and must not
-# influence test assertions about default values.

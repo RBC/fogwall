@@ -18,7 +18,7 @@
     <Loggers>
         <Logger name="org.springframework.security" level="DEBUG"/>
         <Logger name="org.springframework.web.client" level="DEBUG"/>
-        <Logger name="org.finos.gitproxy" level="DEBUG"/>
+        <Logger name="com.rbc.fogwall" level="DEBUG"/>
 
         <Root level="INFO">
             <AppenderRef ref="CONSOLE"/>

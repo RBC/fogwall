@@ -14,7 +14,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
 resolve_pat ~/.gitlab-pat
 GITLAB_REPO=${GITLAB_REPO:-"gitlab.com/coopernetes/test-repo-gitlab.git"}
 GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME:-"Thomas Cooper"}
-GITPROXY_API_KEY=${GITPROXY_API_KEY:-"change-me-in-production"}
+FOGWALL_API_KEY=${FOGWALL_API_KEY:-"change-me-in-production"}
 PROXY_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/proxy/${GITLAB_REPO}"
 TEST_BRANCH="test/proxy-identity-gitlab-$(date +%s)"
 REPO_DIR=$(mktemp -d "${TMPDIR:-/tmp}/proxy-identity-gitlab-XXXX")
@@ -50,7 +50,7 @@ echo "==> Push ID: ${PUSH_ID}"
 APPROVE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
     -X POST "http://localhost:8080/api/push/${PUSH_ID}/authorise" \
     -H "Content-Type: application/json" \
-    -H "X-Api-Key: ${GITPROXY_API_KEY}" \
+    -H "X-Api-Key: ${FOGWALL_API_KEY}" \
     -d '{"reason":"auto-approved by proxy-identity-gitlab.sh"}')
 if [ "${APPROVE_STATUS}" != "200" ]; then
     echo "ERROR: approval returned HTTP ${APPROVE_STATUS}"

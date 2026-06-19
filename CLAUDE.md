@@ -1,12 +1,12 @@
-# git-proxy-java — Claude context
+# fogwall — Claude context
 
 ## Repository layout
 
-| Module                     | Purpose                                                                                                                 |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `git-proxy-java-core`      | Shared library: filter chain, JGit hooks, push store, provider model, approval abstraction                              |
-| `git-proxy-java-server`    | Standalone proxy-only server (`GitProxyJettyApplication`) — no dashboard, no Spring                                     |
-| `git-proxy-java-dashboard` | Dashboard + REST API (`GitProxyWithDashboardApplication`) — Spring MVC, approval UI, depends on `git-proxy-java-server` |
+| Module              | Purpose                                                                                                     |
+| ------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `fogwall-core`      | Shared library: filter chain, JGit hooks, push store, provider model, approval abstraction                  |
+| `fogwall-server`    | Standalone proxy-only server (`FogwallJettyApplication`) — no dashboard, no Spring                          |
+| `fogwall-dashboard` | Dashboard + REST API (`FogwallDashboardApplication`) — Spring MVC, approval UI, depends on `fogwall-server` |
 
 ## Architecture
 
@@ -52,7 +52,7 @@ model, Sink interface, and filter chain patterns when porting features.
 bypass the cache and verify the jacoco threshold:
 
 ```bash
-./gradlew :git-proxy-java-core:test :git-proxy-java-core:jacocoTestCoverageVerification --rerun
+./gradlew :fogwall-core:test :fogwall-core:jacocoTestCoverageVerification --rerun
 ```
 
 Always verify the threshold passes locally before pushing — CI runs without cache and will catch it.
@@ -61,36 +61,36 @@ Always verify the threshold passes locally before pushing — CI runs without ca
 
 ```
 
-Unit tests live under each module's `src/test/`. E2e tests are in
-`git-proxy-java-server/src/test/java/org/finos/gitproxy/e2e/` and tagged `@Tag("e2e")`.
+Unit tests live under each module's `src/test/`. E2e tests are in `fogwall-server/src/test/java/com/rbc/fogwall/e2e/`
+and tagged `@Tag("e2e")`.
 
 ## Running the server locally
 
 ```bash
 # Proxy only (no dashboard, no API):
-./gradlew :git-proxy-java-server:run &
-./gradlew :git-proxy-java-server:stop
+./gradlew :fogwall-server:run &
+./gradlew :fogwall-server:stop
 
 # Proxy + dashboard + REST API (http://localhost:8080/):
-./gradlew :git-proxy-java-dashboard:run &
-./gradlew :git-proxy-java-dashboard:stop
+./gradlew :fogwall-dashboard:run &
+./gradlew :fogwall-dashboard:stop
 
-# Logs: git-proxy-java-server/logs/application.log  (DEBUG for org.finos.gitproxy)
-# Default DB: h2-file — persisted to git-proxy-java-server/.data/gitproxy.mv.db
+# Logs: fogwall-server/logs/application.log  (DEBUG for com.rbc.fogwall)
+# Default DB: h2-file — persisted to fogwall-server/.data/fogwall.mv.db
 ```
 
 ## Docker Compose
 
 ```bash
-docker compose up -d          # git-proxy-java + Gitea (h2-mem database)
+docker compose up -d          # fogwall + Gitea (h2-mem database)
 bash docker/gitea-setup.sh          # one-time: create admin user + test repo in Gitea
 
 # Optional database backends:
-docker compose --profile postgres up -d   # swap git-proxy-local.yml for git-proxy-postgres.yml
-docker compose --profile mongo up -d      # swap git-proxy-local.yml for git-proxy-mongo.yml
+docker compose --profile postgres up -d   # swap fogwall-local.yml for fogwall-postgres.yml
+docker compose --profile mongo up -d      # swap fogwall-local.yml for fogwall-mongo.yml
 ```
 
-Config override file mounted at `/app/conf/git-proxy-local.yml` inside the container. Templates in `docker/`.
+Config override file mounted at `/app/conf/fogwall-local.yml` inside the container. Templates in `docker/`.
 
 ## Configuration
 

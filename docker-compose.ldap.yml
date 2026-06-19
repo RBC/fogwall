@@ -32,11 +32,11 @@ services:
       retries: 12
       start_period: 10s
 
-  git-proxy-java:
+  fogwall:
     volumes:
-      - ./docker/git-proxy-ldap.yml:/app/conf/git-proxy-ldap.yml:ro
+      - ./docker/fogwall-ldap.yml:/app/conf/fogwall-ldap.yml:ro
     environment:
-      GITPROXY_CONFIG_PROFILES: docker-default,ldap
+      FOGWALL_CONFIG_PROFILES: docker-default,ldap
     depends_on:
       openldap:
         condition: service_healthy

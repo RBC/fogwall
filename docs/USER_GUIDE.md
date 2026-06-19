@@ -1,16 +1,16 @@
-# User Guide — Pushing Through git-proxy-java
+# User Guide — Pushing Through fogwall
 
-This guide is for **developers who push code through git-proxy-java**. It covers setting up your git remote,
+This guide is for **developers who push code through fogwall**. It covers setting up your git remote,
 understanding proxy output, and what to do when a push is blocked or waiting for approval.
 
-If you want to operate or configure git-proxy-java, see the [Configuration Reference](CONFIGURATION.md). If you
+If you want to operate or configure fogwall, see the [Configuration Reference](CONFIGURATION.md). If you
 want to build on or contribute to the codebase, see [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ---
 
-## What git-proxy-java does
+## What fogwall does
 
-git-proxy-java sits between your `git push` and the upstream host (GitHub, GitLab, Bitbucket, etc.). Every push
+fogwall sits between your `git push` and the upstream host (GitHub, GitLab, Bitbucket, etc.). Every push
 is inspected before it reaches the upstream:
 
 - Commit author emails are checked against allowed domains
@@ -28,9 +28,9 @@ get a message explaining what to fix.
 
 You need the following from your administrator before you can push through the proxy:
 
-1. **The proxy URL** — something like `https://gitproxy.corp.example.com` or `http://localhost:8080` for local
+1. **The proxy URL** — something like `https://fogwall.corp.example.com` or `http://localhost:8080` for local
    development.
-2. **A proxy user account** — username and password for the git-proxy-java dashboard. This is separate from your
+2. **A proxy user account** — username and password for the fogwall dashboard. This is separate from your
    upstream SCM credentials.
 3. **A personal access token (PAT)** for the upstream SCM — the proxy forwards your token to authenticate with
    GitHub/GitLab/etc. on your behalf.
@@ -57,13 +57,13 @@ http[s]://<proxy-host>/<mode>/<provider-host>/<owner>/<repo>.git
 For example, if you normally push to `https://github.com/myorg/myrepo`, the proxy remote is:
 
 ```text
-https://gitproxy.corp.example.com/push/github.com/myorg/myrepo
+https://fogwall.corp.example.com/push/github.com/myorg/myrepo
 ```
 
 Add it as a new remote (recommended — keeps your direct-to-GitHub remote as a fallback):
 
 ```shell
-git remote add proxy https://gitproxy.corp.example.com/push/github.com/myorg/myrepo
+git remote add proxy https://fogwall.corp.example.com/push/github.com/myorg/myrepo
 ```
 
 Then push via the proxy:
@@ -87,7 +87,7 @@ other is for the web UI.
 Embed credentials directly in the URL if your git credential helper does not pick them up automatically:
 
 ```shell
-git remote add proxy https://me:ghp_yourtoken@gitproxy.corp.example.com/push/github.com/myorg/myrepo
+git remote add proxy https://me:ghp_yourtoken@fogwall.corp.example.com/push/github.com/myorg/myrepo
 ```
 
 Or use `git credential store` / your OS keychain as you normally would.
@@ -188,12 +188,12 @@ remote: 🔑  Scanning for secrets...
 remote:   ✅  no secrets detected
 remote: 
 remote: ────────────────────────────────────────
-remote: 🔗  View push record: http://gitproxy.corp.example.com/dashboard/push/4d6196fb-...
+remote: 🔗  View push record: http://fogwall.corp.example.com/dashboard/push/4d6196fb-...
 remote: ✅  Push approved by reviewer
 remote: 🔗  Forwarding to https://github.com/myorg/myrepo.git...
 remote:   ✅  refs/heads/my-feature -> OK
 remote: ✅  Forwarding complete
-To http://gitproxy.corp.example.com/push/github.com/myorg/myrepo.git
+To http://fogwall.corp.example.com/push/github.com/myorg/myrepo.git
  * [new branch]      my-feature -> my-feature
 ```
 
@@ -219,10 +219,10 @@ After validation passes, the push enters a **PENDING** state and waits for a rev
 dashboard. You will see:
 
 ```text
-remote: 🔗  View push record: http://gitproxy.corp.example.com/dashboard/push/4d6196fb-...
+remote: 🔗  View push record: http://fogwall.corp.example.com/dashboard/push/4d6196fb-...
 remote: ⚠  Push requires review. Waiting for approval...
 remote: 🔑  Push ID: 4d6196fb-4cc3-47d1-ac6d-17fbcc5f71d3
-remote:    Review at: http://gitproxy.corp.example.com/dashboard/push/4d6196fb-...
+remote:    Review at: http://fogwall.corp.example.com/dashboard/push/4d6196fb-...
 remote: Awaiting review... (5s elapsed, ~1794s remaining)
 remote: .
 remote: Awaiting review... (10s elapsed, ~1789s remaining)
@@ -238,7 +238,7 @@ remote: 🔗  Forwarding to https://github.com/myorg/myrepo.git...
 remote:   Pushing 1 ref(s) to upstream...
 remote:   ✅  refs/heads/my-feature -> OK
 remote: ✅  Forwarding complete
-To http://gitproxy.corp.example.com/push/github.com/myorg/myrepo.git
+To http://fogwall.corp.example.com/push/github.com/myorg/myrepo.git
  * [new branch]      my-feature -> my-feature
 ```
 
@@ -338,20 +338,20 @@ remote: ❌  [github-pat]  ci-config.env:1
 remote:   commit: e9085c9
 remote:   match:  REDACTED
 remote: ────────────────────────────────────────
-remote: 🔗  View push record: http://gitproxy.corp.example.com/dashboard/push/b65bee10-...
-To http://gitproxy.corp.example.com/push/github.com/myorg/myrepo.git
+remote: 🔗  View push record: http://fogwall.corp.example.com/dashboard/push/b65bee10-...
+To http://fogwall.corp.example.com/push/github.com/myorg/myrepo.git
  ! [remote rejected] my-feature -> my-feature (5 validation issue(s) - see above)
-error: failed to push some refs to 'http://gitproxy.corp.example.com/push/github.com/myorg/myrepo.git'
+error: failed to push some refs to 'http://fogwall.corp.example.com/push/github.com/myorg/myrepo.git'
 ```
 
 In transparent proxy mode (`/proxy/`), all validation runs first and the summary is returned in one response
 at the end. The terminal output is otherwise identical to the above, but ends with:
 
 ```text
-remote: push rejected by git-proxy
+remote: push rejected by fogwall
 
 fatal: the remote end hung up unexpectedly
-error: failed to push some refs to 'http://gitproxy.corp.example.com/proxy/github.com/myorg/myrepo.git'
+error: failed to push some refs to 'http://fogwall.corp.example.com/proxy/github.com/myorg/myrepo.git'
 ```
 
 Common block reasons and what to do:
@@ -429,7 +429,7 @@ git config http.sslCAInfo /path/to/corporate-ca.pem
 Or for a specific remote only:
 
 ```shell
-git config --local http.https://gitproxy.corp.example.com.sslCAInfo /path/to/corporate-ca.pem
+git config --local http.https://fogwall.corp.example.com.sslCAInfo /path/to/corporate-ca.pem
 ```
 
 ### Push succeeds but commits appear with wrong author
@@ -458,7 +458,7 @@ manually:
 
 ```shell
 # Clone directly through the proxy — origin is set to the proxy URL automatically
-git clone https://me:ghp_yourtoken@gitproxy.corp.example.com/proxy/github.com/myorg/myrepo
+git clone https://me:ghp_yourtoken@fogwall.corp.example.com/proxy/github.com/myorg/myrepo
 cd myrepo
 
 # Confirm origin points at the proxy
@@ -478,7 +478,7 @@ If you already have a local clone pointed directly at the upstream, add the prox
 redirect pushes through it while keeping direct fetch:
 
 ```shell
-git remote set-url --push origin https://gitproxy.corp.example.com/push/github.com/myorg/myrepo
+git remote set-url --push origin https://fogwall.corp.example.com/push/github.com/myorg/myrepo
 ```
 
 ### Private forks and internal mirrors
@@ -491,7 +491,7 @@ library), both can be proxied independently. A common three-remote setup:
 git remote add upstream https://github.com/someproject/somerepo
 
 # origin — your org's internal fork (all traffic through proxy)
-git remote add origin https://gitproxy.corp.example.com/push/github.corp.example.com/myorg/somerepo
+git remote add origin https://fogwall.corp.example.com/push/github.corp.example.com/myorg/somerepo
 
 # The proxy URL reflects whichever provider hosts the fork —
 # it does not have to be the same provider as upstream.

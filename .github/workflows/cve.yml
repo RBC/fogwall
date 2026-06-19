@@ -24,7 +24,7 @@ jobs:
         uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # ratchet:anchore/scan-action@v7
         id: scan
         with:
-          path: git-proxy-java-dashboard/frontend
+          path: fogwall-dashboard/frontend
           fail-build: true
           severity-cutoff: high
           only-fixed: true
@@ -40,7 +40,7 @@ jobs:
         if: ${{ always() }}
         run: |
           export PATH="$(dirname $(find /opt/hostedtoolcache/grype -name grype -type f | head -1)):$PATH"
-          grype dir:git-proxy-java-dashboard/frontend \
+          grype dir:fogwall-dashboard/frontend \
             --config .grype.yaml \
             --only-fixed \
             --output table | tee grype-npm-report.txt || true
