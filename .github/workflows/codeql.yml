@@ -39,7 +39,7 @@ jobs:
         if: matrix.language == 'java-kotlin'
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # ratchet:actions/setup-node@v6
         with:
-          node-version: '24.15.0'
+          node-version: '26.3.1'
           cache: npm
           cache-dependency-path: fogwall-dashboard/frontend/package-lock.json
 
