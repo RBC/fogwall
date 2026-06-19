@@ -15,7 +15,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * Authenticates requests that carry a valid {@code X-Api-Key} header. The expected key is read from the
- * {@code fogwall_API_KEY} environment variable at startup. If the variable is not set the filter is a no-op and every
+ * {@code FOGWALL_API_KEY} environment variable at startup. If the variable is not set the filter is a no-op and every
  * request passes through unauthenticated (relying on form login instead).
  *
  * <p>Intended for CI/test scripts that call {@code /api/**} endpoints without a browser session.

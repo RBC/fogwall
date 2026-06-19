@@ -28,8 +28,7 @@ export function Nav({ currentUser }: NavProps) {
         className="flex items-center gap-2 shrink-0 hover:opacity-80 transition-opacity"
       >
         <svg
-          width="28"
-          height="32"
+          className="h-8 w-auto"
           viewBox="0 0 28 32"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"

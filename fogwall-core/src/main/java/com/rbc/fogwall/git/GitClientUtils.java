@@ -77,7 +77,7 @@ public class GitClientUtils {
 
         private final String value;
 
-        /** ASCII fallback used when {@code fogwall_NO_EMOJI} is set. */
+        /** ASCII fallback used when {@code FOGWALL_NO_EMOJI} is set. */
         private final String text;
 
         /**
@@ -91,7 +91,7 @@ public class GitClientUtils {
         }
 
         /**
-         * Returns the plain ASCII text representation of the symbol. Used when {@code fogwall_NO_EMOJI} is set to avoid
+         * Returns the plain ASCII text representation of the symbol. Used when {@code FOGWALL_NO_EMOJI} is set to avoid
          * terminals that ignore the Unicode text-variation selector (U+FE0E) still rendering emoji.
          *
          * @return the plain text representation of the symbol
@@ -203,9 +203,9 @@ public class GitClientUtils {
         return System.getenv("NO_COLOR") == null;
     }
 
-    /** Returns {@code true} unless {@code fogwall_NO_EMOJI} is set. */
+    /** Returns {@code true} unless {@code FOGWALL_NO_EMOJI} is set. */
     public static boolean isEmojiEnabled() {
-        return System.getenv("fogwall_NO_EMOJI") == null;
+        return System.getenv("FOGWALL_NO_EMOJI") == null;
     }
 
     /**

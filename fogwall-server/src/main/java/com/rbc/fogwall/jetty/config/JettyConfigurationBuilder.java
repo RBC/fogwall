@@ -473,8 +473,8 @@ public class JettyConfigurationBuilder {
             }
             case "servicenow" -> {
                 log.info("Approval mode: servicenow");
-                String snUrl = System.getenv().getOrDefault("fogwall_SERVICENOW_URL", "");
-                String snCreds = System.getenv().getOrDefault("fogwall_SERVICENOW_CREDENTIALS", "");
+                String snUrl = System.getenv().getOrDefault("FOGWALL_SERVICENOW_URL", "");
+                String snCreds = System.getenv().getOrDefault("FOGWALL_SERVICENOW_CREDENTIALS", "");
                 yield new ServiceNowApprovalGateway(snUrl, snCreds);
             }
             default -> {
@@ -671,7 +671,7 @@ public class JettyConfigurationBuilder {
      *
      * <p>For JDBC backends, the token resolver is wrapped with {@link CachingTokenPushIdentityResolver} to avoid
      * repeated SCM API calls for the same token. The cache max age defaults to 7 days and can be overridden via the
-     * {@code fogwall_SCM_CACHE_MAX_AGE_DAYS} environment variable.
+     * {@code FOGWALL_SCM_CACHE_MAX_AGE_DAYS} environment variable.
      */
     public PushIdentityResolver buildPushIdentityResolver(ReadOnlyUserStore userStore) {
         if (config.getUsers().isEmpty()) return null;
@@ -688,7 +688,7 @@ public class JettyConfigurationBuilder {
     }
 
     private JdbcScmTokenCache buildTokenCache() {
-        long maxAgeDays = Optional.ofNullable(System.getenv("fogwall_SCM_CACHE_MAX_AGE_DAYS"))
+        long maxAgeDays = Optional.ofNullable(System.getenv("FOGWALL_SCM_CACHE_MAX_AGE_DAYS"))
                 .map(Long::parseLong)
                 .orElse(7L);
         log.info("SCM token identity cache enabled (max age {} days)", maxAgeDays);

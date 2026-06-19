@@ -120,7 +120,7 @@ public class SecurityConfig {
         log.info("Authentication provider: {}", provider);
 
         boolean isIdpProvider = !"local".equals(provider);
-        String apiKey = System.getenv("fogwall_API_KEY");
+        String apiKey = System.getenv("FOGWALL_API_KEY");
         if (apiKey != null && !apiKey.isBlank()) {
             log.info("API key authentication enabled (operator-supplied)");
             http.addFilterBefore(new ApiKeyAuthFilter(apiKey), UsernamePasswordAuthenticationFilter.class);
@@ -129,7 +129,7 @@ public class SecurityConfig {
             writeBreakGlassToken(generated);
             log.warn("IdP auth active — local user store disabled. Auto-generated break-glass API key written to"
                     + " break-glass.token (chmod 600). Use X-Api-Key header for emergency admin API access."
-                    + " Not persisted across restarts. Pin a stable key with fogwall_API_KEY env var.");
+                    + " Not persisted across restarts. Pin a stable key with FOGWALL_API_KEY env var.");
             http.addFilterBefore(new ApiKeyAuthFilter(generated), UsernamePasswordAuthenticationFilter.class);
         }
 

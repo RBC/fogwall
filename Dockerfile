@@ -78,7 +78,7 @@ COPY --from=builder \
 
 # Create the conf directory; mount a fogwall-{profile}.yml here to override config.
 # Example: -v ./docker/fogwall-local.yml:/app/conf/fogwall-local.yml:ro
-# docker run -e GITPROXY_CONFIG_PROFILE=local -v ./docker/fogwall-local.yml:/app/conf/fogwall-local.yml:ro ...
+# docker run -e FOGWALL_CONFIG_PROFILES=local -v ./docker/fogwall-local.yml:/app/conf/fogwall-local.yml:ro ...
 RUN mkdir -p /app/conf
 
 # Data directory for file-based databases (h2-file, sqlite), log output, and

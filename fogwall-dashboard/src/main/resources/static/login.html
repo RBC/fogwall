@@ -4,11 +4,20 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>fogwall · sign in</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>html { font-size: 18px; }</style>
   </head>
   <body class="bg-gray-100 min-h-screen flex flex-col">
     <header class="bg-slate-800 text-white px-6 py-4 shadow flex items-center justify-between">
-      <img src="/logo.png" alt="fogwall" class="h-10 w-auto" />
+      <div class="flex items-center gap-2">
+        <svg class="h-8 w-auto" viewBox="0 0 28 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M14 1 L26 6 L26 16 C26 23 14 31 14 31 C14 31 2 23 2 16 L2 6 Z" stroke="white" stroke-width="1.8" stroke-linejoin="round" fill="none" opacity="0.85"/>
+          <path d="M7 10 Q10 8 14 10 Q18 12 21 10" stroke="white" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.9"/>
+          <path d="M7 15 Q10 13 14 15 Q18 17 21 15" stroke="white" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.7"/>
+          <path d="M8 20 Q11 18 14 20 Q17 22 20 20" stroke="white" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.5"/>
+        </svg>
+        <span class="text-xl font-semibold tracking-tight">fogwall</span>
+      </div>
       <a
         href="https://github.com/RBC/fogwall/blob/main/docs/CONFIGURATION.md"
         target="_blank"
@@ -69,9 +78,7 @@
 
     <footer class="bg-slate-800 text-slate-500 text-xs px-6 py-3 flex items-center justify-between">
       <span>
-        &copy; 2024&ndash;2026
-        <a href="https://github.com/RBC/fogwall" target="_blank" rel="noopener noreferrer" class="hover:text-slate-300 transition-colors">fogwall</a>
-        contributors &middot;
+        &copy; 2024&ndash;2026 fogwall contributors &middot;
         <a href="https://github.com/RBC/fogwall/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" class="hover:text-slate-300 transition-colors">Apache-2.0</a>
       </span>
       <a href="https://github.com/RBC/fogwall" target="_blank" rel="noopener noreferrer" class="hover:text-slate-300 transition-colors flex items-center gap-1" title="View on GitHub">

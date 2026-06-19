@@ -67,4 +67,5 @@ test/gitea/tokens.env
 ### Frontend build artifacts copied into Spring resources ###
 fogwall-dashboard/src/main/resources/static/assets/
 fogwall-dashboard/src/main/resources/static/index.html
+fogwall-dashboard/src/main/resources/static/logo.png
 break-glass.token

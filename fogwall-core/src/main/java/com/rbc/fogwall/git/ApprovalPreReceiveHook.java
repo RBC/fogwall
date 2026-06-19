@@ -209,7 +209,7 @@ public class ApprovalPreReceiveHook implements PreReceiveHook {
 
     /**
      * Defense in depth: if the approver is the pusher, re-verify that a {@code SELF_CERTIFY} repo permission still
-     * exists for the pusher on this push's path. {@link org.finos.fogwall.dashboard.controller.PushController#approve}
+     * exists for the pusher on this push's path. {@link com.rbc.fogwall.dashboard.controller.PushController#approve}
      * already enforces this at approval time, but re-checking here protects against future code paths or bugs that mark
      * a record APPROVED without going through that gate.
      *

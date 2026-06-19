@@ -272,8 +272,8 @@ public class LiveConfigLoader {
      * <p>Authentication is opt-in via environment variables — no config fields required:
      *
      * <ul>
-     *   <li>{@code fogwall_RELOAD_GIT_AUTH_USERNAME} — git username (or a token username placeholder)
-     *   <li>{@code fogwall_RELOAD_GIT_AUTH_PASSWORD} — personal access token or password
+     *   <li>{@code FOGWALL_RELOAD_GIT_AUTH_USERNAME} — git username (or a token username placeholder)
+     *   <li>{@code FOGWALL_RELOAD_GIT_AUTH_PASSWORD} — personal access token or password
      * </ul>
      *
      * If neither variable is set the clone proceeds without credentials (suitable for public repos or SSH-based URLs
@@ -320,17 +320,17 @@ public class LiveConfigLoader {
     }
 
     /**
-     * Reads {@code fogwall_RELOAD_GIT_AUTH_USERNAME} and {@code fogwall_RELOAD_GIT_AUTH_PASSWORD} from the environment.
+     * Reads {@code FOGWALL_RELOAD_GIT_AUTH_USERNAME} and {@code FOGWALL_RELOAD_GIT_AUTH_PASSWORD} from the environment.
      * Returns a credentials provider if both are set, or {@code null} if either is absent.
      */
     private static UsernamePasswordCredentialsProvider gitCredentials() {
-        String username = System.getenv("fogwall_RELOAD_GIT_AUTH_USERNAME");
-        String password = System.getenv("fogwall_RELOAD_GIT_AUTH_PASSWORD");
+        String username = System.getenv("FOGWALL_RELOAD_GIT_AUTH_USERNAME");
+        String password = System.getenv("FOGWALL_RELOAD_GIT_AUTH_PASSWORD");
         if (username != null && !username.isBlank() && password != null && !password.isBlank()) {
             return new UsernamePasswordCredentialsProvider(username, password);
         }
         if ((username != null) != (password != null)) {
-            log.warn("fogwall_RELOAD_GIT_AUTH_USERNAME and fogwall_RELOAD_GIT_AUTH_PASSWORD must both be set "
+            log.warn("FOGWALL_RELOAD_GIT_AUTH_USERNAME and FOGWALL_RELOAD_GIT_AUTH_PASSWORD must both be set "
                     + "for git auth to work — proceeding without credentials");
         }
         return null;
