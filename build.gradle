@@ -1,17 +1,17 @@
 buildscript {
     configurations.configureEach {
         resolutionStrategy {
-            force 'org.codehaus.plexus:plexus-utils:3.6.1'
+            force 'org.codehaus.plexus:plexus-utils:4.0.3'
             force 'org.bouncycastle:bcpg-jdk18on:1.84'
         }
     }
 }
 
 plugins {
-    id 'com.diffplug.spotless' version '8.4.0' apply false
+    id 'com.diffplug.spotless' version '8.7.0' apply false
     id 'org.cyclonedx.bom' version '3.2.4'
     id 'com.github.node-gradle.node' version '7.1.0' apply false
-    id 'com.github.jk1.dependency-license-report' version '2.9' apply false
+    id 'com.github.jk1.dependency-license-report' version '3.1.4' apply false
 }
 
 ext {
@@ -33,19 +33,19 @@ ext {
     log4j2Version = '2.26.0'
 
     // Database
-    hikariVersion = '7.0.2'
+    hikariVersion = '7.1.0'
     h2Version = '2.4.240'
     postgresVersion = '42.7.11'
     mongoVersion = '5.8.0'
 
     // Jackson
-    jacksonBomVersion = '3.1.4'
+    jacksonBomVersion = '3.2.0'
 
     // Spring
     springVersion = '7.0.8'
-    springSecurityVersion = '7.0.5'
-    springSessionVersion = '4.0.3'
-    lettuceVersion = '6.8.2.RELEASE'
+    springSecurityVersion = '7.1.0'
+    springSessionVersion = '4.1.0'
+    lettuceVersion = '7.6.0.RELEASE'
 
     // YAML
     snakeyamlVersion = '2.6'
@@ -72,7 +72,7 @@ ext {
     gitleaksVersion = '8.30.1'
 
     // OpenAPI spec generation
-    swaggerCoreVersion = '2.2.49'
+    swaggerCoreVersion = '2.2.51'
     swaggerUiVersion = '5.32.6'
 
 }
