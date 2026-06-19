@@ -2,7 +2,6 @@ package com.rbc.fogwall.jetty.config;
 
 import com.rbc.fogwall.approval.ApprovalGateway;
 import com.rbc.fogwall.approval.AutoApprovalGateway;
-import com.rbc.fogwall.approval.ServiceNowApprovalGateway;
 import com.rbc.fogwall.approval.UiApprovalGateway;
 import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.config.DiffScanConfig;
@@ -470,12 +469,6 @@ public class JettyConfigurationBuilder {
             case "ui" -> {
                 log.info("Approval mode: ui (push store polling)");
                 yield new UiApprovalGateway(pushStore);
-            }
-            case "servicenow" -> {
-                log.info("Approval mode: servicenow");
-                String snUrl = System.getenv().getOrDefault("FOGWALL_SERVICENOW_URL", "");
-                String snCreds = System.getenv().getOrDefault("FOGWALL_SERVICENOW_CREDENTIALS", "");
-                yield new ServiceNowApprovalGateway(snUrl, snCreds);
             }
             default -> {
                 if (!"auto".equals(mode)) {
