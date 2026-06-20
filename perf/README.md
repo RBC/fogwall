@@ -83,7 +83,7 @@ on behalf of the user — enabling deferred forwarding and approval gates.
 
 ## Results
 
-See [results/FINDINGS.md](results/FINDINGS.md) for detailed benchmark results.
+See `results/FINDINGS-*.md` for detailed benchmark results per machine.
 
 ## Teardown
 
