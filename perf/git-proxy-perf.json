@@ -1,0 +1,46 @@
+{
+  "cookieSecret": "perf-test-secret",
+  "csrfProtection": false,
+  "sessionMaxAgeHours": 12,
+  "rateLimit": {
+    "windowMs": 60000,
+    "limit": 10000
+  },
+  "tempPassword": {
+    "sendEmail": false,
+    "emailConfig": {}
+  },
+  "authorisedList": [
+    {
+      "project": "perf",
+      "name": "bench-repo",
+      "url": "http://gitea:3000/perf/bench-repo.git"
+    }
+  ],
+  "sink": [
+    {
+      "type": "fs",
+      "enabled": true
+    }
+  ],
+  "authentication": [
+    {
+      "type": "local",
+      "enabled": true
+    }
+  ],
+  "commitConfig": {
+    "author": {
+      "email": {
+        "local": { "block": "" },
+        "domain": { "allow": ".*" }
+      }
+    },
+    "message": {
+      "block": { "literals": [], "patterns": [] }
+    },
+    "diff": {
+      "block": { "literals": [], "patterns": [], "providers": {} }
+    }
+  }
+}

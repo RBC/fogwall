@@ -75,17 +75,19 @@ public class JdbcScmTokenCache {
     }
 
     public void store(String provider, String tokenHash, String proxyUsername) {
-        jdbc.update(
-                "DELETE FROM scm_token_cache WHERE token_hash = :hash AND provider = :provider",
-                Map.of("hash", tokenHash, "provider", provider));
-        jdbc.update(
-                "INSERT INTO scm_token_cache (token_hash, provider, proxy_username, cached_at)"
-                        + " VALUES (:hash, :provider, :username, :now)",
-                Map.of(
-                        "hash", tokenHash,
-                        "provider", provider,
-                        "username", proxyUsername,
-                        "now", Timestamp.from(Instant.now())));
+        try {
+            jdbc.update(
+                    "MERGE INTO scm_token_cache (token_hash, provider, proxy_username, cached_at)"
+                            + " KEY (token_hash, provider)"
+                            + " VALUES (:hash, :provider, :username, :now)",
+                    Map.of(
+                            "hash", tokenHash,
+                            "provider", provider,
+                            "username", proxyUsername,
+                            "now", Timestamp.from(Instant.now())));
+        } catch (org.springframework.dao.DuplicateKeyException e) {
+            log.debug("SCM token cache entry already exists (concurrent insert), skipping");
+        }
         log.debug("SCM token cached: provider={}, user={}", provider, proxyUsername);
     }
 }

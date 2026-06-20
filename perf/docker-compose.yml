@@ -1,0 +1,52 @@
+services:
+
+  # ── Shared Gitea backend ────────────────────────────────────────────────────
+  gitea:
+    image: docker.io/gitea/gitea:1.25-rootless
+    ports:
+      - "3000:3000"
+    environment:
+      GITEA__security__INSTALL_LOCK: "true"
+      GITEA__security__SECRET_KEY: "perf-test-secret"
+      GITEA__server__HTTP_PORT: "3000"
+      GITEA__database__DB_TYPE: "sqlite3"
+      GITEA__log__LEVEL: "Warn"
+      GITEA__repository__DEFAULT_BRANCH: "main"
+    volumes:
+      - gitea-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/api/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  # ── fogwall (Java proxy) ────────────────────────────────────────────────────
+  fogwall:
+    build: ..
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./fogwall-perf.yml:/app/conf/fogwall-perf.yml:ro
+    depends_on:
+      gitea:
+        condition: service_healthy
+    environment:
+      FOGWALL_CONFIG_PROFILES: perf
+
+  # ── finos/git-proxy (Node.js proxy) ─────────────────────────────────────────
+  git-proxy:
+    image: finos/git-proxy:latest
+    ports:
+      - "8000:8000"
+    command: ["node", "dist/index.js", "--config", "/app/perf-config.json"]
+    volumes:
+      - ./git-proxy-perf.json:/app/perf-config.json:ro
+    depends_on:
+      gitea:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+
+volumes:
+  gitea-data:
