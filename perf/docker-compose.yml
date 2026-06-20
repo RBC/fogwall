@@ -29,7 +29,6 @@ services:
     profiles: [tls]
     ports:
       - "3443:3443"
-      - "3000:3000"
     environment:
       GITEA__security__INSTALL_LOCK: "true"
       GITEA__security__SECRET_KEY: "perf-test-secret"

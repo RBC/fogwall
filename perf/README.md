@@ -74,21 +74,47 @@ Measure TLS handshake overhead (JDK SSL vs OpenSSL):
 # Generate self-signed CA + server cert + JKS truststore
 bash perf/tls/generate-certs.sh
 
-# Start TLS-enabled Gitea
+# Start TLS-enabled Gitea (port 3443)
 docker compose -f perf/docker-compose.yml --profile tls up -d gitea-tls
 
-# Re-run setup against the TLS Gitea (port 3443)
-bash perf/setup.sh
+# Run setup against TLS Gitea
+bash perf/setup.sh --tls
+```
 
-# Start fogwall with the custom truststore
-FOGWALL_CONFIG_PROFILES=perf ./gradlew :fogwall-server:run \
-    -PjvmArgs="-Djavax.net.ssl.trustStore=$(pwd)/perf/tls/truststore.jks \
-               -Djavax.net.ssl.trustStorePassword=changeit"
+### fogwall (TLS)
 
-# Start finos/git-proxy with the CA cert
-NODE_EXTRA_CA_CERTS=$(pwd)/perf/tls/ca.pem node dist/index.js --config ...
+Symlink both perf profiles into resources:
 
-# Benchmark with --tls flag (uses port 3443, sets GIT_SSL_CAINFO automatically)
+```bash
+ln -sf "$(pwd)/perf/fogwall-perf.yml" fogwall-server/src/main/resources/fogwall-perf.yml
+ln -sf "$(pwd)/perf/fogwall-perf-tls.yml" fogwall-server/src/main/resources/fogwall-perf-tls.yml
+```
+
+The `perf-tls` profile overrides the Gitea URI to `https://localhost:3443` and
+sets `server.tls.trust-ca-bundle` for the proxy path. `JAVA_TOOL_OPTIONS` adds
+the JKS truststore so the Forgejo identity API client also trusts the CA:
+
+```bash
+FOGWALL_CONFIG_PROFILES=perf,perf-tls \
+    JAVA_TOOL_OPTIONS="-Djavax.net.ssl.trustStore=$(pwd)/perf/tls/truststore.jks \
+                       -Djavax.net.ssl.trustStorePassword=changeit" \
+    ./gradlew :fogwall-server:run
+```
+
+### finos/git-proxy (TLS)
+
+```bash
+NODE_EXTRA_CA_CERTS=$(pwd)/perf/tls/ca.pem \
+    node dist/index.js --config /path/to/perf/git-proxy-perf.json
+```
+
+Note: the `git-proxy-perf.json` authorisedList URL must be updated to
+`https://localhost:3443` and the proxy routes need the HTTP→HTTPS code
+changes described in the findings.
+
+### Run benchmarks
+
+```bash
 python3 perf/bench.py fogwall --tls
 python3 perf/bench.py git-proxy --tls
 python3 perf/bench.py fogwall --tls --concurrent

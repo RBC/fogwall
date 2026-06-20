@@ -177,9 +177,9 @@ def main():
 
     direct_url = f"{scheme}://{env['TEST_USER']}:{env['TEST_PASSWORD']}@localhost:{gitea_port}/{env['ORG']}/{env['REPO']}.git"
 
-    gitea_host = f"localhost:{gitea_port}" if use_tls else env["GITEA_URL"].split("://")[1].split(":")[0]
     if proxy_name == "fogwall":
-        proxy_url = f"http://{creds}@localhost:8080/proxy/{gitea_host}/{env['ORG']}/{env['REPO']}.git"
+        fogwall_host = f"localhost:{gitea_port}"
+        proxy_url = f"http://{creds}@localhost:8080/proxy/{fogwall_host}/{env['ORG']}/{env['REPO']}.git"
     else:
         gitea_host_port = f"localhost:{gitea_port}"
         proxy_url = f"http://{creds}@localhost:8000/{gitea_host_port}/{env['ORG']}/{env['REPO']}.git"

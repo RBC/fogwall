@@ -1,14 +1,24 @@
 #!/usr/bin/env bash
 # One-time setup: create Gitea admin, org, repo, and test user for benchmarking.
-# Requires Gitea running via: docker compose -f perf/docker-compose.yml up -d gitea
 #
 # Usage:
-#   bash perf/setup.sh
+#   bash perf/setup.sh          # plain HTTP Gitea on port 3000
+#   bash perf/setup.sh --tls    # TLS Gitea on port 3443
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+USE_TLS=false
+GITEA_SERVICE="gitea"
 GITEA_URL="http://localhost:3000"
+CURL_OPTS=""
+
+if [ "${1:-}" = "--tls" ]; then
+    USE_TLS=true
+    GITEA_SERVICE="gitea-tls"
+    GITEA_URL="https://localhost:3443"
+    CURL_OPTS="--cacert ${SCRIPT_DIR}/tls/ca.pem"
+fi
 ADMIN_USER="perfadmin"
 ADMIN_PASSWORD="Admin1234!"
 ADMIN_EMAIL="perfadmin@example.com"
@@ -30,26 +40,26 @@ else
 fi
 COMPOSE_FILE="${SCRIPT_DIR}/docker-compose.yml"
 
-echo "==> Waiting for Gitea..."
-until curl -sf "${GITEA_URL}/api/healthz" -o /dev/null 2>&1; do sleep 2; done
+echo "==> Waiting for Gitea (${GITEA_URL})..."
+until curl -sf ${CURL_OPTS} "${GITEA_URL}/api/healthz" -o /dev/null 2>&1; do sleep 2; done
 echo "    Gitea ready."
 
 create_user() {
     local username="$1" password="$2" email="$3" admin_flag="${4:-}"
-    $COMPOSE -f "${COMPOSE_FILE}" exec gitea gitea admin user create \
+    $COMPOSE -f "${COMPOSE_FILE}" --profile tls exec "${GITEA_SERVICE}" gitea admin user create \
         ${admin_flag} --username "${username}" --password "${password}" \
         --email "${email}" --must-change-password=false 2>&1 || echo "    (exists)"
 }
 
 generate_token() {
     local username="$1" token_name="$2"
-    $COMPOSE -f "${COMPOSE_FILE}" exec gitea gitea admin user generate-access-token \
+    $COMPOSE -f "${COMPOSE_FILE}" --profile tls exec "${GITEA_SERVICE}" gitea admin user generate-access-token \
         --username "${username}" --token-name "${token_name}" \
         --scopes "read:user,write:repository" 2>&1 | grep -oE '[0-9a-f]{40}' | head -1
 }
 
 gitea_api() {
-    curl -sf -u "${ADMIN_USER}:${ADMIN_PASSWORD}" \
+    curl -sf ${CURL_OPTS} -u "${ADMIN_USER}:${ADMIN_PASSWORD}" \
         -H "Content-Type: application/json" \
         "${GITEA_URL}/api/v1/$@"
 }
@@ -71,7 +81,11 @@ gitea_api "repos/${ORG}/${REPO}/collaborators/${TEST_USER}" -X PUT -d '{"permiss
 
 echo "==> Seeding repo with test data..."
 TMPDIR=$(mktemp -d)
-git clone --quiet "http://${TEST_USER}:${TEST_PASSWORD}@localhost:3000/${ORG}/${REPO}.git" "${TMPDIR}/repo" 2>/dev/null
+GIT_CLONE_URL="${GITEA_URL//:\/\//:\/\/${TEST_USER}:${TEST_PASSWORD}@}/${ORG}/${REPO}.git"
+if [ "${USE_TLS}" = true ]; then
+    export GIT_SSL_CAINFO="${SCRIPT_DIR}/tls/ca.pem"
+fi
+git clone --quiet "${GIT_CLONE_URL}" "${TMPDIR}/repo" 2>/dev/null
 cd "${TMPDIR}/repo"
 git config user.email "${TEST_EMAIL}"
 git config user.name "${TEST_USER}"
