@@ -66,6 +66,34 @@ CONCURRENCY=50 TOTAL_OPS=200 python3 perf/bench.py fogwall --concurrent
 Results are saved to `perf/results/<proxy>/sequential.json` and
 `perf/results/<proxy>/concurrent.json`.
 
+## TLS benchmarks
+
+Measure TLS handshake overhead (JDK SSL vs OpenSSL):
+
+```bash
+# Generate self-signed CA + server cert + JKS truststore
+bash perf/tls/generate-certs.sh
+
+# Start TLS-enabled Gitea
+docker compose -f perf/docker-compose.yml --profile tls up -d gitea-tls
+
+# Re-run setup against the TLS Gitea (port 3443)
+bash perf/setup.sh
+
+# Start fogwall with the custom truststore
+FOGWALL_CONFIG_PROFILES=perf ./gradlew :fogwall-server:run \
+    -PjvmArgs="-Djavax.net.ssl.trustStore=$(pwd)/perf/tls/truststore.jks \
+               -Djavax.net.ssl.trustStorePassword=changeit"
+
+# Start finos/git-proxy with the CA cert
+NODE_EXTRA_CA_CERTS=$(pwd)/perf/tls/ca.pem node dist/index.js --config ...
+
+# Benchmark with --tls flag (uses port 3443, sets GIT_SSL_CAINFO automatically)
+python3 perf/bench.py fogwall --tls
+python3 perf/bench.py git-proxy --tls
+python3 perf/bench.py fogwall --tls --concurrent
+```
+
 ## What's tested
 
 | Scenario | Description |

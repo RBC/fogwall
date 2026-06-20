@@ -13,6 +13,7 @@ import argparse
 import json
 import os
 import shutil
+import sys
 import subprocess
 import statistics
 import time
@@ -147,10 +148,12 @@ def main():
     parser = argparse.ArgumentParser(description="Git proxy performance benchmark")
     parser.add_argument("proxy", choices=["fogwall", "git-proxy"])
     parser.add_argument("--concurrent", action="store_true", help="Run concurrent benchmark")
+    parser.add_argument("--tls", action="store_true", help="Use TLS endpoints (requires perf/tls/generate-certs.sh)")
     args = parser.parse_args()
 
     proxy_name = args.proxy
     concurrent = args.concurrent
+    use_tls = args.tls
     env = load_env()
 
     runs = int(os.environ.get("RUNS", "10" if not concurrent else "20"))
@@ -159,17 +162,31 @@ def main():
     concurrency = int(os.environ.get("CONCURRENCY", "5"))
 
     creds = f"{env['TEST_USER']}:{env.get('TOKEN', env['TEST_PASSWORD'])}"
-    direct_url = f"http://{env['TEST_USER']}:{env['TEST_PASSWORD']}@localhost:3000/{env['ORG']}/{env['REPO']}.git"
 
-    gitea_host = env["GITEA_URL"].split("://")[1].split(":")[0]
+    if use_tls:
+        ca_pem = SCRIPT_DIR / "tls" / "ca.pem"
+        if not ca_pem.exists():
+            print("ERROR: Run perf/tls/generate-certs.sh first", file=sys.stderr)
+            sys.exit(1)
+        os.environ["GIT_SSL_CAINFO"] = str(ca_pem)
+        gitea_port = "3443"
+        scheme = "https"
+    else:
+        gitea_port = "3000"
+        scheme = "http"
+
+    direct_url = f"{scheme}://{env['TEST_USER']}:{env['TEST_PASSWORD']}@localhost:{gitea_port}/{env['ORG']}/{env['REPO']}.git"
+
+    gitea_host = f"localhost:{gitea_port}" if use_tls else env["GITEA_URL"].split("://")[1].split(":")[0]
     if proxy_name == "fogwall":
         proxy_url = f"http://{creds}@localhost:8080/proxy/{gitea_host}/{env['ORG']}/{env['REPO']}.git"
     else:
-        gitea_host_port = env["GITEA_URL"].split("://")[1]
+        gitea_host_port = f"localhost:{gitea_port}"
         proxy_url = f"http://{creds}@localhost:8000/{gitea_host_port}/{env['ORG']}/{env['REPO']}.git"
 
     mode = "concurrent" if concurrent else "sequential"
-    print(f"Proxy:       {proxy_name}")
+    tls_label = " (TLS)" if use_tls else ""
+    print(f"Proxy:       {proxy_name}{tls_label}")
     print(f"Mode:        {mode}")
     if concurrent:
         print(f"Concurrency: {concurrency}")
@@ -278,7 +295,8 @@ def main():
     # ── Save results ──────────────────────────────────────────────────────
     results_dir = SCRIPT_DIR / "results" / proxy_name
     results_dir.mkdir(parents=True, exist_ok=True)
-    out_file = results_dir / f"{mode}.json"
+    tls_suffix = "-tls" if use_tls else ""
+    out_file = results_dir / f"{mode}{tls_suffix}.json"
     (out_file).write_text(json.dumps(all_results, indent=2))
     print(f"=== Results saved to {out_file} ===")
 

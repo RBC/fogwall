@@ -74,4 +74,6 @@ break-glass.token
 perf/results/*/
 perf/.env
 perf/.git-proxy-local.json
+perf/tls/*.pem
+perf/tls/*.jks
 fogwall-server/src/main/resources/fogwall-perf.yml
