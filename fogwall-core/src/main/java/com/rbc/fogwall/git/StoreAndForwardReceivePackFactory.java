@@ -50,6 +50,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
     private final String serviceUrl;
     private final Duration heartbeatInterval;
     private final UrlRuleRegistry urlRuleRegistry;
+    private LocalRepositoryCache cache;
 
     /** Stop the validation hook chain after the first failure (see {@link ServerConfig#isFailFast()}). */
     private boolean failFast = false;
@@ -65,6 +66,11 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
     /** Set the upstream connect timeout. Call after construction before the factory handles any requests. */
     public void setConnectTimeoutSeconds(int connectTimeoutSeconds) {
         this.connectTimeoutSeconds = connectTimeoutSeconds;
+    }
+
+    /** Set the local repository cache for invalidation on forward failure. */
+    public void setCache(LocalRepositoryCache cache) {
+        this.cache = cache;
     }
 
     /** Fixed-config constructors for use in tests and simple setups (no URL rule enforcement). */
@@ -274,7 +280,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
                 chainPreReceiveHooks(heartbeatInterval, validationContext, failFast, disconnectCallback, preHooks));
 
         // Post-receive: forward to upstream, then record final status
-        var forwardingHook = new ForwardingPostReceiveHook(provider, creds, pushContext, connectTimeoutSeconds);
+        var forwardingHook = new ForwardingPostReceiveHook(provider, creds, pushContext, connectTimeoutSeconds, cache);
         if (persistenceHook != null) {
             rp.setPostReceiveHook(chainPostReceiveHooks(forwardingHook, persistenceHook.postReceiveHook()));
         } else {

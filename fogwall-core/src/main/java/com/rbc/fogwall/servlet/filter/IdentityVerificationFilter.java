@@ -140,7 +140,7 @@ public class IdentityVerificationFilter extends AbstractFogwallFilter {
                     request,
                     StepStatus.PASS,
                     null,
-                    violations.size() + " commit email(s) not registered to " + user.getUsername());
+                    violations.size() + " unrecognised commit email(s) — not in proxy user registry");
         }
     }
 
@@ -151,8 +151,8 @@ public class IdentityVerificationFilter extends AbstractFogwallFilter {
         if (commit.getAuthor() != null) {
             String email = commit.getAuthor().getEmail();
             if (email != null && !registeredEmails.contains(email)) {
-                violations.add(
-                        sym(CROSS_MARK) + "  " + sha + ": author <" + email + "> is not registered to " + pushUsername);
+                violations.add(sym(CROSS_MARK) + "  Unrecognised commit email: <" + email + "> (commit " + sha
+                        + ", author) — not in proxy user registry");
             }
         }
 
@@ -162,8 +162,8 @@ public class IdentityVerificationFilter extends AbstractFogwallFilter {
                 boolean sameAsAuthor = commit.getAuthor() != null
                         && email.equals(commit.getAuthor().getEmail());
                 if (!sameAsAuthor) {
-                    violations.add(sym(CROSS_MARK) + "  " + sha + ": committer <" + email + "> is not registered to "
-                            + pushUsername);
+                    violations.add(sym(CROSS_MARK) + "  Unrecognised commit email: <" + email + "> (commit " + sha
+                            + ", committer) — not in proxy user registry");
                 }
             }
         }
