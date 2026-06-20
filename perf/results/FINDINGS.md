@@ -78,16 +78,17 @@ lower average latency and 47% lower p95.
 Both proxies transparently forward pushes to the upstream, but they inspect
 the pack data differently:
 
-- **fogwall** parses the pack inline in the Jetty servlet filter chain. No
-  local clone needed — the filter reads the pack stream, runs validation
-  (commit messages, author emails, diff scanning, secret scanning), and
-  forwards to upstream in a single pass.
+- **fogwall** maintains a persistent cached clone per repo
+  (`LocalRepositoryCache`) that is reused across requests. On each push, it
+  does an incremental fetch (with a 5s cooldown to avoid redundant fetches
+  under concurrent load), inspects commits from the cache, and forwards the
+  original request to upstream. The first push to a repo pays the clone cost;
+  subsequent pushes only pay for incremental fetches.
 
-- **finos/git-proxy** clones the upstream repo into a temp directory on every
-  push, runs `git receive-pack` locally to unpack and inspect, deletes the
-  clone, then forwards the original HTTP request. The clone+receive+delete
-  cycle adds significant per-push overhead that scales linearly with
-  concurrency.
+- **finos/git-proxy** does a fresh `git clone` of the upstream repo into a
+  temp directory on every push, runs `git receive-pack` into it for
+  inspection, then deletes the clone and forwards the original request. Every
+  push pays the full clone cost, which scales linearly with concurrency.
 
 ## Modifications required to benchmark finos/git-proxy
 
