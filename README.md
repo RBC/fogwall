@@ -211,6 +211,7 @@ rationale and reference material:
 | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [Project vision & design](https://gist.github.com/coopernetes/d02d48efa759282ff8187da0d5dcae64) | High-level goals and priority tracks: sideband streaming UX, checkpoint-based resumption, lifecycle hooks, DAG pipeline execution, SCM OAuth integration, SSH support |
 | [Framework rationale](https://gist.github.com/coopernetes/626541b83a148f4ae21ae2c62c57edea)     | Why Java/Jetty + JGit over Node.js/Express: native git protocol handling, in-process pack inspection, sideband streaming                                              |
+| [Performance benchmarks](perf/results/FINDINGS.md)                                              | Side-by-side comparison vs finos/git-proxy: sequential and concurrent clone, fetch, push throughput against a shared Gitea backend                                    |
 
 ## Acknowledgments
 
