@@ -7,51 +7,64 @@ not database or network latency.
 
 ## Prerequisites
 
-- Docker (for Gitea only — pre-built image, no build needed)
-- Python 3 (standard library only, no pip packages)
+- Docker with Compose (Docker Desktop or Podman)
+- Python 3 (standard library only)
 - Java 25+ (for fogwall)
-- Node.js 18+ (for finos/git-proxy)
+- Node.js 22.13+ or 24+ (for finos/git-proxy)
 - git
 
-## Quick start
+## Setup
 
 ```bash
-# 1. Start services locally
-bash perf/start-local.sh
+# Start Gitea
+docker compose -f perf/docker-compose.yml up -d gitea
 
-# 2. One-time setup: create test org, repo, user, seed data
-bash perf/setup.sh --local
+# Create test user, org, repo, seed data
+bash perf/setup.sh
+```
 
-# 3. Run sequential benchmarks
+## Running fogwall
+
+fogwall loads `fogwall-{profile}.yml` from the classpath. Symlink the perf
+config into the resources directory so Gradle picks it up:
+
+```bash
+ln -sf "$(pwd)/perf/fogwall-perf.yml" fogwall-server/src/main/resources/fogwall-perf.yml
+FOGWALL_CONFIG_PROFILES=perf ./gradlew :fogwall-server:run
+```
+
+## Running finos/git-proxy
+
+finos/git-proxy requires local code modifications to work with a plain HTTP
+backend (hardcoded HTTPS, no auto-approve config). See the findings files
+for the specific changes needed.
+
+```bash
+cd /path/to/finos-git-proxy
+node dist/index.js --config /path/to/fogwall/perf/git-proxy-perf.json
+```
+
+Note: `git-proxy-perf.json` uses Docker networking hostnames (`gitea:3000`).
+For local runs, create a copy with `localhost:3000` and `http://` scheme.
+
+## Benchmarks
+
+```bash
+# Sequential (10 runs, 2 warmup)
 python3 perf/bench.py fogwall
 python3 perf/bench.py git-proxy
 
-# 4. Run concurrent benchmarks
-CONCURRENCY=20 TOTAL_OPS=100 python3 perf/bench.py fogwall --concurrent
-CONCURRENCY=20 TOTAL_OPS=100 python3 perf/bench.py git-proxy --concurrent
+# Concurrent
+CONCURRENCY=10 TOTAL_OPS=50 python3 perf/bench.py fogwall --concurrent
+CONCURRENCY=10 TOTAL_OPS=50 python3 perf/bench.py git-proxy --concurrent
 
-# 5. Stop services
-bash perf/stop-local.sh
-```
-
-## Docker Compose (fully isolated)
-
-```bash
-docker compose -f perf/docker-compose.yml up -d --build
-bash perf/setup.sh
-python3 perf/bench.py fogwall
-docker compose -f perf/docker-compose.yml down -v
-```
-
-## Tuning
-
-```bash
-# Sequential: more runs, more warmup
+# Tuning
 RUNS=20 WARMUP=5 python3 perf/bench.py fogwall
-
-# Concurrent: scale up
 CONCURRENCY=50 TOTAL_OPS=200 python3 perf/bench.py fogwall --concurrent
 ```
+
+Results are saved to `perf/results/<proxy>/sequential.json` and
+`perf/results/<proxy>/concurrent.json`.
 
 ## What's tested
 
@@ -63,23 +76,17 @@ CONCURRENCY=50 TOTAL_OPS=200 python3 perf/bench.py fogwall --concurrent
 
 ### Push architecture difference
 
-Both proxies transparently forward pushes to upstream, but inspect the pack
-data differently:
+Both proxies need a local clone for commit inspection and diff generation.
+The difference is in how that clone is managed:
 
 - **fogwall** maintains a persistent cached clone per repo
-  (`LocalRepositoryCache`) that is reused across requests. On each push, it
-  does an incremental fetch (with a 5s cooldown to avoid redundant fetches),
-  inspects commits from the cache, and forwards the original request to
-  upstream.
+  (`LocalRepositoryCache`) that is reused across requests. Subsequent pushes
+  do an incremental fetch (with a 5s cooldown). Under concurrency, all
+  parallel pushes share one cached clone.
 
-- **finos/git-proxy** does a fresh `git clone` of the upstream repo into a
-  temp directory on every push, runs `git receive-pack` into it for
-  inspection, then deletes the clone and forwards the original request. Every
-  push pays the full clone cost.
-
-fogwall also supports a separate **store-and-forward mode** (not benchmarked
-here) where pushes are received into a persistent local bare repo and forwarded
-on behalf of the user — enabling deferred forwarding and approval gates.
+- **finos/git-proxy** does a fresh `git clone` into a temp directory on
+  every push, runs `git receive-pack` for inspection, then deletes the clone.
+  Every push pays the full clone cost.
 
 ## Results
 
@@ -88,7 +95,5 @@ See `results/FINDINGS-*.md` for detailed benchmark results per machine.
 ## Teardown
 
 ```bash
-bash perf/stop-local.sh
-# or for Docker Compose:
 docker compose -f perf/docker-compose.yml down -v
 ```

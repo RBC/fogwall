@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # One-time setup: create Gitea admin, org, repo, and test user for benchmarking.
+# Requires Gitea running via: docker compose -f perf/docker-compose.yml up -d gitea
 #
 # Usage:
-#   bash perf/setup.sh           # docker compose mode
-#   bash perf/setup.sh --local   # local mode (start-local.sh)
+#   bash perf/setup.sh
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,58 +18,35 @@ TEST_EMAIL="benchuser@example.com"
 ORG="perf"
 REPO="bench-repo"
 
-LOCAL_MODE=false
-if [ "${1:-}" = "--local" ]; then
-    LOCAL_MODE=true
+if [ -n "${COMPOSE:-}" ]; then
+    :
+elif command -v docker &>/dev/null && docker info &>/dev/null 2>&1; then
+    COMPOSE="docker compose"
+elif command -v podman &>/dev/null && podman info &>/dev/null 2>&1; then
+    COMPOSE="podman compose"
+else
+    echo "No working container runtime found (tried docker, podman)" >&2
+    exit 1
 fi
-
-COMPOSE="${COMPOSE:-docker compose}"
 COMPOSE_FILE="${SCRIPT_DIR}/docker-compose.yml"
 
 echo "==> Waiting for Gitea..."
 until curl -sf "${GITEA_URL}/api/healthz" -o /dev/null 2>&1; do sleep 2; done
 echo "    Gitea ready."
 
-# ---------------------------------------------------------------------------
-# Create users — Gitea admin CLI requires exec into container for compose mode,
-# but the API works for both modes once the admin user exists.
-# ---------------------------------------------------------------------------
-
-create_user_via_exec() {
+create_user() {
     local username="$1" password="$2" email="$3" admin_flag="${4:-}"
     $COMPOSE -f "${COMPOSE_FILE}" exec gitea gitea admin user create \
         ${admin_flag} --username "${username}" --password "${password}" \
         --email "${email}" --must-change-password=false 2>&1 || echo "    (exists)"
 }
 
-create_user_via_docker() {
-    local username="$1" password="$2" email="$3" admin_flag="${4:-}"
-    docker exec perf-gitea gitea admin user create \
-        ${admin_flag} --username "${username}" --password "${password}" \
-        --email "${email}" --must-change-password=false 2>&1 || echo "    (exists)"
-}
-
-generate_token_via_exec() {
+generate_token() {
     local username="$1" token_name="$2"
     $COMPOSE -f "${COMPOSE_FILE}" exec gitea gitea admin user generate-access-token \
         --username "${username}" --token-name "${token_name}" \
         --scopes "read:user,write:repository" 2>&1 | grep -oE '[0-9a-f]{40}' | head -1
 }
-
-generate_token_via_docker() {
-    local username="$1" token_name="$2"
-    docker exec perf-gitea gitea admin user generate-access-token \
-        --username "${username}" --token-name "${token_name}" \
-        --scopes "read:user,write:repository" 2>&1 | grep -oE '[0-9a-f]{40}' | head -1
-}
-
-if [ "${LOCAL_MODE}" = true ]; then
-    create_user() { create_user_via_docker "$@"; }
-    generate_token() { generate_token_via_docker "$@"; }
-else
-    create_user() { create_user_via_exec "$@"; }
-    generate_token() { generate_token_via_exec "$@"; }
-fi
 
 gitea_api() {
     curl -sf -u "${ADMIN_USER}:${ADMIN_PASSWORD}" \
@@ -86,19 +63,11 @@ create_user "${TEST_USER}" "${TEST_PASSWORD}" "${TEST_EMAIL}"
 echo "==> Generating token..."
 TOKEN=$(generate_token "${TEST_USER}" "perf-bench") || true
 
-# ---------------------------------------------------------------------------
-# Orgs and repos
-# ---------------------------------------------------------------------------
-
 echo "==> Creating org and repo..."
 gitea_api orgs -X POST -d "{\"username\":\"${ORG}\",\"visibility\":\"public\"}" > /dev/null 2>&1 || true
 gitea_api "orgs/${ORG}/repos" -X POST \
     -d "{\"name\":\"${REPO}\",\"private\":false,\"auto_init\":true,\"default_branch\":\"main\"}" > /dev/null 2>&1 || true
 gitea_api "repos/${ORG}/${REPO}/collaborators/${TEST_USER}" -X PUT -d '{"permission":"write"}' > /dev/null 2>&1 || true
-
-# ---------------------------------------------------------------------------
-# Seed the repo with files so clones are non-trivial
-# ---------------------------------------------------------------------------
 
 echo "==> Seeding repo with test data..."
 TMPDIR=$(mktemp -d)
@@ -107,7 +76,6 @@ cd "${TMPDIR}/repo"
 git config user.email "${TEST_EMAIL}"
 git config user.name "${TEST_USER}"
 
-# Check if already seeded
 if [ ! -f "file-1.txt" ]; then
     for i in $(seq 1 50); do
         dd if=/dev/urandom bs=1024 count=10 2>/dev/null | base64 > "file-${i}.txt"
@@ -122,10 +90,6 @@ fi
 cd - > /dev/null
 rm -rf "${TMPDIR}"
 
-# ---------------------------------------------------------------------------
-# Write env file
-# ---------------------------------------------------------------------------
-
 ENV_FILE="${SCRIPT_DIR}/.env"
 cat > "${ENV_FILE}" <<EOF
 GITEA_URL=${GITEA_URL}
@@ -135,8 +99,6 @@ TEST_EMAIL=${TEST_EMAIL}
 TOKEN=${TOKEN}
 ORG=${ORG}
 REPO=${REPO}
-FOGWALL_URL=http://localhost:8080
-GIT_PROXY_URL=http://localhost:8000
 EOF
 
 echo ""
@@ -144,7 +106,5 @@ echo "==> Setup complete!"
 echo "    Env written to: ${ENV_FILE}"
 echo ""
 echo "    Direct Gitea:  git clone http://${TEST_USER}:<password>@localhost:3000/${ORG}/${REPO}.git"
-echo "    Via fogwall:   git clone http://${TEST_USER}:<password>@localhost:8080/proxy/gitea/${ORG}/${REPO}.git"
-echo "    Via git-proxy: git clone http://${TEST_USER}:<password>@localhost:8000/${ORG}/${REPO}.git"
 echo ""
-echo "    Run benchmarks: bash perf/bench.sh"
+echo "    Run benchmarks: python3 perf/bench.py <fogwall|git-proxy>"
