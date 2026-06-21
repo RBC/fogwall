@@ -57,10 +57,6 @@ bypass the cache and verify the jacoco threshold:
 
 Always verify the threshold passes locally before pushing — CI runs without cache and will catch it.
 
-```bash
-
-```
-
 Unit tests live under each module's `src/test/`. E2e tests are in `fogwall-server/src/test/java/com/rbc/fogwall/e2e/`
 and tagged `@Tag("e2e")`.
 

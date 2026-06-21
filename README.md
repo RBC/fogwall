@@ -7,7 +7,7 @@
 
 A policy-enforcing git push proxy for enterprises. fogwall sits between the developer's `git push` and the upstream host
 (GitHub, GitLab, Bitbucket, Forgejo), enforcing commit policies, scanning for secrets, verifying identities, and gating
-pushes behind a review workflow — all with real-time terminal feedback via git sideband streaming.
+pushes behind a review workflow — with real-time feedback directly in the developer's terminal.
 
 Built on [JGit](https://github.com/eclipse-jgit/jgit) for native git protocol handling,
 [Jetty](https://github.com/jetty/jetty.project) for the HTTP layer, and [Spring](https://spring.io/),
@@ -26,12 +26,11 @@ Both proxy modes enforce the same set of configurable validation rules:
 - 🔑 Secret scanning ([gitleaks](https://github.com/gitleaks/gitleaks))
 - 🪪 SCM identity verification (resolve token → SCM user)
 - 🛡️ User push permissions (per-repo RBAC)
-- 🕵️ Hidden commit detection (force-push / history rewrite guard)
-- 🌿 Empty branch protection
+- 🕵️ Git history integrity (prevent hidden commits and empty branch pushes)
 - ✍️ GPG/SSH commit signature verification
-- ✅ Approval gate with full lifecycle (RECEIVED → APPROVED → FORWARDED)
+- ✅ Approval gate with configurable mode (auto-approve or manual review via dashboard)
 - 📋 Aggregate failure reporting (all errors surfaced at once)
-- 📡 Real-time sideband progress (store-and-forward)
+- 📡 Real-time terminal feedback during `git push` as validation runs (store-and-forward)
 - 📊 Fetch auditing
 
 ## Dashboard
@@ -49,6 +48,7 @@ The web dashboard provides push management, approval workflows, and operational 
 - 🔒 Allow/deny access rules (literal, glob, regex) scoped by provider and operation
 - 👤 Per-user push permissions with the same target/match model as access rules
 - 📄 Inline diff viewer with side-by-side toggle; large diffs (>1000 lines) on a dedicated page
+- 📦 Repository discovery with push/fetch traffic counts and one-click clone URL
 - 🔌 Provider connectivity diagnostics (TCP, TLS, HTTP, git-specific probe)
 - 🔄 Live config reload without server restart
 
@@ -56,11 +56,12 @@ The web dashboard provides push management, approval workflows, and operational 
 
 Two modes, both active for every provider:
 
-- **Store-and-forward** (`/push/<host>/...`) — JGit `ReceivePack` receives the push locally, runs validation with
-  real-time sideband streaming, then forwards upstream. Supports held-connection approval, deferred forwarding, and full
-  push lifecycle persistence.
-- **Transparent proxy** (`/proxy/<host>/...`) — Jetty `ProxyServlet` forwards the request to upstream. A servlet filter
-  chain validates commits inline and rejects before the push reaches the upstream.
+- **Transparent proxy** (`/proxy/<host>/...`) — forwards the push to upstream via Jetty `ProxyServlet`. A servlet filter
+  chain validates commits inline and rejects before the push reaches upstream. Developers re-push after fixing any
+  validation failures and/or after a push is approved.
+- **Store-and-forward** (`/push/<host>/...`) — runs as a live git server to receive the push locally, runs validation
+  with real-time terminal feedback, then forwards upstream on approval. The push session stays open while a reviewer
+  acts on the dashboard — no need to re-push after approval.
 
 ```shell
 git remote add proxy http://localhost:8080/push/github.com/owner/repo.git

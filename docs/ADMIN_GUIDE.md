@@ -116,8 +116,10 @@ How to grant `ROLE_SELF_CERTIFY`:
 - **LDAP / AD / OIDC:** add `SELF_CERTIFY` to `auth.role-mappings` and map it to the appropriate IdP group.
 - **Local auth:** add `SELF_CERTIFY` to `roles:` in the user's `users:` YAML entry.
 
-> **Note:** Organisations that require mandatory peer review (four-eyes) for all activity should simply not grant
-> `SELF_CERTIFY` role or permissions. If no user holds `SELF_CERTIFY`, all pushes require a separate reviewer.
+<!-- prettier-ignore-start -->
+> [!NOTE]
+> Organisations that require mandatory peer review (four-eyes) for all activity should simply not grant `SELF_CERTIFY` role or permissions. If no user holds `SELF_CERTIFY`, all pushes require a separate reviewer.
+<!-- prettier-ignore-end -->
 
 **Roles are dashboard-level access only.** They do not control which repos a user can push to — that is what permissions
 (below) are for.
@@ -405,9 +407,10 @@ grep "your-request-id" logs/application.log
 
 The `requestId` is also printed in the sideband output to the git client, so you can match terminal output to log lines.
 
-> **Roadmap:** OpenTelemetry tracing support (propagating trace/span IDs into the log MDC and exporting spans to a
-> collector) is tracked in [#106](https://github.com/RBC/fogwall/issues/106). Once implemented, the `requestId` will be
-> correlatable across distributed systems without manual log grepping.
+<!-- prettier-ignore-start -->
+> [!NOTE]
+> **Roadmap:** OpenTelemetry tracing support (propagating trace/span IDs into the log MDC and exporting spans to a collector) is tracked in [#106](https://github.com/RBC/fogwall/issues/106). Once implemented, the `requestId` will be correlatable across distributed systems without manual log grepping.
+<!-- prettier-ignore-end -->
 
 ### Git client output formatting
 
@@ -538,8 +541,10 @@ environment:
 The loader looks for `fogwall-{profile}.yml` on the classpath. With `/app/conf/` prepended, your mounted file is found
 first.
 
-> **Important:** a file mounted at `/app/conf/` is silently ignored unless the matching profile name is set in
-> `FOGWALL_CONFIG_PROFILES`. There is no auto-discovery — the profile name is the activation key.
+<!-- prettier-ignore-start -->
+> [!IMPORTANT]
+> A file mounted at `/app/conf/` is silently ignored unless the matching profile name is set in `FOGWALL_CONFIG_PROFILES`. There is no auto-discovery — the profile name is the activation key.
+<!-- prettier-ignore-end -->
 
 **Multiple profiles** are comma-separated; later profiles take priority over earlier ones:
 
@@ -549,11 +554,10 @@ FOGWALL_CONFIG_PROFILES=docker-default,ldap
 
 This loads `fogwall-docker-default.yml` then `fogwall-ldap.yml`; `ldap` wins on any key both files define.
 
-> **List merge caveat:** Gestalt replaces lists at the key level — it does not append. If two profile files both define
-> `permissions:`, the later file's list replaces the earlier one entirely. Keep all entries for a given list key in a
-> single profile file. A common split that avoids this: one profile for organizational config (users, permissions,
-> rules) and a second for environment-specific connectivity (auth provider URL, database, TLS) which never defines list
-> keys.
+<!-- prettier-ignore-start -->
+> [!WARNING]
+> **List merge caveat:** Gestalt replaces lists at the key level — it does not append. If two profile files both define `permissions:`, the later file's list replaces the earlier one entirely. Keep all entries for a given list key in a single profile file. A common split that avoids this: one profile for organizational config (users, permissions, rules) and a second for environment-specific connectivity (auth provider URL, database, TLS) which never defines list keys.
+<!-- prettier-ignore-end -->
 
 ### Environment variable overrides
 
@@ -623,8 +627,10 @@ Many organisations run a local proxy relay (cntlm, Alpaca) that handles NTLM/Ker
 proxy transparently. Point `HTTPS_PROXY` at the relay (e.g. `http://localhost:3128`) and fogwall will work without any
 auth configuration.
 
-> **Note:** Full proxy authentication (Basic, NTLM) in YAML config is tracked in
-> [#158](https://github.com/RBC/fogwall/issues/158).
+<!-- prettier-ignore-start -->
+> [!NOTE]
+> Full proxy authentication (Basic, NTLM) in YAML config is tracked in [#158](https://github.com/RBC/fogwall/issues/158).
+<!-- prettier-ignore-end -->
 
 ### Connectivity diagnostics (dashboard)
 
@@ -755,9 +761,10 @@ The shared key is a stopgap for automation until proper machine auth is availabl
 calls made with it are unattributed. Prefer session-based access (log in as a named service account) for any automation
 that needs an audit trail.
 
-> **Roadmap:** Per-user and per-service API keys, and an OAuth2 resource server mode for machine-to-machine auth, are
-> tracked in [#57](https://github.com/RBC/fogwall/issues/57). Until then, treat the shared key as a temporary measure
-> and rotate it regularly.
+<!-- prettier-ignore-start -->
+> [!NOTE]
+> **Roadmap:** Per-user and per-service API keys, and an OAuth2 resource server mode for machine-to-machine auth, are tracked in [#57](https://github.com/RBC/fogwall/issues/57). Until then, treat the shared key as a temporary measure and rotate it regularly.
+<!-- prettier-ignore-end -->
 
 ---
 

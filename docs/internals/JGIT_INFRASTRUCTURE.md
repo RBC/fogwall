@@ -19,7 +19,7 @@ plugged in to turn a vanilla `GitServlet` into a validating, forwarding proxy:
 | `ReceivePackFactory` | `StoreAndForwardReceivePackFactory` | Creates a `ReceivePack` per request; assembles the pre/post-receive hook chain  |
 | `UploadPackFactory`  | `StoreAndForwardUploadPackFactory`  | Creates `UploadPack` for fetch requests                                         |
 
-Registration happens in `GitProxyServletRegistrar`:
+Registration happens in `FogwallServletRegistrar`:
 
 ```java
 var gitServlet = new GitServlet();
@@ -125,7 +125,7 @@ without access to the HTTP request.
 `StoreAndForwardReceivePackFactory` creates a fresh `ReceivePack` for each push request. Its main job is assembling the
 hook chain:
 
-- **Orderable validation hooks** implement `GitProxyHook` and are sorted by `getOrder()`. Two ranges are used:
+- **Orderable validation hooks** implement `FogwallHook` and are sorted by `getOrder()`. Two ranges are used:
   - Authorization (0–199): whitelist check, user permission
   - Content filtering (200–399): empty branch, hidden commits, email/message validation, diffs, GPG, secret scanning
 - **Lifecycle hooks** are pinned at fixed positions around the validation hooks: persistence (before/after) and approval
@@ -302,7 +302,7 @@ All methods use `^{commit}` peeling to handle annotated tags transparently. See
 
 | API                    | Where                                               | Purpose                                             |
 | ---------------------- | --------------------------------------------------- | --------------------------------------------------- |
-| `GitServlet`           | `GitProxyServletRegistrar`                          | HTTP git server implementation                      |
+| `GitServlet`           | `FogwallServletRegistrar`                           | HTTP git server implementation                      |
 | `ReceivePack`          | `StoreAndForwardReceivePackFactory`                 | Receives pack data, runs hook chain                 |
 | `Transport`            | `ForwardingPostReceiveHook`                         | Pushes to upstream with credentials                 |
 | `RevWalk`              | `CommitInspectionService`, `CheckHiddenCommitsHook` | Walks commit graph                                  |

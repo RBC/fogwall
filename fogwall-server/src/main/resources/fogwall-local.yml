@@ -6,17 +6,17 @@ server:
   # Use default h2 database for local development - save the sessions there as well
   session-store: jdbc
 
-# Four users:
-#   admin          — ADMIN role, no SCM identity; for dashboard/user-management testing
-#   thomas-cooper  — personal push account linked to real SCM handles (github/gitlab)
-#   trusted        — trusted contributor with SELF_CERTIFY access to approve their own pushes
-#   reviewer       — dummy approve-only account; no SCM identity, used to test
-#                    the approval flow independently of the pusher identity
+# Three users for local development:
+#   admin    — full dashboard access, can approve any push
+#   dev      — a developer account; add your SCM identity here to push through the proxy
+#   reviewer — approve-only account for testing the approval flow separately from the pusher
 #
-# Codeberg is intentionally absent from thomas-cooper's scm-identities —
-# push-identity-codeberg.sh expects "Identity Not Linked" as the failure scenario.
+# To try it out:
+#   1. Add your SCM username under dev's scm-identities (e.g. provider: github, username: your-gh-handle)
+#   2. Add an allow rule and permission for your test repo (see rules/permissions below)
+#   3. Start the server and push with your own PAT
 #
-# Password format: {noop}plaintext (dev only).
+# Password format: {noop}plaintext (dev only — use {bcrypt} in production).
 auth:
   provider: local
 
@@ -27,21 +27,15 @@ users:
     emails:
       - admin@example.com
 
-  - username: thomas-cooper
+  - username: dev
     password-hash: "{noop}password"
     roles: [ADMIN, SELF_CERTIFY]
-    scm-identities:
-      - provider: github
-        username: coopernetes
-      - provider: gitlab
-        username: coopernetes
-      # codeberg intentionally omitted — used to test unresolved-identity scenario
+    scm-identities: []
+      # Add your SCM identity here, e.g.:
+      # - provider: github
+      #   username: your-github-handle
     emails:
-      - thomas-cooper@example.com
-
-  - username: trusted
-    password-hash: "{noop}password"
-    roles: [SELF_CERTIFY]
+      - dev@example.com
 
   - username: reviewer
     password-hash: "{noop}password"
@@ -49,8 +43,7 @@ users:
 commit:
   author:
     email:
-      # Domains allowed for commit authors.
-      # Used by the local test-*.sh scripts — replace with your corporate domain in production.
+      # Domains allowed for commit authors. Broad defaults for local dev.
       domain:
         allow: "(proton\\.me|gmail\\.com|outlook\\.com|yahoo\\.com|example\\.com)$"
       # Local-parts (before @) that are always blocked regardless of domain.
@@ -58,19 +51,16 @@ commit:
         block: "^(noreply|no-reply|bot|nobody)$"
   message:
     block:
-      # Commit messages containing any of these strings (case-insensitive) are rejected.
       literals:
         - "WIP"
         - "DO NOT MERGE"
         - "fixup!"
         - "squash!"
-      # Commit messages matching any of these patterns are rejected.
       patterns:
         - '(?i)(password|secret|token)\s*[=:]\s*\S+'
 
 diff-scan:
   block:
-    # Example: block internal hostnames/URLs from leaking into public repos.
     literals:
       - "internal.corp.example.com"
     patterns:
@@ -93,71 +83,33 @@ attestations:
     label: "Internal ticket or justification reference"
     required: false
 
-# Repo permissions for local dev / smoke testing.
+# Repo permissions for local dev.
 #
-# thomas-cooper: push access on all allowed repos (exercises LITERAL/GLOB/REGEX).
-# reviewer:      approve-only — dummy account for testing the approval flow
-#                independently of the pusher identity; no SCM identity needed.
-# (admin can also approve via the dashboard by virtue of its ADMIN role.)
-#
-# Match types intentionally exercise all three modes:
-#   GitHub   → LITERAL (exact slug)
-#   GitLab   → GLOB   (all repos under the coopernetes owner)
-#   Codeberg → REGEX  (anchored Java regex — permission exists but identity will
-#                      block before it's evaluated in push-identity-codeberg.sh)
+# dev:      push access on allowed repos — add your test repo below
+# reviewer: approve-only (can review any push dev submits)
+# admin:    can also approve via the dashboard by virtue of its ADMIN role
 permissions:
-  - username: thomas-cooper
+  - username: dev
     provider: github
     match:
       target: SLUG
-      value: /finos/git-proxy
+      value: /RBC/fogwall
       type: LITERAL
     operations: PUSH
-  - username: thomas-cooper
-    provider: github
-    match:
-      target: SLUG
-      value: /coopernetes/test-repo
-      type: LITERAL
-    operations: PUSH
-  - username: thomas-cooper
-    provider: gitlab
-    match:
-      target: OWNER
-      value: coopernetes
-      type: GLOB
-    operations: PUSH
-  - username: thomas-cooper
-    provider: codeberg
-    match:
-      target: SLUG
-      value: '/coopernetes/test-repo-([\w]+)' # matches /coopernetes/test-repo-codeberg & any test-repo-<something>
-      type: REGEX
-    operations: PUSH
+  # Add more permissions for your own repos, e.g.:
+  # - username: dev
+  #   provider: github
+  #   match:
+  #     target: SLUG
+  #     value: /your-org/your-repo
+  #     type: LITERAL
+  #   operations: PUSH
 
 rules:
-  # Rules are evaluated like firewall / iptables rules: all allow and deny rules are merged into a
-  # single list sorted by `order` (ascending). The first rule that matches a request wins, regardless
-  # of whether it is an allow or deny rule. Lower order numbers take priority.
-  #
-  # A lower-numbered allow rule will therefore permit a request even if a higher-numbered deny rule
-  # also matches, and vice versa.
-  #
-  # If no allow rules are configured at all, the proxy operates in fail closed mode (all requests denied).
+  # Evaluated like firewall rules: all allow and deny rules merged into a single list
+  # sorted by order (ascending). First matching rule wins.
   deny:
-    # Guard: never allow pushes to this proxy's own source repository through the proxy.
-    # /finos/git-proxy is allowed above (for dev testing), but git-proxy-java itself is not.
-    - enabled: true
-      order: 10
-      operations: PUSH
-      provider: github
-      match:
-        target: SLUG
-        value: /coopernetes/git-proxy-java
-        type: LITERAL
-
-    # GitHub Pages repositories are presentation sites — block pushes even if the
-    # owner is covered by an allow rule (e.g. a future finos/* allow entry).
+    # Example: block pushes to *.github.io repos
     - enabled: true
       order: 20
       operations: PUSH
@@ -168,38 +120,22 @@ rules:
         type: GLOB
 
   allow:
+    # Allow fetch and push to this project's own repo
     - enabled: true
-      order: 30
-      operations: FETCH
+      order: 100
+      operations: BOTH
       provider: github
       match:
         target: SLUG
-        value: '/(finos|coopernetes)/(git-proxy|git-proxy-java|test-repo)'
-        type: REGEX
-
-    - enabled: true
-      order: 40
-      operations: BOTH
-      provider: gitlab
-      match:
-        target: SLUG
-        value: /coopernetes/test-repo-gitlab
+        value: /RBC/fogwall
         type: LITERAL
 
-    - enabled: true
-      order: 50
-      operations: BOTH
-      provider: codeberg
-      match:
-        target: SLUG
-        value: /coopernetes/test-repo-codeberg
-        type: LITERAL
-
-    - enabled: true
-      order: 60
-      operations: FETCH
-      provider: github
-      match:
-        target: OWNER
-        value: finos
-        type: GLOB
+    # Add more allow rules for your own repos, e.g.:
+    # - enabled: true
+    #   order: 110
+    #   operations: BOTH
+    #   provider: github
+    #   match:
+    #     target: SLUG
+    #     value: /your-org/your-repo
+    #     type: LITERAL

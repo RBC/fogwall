@@ -15,6 +15,6 @@ source "$(dirname "${BASH_SOURCE[0]}")/tokens.env"
 
 export GIT_USERNAME="me"
 export GIT_PASSWORD="${GITEA_TESTUSER_TOKEN}"
-export GIT_REPO="gitea/test-owner/test-repo.git"
+export GIT_REPO="${GITEA_HOST:-localhost:3000}/test-owner/test-repo.git"
 export GIT_AUTHOR_NAME="test-user"
 export GIT_EMAIL="testuser@example.com"

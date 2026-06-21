@@ -447,8 +447,3 @@ this step.
 
 This means every release image is byte-for-byte identical to the `:edge` image that was scanned when the version bump
 merged.
-
-## Issues and pull requests
-
-The issue tracker is at [RBC/fogwall](https://github.com/RBC/fogwall/issues). Reference the upstream Node.js
-implementation at [finos/git-proxy](https://github.com/finos/git-proxy) when porting features.
