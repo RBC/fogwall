@@ -5,15 +5,11 @@
 
 # fogwall
 
-Enterprises in regulated industries need their developers to contribute to open-source — but every outbound push must be
-audited, validated, and approved before it leaves the building. fogwall sits between the developer's `git push` and the
-upstream host, enforcing commit policies, scanning for secrets, verifying identities, and gating pushes behind a review
-workflow.
+A policy-enforcing git push proxy for enterprises. fogwall sits between the developer's `git push` and the upstream host
+(GitHub, GitLab, Bitbucket, Forgejo), enforcing commit policies, scanning for secrets, verifying identities, and gating
+pushes behind a review workflow — all with real-time terminal feedback via git sideband streaming.
 
-This project is a Java reimplementation of [FINOS git-proxy](https://github.com/finos/git-proxy) — a Node.js proxy that
-pioneered the concept of an enterprise-grade, policy-enforcing git push gateway. fogwall builds on the same core ideas
-(validation pipeline, push approval lifecycle, multi-provider support) while targeting JVM-based environments, using
-[JGit](https://github.com/eclipse-jgit/jgit) for native git protocol handling,
+Built on [JGit](https://github.com/eclipse-jgit/jgit) for native git protocol handling,
 [Jetty](https://github.com/jetty/jetty.project) for the HTTP layer, and [Spring](https://spring.io/),
 [React](https://react.dev/) & [Tailwind](https://tailwindcss.com/) for the dashboard.
 
@@ -58,105 +54,33 @@ The web dashboard provides push management, approval workflows, and operational 
 
 ## Proxy Modes
 
-### URLs
+Two modes, both active for every provider:
 
-fogwall proxies arbitrary upstream Git repositories over HTTPS. For each upstream provider (e.g. `github.com`,
-`gitlab.com`), a distinct URL is mapped by hostname. The remainder of the URL is the repository path:
-
-- Original repository: `https://github.com/RBC/fogwall`
-- Proxy: `http[s]://{fogwall-server}/{proxy,push*}/github.com/RBC/fogwall`
-
-This makes it simple for a developer to add a new [git remote](https://git-scm.com/docs/git-remote) and start pushing
-through the proxy:
+- **Store-and-forward** (`/push/<host>/...`) — JGit `ReceivePack` receives the push locally, runs validation with
+  real-time sideband streaming, then forwards upstream. Supports held-connection approval, deferred forwarding, and full
+  push lifecycle persistence.
+- **Transparent proxy** (`/proxy/<host>/...`) — Jetty `ProxyServlet` forwards the request to upstream. A servlet filter
+  chain validates commits inline and rejects before the push reaches the upstream.
 
 ```shell
-git clone https://github.com/RBC/fogwall && cd fogwall
-git remote add proxy http://localhost:8080/push/github.com/RBC/fogwall
+git remote add proxy http://localhost:8080/push/github.com/owner/repo.git
+git push proxy main
 ```
 
-> \*Note: the base URL determines which proxying mode is in use. See below for details.
-
-### Transparent proxy (`/proxy/<host>/...`)
-
-HTTP requests are forwarded to the upstream Git server via Jetty's `ProxyServlet`. A servlet filter chain validates
-commits inline and rejects the push with a git client error before it reaches the upstream. It is designed for simple
-proxying usage where immediate feedback is preferred and clients re-push upon resolving any validation failures.
-
-```shell
-git clone http://localhost:8080/proxy/github.com/owner/repo.git
-git push http://localhost:8080/proxy/github.com/owner/repo.git
-```
-
-### Store-and-forward (`/push/<host>/...`)
-
-Push objects are received locally using JGit's `ReceivePack`. A hook chain validates commits and streams real-time
-progress via git sideband before forwarding to the upstream. Because the proxy owns the full push lifecycle, each step
-can be extended — custom validation, external approval workflows, third-party integrations — without touching the
-upstream. Each state transition is persisted as an event-log entry in the configured database.
-
-```shell
-git clone http://localhost:8080/push/github.com/owner/repo.git
-git push http://localhost:8080/push/github.com/owner/repo.git
-```
+See the [User Guide](docs/USER_GUIDE.md) for URL scheme details, push modes, and the approval workflow.
 
 ## Getting Started
 
-### Prerequisites
-
-- Java 25+
-- Node 24+ (for the dashboard frontend)
-- Gradle (wrapper included)
-
-The easiest way to get the right versions is [mise](https://mise.jdx.dev/):
-
 ```shell
-mise install   # installs Java 21 (Temurin) and Node 24 from mise.toml
+mise install                       # Java 25 + Node 26 (or install manually)
+git clone https://github.com/RBC/fogwall.git && cd fogwall
+./gradlew build                    # compile + unit tests
+./gradlew :fogwall-dashboard:run   # proxy + dashboard at http://localhost:8080
 ```
 
-### Clone and build
-
-```shell
-git clone https://github.com/RBC/fogwall.git
-cd fogwall
-./gradlew build
-```
-
-### Run the main application (UI + proxy)
-
-The full application includes the proxy, approval dashboard, and REST API:
-
-```shell
-./gradlew :fogwall-dashboard:run
-```
-
-Stop with:
-
-```shell
-./gradlew :fogwall-dashboard:stop
-```
-
-### Run the proxy server (standalone, no UI or review gates)
-
-If you only need the proxy without the dashboard or management API:
-
-```shell
-./gradlew :fogwall-server:run
-```
-
-Logs are written to `fogwall-server/logs/application.log`. Stop with:
-
-```shell
-./gradlew :fogwall-server:stop
-```
-
-### Configure and test
-
-Configuration is YAML-based. See the [Configuration Reference](docs/CONFIGURATION.md) for the full schema, environment
-variable overrides, and provider settings.
-
-To verify the proxy end-to-end against your own repo, follow the
-[Running tests against your own repo](CONTRIBUTING.md#running-tests-against-your-own-repo) guide in CONTRIBUTING.md — it
-walks through PAT setup, allow rules, permissions, and running the smoke test scripts.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed build instructions, Docker Compose setup, test scripts, and
+development workflow. See the [Configuration Reference](docs/CONFIGURATION.md) for YAML config, environment variable
+overrides, and provider settings.
 
 ## Supported Providers
 

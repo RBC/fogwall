@@ -1,8 +1,7 @@
 # Performance benchmarks
 
-Side-by-side comparison of **fogwall** vs **finos/git-proxy** using a shared
-local Gitea backend. Both proxies are configured with minimal validation rules
-and local-only storage (h2 / filesystem) so the numbers reflect proxy overhead,
+Side-by-side comparison of **fogwall** vs **finos/git-proxy** using a shared local Gitea backend. Both proxies are
+configured with minimal validation rules and local-only storage (h2 / filesystem) so the numbers reflect proxy overhead,
 not database or network latency.
 
 ## Prerequisites
@@ -25,8 +24,8 @@ bash perf/setup.sh
 
 ## Running fogwall
 
-fogwall loads `fogwall-{profile}.yml` from the classpath. Symlink the perf
-config into the resources directory so Gradle picks it up:
+fogwall loads `fogwall-{profile}.yml` from the classpath. Symlink the perf config into the resources directory so Gradle
+picks it up:
 
 ```bash
 ln -sf "$(pwd)/perf/fogwall-perf.yml" fogwall-server/src/main/resources/fogwall-perf.yml
@@ -35,17 +34,16 @@ FOGWALL_CONFIG_PROFILES=perf ./gradlew :fogwall-server:run
 
 ## Running finos/git-proxy
 
-finos/git-proxy requires local code modifications to work with a plain HTTP
-backend (hardcoded HTTPS, no auto-approve config). See the findings files
-for the specific changes needed.
+finos/git-proxy requires local code modifications to work with a plain HTTP backend (hardcoded HTTPS, no auto-approve
+config). See the findings files for the specific changes needed.
 
 ```bash
 cd /path/to/finos-git-proxy
 node dist/index.js --config /path/to/fogwall/perf/git-proxy-perf.json
 ```
 
-Note: `git-proxy-perf.json` uses Docker networking hostnames (`gitea:3000`).
-For local runs, create a copy with `localhost:3000` and `http://` scheme.
+Note: `git-proxy-perf.json` uses Docker networking hostnames (`gitea:3000`). For local runs, create a copy with
+`localhost:3000` and `http://` scheme.
 
 ## Benchmarks
 
@@ -63,8 +61,7 @@ RUNS=20 WARMUP=5 python3 perf/bench.py fogwall
 CONCURRENCY=50 TOTAL_OPS=200 python3 perf/bench.py fogwall --concurrent
 ```
 
-Results are saved to `perf/results/<proxy>/sequential.json` and
-`perf/results/<proxy>/concurrent.json`.
+Results are saved to `perf/results/<proxy>/sequential.json` and `perf/results/<proxy>/concurrent.json`.
 
 ## TLS benchmarks
 
@@ -90,9 +87,8 @@ ln -sf "$(pwd)/perf/fogwall-perf.yml" fogwall-server/src/main/resources/fogwall-
 ln -sf "$(pwd)/perf/fogwall-perf-tls.yml" fogwall-server/src/main/resources/fogwall-perf-tls.yml
 ```
 
-The `perf-tls` profile overrides the Gitea URI to `https://localhost:3443` and
-sets `server.tls.trust-ca-bundle` for the proxy path. `JAVA_TOOL_OPTIONS` adds
-the JKS truststore so the Forgejo identity API client also trusts the CA:
+The `perf-tls` profile overrides the Gitea URI to `https://localhost:3443` and sets `server.tls.trust-ca-bundle` for the
+proxy path. `JAVA_TOOL_OPTIONS` adds the JKS truststore so the Forgejo identity API client also trusts the CA:
 
 ```bash
 FOGWALL_CONFIG_PROFILES=perf,perf-tls \
@@ -108,9 +104,8 @@ NODE_EXTRA_CA_CERTS=$(pwd)/perf/tls/ca.pem \
     node dist/index.js --config /path/to/perf/git-proxy-perf.json
 ```
 
-Note: the `git-proxy-perf.json` authorisedList URL must be updated to
-`https://localhost:3443` and the proxy routes need the HTTP→HTTPS code
-changes described in the findings.
+Note: the `git-proxy-perf.json` authorisedList URL must be updated to `https://localhost:3443` and the proxy routes need
+the HTTP→HTTPS code changes described in the findings.
 
 ### Run benchmarks
 
@@ -122,25 +117,23 @@ python3 perf/bench.py fogwall --tls --concurrent
 
 ## What's tested
 
-| Scenario | Description |
-|----------|-------------|
-| Clone | Full `git clone` through proxy vs direct Gitea |
-| Fetch | `git fetch` on pre-cloned repo |
-| Push | Commit + push through proxy (transparent mode) |
+| Scenario | Description                                    |
+| -------- | ---------------------------------------------- |
+| Clone    | Full `git clone` through proxy vs direct Gitea |
+| Fetch    | `git fetch` on pre-cloned repo                 |
+| Push     | Commit + push through proxy (transparent mode) |
 
 ### Push architecture difference
 
-Both proxies need a local clone for commit inspection and diff generation.
-The difference is in how that clone is managed:
+Both proxies need a local clone for commit inspection and diff generation. The difference is in how that clone is
+managed:
 
-- **fogwall** maintains a persistent cached clone per repo
-  (`LocalRepositoryCache`) that is reused across requests. Subsequent pushes
-  do an incremental fetch (with a 5s cooldown). Under concurrency, all
-  parallel pushes share one cached clone.
+- **fogwall** maintains a persistent cached clone per repo (`LocalRepositoryCache`) that is reused across requests.
+  Subsequent pushes do an incremental fetch (with a 5s cooldown). Under concurrency, all parallel pushes share one
+  cached clone.
 
-- **finos/git-proxy** does a fresh `git clone` into a temp directory on
-  every push, runs `git receive-pack` for inspection, then deletes the clone.
-  Every push pays the full clone cost.
+- **finos/git-proxy** does a fresh `git clone` into a temp directory on every push, runs `git receive-pack` for
+  inspection, then deletes the clone. Every push pays the full clone cost.
 
 ## Results
 

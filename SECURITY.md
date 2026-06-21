@@ -2,13 +2,12 @@
 
 ## Supported Versions
 
-fogwall is currently pre-1.0. Only the latest release is supported with security fixes.
+Security fixes are applied to the latest release only. Upgrade to receive fixes.
 
-| Version               | Supported        |
-| --------------------- | ---------------- |
-| 1.0.x (when released) | ✅               |
-| 1.0.0-beta.x          | ✅ (latest only) |
-| < 1.0.0-beta.1        | ❌               |
+| Version | Supported        |
+| ------- | ---------------- |
+| 1.x     | ✅ (latest only) |
+| < 1.0.0 | ❌               |
 
 ## Reporting a Vulnerability
 

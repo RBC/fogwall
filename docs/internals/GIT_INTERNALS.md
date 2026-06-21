@@ -392,8 +392,8 @@ When a push's pack data exceeds the git client's `http.postBuffer` (default 1 Mi
 PACK data — but the HTTP framing changes from "here's N bytes" to "here are chunks of variable size, terminated by a
 zero-length chunk."
 
-Many reverse proxies deployed in front of fogwall do not faithfully forward chunked request bodies. Observed
-failure modes (confirmed on HAProxy-based OpenShift Routes):
+Many reverse proxies deployed in front of fogwall do not faithfully forward chunked request bodies. Observed failure
+modes (confirmed on HAProxy-based OpenShift Routes):
 
 - **Early termination**: the proxy forwards the first HTTP chunk (a few bytes of pkt-line data), then sends the chunked
   terminator. The server receives a valid but tiny body — just the pkt-line length prefix — and `ParseGitRequestFilter`
@@ -408,9 +408,9 @@ failure modes (confirmed on HAProxy-based OpenShift Routes):
 
 Small pushes (< 1 MiB) use `Content-Length` and are unaffected — the proxy forwards the body as a single unit.
 
-This is not a Jetty bug or a fogwall bug. The same issue affects any HTTP backend behind a proxy that doesn't
-support chunked request forwarding. GitHub, GitLab, and Gitea avoid this because they either terminate HTTP at the edge
-(no generic proxy in the path) or explicitly configure their proxy layer for streaming uploads.
+This is not a Jetty bug or a fogwall bug. The same issue affects any HTTP backend behind a proxy that doesn't support
+chunked request forwarding. GitHub, GitLab, and Gitea avoid this because they either terminate HTTP at the edge (no
+generic proxy in the path) or explicitly configure their proxy layer for streaming uploads.
 
 ### Server-side mitigation: `BlockingContentHandler`
 
@@ -425,8 +425,8 @@ the servlet layer sees it. It uses Jetty 12's `Content.Source.read()` / `Content
 
 The accumulated body is wrapped in a `BufferedBodyRequest` (a `Request.Wrapper` that overrides the `Content.Source`
 methods) so the servlet layer's `HttpInput` reads from the buffered copy. Both the transparent proxy filter chain
-(`RequestBodyWrapper.readAllBytes()`) and the store-and-forward path (JGit's `ReceivePack`) get the complete body without
-touching the network.
+(`RequestBodyWrapper.readAllBytes()`) and the store-and-forward path (JGit's `ReceivePack`) get the complete body
+without touching the network.
 
 GET requests pass through without buffering.
 
@@ -440,12 +440,12 @@ does not work. The body was still truncated in production.
 #### Why not just dispatch to a blocking thread?
 
 The second attempt used a simple `Handler.Wrapper` that called `request.getContext().execute(...)` to move servlet
-execution to a `QueuedThreadPool` worker thread, then relied on the servlet layer's `HttpInput.readAllBytes()`. This also
-failed — `HttpInput` returned `-1` prematurely even on a blocking thread.
+execution to a `QueuedThreadPool` worker thread, then relied on the servlet layer's `HttpInput.readAllBytes()`. This
+also failed — `HttpInput` returned `-1` prematurely even on a blocking thread.
 
-The third attempt used `Content.Source.asInputStream(request).readAllBytes()` at the Handler level, bypassing `HttpInput`.
-This also returned truncated data — `ContentSourceInputStream` wraps the same `Content.Source` and exhibited the same
-premature EOF behaviour.
+The third attempt used `Content.Source.asInputStream(request).readAllBytes()` at the Handler level, bypassing
+`HttpInput`. This also returned truncated data — `ContentSourceInputStream` wraps the same `Content.Source` and
+exhibited the same premature EOF behaviour.
 
 The working approach reads from `Content.Source` directly using the `read()`/`demand()` loop, which is the lowest-level
 API available and handles partial delivery correctly regardless of transfer encoding or proxy reframing.
@@ -466,12 +466,14 @@ handle correctly. The tradeoff is higher client memory usage for large pushes.
 If you control the reverse proxy, configure it to buffer the full request before forwarding to the backend:
 
 **nginx**:
+
 ```
 proxy_request_buffering on;   # buffer the full request before forwarding (default)
 client_max_body_size 500m;    # allow large pack uploads
 ```
 
 **HAProxy**:
+
 ```
 option http-buffer-request     # buffer the full request before forwarding
 timeout http-request 300s      # allow time for large chunked uploads to complete

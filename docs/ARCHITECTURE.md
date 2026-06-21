@@ -1,8 +1,8 @@
 # Architecture
 
-fogwall is a Git push proxy that sits between developers and upstream Git hosting providers (GitHub, GitLab,
-Bitbucket, Forgejo, etc.). Every push travels through a validation and approval pipeline before reaching the upstream
-remote. Fetch/clone traffic is audited but not blocked.
+fogwall is a Git push proxy that sits between developers and upstream Git hosting providers (GitHub, GitLab, Bitbucket,
+Forgejo, etc.). Every push travels through a validation and approval pipeline before reaching the upstream remote.
+Fetch/clone traffic is audited but not blocked.
 
 If you're familiar with [finos/git-proxy](https://github.com/finos/git-proxy), the Java rewrite shares the same
 conceptual model: an ordered chain of steps that inspect and act on each push, a push store for audit and approval
@@ -62,21 +62,21 @@ The developer's git client is talking to a forwarding proxy, not a JGit endpoint
 cycle. A temporary local clone is still used to unpack the pack data and walk the commit range for validation, but the
 push is forwarded via HTTP proxy rather than a JGit `push` command.
 
-This mode cannot stream incremental feedback, but it does still clone the upstream repo locally for pack inspection — 
+This mode cannot stream incremental feedback, but it does still clone the upstream repo locally for pack inspection —
 see below.
 
 ### Choosing a mode
 
-| Concern | Store-and-forward | Transparent proxy                                                         |
-|---|---|---------------------------------------------------------------------------|
-| Live progress feedback | Yes — per-step sideband messages | No — single terminal response                                             |
-| Local storage required | Yes — receives the push into a local clone | Yes — clone needed for pack inspection                                    |
-| Approval workflow | Blocks git session until approved | Records push, polls for approval (requires second push)                   |
-| Pack inspection | Via JGit `ReceivePack` APIs | Pack unpacked into local clone for inspection, then HTTP-proxied upstream |
-| Resumable push after approval | Same session | New push to `/proxy/` re-run detects prior approval                       |
+| Concern                       | Store-and-forward                          | Transparent proxy                                                         |
+| ----------------------------- | ------------------------------------------ | ------------------------------------------------------------------------- |
+| Live progress feedback        | Yes — per-step sideband messages           | No — single terminal response                                             |
+| Local storage required        | Yes — receives the push into a local clone | Yes — clone needed for pack inspection                                    |
+| Approval workflow             | Blocks git session until approved          | Records push, polls for approval (requires second push)                   |
+| Pack inspection               | Via JGit `ReceivePack` APIs                | Pack unpacked into local clone for inspection, then HTTP-proxied upstream |
+| Resumable push after approval | Same session                               | New push to `/proxy/` re-run detects prior approval                       |
 
-  Both modes share the same validation logic and push store. Both are always active for every configured provider —
-  there is currently no per-provider toggle to disable one mode.
+Both modes share the same validation logic and push store. Both are always active for every configured provider — there
+is currently no per-provider toggle to disable one mode.
 
 ---
 
@@ -141,17 +141,17 @@ git push → /proxy/<provider>/<owner>/<repo>.git
 Both modes run equivalent validation logic. The filter/hook names differ, but they check the same things in the same
 order.
 
-| Order | What it checks |
-|---|---|
-| 100 | URL allow/deny rules (config + DB-sourced) |
-| 150 | User identity — developer must have a proxy account and push permission for this repo |
-| 160 | Author attribution — git commit author must match the authenticated proxy user |
-| 210 | Non-empty push — at least one new commit |
-| 220 | Hidden commits — pack must not contain commits outside the declared push range |
-| 240–260 | Author email and commit message patterns (allow/block regex) |
-| 280 | Diff content scan (blocked literals and patterns) |
-| 290 | Secret scanning (gitleaks) |
-| 310 | GPG signature validation |
+| Order   | What it checks                                                                        |
+| ------- | ------------------------------------------------------------------------------------- |
+| 100     | URL allow/deny rules (config + DB-sourced)                                            |
+| 150     | User identity — developer must have a proxy account and push permission for this repo |
+| 160     | Author attribution — git commit author must match the authenticated proxy user        |
+| 210     | Non-empty push — at least one new commit                                              |
+| 220     | Hidden commits — pack must not contain commits outside the declared push range        |
+| 240–260 | Author email and commit message patterns (allow/block regex)                          |
+| 280     | Diff content scan (blocked literals and patterns)                                     |
+| 290     | Secret scanning (gitleaks)                                                            |
+| 310     | GPG signature validation                                                              |
 
 Each step records a `PushStep` in the push record. All steps always run (fail-fast is configurable); issues accumulate
 and are reported together.
@@ -172,14 +172,14 @@ Providers that implement `TokenIdentityProvider` can resolve an SCM username fro
 service's API (e.g. `GET /user` for GitHub). This is how the proxy maps a credential to a known identity without
 requiring the developer to use their SCM username as the HTTP Basic username. These mappings are cached in the database
 for performance & to avoid excess API calls to respect rate limits. The cache expires entries on the order of 7 days by
-default - PAT tokens have a configurable lifespan, so this strikes a balance between keeping up with token changes
-and minimizing API calls.
+default - PAT tokens have a configurable lifespan, so this strikes a balance between keeping up with token changes and
+minimizing API calls.
 
 ### Push store (`PushStore`)
 
-Every push attempt produces a `PushRecord`. The record tracks the full lifecycle: `RECEIVED → PENDING → APPROVED →
-FORWARDED`, or `RECEIVED → BLOCKED`, or `RECEIVED → PENDING → REJECTED`. It embeds an ordered list of `PushStep`
-entries (one per validation step) and a list of commits.
+Every push attempt produces a `PushRecord`. The record tracks the full lifecycle:
+`RECEIVED → PENDING → APPROVED → FORWARDED`, or `RECEIVED → BLOCKED`, or `RECEIVED → PENDING → REJECTED`. It embeds an
+ordered list of `PushStep` entries (one per validation step) and a list of commits.
 
 The push store is the integration point for the approval workflow: the dashboard reads push records from it, writes
 approvals/rejections to it, and the proxy polls it.
@@ -249,8 +249,8 @@ environments, or setups where an external system like ServiceNow handles approva
 
 ### Proxy + dashboard (`fogwall-dashboard`)
 
-`FogwallDashboardApplication` builds the same `FogwallContext` and calls the same `FogwallServletRegistrar`, then
-layers on a Spring MVC `DispatcherServlet` at `/*`. Jetty's servlet path-matching rules give the more-specific git paths
+`FogwallDashboardApplication` builds the same `FogwallContext` and calls the same `FogwallServletRegistrar`, then layers
+on a Spring MVC `DispatcherServlet` at `/*`. Jetty's servlet path-matching rules give the more-specific git paths
 (`/push/*`, `/proxy/*`) precedence, so the Spring servlet only handles `/api/*`, `/dashboard/*`, `/login`, and static
 assets.
 
@@ -299,9 +299,9 @@ providers:
     uri: https://git.acquiredco.internal
 ```
 
-Pushes to `/push/internal-github/...` and `/push/acquired-gitlab/...` go through the same validation pipeline. The
-proxy validates identity, author email, commit messages, and diff content before forwarding to the appropriate internal
-host. This is useful for enforcing consistent push policy across multiple internally-hosted Git services.
+Pushes to `/push/internal-github/...` and `/push/acquired-gitlab/...` go through the same validation pipeline. The proxy
+validates identity, author email, commit messages, and diff content before forwarding to the appropriate internal host.
+This is useful for enforcing consistent push policy across multiple internally-hosted Git services.
 
 ### Credential rewriting (planned)
 
@@ -336,16 +336,16 @@ possible with a pass-through HTTP proxy:
   repositories (CI workflows, shared libraries) in sync across separate Git hosts without requiring the developer to
   push to each one individually.
 
-- **Upstream buffering** — when an upstream SCM is slow or unavailable, the proxy can hold received packs and retry
-  with backoff rather than failing the developer's push immediately.
+- **Upstream buffering** — when an upstream SCM is slow or unavailable, the proxy can hold received packs and retry with
+  backoff rather than failing the developer's push immediately.
 
 - **Checkpoint resumption** — because each validation step is persisted as a `PushStep`, a re-push of the same commits
   can skip steps that already passed. This matters most when the chain includes expensive external calls (secret
   scanning, external policy engines) — the developer gets credit for work already done rather than waiting through the
   full chain again.
 
-- **Streaming LLM analysis** — the sideband channel in store-and-forward mode can stream an LLM's advisory review of
-  the diff back to the developer's terminal in real time, giving immediate feedback alongside the existing rule-based
+- **Streaming LLM analysis** — the sideband channel in store-and-forward mode can stream an LLM's advisory review of the
+  diff back to the developer's terminal in real time, giving immediate feedback alongside the existing rule-based
   checks.
 
 These are tracked as individual issues in the backlog; the architecture is designed to support them incrementally.
