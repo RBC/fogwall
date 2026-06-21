@@ -98,8 +98,8 @@ class ConfigHotReloadE2ETest {
     private String url() {
         String user = URLEncoder.encode(GiteaContainer.ADMIN_USER, StandardCharsets.UTF_8);
         String pass = URLEncoder.encode(GiteaContainer.ADMIN_PASSWORD, StandardCharsets.UTF_8);
-        return "http://" + user + ":" + pass + "@localhost:" + proxy.getPort() + "/proxy/localhost/"
-                + GiteaContainer.TEST_ORG + "/" + repoName + ".git";
+        return "http://" + user + ":" + pass + "@localhost:" + proxy.getPort() + "/proxy/" + proxy.getGiteaHostPort()
+                + "/" + GiteaContainer.TEST_ORG + "/" + repoName + ".git";
     }
 
     private Path writeOverride(String yaml) throws Exception {

@@ -50,6 +50,7 @@ class HotReloadJettyFixture implements AutoCloseable {
     private final int port;
     private final PushStore pushStore;
     private final String providerId;
+    private final String giteaHostPort;
     private final ConfigHolder configHolder;
     private final InMemoryUrlRuleRegistry configRegistry;
 
@@ -73,6 +74,7 @@ class HotReloadJettyFixture implements AutoCloseable {
                 .basePath("")
                 .build();
         this.providerId = provider.getProviderId();
+        this.giteaHostPort = giteaUri.getHost() + ":" + giteaUri.getPort();
 
         var context = new ServletContextHandler("/", false, false);
         var approvalGateway = new AutoApprovalGateway(pushStore);
@@ -160,8 +162,12 @@ class HotReloadJettyFixture implements AutoCloseable {
         return providerId;
     }
 
+    String getGiteaHostPort() {
+        return giteaHostPort;
+    }
+
     String getProxyBase() {
-        return "http://localhost:" + port + PROXY_PREFIX + "/localhost";
+        return "http://localhost:" + port + PROXY_PREFIX + "/" + giteaHostPort;
     }
 
     /**
