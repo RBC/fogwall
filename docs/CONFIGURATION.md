@@ -347,8 +347,8 @@ no need to flush the cache manually when tokens are rotated.
 
 If you are migrating from [finos/git-proxy](https://github.com/finos/git-proxy) (the Node.js implementation) and
 pointing this proxy at a database that previously held its data, the two applications use incompatible document schemas.
-The safest path is to **provision a new MongoDB database** (e.g. `gitproxy-java`) and point `database.url` at it. This
-avoids all collision risk and keeps indexes, backups, and ops tooling cleanly separated.
+The safest path is to **provision a new MongoDB database** (e.g. `fogwall`) and point `database.url` at it. This avoids
+all collision risk and keeps indexes, backups, and ops tooling cleanly separated.
 
 If provisioning a separate database is not feasible, this proxy now uses collection names that do not collide with the
 upstream Node.js implementation:
