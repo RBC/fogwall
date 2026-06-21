@@ -5,7 +5,8 @@ allowed-tools: Bash, Read, Edit, Glob, Grep
 
 ## Task
 
-Update all GitHub Actions `uses:` pins in `.github/workflows/` to the latest commit SHA that satisfies the version constraint declared in the trailing comment.
+Update all GitHub Actions `uses:` pins in `.github/workflows/` to the latest commit SHA that satisfies the version
+constraint declared in the trailing comment.
 
 ## Comment format (preserve exactly)
 
@@ -16,6 +17,7 @@ uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:action
 The `# ratchet:<action>@<version>` comment is the version constraint. Never change or remove it.
 
 Version constraint semantics:
+
 - `@v6` — major pin: upgrade to latest `v6.x.y` tag
 - `@v7.4` — minor pin: upgrade to latest `v7.4.x` tag
 - `@v7.4.0` — patch pin: upgrade to latest `v7.4.x` tag (still tracks patches)
@@ -31,6 +33,7 @@ grep -rn 'uses: .\+@[0-9a-f]\{40\} # ratchet:' .github/workflows/
 ```
 
 For each matching line, parse out:
+
 - `file` — the workflow file path
 - `action` — `owner/repo` portion (e.g. `actions/checkout`)
 - `current_sha` — the 40-char hex SHA currently pinned
@@ -45,6 +48,7 @@ gh api repos/{owner}/{repo}/tags --paginate --jq '.[].name'
 ```
 
 Filter the returned tag names client-side:
+
 - `@v6` → keep tags matching `^v6\.\d+\.\d+$`, sort semver descending, take first
 - `@v7.4` → keep tags matching `^v7\.4\.\d+$`, sort semver descending, take first
 - `@v7.4.0` → keep tags matching `^v7\.4\.\d+$`, sort semver descending, take first
@@ -68,6 +72,7 @@ The final SHA must be the commit SHA (40 hex chars), not the tag object SHA.
 ### 4. Update files
 
 For each pin where the resolved commit SHA differs from `current_sha`:
+
 - Use Edit to replace `@{current_sha}` with `@{new_sha}` on that exact line
 - Leave the `# ratchet:` comment completely unchanged
 - If the latest tag itself changed (e.g. `v6.1.0` → `v6.2.0`), update the tag name in the comment too

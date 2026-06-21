@@ -1,17 +1,17 @@
 # Configuration Reference
 
-fogwall uses layered YAML configuration merged at startup. A base file ships with the jar; additional profile files
-and environment variable overrides are applied on top in a defined order.
+fogwall uses layered YAML configuration merged at startup. A base file ships with the jar; additional profile files and
+environment variable overrides are applied on top in a defined order.
 
 ## Configuration files and profiles
 
 ### Load order (lowest → highest priority)
 
-| Layer | Source                               | When loaded                                           |
-| ----- | ------------------------------------ | ----------------------------------------------------- |
-| 1     | `fogwall.yml`                      | Always — base defaults bundled in the jar             |
-| 2     | `fogwall-{profile}.yml`            | For each profile listed in `FOGWALL_CONFIG_PROFILES` |
-| 3     | Environment variables (`FOGWALL_*`) | Always — highest priority                             |
+| Layer | Source                              | When loaded                                          |
+| ----- | ----------------------------------- | ---------------------------------------------------- |
+| 1     | `fogwall.yml`                       | Always — base defaults bundled in the jar            |
+| 2     | `fogwall-{profile}.yml`             | For each profile listed in `FOGWALL_CONFIG_PROFILES` |
+| 3     | Environment variables (`FOGWALL_*`) | Always — highest priority                            |
 
 ### `FOGWALL_CONFIG_PROFILES`
 
@@ -36,8 +36,8 @@ override everything.
 
 ### Bundled profiles
 
-| Profile name     | File                           | Purpose                                                   |
-| ---------------- | ------------------------------ | --------------------------------------------------------- |
+| Profile name     | File                         | Purpose                                                   |
+| ---------------- | ---------------------------- | --------------------------------------------------------- |
 | `local`          | `fogwall-local.yml`          | Local development: dev users, Vite CORS, test allow rules |
 | `docker-default` | `fogwall-docker-default.yml` | Docker base: admin user, Gitea provider, validation rules |
 | `ldap`           | `fogwall-ldap.yml`           | LDAP authentication config (used with `docker-default`)   |
@@ -68,24 +68,24 @@ docker compose --profile postgres \
 
 Strip the `FOGWALL_` prefix, lowercase, and replace `_` with `.` to get the config path.
 
-| Environment Variable                | Config path                 | Example                   |
-| ----------------------------------- | --------------------------- | ------------------------- |
-| `FOGWALL_CONFIG_PROFILES`          | _(meta — not a config key)_ | `docker-default,ldap`     |
-| `FOGWALL_SERVER_PORT`              | `server.port`               | `9090`                    |
-| `FOGWALL_SERVER_APPROVAL_MODE`     | `server.approvalMode`       | `ui`                      |
-| `FOGWALL_SERVER_SERVICE_URL`       | `server.serviceUrl`         | `https://fogwall.example.com/dashboard` |
-| `FOGWALL_DATABASE_TYPE`                    | `database.type`                    | `postgres`                |
-| `FOGWALL_DATABASE_URL`                     | `database.url`                     | `jdbc:postgresql://...`   |
-| `FOGWALL_DATABASE_HOST`                    | `database.host`                    | `db.internal`             |
-| `FOGWALL_DATABASE_POOL_MAXIMUMPOOLSIZE`    | `database.pool.maximum-pool-size`  | `3`                       |
-| `FOGWALL_DATABASE_POOL_MINIMUMIDLE`        | `database.pool.minimum-idle`       | `1`                       |
-| `FOGWALL_DATABASE_POOL_CONNECTIONTIMEOUT`  | `database.pool.connection-timeout` | `30000`                   |
-| `FOGWALL_SERVER_SESSIONSTORE`              | `server.session-store`             | `jdbc`                    |
-| `FOGWALL_SERVER_REDIS_HOST`                | `server.redis.host`                | `redis.cluster.local`     |
-| `FOGWALL_SERVER_REDIS_PORT`                | `server.redis.port`                | `6379`                    |
-| `FOGWALL_SERVER_ALLOWEDORIGINS`            | `server.allowed-origins`    | `https://dashboard.example.com` |
-| `FOGWALL_PROVIDERS_GITHUB_ENABLED` | `providers.github.enabled`  | `false`                   |
-| `FOGWALL_PROVIDERS_<NAME>_URI`     | `providers.<name>.uri`      | `https://gitlab.corp.com` |
+| Environment Variable                      | Config path                        | Example                                 |
+| ----------------------------------------- | ---------------------------------- | --------------------------------------- |
+| `FOGWALL_CONFIG_PROFILES`                 | _(meta — not a config key)_        | `docker-default,ldap`                   |
+| `FOGWALL_SERVER_PORT`                     | `server.port`                      | `9090`                                  |
+| `FOGWALL_SERVER_APPROVAL_MODE`            | `server.approvalMode`              | `ui`                                    |
+| `FOGWALL_SERVER_SERVICE_URL`              | `server.serviceUrl`                | `https://fogwall.example.com/dashboard` |
+| `FOGWALL_DATABASE_TYPE`                   | `database.type`                    | `postgres`                              |
+| `FOGWALL_DATABASE_URL`                    | `database.url`                     | `jdbc:postgresql://...`                 |
+| `FOGWALL_DATABASE_HOST`                   | `database.host`                    | `db.internal`                           |
+| `FOGWALL_DATABASE_POOL_MAXIMUMPOOLSIZE`   | `database.pool.maximum-pool-size`  | `3`                                     |
+| `FOGWALL_DATABASE_POOL_MINIMUMIDLE`       | `database.pool.minimum-idle`       | `1`                                     |
+| `FOGWALL_DATABASE_POOL_CONNECTIONTIMEOUT` | `database.pool.connection-timeout` | `30000`                                 |
+| `FOGWALL_SERVER_SESSIONSTORE`             | `server.session-store`             | `jdbc`                                  |
+| `FOGWALL_SERVER_REDIS_HOST`               | `server.redis.host`                | `redis.cluster.local`                   |
+| `FOGWALL_SERVER_REDIS_PORT`               | `server.redis.port`                | `6379`                                  |
+| `FOGWALL_SERVER_ALLOWEDORIGINS`           | `server.allowed-origins`           | `https://dashboard.example.com`         |
+| `FOGWALL_PROVIDERS_GITHUB_ENABLED`        | `providers.github.enabled`         | `false`                                 |
+| `FOGWALL_PROVIDERS_<NAME>_URI`            | `providers.<name>.uri`             | `https://gitlab.corp.com`               |
 
 > Complex nested structures (URL rules, full commit validation blocks) are not overridable via env vars. Use YAML
 > profile files instead.
@@ -147,6 +147,7 @@ server:
 ### Session persistence for multi-instance deployments
 
 By default, authenticated sessions are stored in memory. This works for single-instance deployments but means:
+
 - Sessions are lost when a pod restarts
 - A user hitting a different pod after a load balancer switch will be logged out
 
@@ -166,7 +167,8 @@ database:
     minimum-idle: 1
 ```
 
-The session tables (`SPRING_SESSION`, `SPRING_SESSION_ATTRIBUTES`) are created automatically by the database migrator on first startup. No manual DDL required.
+The session tables (`SPRING_SESSION`, `SPRING_SESSION_ATTRIBUTES`) are created automatically by the database migrator on
+first startup. No manual DDL required.
 
 **Redis / Valkey:**
 
@@ -174,13 +176,14 @@ The session tables (`SPRING_SESSION`, `SPRING_SESSION_ATTRIBUTES`) are created a
 server:
   session-store: redis
   redis:
-    host: redis.cluster.local  # or valkey.cluster.local
+    host: redis.cluster.local # or valkey.cluster.local
     port: 6379
-    password: ""               # omit if no auth configured
-    ssl: false                 # set true for TLS-secured Redis
+    password: "" # omit if no auth configured
+    ssl: false # set true for TLS-secured Redis
 ```
 
-A minimal single-replica Redis or Valkey pod is sufficient — sessions are small and low-throughput. No persistence or clustering required for this use case.
+A minimal single-replica Redis or Valkey pod is sufficient — sessions are small and low-throughput. No persistence or
+clustering required for this use case.
 
 **MongoDB:**
 
@@ -193,7 +196,10 @@ database:
   url: mongodb://fogwall:secret@mongo.internal:27017/fogwall
 ```
 
-Sessions are stored in the `proxy_sessions` collection alongside the other `proxy_*` collections. A TTL index on `expireAt` lets MongoDB expire idle sessions server-side — no background cleanup task runs in the proxy. The session store reuses the same connection pool as the rest of the MongoDB-backed stores, so no extra configuration is needed. Requires `database.type: mongo`.
+Sessions are stored in the `proxy_sessions` collection alongside the other `proxy_*` collections. A TTL index on
+`expireAt` lets MongoDB expire idle sessions server-side — no background cleanup task runs in the proxy. The session
+store reuses the same connection pool as the rest of the MongoDB-backed stores, so no extra configuration is needed.
+Requires `database.type: mongo`.
 
 ## TLS
 
@@ -207,8 +213,8 @@ By default fogwall listens on plain HTTP. To enable HTTPS, add a `server.tls` bl
 server:
   tls:
     port: 8443
-    certificate: /etc/fogwall/tls/server.pem      # X.509 certificate or chain, PEM
-    key: /etc/fogwall/tls/server-key.pem           # PKCS8 private key, unencrypted PEM
+    certificate: /etc/fogwall/tls/server.pem # X.509 certificate or chain, PEM
+    key: /etc/fogwall/tls/server-key.pem # PKCS8 private key, unencrypted PEM
 ```
 
 The private key must be in PKCS8 format. Convert a PKCS1 key with:
@@ -226,7 +232,7 @@ server:
     keystore:
       path: /etc/fogwall/tls/keystore.p12
       password: changeit
-      type: PKCS12   # or JKS
+      type: PKCS12 # or JKS
 ```
 
 Plain HTTP on `server.port` remains active when HTTPS is configured — both listeners run concurrently.
@@ -234,8 +240,8 @@ Plain HTTP on `server.port` remains active when HTTPS is configured — both lis
 ### Custom upstream CA trust
 
 Enterprise PKIs typically issue certificates that Java's built-in truststore doesn't include, causing
-`SSLHandshakeException` on upstream connections to internal GitLab/Bitbucket/Forgejo instances. fogwall
-supports trusting a custom CA bundle without touching the JVM truststore or running `keytool`.
+`SSLHandshakeException` on upstream connections to internal GitLab/Bitbucket/Forgejo instances. fogwall supports
+trusting a custom CA bundle without touching the JVM truststore or running `keytool`.
 
 ```yaml
 server:
@@ -243,9 +249,9 @@ server:
     trust-ca-bundle: /etc/fogwall/tls/internal-ca.pem
 ```
 
-The PEM file may contain one or more `-----BEGIN CERTIFICATE-----` blocks (a full CA chain is fine). Custom
-CAs are merged with the JVM's built-in trust anchors — public hosts (GitHub, GitLab SaaS, Bitbucket Cloud)
-continue to work without any changes.
+The PEM file may contain one or more `-----BEGIN CERTIFICATE-----` blocks (a full CA chain is fine). Custom CAs are
+merged with the JVM's built-in trust anchors — public hosts (GitHub, GitLab SaaS, Bitbucket Cloud) continue to work
+without any changes.
 
 This applies to both proxy modes:
 
@@ -261,13 +267,13 @@ database:
 
 ### Database backends
 
-| Type       | Description                 | Extra keys                                                              |
-| ---------- | --------------------------- | ----------------------------------------------------------------------- |
-| `h2-mem`   | H2 in-memory (default)      | `name` (default: `fogwall`)                                            |
-| `h2-file`  | H2 persisted to disk        | `path` (default: `./.data/fogwall`)                                    |
-| `sqlite`   | SQLite file                 | `path` (default: `./.data/fogwall.db`)                                 |
-| `postgres` | PostgreSQL                  | `url` **or** `host`, `port`, `name`, `username`, `password`             |
-| `mongo`    | MongoDB                     | `url` (required); `name` optional if the database is in the URI path    |
+| Type       | Description            | Extra keys                                                           |
+| ---------- | ---------------------- | -------------------------------------------------------------------- |
+| `h2-mem`   | H2 in-memory (default) | `name` (default: `fogwall`)                                          |
+| `h2-file`  | H2 persisted to disk   | `path` (default: `./.data/fogwall`)                                  |
+| `sqlite`   | SQLite file            | `path` (default: `./.data/fogwall.db`)                               |
+| `postgres` | PostgreSQL             | `url` **or** `host`, `port`, `name`, `username`, `password`          |
+| `mongo`    | MongoDB                | `url` (required); `name` optional if the database is in the URI path |
 
 For both `postgres` and `mongo`, setting `url` to a full connection string is the recommended approach when you need
 driver-specific options (TLS, SSL certificates, connection parameters) that are not exposed as individual config fields.
@@ -276,19 +282,19 @@ driver-specific options (TLS, SSL certificates, connection parameters) that are 
 
 Applies to all JDBC backends (`h2-mem`, `h2-file`, `postgres`). The default pool size is deliberately small — git push
 workloads are sequential per user, so a large pool buys nothing and drives up aggregate connection counts when multiple
-instances share a database. The [HikariCP pool sizing guide](https://github.com/brettwooldridge/HikariCP/wiki/About-Pool-Sizing)
-covers this in depth.
+instances share a database. The
+[HikariCP pool sizing guide](https://github.com/brettwooldridge/HikariCP/wiki/About-Pool-Sizing) covers this in depth.
 
 ```yaml
 database:
   type: postgres
   url: jdbc:postgresql://db.internal:5432/fogwall
   pool:
-    maximum-pool-size: 3      # per-instance connections; multiply by instance count for total DB load
-    minimum-idle: 1           # release idle connections; omit to keep the full pool warm
+    maximum-pool-size: 3 # per-instance connections; multiply by instance count for total DB load
+    minimum-idle: 1 # release idle connections; omit to keep the full pool warm
     connection-timeout: 30000 # ms; fail fast if the pool is exhausted
-    idle-timeout: 600000      # ms; retire connections after 10 min idle
-    max-lifetime: 1800000     # ms; rotate connections every 30 min
+    idle-timeout: 600000 # ms; retire connections after 10 min idle
+    max-lifetime: 1800000 # ms; rotate connections every 30 min
 ```
 
 For deployments sharing a database across multiple instances (multiple environments, blue/green, canary), set
@@ -324,21 +330,41 @@ database:
   name: fogwall
 ```
 
+### SCM token identity cache
+
+When users are configured, fogwall caches successful token-to-username resolutions so that repeated pushes from the same
+PAT do not incur a provider API call every time. The cache is backed by the configured database (JDBC or MongoDB) and
+keyed on a SHA-512 digest of the token — the raw token is never stored.
+
+| Variable                         | Default | Effect                                                                                                                               |
+| -------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `FOGWALL_SCM_CACHE_MAX_AGE_DAYS` | `7`     | Maximum age of a cache entry in days. Entries older than this are ignored on read and overwritten on the next successful resolution. |
+
+Token rotation is handled automatically: a new PAT produces a new cache key, so the old entry simply ages out. There is
+no need to flush the cache manually when tokens are rotated.
+
 ### MongoDB: coexisting with the upstream Node.js git-proxy
 
-If you are migrating from [finos/git-proxy](https://github.com/finos/git-proxy) (the Node.js implementation) and pointing this proxy at a database that previously held its data, the two applications use incompatible document schemas. The safest path is to **provision a new MongoDB database** (e.g. `gitproxy-java`) and point `database.url` at it. This avoids all collision risk and keeps indexes, backups, and ops tooling cleanly separated.
+If you are migrating from [finos/git-proxy](https://github.com/finos/git-proxy) (the Node.js implementation) and
+pointing this proxy at a database that previously held its data, the two applications use incompatible document schemas.
+The safest path is to **provision a new MongoDB database** (e.g. `gitproxy-java`) and point `database.url` at it. This
+avoids all collision risk and keeps indexes, backups, and ops tooling cleanly separated.
 
-If provisioning a separate database is not feasible, this proxy now uses collection names that do not collide with the upstream Node.js implementation:
+If provisioning a separate database is not feasible, this proxy now uses collection names that do not collide with the
+upstream Node.js implementation:
 
-| Collection         | Written by                        | Notes                                                                  |
-| ------------------ | --------------------------------- | ---------------------------------------------------------------------- |
-| `proxy_users`      | `MongoUserStore`                  | Renamed from `users` to avoid collision with upstream's `users`.       |
-| `proxy_pushes`     | `MongoPushStore`                  | Renamed from `pushes` to avoid collision with upstream's `pushes`.     |
-| `repo_permissions` | `MongoRepoPermissionStore`        | No upstream equivalent.                                                |
-| `access_rules`     | `MongoUrlRuleRegistry`            | No upstream equivalent.                                                |
-| `fetch_records`    | `MongoFetchStore`                 | No upstream equivalent.                                                |
+| Collection         | Written by                 | Notes                                                              |
+| ------------------ | -------------------------- | ------------------------------------------------------------------ |
+| `proxy_users`      | `MongoUserStore`           | Renamed from `users` to avoid collision with upstream's `users`.   |
+| `proxy_pushes`     | `MongoPushStore`           | Renamed from `pushes` to avoid collision with upstream's `pushes`. |
+| `repo_permissions` | `MongoRepoPermissionStore` | No upstream equivalent.                                            |
+| `access_rules`     | `MongoUrlRuleRegistry`     | No upstream equivalent.                                            |
+| `fetch_records`    | `MongoFetchStore`          | No upstream equivalent.                                            |
 
-This means you _can_ point both apps at the same MongoDB database without corrupting each other's data. We still recommend separate databases for operational clarity — shared databases make backups, restores, and index tuning harder to reason about — but it is no longer a correctness hazard. Starting with 1.0.0, these collection names are part of the project's stability contract and will not be renamed without an in-place migration path.
+This means you _can_ point both apps at the same MongoDB database without corrupting each other's data. We still
+recommend separate databases for operational clarity — shared databases make backups, restores, and index tuning harder
+to reason about — but it is no longer a correctness hazard. Starting with 1.0.0, these collection names are part of the
+project's stability contract and will not be renamed without an in-place migration path.
 
 ## Authentication
 
@@ -346,7 +372,7 @@ The dashboard supports four authentication providers, selected via `auth.provide
 
 ```yaml
 auth:
-  provider: local   # local | ldap | ad | oidc (default: local)
+  provider: local # local | ldap | ad | oidc (default: local)
 
   # Maximum idle time before a session expires and the user must re-authenticate.
   # Default: 86400 (24 hours). Tighten to 28800 (8 hours) or less for compliance environments.
@@ -501,9 +527,9 @@ auth:
 `auth.role-mappings` applies to LDAP, AD, and OIDC. Keys are role names (without the `ROLE_` prefix); values are lists
 of group names or claim values from the IdP. `ROLE_USER` is always granted to every authenticated user.
 
-| Role    | Dashboard access |
-| ------- | ---------------- |
-| `USER`  | View and act on pushes awaiting approval |
+| Role    | Dashboard access                                                               |
+| ------- | ------------------------------------------------------------------------------ |
+| `USER`  | View and act on pushes awaiting approval                                       |
 | `ADMIN` | All USER permissions + create/delete users, reset passwords, manage identities |
 
 ## Providers
@@ -617,8 +643,8 @@ commit:
 
 ## Diff scan
 
-Push-level check applied once per push against the aggregate diff (all commits combined). Only added lines
-(`+`) are scanned — deletions and context lines are ignored.
+Push-level check applied once per push against the aggregate diff (all commits combined). Only added lines (`+`) are
+scanned — deletions and context lines are ignored.
 
 ```yaml
 diff-scan:
@@ -631,10 +657,11 @@ diff-scan:
 
 ## Secret scanning
 
-Secret scanning via gitleaks (<https://github.com/gitleaks/gitleaks>). Applied once per push. The JAR ships with
-a bundled gitleaks binary so scanning works out of the box.
+Secret scanning via gitleaks (<https://github.com/gitleaks/gitleaks>). Applied once per push. The JAR ships with a
+bundled gitleaks binary so scanning works out of the box.
 
 Binary resolution order (first match wins):
+
 1. `scanner-path` — explicit path, bypasses everything else
 2. `version` + `auto-install: true` — downloads and caches that version on startup
 3. Bundled JAR binary (default version, always present)
@@ -675,13 +702,13 @@ Selected config sections can be reloaded at runtime without restarting the serve
 reload:
   file:
     enabled: false
-    path: /app/conf/fogwall-local.yml   # watched for modifications
+    path: /app/conf/fogwall-local.yml # watched for modifications
   git:
     enabled: false
     url: https://github.com/myorg/config.git
     branch: main
     file-path: fogwall.yml
-    interval-seconds: 300   # 0 = manual trigger only
+    interval-seconds: 300 # 0 = manual trigger only
 ```
 
 #### Git source authentication
@@ -693,20 +720,20 @@ FOGWALL_RELOAD_GIT_AUTH_USERNAME=<username or token placeholder>
 FOGWALL_RELOAD_GIT_AUTH_PASSWORD=<personal access token or password>
 ```
 
-Both variables must be set together; if only one is present a warning is logged and the clone/pull proceeds
-without credentials. For token-only auth (GitHub, GitLab, Gitea PATs) the username can be any non-empty
-string — `git` or `x-token` are common placeholders.
+Both variables must be set together; if only one is present a warning is logged and the clone/pull proceeds without
+credentials. For token-only auth (GitHub, GitLab, Gitea PATs) the username can be any non-empty string — `git` or
+`x-token` are common placeholders.
 
 ### Reloadable sections
 
-| Section        | YAML key          | What changes take effect                                             |
-| -------------- | ----------------- | -------------------------------------------------------------------- |
-| `commit`       | `commit:`         | Author email rules, message block lists, identity-verification mode  |
-| `diff-scan`    | `diff-scan:`      | Diff content block literals and patterns                             |
-| `secret-scan`  | `secret-scan:`    | All gitleaks settings including `inline-config`                      |
-| `rules`        | `rules:`          | URL access control allow/deny rules                                  |
-| `permissions`  | `permissions:`    | Config-sourced user→repo permission grants                           |
-| `attestations` | `attestations:`   | Dashboard approval form questions                                    |
+| Section        | YAML key        | What changes take effect                                            |
+| -------------- | --------------- | ------------------------------------------------------------------- |
+| `commit`       | `commit:`       | Author email rules, message block lists, identity-verification mode |
+| `diff-scan`    | `diff-scan:`    | Diff content block literals and patterns                            |
+| `secret-scan`  | `secret-scan:`  | All gitleaks settings including `inline-config`                     |
+| `rules`        | `rules:`        | URL access control allow/deny rules                                 |
+| `permissions`  | `permissions:`  | Config-sourced user→repo permission grants                          |
+| `attestations` | `attestations:` | Dashboard approval form questions                                   |
 
 Provider, server, and database sections always require a restart.
 
@@ -752,11 +779,11 @@ For every push, the proxy runs two checks:
 
 `identity-verification` controls the **commit email check** only. The SCM login check is always enforced.
 
-| Mode     | Behaviour                                                                                                      | Use when                                                                       |
-| -------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `strict` | Blocks the push if any commit email cannot be matched to the authenticated fogwall user   | Production — enforces that every commit is attributed to the person who pushed |
-| `warn`   | Allows the push through but emits a sideband warning to the git client and records the mismatch                | Rolling out to an existing team — lets you observe mismatches before enforcing |
-| `off`    | Commit email check is disabled entirely                                                                        | Migrations or environments where email data is not yet populated               |
+| Mode     | Behaviour                                                                                       | Use when                                                                       |
+| -------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `strict` | Blocks the push if any commit email cannot be matched to the authenticated fogwall user         | Production — enforces that every commit is attributed to the person who pushed |
+| `warn`   | Allows the push through but emits a sideband warning to the git client and records the mismatch | Rolling out to an existing team — lets you observe mismatches before enforcing |
+| `off`    | Commit email check is disabled entirely                                                         | Migrations or environments where email data is not yet populated               |
 
 > **`warn` is not a security control.** Pushes succeed regardless of the email check outcome. Only `strict` blocks
 > mismatched commits. The default is `warn` to avoid breaking existing deployments on first install — but `strict`
@@ -764,8 +791,8 @@ For every push, the proxy runs two checks:
 
 ### Token scope requirements
 
-The SCM login check calls `GET /user` (or equivalent) on the upstream SCM using the pusher's token. The token must
-carry at least the following scope:
+The SCM login check calls `GET /user` (or equivalent) on the upstream SCM using the pusher's token. The token must carry
+at least the following scope:
 
 | Provider | API endpoint                           | Additional scope                                                       |
 | -------- | -------------------------------------- | ---------------------------------------------------------------------- |
@@ -788,7 +815,7 @@ users:
   - username: alice
     password-hash: "{bcrypt}$2a$12$..."
     roles:
-      - ADMIN   # optional; defaults to [USER] if omitted
+      - ADMIN # optional; defaults to [USER] if omitted
     emails:
       - alice@example.com
     # push-usernames: HTTP Basic-auth usernames accepted for this user when pushing.
@@ -807,9 +834,9 @@ users:
 
 ## URL rules
 
-URL rules control which repositories are accessible through the proxy. fogwall is **default-deny**: if no allow
-rules are configured for a provider, all pushes and fetches to that provider are rejected. At least one allow rule
-must match for a request to proceed.
+URL rules control which repositories are accessible through the proxy. fogwall is **default-deny**: if no allow rules
+are configured for a provider, all pushes and fetches to that provider are rejected. At least one allow rule must match
+for a request to proceed.
 
 Rules use a unified `match` block that specifies what to match against (`target`), the pattern string (`value`), and how
 to interpret it (`type`). Evaluation is first-match-wins by `order` — identical to iptables/firewall rule semantics.
@@ -863,16 +890,16 @@ rules:
 
 ### URL rule properties
 
-| Property      | Type    | Default  | Description                                                          |
-| ------------- | ------- | -------- | -------------------------------------------------------------------- |
-| `enabled`     | boolean | `true`   | Whether this entry is active                                         |
-| `order`       | int     | `1100`   | Evaluation order (lower = earlier; first match wins)                 |
-| `operations`  | string  | `BOTH`   | `FETCH`, `PUSH`, or `BOTH` — which operations this entry matches     |
-| `provider`    | string  | _(all)_  | Provider name to scope this entry to; omit or leave blank for all    |
-| `match`       | object  | —        | Repository match criteria — see below                                |
-| `match.target`| enum    | `SLUG`   | What to match: `SLUG` (`/owner/repo`), `OWNER`, or `NAME`           |
-| `match.value` | string  | —        | The pattern to match against the chosen target                       |
-| `match.type`  | enum    | `GLOB`   | How to interpret the pattern: `LITERAL`, `GLOB`, or `REGEX`          |
+| Property       | Type    | Default | Description                                                       |
+| -------------- | ------- | ------- | ----------------------------------------------------------------- |
+| `enabled`      | boolean | `true`  | Whether this entry is active                                      |
+| `order`        | int     | `1100`  | Evaluation order (lower = earlier; first match wins)              |
+| `operations`   | string  | `BOTH`  | `FETCH`, `PUSH`, or `BOTH` — which operations this entry matches  |
+| `provider`     | string  | _(all)_ | Provider name to scope this entry to; omit or leave blank for all |
+| `match`        | object  | —       | Repository match criteria — see below                             |
+| `match.target` | enum    | `SLUG`  | What to match: `SLUG` (`/owner/repo`), `OWNER`, or `NAME`         |
+| `match.value`  | string  | —       | The pattern to match against the chosen target                    |
+| `match.type`   | enum    | `GLOB`  | How to interpret the pattern: `LITERAL`, `GLOB`, or `REGEX`       |
 
 ### Pattern matching
 
@@ -888,18 +915,18 @@ Exact string match after normalising a leading `/`. `/acme/repo` and `acme/repo`
 
 Wildcard matching using `*` (any characters) and `?` (single character).
 
-| Target  | `*` behaviour                                    |
-| ------- | ------------------------------------------------ |
-| `SLUG`  | Does **not** cross `/` — use `acme/*` not `acme/**` |
+| Target  | `*` behaviour                                               |
+| ------- | ----------------------------------------------------------- |
+| `SLUG`  | Does **not** cross `/` — use `acme/*` not `acme/**`         |
 | `OWNER` | Owner names cannot contain `/` — `*` matches any valid name |
-| `NAME`  | Repo names cannot contain `/` — `*` matches any valid name |
+| `NAME`  | Repo names cannot contain `/` — `*` matches any valid name  |
 
-| Pattern (GLOB, target=SLUG) | Matches | Does NOT match |
-| --------------------------- | ------- | -------------- |
-| `/acme/repo` _(LITERAL)_    | `/acme/repo` | `/acme/other` |
-| `/acme/*`                   | `/acme/repo`, `/acme/my-service` | `/other/repo` |
-| `/acme/service-*`           | `/acme/service-api`, `/acme/service-worker` | `/acme/repo` |
-| `/acme/repo-?`              | `/acme/repo-1`, `/acme/repo-a` | `/acme/repo-12` |
+| Pattern (GLOB, target=SLUG) | Matches                                     | Does NOT match  |
+| --------------------------- | ------------------------------------------- | --------------- |
+| `/acme/repo` _(LITERAL)_    | `/acme/repo`                                | `/acme/other`   |
+| `/acme/*`                   | `/acme/repo`, `/acme/my-service`            | `/other/repo`   |
+| `/acme/service-*`           | `/acme/service-api`, `/acme/service-worker` | `/acme/repo`    |
+| `/acme/repo-?`              | `/acme/repo-1`, `/acme/repo-a`              | `/acme/repo-12` |
 
 #### REGEX
 
@@ -912,17 +939,17 @@ Full Java regular expression. A few things to know before writing regex rules:
 - **Case-insensitive**: use the `(?i)` inline flag — e.g. `(?i)/acme/.*`.
 - **Anchoring**: explicit `^` and `$` are redundant with `matches()` but harmless if included.
 
-| Pattern (REGEX, target=SLUG)          | Matches                          | Does NOT match      |
-| ------------------------------------- | -------------------------------- | ------------------- |
-| `/acme/.*`                            | `/acme/repo`, `/acme/my-service` | `/other/repo`       |
-| `/(acme\|partner)/.*`                 | `/acme/repo`, `/partner/repo`    | `/other/repo`       |
-| `/acme/service-[0-9]+`                | `/acme/service-1`, `/acme/service-42` | `/acme/service-api` |
-| `(?i)/acme/.*`                        | `/acme/repo`, `/ACME/Repo`       | `/other/repo`       |
+| Pattern (REGEX, target=SLUG) | Matches                               | Does NOT match      |
+| ---------------------------- | ------------------------------------- | ------------------- |
+| `/acme/.*`                   | `/acme/repo`, `/acme/my-service`      | `/other/repo`       |
+| `/(acme\|partner)/.*`        | `/acme/repo`, `/partner/repo`         | `/other/repo`       |
+| `/acme/service-[0-9]+`       | `/acme/service-1`, `/acme/service-42` | `/acme/service-api` |
+| `(?i)/acme/.*`               | `/acme/repo`, `/ACME/Repo`            | `/other/repo`       |
 
-| Pattern (REGEX, target=NAME)                | Matches                        | Does NOT match  |
-| ------------------------------------------- | ------------------------------ | --------------- |
-| `(?i)(^&#124;-)secret(-&#124;$).*`          | `secret-config`, `my-secret`   | `secretariat`   |
-| `migrate-.*`                                | `migrate-app`, `migrate-db`    | `old-migrate`   |
+| Pattern (REGEX, target=NAME)       | Matches                      | Does NOT match |
+| ---------------------------------- | ---------------------------- | -------------- |
+| `(?i)(^&#124;-)secret(-&#124;$).*` | `secret-config`, `my-secret` | `secretariat`  |
+| `migrate-.*`                       | `migrate-app`, `migrate-db`  | `old-migrate`  |
 
 ```yaml
 rules:
@@ -1093,15 +1120,15 @@ permissions:
 
 ### Permission properties
 
-| Property        | Type   | Default          | Description                                                                     |
-| --------------- | ------ | ---------------- | ------------------------------------------------------------------------------- |
-| `username`      | string | —                | Proxy username (must match a `users:` entry or a DB user)                       |
-| `provider`      | string | —                | Provider name as defined in `providers:` config                                 |
-| `match`         | object | —                | Repository match criteria — see below                                           |
-| `match.target`  | enum   | `SLUG`           | What to match: `SLUG` (`/owner/repo`), `OWNER`, or `NAME`                       |
-| `match.value`   | string | —                | The pattern to match against the chosen target                                  |
-| `match.type`    | enum   | `GLOB`           | How to interpret the pattern: `LITERAL`, `GLOB`, or `REGEX`                     |
-| `operations`    | enum   | `PUSH_AND_REVIEW`| What the user may do: `PUSH`, `REVIEW`, `PUSH_AND_REVIEW`, `SELF_CERTIFY`       |
+| Property       | Type   | Default           | Description                                                               |
+| -------------- | ------ | ----------------- | ------------------------------------------------------------------------- |
+| `username`     | string | —                 | Proxy username (must match a `users:` entry or a DB user)                 |
+| `provider`     | string | —                 | Provider name as defined in `providers:` config                           |
+| `match`        | object | —                 | Repository match criteria — see below                                     |
+| `match.target` | enum   | `SLUG`            | What to match: `SLUG` (`/owner/repo`), `OWNER`, or `NAME`                 |
+| `match.value`  | string | —                 | The pattern to match against the chosen target                            |
+| `match.type`   | enum   | `GLOB`            | How to interpret the pattern: `LITERAL`, `GLOB`, or `REGEX`               |
+| `operations`   | enum   | `PUSH_AND_REVIEW` | What the user may do: `PUSH`, `REVIEW`, `PUSH_AND_REVIEW`, `SELF_CERTIFY` |
 
 ### Pattern matching
 
@@ -1110,17 +1137,17 @@ Permissions support the same three match types as URL rules (LITERAL, GLOB, REGE
 
 GLOB on `target: SLUG` follows slug path conventions:
 
-| Pattern (GLOB, target=SLUG)   | Matches                                | Does NOT match      |
-| ----------------------------- | -------------------------------------- | ------------------- |
-| `/acme/repo`                  | `/acme/repo`                           | `/acme/other`       |
-| `/acme/*`                     | `/acme/repo`, `/acme/my-service`       | `/other/repo`       |
-| `/acme/service-*`             | `/acme/service-api`, `/acme/service-worker` | `/acme/repo`   |
-| `/*/proj0-*`                  | `/acme/proj0-api`, `/other/proj0-db`   | `/acme/other`       |
+| Pattern (GLOB, target=SLUG) | Matches                                     | Does NOT match |
+| --------------------------- | ------------------------------------------- | -------------- |
+| `/acme/repo`                | `/acme/repo`                                | `/acme/other`  |
+| `/acme/*`                   | `/acme/repo`, `/acme/my-service`            | `/other/repo`  |
+| `/acme/service-*`           | `/acme/service-api`, `/acme/service-worker` | `/acme/repo`   |
+| `/*/proj0-*`                | `/acme/proj0-api`, `/other/proj0-db`        | `/acme/other`  |
 
-> **Conflict detection:** At config load time and when saving via the dashboard API, fogwall rejects any
-> new permission entry whose pattern overlaps with an existing entry for the same user and provider. Two entries overlap
-> when they are equal, or when one is a GLOB/REGEX pattern that would match the other's value. This prevents
-> silent misconfiguration where the effective permission depends on evaluation order.
+> **Conflict detection:** At config load time and when saving via the dashboard API, fogwall rejects any new permission
+> entry whose pattern overlaps with an existing entry for the same user and provider. Two entries overlap when they are
+> equal, or when one is a GLOB/REGEX pattern that would match the other's value. This prevents silent misconfiguration
+> where the effective permission depends on evaluation order.
 
 ### Real-world permission examples
 
@@ -1174,8 +1201,8 @@ permissions:
 
 **Self-certify for a trusted committer scoped to a prefix:**
 
-A trusted committer needs both entries: `PUSH_AND_REVIEW` to be able to push, and `SELF_CERTIFY` to bypass the
-peer review requirement. These cover separate code paths and are not treated as conflicting.
+A trusted committer needs both entries: `PUSH_AND_REVIEW` to be able to push, and `SELF_CERTIFY` to bypass the peer
+review requirement. These cover separate code paths and are not treated as conflicting.
 
 ```yaml
 permissions:
@@ -1200,12 +1227,12 @@ permissions:
 
 ### Operations
 
-| Value            | Effect                                                                                                                    |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `PUSH`           | User may push to matching repositories                                                                                    |
-| `REVIEW`         | User may approve or reject pushes submitted by others                                                                     |
-| `PUSH_AND_REVIEW`| Shorthand for both PUSH and REVIEW; does **not** include SELF_CERTIFY                                                    |
-| `SELF_CERTIFY`   | Trusted contributor: may approve their own clean pushes without a peer reviewer. Requires the `SELF_CERTIFY` role as well |
+| Value             | Effect                                                                                                                    |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `PUSH`            | User may push to matching repositories                                                                                    |
+| `REVIEW`          | User may approve or reject pushes submitted by others                                                                     |
+| `PUSH_AND_REVIEW` | Shorthand for both PUSH and REVIEW; does **not** include SELF_CERTIFY                                                     |
+| `SELF_CERTIFY`    | Trusted contributor: may approve their own clean pushes without a peer reviewer. Requires the `SELF_CERTIFY` role as well |
 
 > **`SELF_CERTIFY` is a two-key lock:** the user must have both a `SELF_CERTIFY` permission entry for the repository
 > _and_ the `SELF_CERTIFY` role (set via `users[].roles` or `auth.role-mappings`). Either alone is not sufficient.
@@ -1245,14 +1272,14 @@ attestations:
 
 ### Attestation properties
 
-| Property  | Type    | Default      | Description                                                                  |
-| --------- | ------- | ------------ | ---------------------------------------------------------------------------- |
-| `id`      | string  | —            | Unique key used to store the reviewer's answer in the push record            |
-| `type`    | string  | `checkbox`   | Input type: `checkbox`, `text`, or `dropdown`                                |
-| `label`   | string  | —            | Question text shown in the review form                                       |
-| `required`| boolean | `false`      | Whether the question must be answered before the reviewer can submit         |
-| `options` | list    | _(empty)_    | Choices for `dropdown` type; ignored for other types                         |
-| `tooltip` | string  | _(none)_     | Optional help text shown alongside the question                              |
+| Property   | Type    | Default    | Description                                                          |
+| ---------- | ------- | ---------- | -------------------------------------------------------------------- |
+| `id`       | string  | —          | Unique key used to store the reviewer's answer in the push record    |
+| `type`     | string  | `checkbox` | Input type: `checkbox`, `text`, or `dropdown`                        |
+| `label`    | string  | —          | Question text shown in the review form                               |
+| `required` | boolean | `false`    | Whether the question must be answered before the reviewer can submit |
+| `options`  | list    | _(empty)_  | Choices for `dropdown` type; ignored for other types                 |
+| `tooltip`  | string  | _(none)_   | Optional help text shown alongside the question                      |
 
 Set `attestations: []` (or omit the key) to disable attestations entirely.
 
@@ -1273,8 +1300,8 @@ Logs: `fogwall-server/logs/application.log`
 
 ## Logging
 
-fogwall uses Log4j2 for logging. To override the bundled config without rebuilding the image, mount
-a custom `log4j2.xml` and point the JVM at it:
+fogwall uses Log4j2 for logging. To override the bundled config without rebuilding the image, mount a custom
+`log4j2.xml` and point the JVM at it:
 
 ```bash
 # Local run
@@ -1289,22 +1316,22 @@ environment:
 
 `JAVA_TOOL_OPTIONS` is read directly by the JVM, so it works regardless of how the application is launched.
 
-A ready-made debug config (`docker/log4j2-debug.xml`) is included for diagnosing OIDC and Spring Security
-issues — it enables `DEBUG` on `org.springframework.security` and `org.springframework.web.client`. See the
-comments in that file for how to activate it.
+A ready-made debug config (`docker/log4j2-debug.xml`) is included for diagnosing OIDC and Spring Security issues — it
+enables `DEBUG` on `org.springframework.security` and `org.springframework.web.client`. See the comments in that file
+for how to activate it.
 
 ## Git client output
 
-fogwall sends validation results and status messages to the git client via sideband (the `remote:`
-lines visible during a push). Two environment variables control the formatting of these messages:
+fogwall sends validation results and status messages to the git client via sideband (the `remote:` lines visible during
+a push). Two environment variables control the formatting of these messages:
 
-| Variable | Effect |
-| -------- | ------ |
-| `NO_COLOR` | Disables ANSI colour in sideband output. Follows the [no-color.org](https://no-color.org) convention — set to any value to disable. |
+| Variable           | Effect                                                                                                                                                            |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NO_COLOR`         | Disables ANSI colour in sideband output. Follows the [no-color.org](https://no-color.org) convention — set to any value to disable.                               |
 | `FOGWALL_NO_EMOJI` | Replaces emoji symbols (✅ ❌ ⛔ 🔑 etc.) with plain ASCII equivalents. Useful when pushing through terminals or CI systems that do not render Unicode correctly. |
 
-Both are read at runtime from the server's environment — no restart is required if set before the process
-starts, but they cannot be changed while the server is running.
+Both are read at runtime from the server's environment — no restart is required if set before the process starts, but
+they cannot be changed while the server is running.
 
 ```bash
 # Docker Compose — add to the fogwall service environment block

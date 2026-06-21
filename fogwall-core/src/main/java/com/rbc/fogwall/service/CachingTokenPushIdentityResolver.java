@@ -27,7 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 public class CachingTokenPushIdentityResolver implements PushIdentityResolver {
 
     private final PushIdentityResolver delegate;
-    private final JdbcScmTokenCache cache;
+    private final ScmTokenCache cache;
     private final ReadOnlyUserStore userStore;
 
     @Override

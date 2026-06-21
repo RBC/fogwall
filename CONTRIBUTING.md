@@ -5,13 +5,13 @@
 The easiest way to get the right toolchain versions is [mise](https://mise.jdx.dev/):
 
 ```shell
-mise install   # installs Java 21 (Temurin) and Node 24 as defined in mise.toml
+mise install   # installs Java 25 (Temurin) and Node 26 as defined in mise.toml
 ```
 
 If you prefer to manage tools yourself, you need:
 
-- Java 21+
-- Node 24+
+- Java 25+
+- Node 26+
 - Docker or Podman (for e2e tests and Docker Compose workflows)
 
 Gradle itself is included via the wrapper — no separate installation needed.
@@ -72,15 +72,20 @@ rules:
   allow:
     - enabled: true
       order: 110
-      operations: [FETCH, PUSH]
-      providers: [github]
-      slugs:
-        - /your-org/your-repo
+      operations: BOTH
+      provider: github
+      match:
+        target: SLUG
+        value: /your-org/your-repo
+        type: LITERAL
 
 permissions:
   - username: your-proxy-user
     provider: github
-    path: /your-org/your-repo
+    match:
+      target: SLUG
+      value: /your-org/your-repo
+      type: LITERAL
     operations: PUSH
 ```
 
@@ -158,20 +163,28 @@ Run tests by logical grouping. Each entry point orchestrates multiple related te
 
 If running a single test case by name:
 
-**Store-and-forward (push):** | Script | Category | What it tests | | ---------------------- | -------- |
------------------------------------------------------- | | `push-pass.sh` | Pass | Golden-path push — should succeed and
-forward upstream | | `push-pass-tag.sh` | Pass | Lightweight and annotated tags — should succeed | |
-`push-pass-secrets.sh` | Pass | File patterns that look like secrets but pass gitleaks | | `push-fail-author.sh` | Fail
-| Invalid author email domains (noreply, disallowed) | | `push-fail-message.sh` | Fail | Commit message validation (WIP,
-fixup, DO NOT MERGE) | | `push-fail-diff.sh` | Fail | Diff content scanning (internal URLs, patterns) | |
-`push-fail-secrets.sh` | Fail | Gitleaks detecting secrets in diff (AWS, GitHub, PEM) |
+**Store-and-forward (push):**
 
-**Transparent proxy:** | Script | Category | What it tests | | ----------------------- | -------- |
----------------------------------------------------------------- | | `proxy-pass.sh` | Pass | Golden-path push — blocks
-for approval, then auto-approves | | `proxy-pass-tag.sh` | Pass | Lightweight and annotated tags through proxy | |
-`proxy-fail-author.sh` | Fail | Invalid author email domains (noreply, disallowed) | | `proxy-fail-message.sh` | Fail |
-Commit message validation (WIP, fixup, DO NOT MERGE) | | `proxy-fail-diff.sh` | Fail | Diff content scanning (internal
-URLs, patterns) | | `proxy-fail-secrets.sh` | Fail | Gitleaks detecting secrets in diff (AWS, GitHub, PEM) |
+| Script                 | Category | What it tests                                          |
+| ---------------------- | -------- | ------------------------------------------------------ |
+| `push-pass.sh`         | Pass     | Golden-path push — should succeed and forward upstream |
+| `push-pass-tag.sh`     | Pass     | Lightweight and annotated tags — should succeed        |
+| `push-pass-secrets.sh` | Pass     | File patterns that look like secrets but pass gitleaks |
+| `push-fail-author.sh`  | Fail     | Invalid author email domains (noreply, disallowed)     |
+| `push-fail-message.sh` | Fail     | Commit message validation (WIP, fixup, DO NOT MERGE)   |
+| `push-fail-diff.sh`    | Fail     | Diff content scanning (internal URLs, patterns)        |
+| `push-fail-secrets.sh` | Fail     | Gitleaks detecting secrets in diff (AWS, GitHub, PEM)  |
+
+**Transparent proxy:**
+
+| Script                  | Category | What it tests                                              |
+| ----------------------- | -------- | ---------------------------------------------------------- |
+| `proxy-pass.sh`         | Pass     | Golden-path push — blocks for approval, then auto-approves |
+| `proxy-pass-tag.sh`     | Pass     | Lightweight and annotated tags through proxy               |
+| `proxy-fail-author.sh`  | Fail     | Invalid author email domains (noreply, disallowed)         |
+| `proxy-fail-message.sh` | Fail     | Commit message validation (WIP, fixup, DO NOT MERGE)       |
+| `proxy-fail-diff.sh`    | Fail     | Diff content scanning (internal URLs, patterns)            |
+| `proxy-fail-secrets.sh` | Fail     | Gitleaks detecting secrets in diff (AWS, GitHub, PEM)      |
 
 #### Running tests against your own repo
 
@@ -368,14 +381,14 @@ Open `http://localhost:8080` and log in with any username.
 After `docker/gitea-setup.sh`, the test repository is reachable at:
 
 ```text
-http://localhost:8080/push/gitea/test-owner/test-repo.git
-http://localhost:8080/proxy/gitea/test-owner/test-repo.git
+http://localhost:8080/push/gitea:3000/test-owner/test-repo.git
+http://localhost:8080/proxy/gitea:3000/test-owner/test-repo.git
 ```
 
 Clone example:
 
 ```shell
-git clone http://fogwalladmin:Admin1234!@localhost:8080/push/gitea/test-owner/test-repo.git
+git clone http://fogwalladmin:Admin1234!@localhost:8080/push/gitea:3000/test-owner/test-repo.git
 ```
 
 ### Teardown
@@ -417,17 +430,6 @@ This sets `core.hooksPath` to `.githooks/`. The hook runs on every `git commit`:
 1. `spotlessApply` — auto-formats Java and re-stages changed files
 2. `npmFormat` — auto-formats frontend source with Prettier and re-stages changed files
 3. `npmLint` — ESLint check; fails the commit if there are errors (no auto-fix)
-
-## Project layout
-
-| Module              | Purpose                                                                                    |
-| ------------------- | ------------------------------------------------------------------------------------------ |
-| `fogwall-core`      | Shared library: filter chain, JGit hooks, push store, provider model, approval abstraction |
-| `fogwall-server`    | Standalone proxy-only server — no dashboard, no Spring                                     |
-| `fogwall-dashboard` | Dashboard + REST API — Spring MVC, approval UI                                             |
-
-See [docs/internals/JGIT_INFRASTRUCTURE.md](docs/internals/JGIT_INFRASTRUCTURE.md) for the store-and-forward
-architecture and [docs/internals/GIT_INTERNALS.md](docs/internals/GIT_INTERNALS.md) for wire-protocol details.
 
 ## Releases
 

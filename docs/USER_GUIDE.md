@@ -1,17 +1,17 @@
 # User Guide — Pushing Through fogwall
 
-This guide is for **developers who push code through fogwall**. It covers setting up your git remote,
-understanding proxy output, and what to do when a push is blocked or waiting for approval.
+This guide is for **developers who push code through fogwall**. It covers setting up your git remote, understanding
+proxy output, and what to do when a push is blocked or waiting for approval.
 
-If you want to operate or configure fogwall, see the [Configuration Reference](CONFIGURATION.md). If you
-want to build on or contribute to the codebase, see [CONTRIBUTING.md](../CONTRIBUTING.md).
+If you want to operate or configure fogwall, see the [Configuration Reference](CONFIGURATION.md). If you want to build
+on or contribute to the codebase, see [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ---
 
 ## What fogwall does
 
-fogwall sits between your `git push` and the upstream host (GitHub, GitLab, Bitbucket, etc.). Every push
-is inspected before it reaches the upstream:
+fogwall sits between your `git push` and the upstream host (GitHub, GitLab, Bitbucket, etc.). Every push is inspected
+before it reaches the upstream:
 
 - Commit author emails are checked against allowed domains
 - Commit messages are scanned for blocked patterns
@@ -19,8 +19,8 @@ is inspected before it reaches the upstream:
 - Your git identity is verified against your proxy account
 - You may need approval from a reviewer before the push is forwarded
 
-If everything passes, your push lands on the upstream as normal. If something fails, the push is rejected and you
-get a message explaining what to fix.
+If everything passes, your push lands on the upstream as normal. If something fails, the push is rejected and you get a
+message explaining what to fix.
 
 ---
 
@@ -30,15 +30,14 @@ You need the following from your administrator before you can push through the p
 
 1. **The proxy URL** — something like `https://fogwall.corp.example.com` or `http://localhost:8080` for local
    development.
-2. **A proxy user account** — username and password for the fogwall dashboard. This is separate from your
-   upstream SCM credentials.
+2. **A proxy user account** — username and password for the fogwall dashboard. This is separate from your upstream SCM
+   credentials.
 3. **A personal access token (PAT)** for the upstream SCM — the proxy forwards your token to authenticate with
    GitHub/GitLab/etc. on your behalf.
 4. **Push permission on the target repo** — the administrator must grant you `PUSH` permission for the specific
    repository you want to push to.
 5. **Your SCM identity registered** — the proxy verifies that your token resolves to the same person as your proxy
-   account. Your administrator needs to add your upstream username (e.g. your GitHub login) to your proxy user
-   profile.
+   account. Your administrator needs to add your upstream username (e.g. your GitHub login) to your proxy user profile.
 
 If the admin has configured `identity-verification: warn`, pushes will go through even without a registered SCM
 identity, but you will see a warning in the push output. If it is set to `strict`, pushes will be blocked until your
@@ -74,15 +73,14 @@ git push proxy main
 
 ### Credentials in the remote URL
 
-The git push path (`/push/` and `/proxy/`) uses HTTP Basic authentication — this is what the git protocol
-requires, and it matches what the upstream SCM expects. Your upstream PAT is the password; the username can
-be any non-empty string — `me`, `git`, your name — it is not used for identity resolution (see
-[Identity verification](#identity-verification) below). It must not be empty or the upstream SCM will
-reject the request. The exception is Bitbucket — see below.
+The git push path (`/push/` and `/proxy/`) uses HTTP Basic authentication — this is what the git protocol requires, and
+it matches what the upstream SCM expects. Your upstream PAT is the password; the username can be any non-empty string —
+`me`, `git`, your name — it is not used for identity resolution (see [Identity verification](#identity-verification)
+below). It must not be empty or the upstream SCM will reject the request. The exception is Bitbucket — see below.
 
-This is separate from the dashboard: the dashboard login uses your proxy user account (via your org's IdP or
-local credentials), not your SCM token. The two credential sets are independent — one is for `git push`, the
-other is for the web UI.
+This is separate from the dashboard: the dashboard login uses your proxy user account (via your org's IdP or local
+credentials), not your SCM token. The two credential sets are independent — one is for `git push`, the other is for the
+web UI.
 
 Embed credentials directly in the URL if your git credential helper does not pick them up automatically:
 
@@ -100,12 +98,12 @@ Or use `git credential store` / your OS keychain as you normally would.
 
 The proxy calls the SCM API to resolve your identity. Your PAT needs at least:
 
-| Provider | Minimum scope |
-| -------- | ------------- |
-| GitHub | No additional scopes required (classic or fine-grained PATs both work) |
-| GitLab | `read_user` |
-| Bitbucket | `read:user:bitbucket` and `write:repository:bitbucket` |
-| Codeberg / Gitea | `read:user` |
+| Provider         | Minimum scope                                                          |
+| ---------------- | ---------------------------------------------------------------------- |
+| GitHub           | No additional scopes required (classic or fine-grained PATs both work) |
+| GitLab           | `read_user`                                                            |
+| Bitbucket        | `read:user:bitbucket` and `write:repository:bitbucket`                 |
+| Codeberg / Gitea | `read:user`                                                            |
 
 ---
 
@@ -113,33 +111,32 @@ The proxy calls the SCM API to resolve your identity. Your PAT needs at least:
 
 There are two URL prefixes, each with different behaviour:
 
-| | `/push/` (store-and-forward) | `/proxy/` (transparent proxy) |
-| --- | --- | --- |
-| **How it works** | The proxy receives your push locally, validates it, then forwards to upstream | The proxy forwards HTTP requests directly to upstream while inspecting them inline |
-| **Terminal feedback** | Live streaming — each validation step prints as it runs | Silent until the end — one response after all checks complete |
-| **Approval workflow** | Push stays open waiting for approval; same `git push` command completes once approved | Push is blocked and you must run `git push` again after a reviewer approves — the second push is matched to the existing push record |
-| **Push record** | Every push is persisted with a full event history | Every push is persisted; the re-push after approval references the same record |
-| **Local disk usage** | Clones each repo to ephemeral pod storage for diff inspection — proportional to repo history size | None — git bytes stream directly through the proxy with no local storage |
-| **Recommendation** | **Use this for most workflows** | Use when network reliability or disk constraints are a concern |
+|                       | `/push/` (store-and-forward)                                                                      | `/proxy/` (transparent proxy)                                                                                                        |
+| --------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **How it works**      | The proxy receives your push locally, validates it, then forwards to upstream                     | The proxy forwards HTTP requests directly to upstream while inspecting them inline                                                   |
+| **Terminal feedback** | Live streaming — each validation step prints as it runs                                           | Silent until the end — one response after all checks complete                                                                        |
+| **Approval workflow** | Push stays open waiting for approval; same `git push` command completes once approved             | Push is blocked and you must run `git push` again after a reviewer approves — the second push is matched to the existing push record |
+| **Push record**       | Every push is persisted with a full event history                                                 | Every push is persisted; the re-push after approval references the same record                                                       |
+| **Local disk usage**  | Clones each repo to ephemeral pod storage for diff inspection — proportional to repo history size | None — git bytes stream directly through the proxy with no local storage                                                             |
+| **Recommendation**    | **Use this for most workflows**                                                                   | Use when network reliability or disk constraints are a concern                                                                       |
 
-For day-to-day use, `/push/` gives a better experience: you see each validation step in real time and the
-same `git push` command completes once approved.
+For day-to-day use, `/push/` gives a better experience: you see each validation step in real time and the same
+`git push` command completes once approved.
 
-Prefer `/proxy/` if your network infrastructure is flaky or connections between client → proxy → upstream
-are unreliable. Store-and-forward keeps the client connection open for the full validation and approval
-cycle — a dropped connection means starting over. Transparent proxy completes each HTTP request atomically,
-so a network hiccup during approval does not lose the push record.
+Prefer `/proxy/` if your network infrastructure is flaky or connections between client → proxy → upstream are
+unreliable. Store-and-forward keeps the client connection open for the full validation and approval cycle — a dropped
+connection means starting over. Transparent proxy completes each HTTP request atomically, so a network hiccup during
+approval does not lose the push record.
 
 ### Disk usage in store-and-forward mode
 
-In S&F mode, the proxy maintains local mirrors of each upstream repository on ephemeral pod storage
-(`emptyDir` in Kubernetes/OpenShift). A full clone is kept for the serve path (so clients can fetch
-through the proxy) and a shallow clone (depth 100) for diff inspection. These are rebuilt automatically
-on pod restart — there is no durable state in the cache.
+In S&F mode, the proxy maintains local mirrors of each upstream repository on ephemeral pod storage (`emptyDir` in
+Kubernetes/OpenShift). A full clone is kept for the serve path (so clients can fetch through the proxy) and a shallow
+clone (depth 100) for diff inspection. These are rebuilt automatically on pod restart — there is no durable state in the
+cache.
 
-**Large repositories** (deep history, large binaries, monorepos) can consume significant disk on the proxy
-pod. Operators should set an `emptyDir.sizeLimit` in the pod spec to prevent runaway clones from
-exhausting node disk:
+**Large repositories** (deep history, large binaries, monorepos) can consume significant disk on the proxy pod.
+Operators should set an `emptyDir.sizeLimit` in the pod spec to prevent runaway clones from exhausting node disk:
 
 ```yaml
 volumes:
@@ -148,10 +145,9 @@ volumes:
       sizeLimit: 5Gi
 ```
 
-If disk pressure becomes an issue for a specific large repo, route it through `/proxy/` instead — transparent
-proxy mode uses zero local disk and shifts the concern purely to network reliability between the proxy and
-upstream. A transient network failure during a push just means the developer retries; the push record is
-preserved.
+If disk pressure becomes an issue for a specific large repo, route it through `/proxy/` instead — transparent proxy mode
+uses zero local disk and shifts the concern purely to network reliability between the proxy and upstream. A transient
+network failure during a push just means the developer retries; the push record is preserved.
 
 ---
 
@@ -186,7 +182,7 @@ remote: 🔑  Checking GPG signatures...
 remote:   ✅  signatures OK
 remote: 🔑  Scanning for secrets...
 remote:   ✅  no secrets detected
-remote: 
+remote:
 remote: ────────────────────────────────────────
 remote: 🔗  View push record: http://fogwall.corp.example.com/dashboard/push/4d6196fb-...
 remote: ✅  Push approved by reviewer
@@ -197,9 +193,9 @@ To http://fogwall.corp.example.com/push/github.com/myorg/myrepo.git
  * [new branch]      my-feature -> my-feature
 ```
 
-Each `remote:` line is a validation step streaming in real time. The example above shows `ui` approval mode —
-a reviewer approved in the dashboard before the push was forwarded. In `auto` mode the `✅ Push approved by
-reviewer` line is replaced by immediate forwarding with no wait.
+Each `remote:` line is a validation step streaming in real time. The example above shows `ui` approval mode — a reviewer
+approved in the dashboard before the push was forwarded. In `auto` mode the `✅ Push approved by reviewer` line is
+replaced by immediate forwarding with no wait.
 
 ---
 
@@ -209,14 +205,14 @@ What happens after validation depends on how the administrator has configured th
 
 ### Auto-approve (`approval-mode: auto`)
 
-Clean pushes (no validation failures) are immediately approved and forwarded. You see output like the example above
-— no human reviewer is needed. This is the typical setting for solo developers or teams that use validation as a
-guardrail without a manual review step.
+Clean pushes (no validation failures) are immediately approved and forwarded. You see output like the example above — no
+human reviewer is needed. This is the typical setting for solo developers or teams that use validation as a guardrail
+without a manual review step.
 
 ### Review required (`approval-mode: ui`)
 
-After validation passes, the push enters a **PENDING** state and waits for a reviewer to approve it in the
-dashboard. You will see:
+After validation passes, the push enters a **PENDING** state and waits for a reviewer to approve it in the dashboard.
+You will see:
 
 ```text
 remote: 🔗  View push record: http://fogwall.corp.example.com/dashboard/push/4d6196fb-...
@@ -228,8 +224,8 @@ remote: .
 remote: Awaiting review... (10s elapsed, ~1789s remaining)
 ```
 
-The push command stays open, printing keepalive dots while it waits. Once a reviewer approves in the dashboard,
-the proxy forwards the push and the command completes:
+The push command stays open, printing keepalive dots while it waits. Once a reviewer approves in the dashboard, the
+proxy forwards the push and the command completes:
 
 ```text
 remote: ✅  Push approved by reviewer
@@ -242,63 +238,63 @@ To http://fogwall.corp.example.com/push/github.com/myorg/myrepo.git
  * [new branch]      my-feature -> my-feature
 ```
 
-If no approval comes, your git client will eventually time out. You can re-run the push — it will resume waiting
-for approval on the existing push record rather than creating a new one.
+If no approval comes, your git client will eventually time out. You can re-run the push — it will resume waiting for
+approval on the existing push record rather than creating a new one.
 
 ### Attestation questions
 
-The administrator may configure attestation questions that you must answer before a push is approved. These appear
-in the dashboard push record view, not in the terminal. A reviewer (or yourself, if you have `SELF_CERTIFY`
-permission for the repo) answers them as part of the approval step.
+The administrator may configure attestation questions that you must answer before a push is approved. These appear in
+the dashboard push record view, not in the terminal. A reviewer (or yourself, if you have `SELF_CERTIFY` permission for
+the repo) answers them as part of the approval step.
 
 ---
 
 ## Reviewing a push
 
-If you have been asked to review a push, or you are an administrator, log in to the dashboard and open
-the **Pushes** page. Pushes awaiting review have status **PENDING**.
+If you have been asked to review a push, or you are an administrator, log in to the dashboard and open the **Pushes**
+page. Pushes awaiting review have status **PENDING**.
 
 ### Push record states
 
-| State | Meaning |
-| ----- | ------- |
-| `RECEIVED` | Push has arrived and is being processed |
-| `PENDING` | Validation passed; awaiting a reviewer's decision |
-| `APPROVED` | Approved by a reviewer (or self-certified) — will be forwarded |
-| `FORWARDED` | Successfully sent to the upstream SCM |
-| `REJECTED` | Reviewer declined the push |
-| `BLOCKED` | Validation failed — push will not be forwarded |
-| `CANCELED` | Canceled by the pusher or an administrator |
+| State       | Meaning                                                        |
+| ----------- | -------------------------------------------------------------- |
+| `RECEIVED`  | Push has arrived and is being processed                        |
+| `PENDING`   | Validation passed; awaiting a reviewer's decision              |
+| `APPROVED`  | Approved by a reviewer (or self-certified) — will be forwarded |
+| `FORWARDED` | Successfully sent to the upstream SCM                          |
+| `REJECTED`  | Reviewer declined the push                                     |
+| `BLOCKED`   | Validation failed — push will not be forwarded                 |
+| `CANCELED`  | Canceled by the pusher or an administrator                     |
 
 ### Approving or rejecting
 
 Open the push record to see the full diff, commit list, and validation results. You can:
 
-- **Approve** — forwards the push to the upstream. If attestation questions are configured, you must
-  answer them before approving.
-- **Reject** — blocks the push. The reason field is optional but recommended — it is shown to the
-  pusher in the dashboard and helps them understand what to fix.
+- **Approve** — forwards the push to the upstream. If attestation questions are configured, you must answer them before
+  approving.
+- **Reject** — blocks the push. The reason field is optional but recommended — it is shown to the pusher in the
+  dashboard and helps them understand what to fix.
 
 The reason field is recorded in the audit log regardless of whether it is shown to the pusher.
 
 ### Self-certification
 
-If you have `SELF_CERTIFY` permission for the repository, you can approve your own pushes from the push
-record view. The approval is recorded in the audit log with a self-certification flag, distinguishing it
-from peer review. Attestation questions still apply.
+If you have `SELF_CERTIFY` permission for the repository, you can approve your own pushes from the push record view. The
+approval is recorded in the audit log with a self-certification flag, distinguishing it from peer review. Attestation
+questions still apply.
 
 ### Who can review
 
-By default any authenticated user can review any push they did not push themselves. If your administrator
-has set `server.require-review-permission: true`, you need an explicit `REVIEW` permission entry for the
-repository to approve or reject. Contact your administrator if you receive a 403 trying to approve a push.
+By default any authenticated user can review any push they did not push themselves. If your administrator has set
+`server.require-review-permission: true`, you need an explicit `REVIEW` permission entry for the repository to approve
+or reject. Contact your administrator if you receive a 403 trying to approve a push.
 
 ---
 
 ## When a push is blocked
 
-In store-and-forward mode (`/push/`), each validation step streams live and all failures are summarised
-at the end. A push with multiple issues across several commits looks like this:
+In store-and-forward mode (`/push/`), each validation step streams live and all failures are summarised at the end. A
+push with multiple issues across several commits looks like this:
 
 ```text
 remote: 🔑  Checking URL allow rules...
@@ -329,11 +325,11 @@ remote: ❌  noreply@example.com: blocked local part (noreply)
 remote:   → git config user.email "you@example.com"
 remote: ❌  WIP: commit 2 — bad commit message: contains blocked term: "WIP"
 remote:   → Messages must not contain: WIP, fixup!, squash!, DO NOT MERGE
-remote: 
+remote:
 remote: ⛔  Push Blocked - Diff Contains Blocked Content
 remote: ❌  blocked term: "internal.corp.example.com" in config.yml
 remote: ❌  blocked pattern: (?i)https?://[a-z0-9.-]*\.corp\.example\.com\b in config.yml
-remote: 
+remote:
 remote: ❌  [github-pat]  ci-config.env:1
 remote:   commit: e9085c9
 remote:   match:  REDACTED
@@ -344,8 +340,8 @@ To http://fogwall.corp.example.com/push/github.com/myorg/myrepo.git
 error: failed to push some refs to 'http://fogwall.corp.example.com/push/github.com/myorg/myrepo.git'
 ```
 
-In transparent proxy mode (`/proxy/`), all validation runs first and the summary is returned in one response
-at the end. The terminal output is otherwise identical to the above, but ends with:
+In transparent proxy mode (`/proxy/`), all validation runs first and the summary is returned in one response at the end.
+The terminal output is otherwise identical to the above, but ends with:
 
 ```text
 remote: push rejected by fogwall
@@ -356,16 +352,16 @@ error: failed to push some refs to 'http://fogwall.corp.example.com/proxy/github
 
 Common block reasons and what to do:
 
-| Message | Fix |
-| ------- | --- |
-| `author email '...' is not allowed` | Your `git config user.email` does not match an allowed domain. Set it to your corporate email: `git config user.email you@corp.example.com` then amend or rebase to update the commits. |
-| `commit message contains blocked pattern` | Reword the commit message (`git commit --amend` or `git rebase -i`) to remove the blocked string. |
-| `diff contains blocked content` | The push contains content matching a deny rule (e.g. an internal hostname, a secret pattern). Remove it from the commit and amend/rebase. |
-| `secret detected by gitleaks` | A secret was found in the diff. Remove it from the commit history — a simple amend is not enough if the secret was ever committed; rewrite the history with `git filter-repo` or similar. |
-| `Repository Not Allowed` | The repository is not in the proxy's allow list — it hasn't been enabled for use through the proxy at all. Contact your administrator to add it to the access rules. |
-| `Repository Denied` | The repository is explicitly blocked by a deny rule. Contact your administrator. |
-| `Push Blocked - Unauthorized` | The repository is allowed through the proxy but you do not have a `PUSH` permission entry for it. Contact your administrator to grant you access. |
-| `identity not resolved` | Your PAT did not resolve to a known SCM identity. Check your token scopes and ask your administrator to register your upstream username. |
+| Message                                   | Fix                                                                                                                                                                                       |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `author email '...' is not allowed`       | Your `git config user.email` does not match an allowed domain. Set it to your corporate email: `git config user.email you@corp.example.com` then amend or rebase to update the commits.   |
+| `commit message contains blocked pattern` | Reword the commit message (`git commit --amend` or `git rebase -i`) to remove the blocked string.                                                                                         |
+| `diff contains blocked content`           | The push contains content matching a deny rule (e.g. an internal hostname, a secret pattern). Remove it from the commit and amend/rebase.                                                 |
+| `secret detected by gitleaks`             | A secret was found in the diff. Remove it from the commit history — a simple amend is not enough if the secret was ever committed; rewrite the history with `git filter-repo` or similar. |
+| `Repository Not Allowed`                  | The repository is not in the proxy's allow list — it hasn't been enabled for use through the proxy at all. Contact your administrator to add it to the access rules.                      |
+| `Repository Denied`                       | The repository is explicitly blocked by a deny rule. Contact your administrator.                                                                                                          |
+| `Push Blocked - Unauthorized`             | The repository is allowed through the proxy but you do not have a `PUSH` permission entry for it. Contact your administrator to grant you access.                                         |
+| `identity not resolved`                   | Your PAT did not resolve to a known SCM identity. Check your token scopes and ask your administrator to register your upstream username.                                                  |
 
 After fixing the issue, push again normally — the proxy will re-validate from scratch.
 
@@ -375,23 +371,23 @@ After fixing the issue, push again normally — the proxy will re-validate from 
 
 The proxy runs two checks to confirm that the person pushing is who they say they are:
 
-1. **Token → SCM username**: your PAT is used to call the SCM API (`GET /user`). The returned username must match
-   the SCM identity registered in your proxy user profile. This check is **always enforced** — a push is blocked
-   immediately if your token cannot be matched to a registered proxy user, regardless of any other settings.
-2. **Commit emails → proxy user**: every author and committer email in the pushed commits must match an email
-   address registered on your proxy account. This check is controlled by `identity-verification` — in `warn` mode
-   mismatches are logged but the push proceeds; in `strict` mode the push is blocked.
+1. **Token → SCM username**: your PAT is used to call the SCM API (`GET /user`). The returned username must match the
+   SCM identity registered in your proxy user profile. This check is **always enforced** — a push is blocked immediately
+   if your token cannot be matched to a registered proxy user, regardless of any other settings.
+2. **Commit emails → proxy user**: every author and committer email in the pushed commits must match an email address
+   registered on your proxy account. This check is controlled by `identity-verification` — in `warn` mode mismatches are
+   logged but the push proceeds; in `strict` mode the push is blocked.
 
-You can add and remove your own SCM identities and email addresses from your profile page in the dashboard.
-If your push is blocked with "Identity Not Linked" or a commit email mismatch, log in to the dashboard and
-add the missing identity or email under your profile before pushing again.
+You can add and remove your own SCM identities and email addresses from your profile page in the dashboard. If your push
+is blocked with "Identity Not Linked" or a commit email mismatch, log in to the dashboard and add the missing identity
+or email under your profile before pushing again.
 
-If you cannot resolve it yourself — for example, because the email address or SCM username is already
-registered to another user — contact an administrator. Duplicate identity conflicts (two users claiming the
-same email or SCM handle) require admin intervention to resolve.
+If you cannot resolve it yourself — for example, because the email address or SCM username is already registered to
+another user — contact an administrator. Duplicate identity conflicts (two users claiming the same email or SCM handle)
+require admin intervention to resolve.
 
-**The HTTP Basic-auth username in your remote URL is not used for identity.** Use any value — `me`, `git`, your
-name — it makes no difference. Only the password (your PAT) matters.
+**The HTTP Basic-auth username in your remote URL is not used for identity.** Use any value — `me`, `git`, your name —
+it makes no difference. Only the password (your PAT) matters.
 
 ---
 
@@ -399,15 +395,15 @@ name — it makes no difference. Only the password (your PAT) matters.
 
 Two independent configuration layers control whether a push is allowed:
 
-**Access rules** (`rules.allow` / `rules.deny`) are administrator-configured gates on which repositories the proxy
-will handle at all. If a repository is not in the allow list, the proxy rejects requests for it immediately — no
-user-level check is run. This is a site-wide filter.
+**Access rules** (`rules.allow` / `rules.deny`) are administrator-configured gates on which repositories the proxy will
+handle at all. If a repository is not in the allow list, the proxy rejects requests for it immediately — no user-level
+check is run. This is a site-wide filter.
 
 **User permissions** (`permissions`) control which proxy users can perform which operations on specific repositories.
 Even if a repository is in the allow list, you need an explicit `PUSH` permission entry to push to it.
 
-The error message tells you which layer rejected the push — see [When a push is blocked](#when-a-push-is-blocked)
-for the exact messages and what to do for each.
+The error message tells you which layer rejected the push — see [When a push is blocked](#when-a-push-is-blocked) for
+the exact messages and what to do for each.
 
 ---
 
@@ -415,12 +411,13 @@ for the exact messages and what to do for each.
 
 ### Push hangs on credential prompt
 
-Your git credential helper is prompting for the proxy URL but nothing appears. Embed credentials directly in the
-remote URL or configure your credential helper to recognise the proxy host.
+Your git credential helper is prompting for the proxy URL but nothing appears. Embed credentials directly in the remote
+URL or configure your credential helper to recognise the proxy host.
 
 ### `SSL certificate problem`
 
-Your corporate PKI certificate is not trusted by your git client. Ask your administrator for the CA bundle and install it:
+Your corporate PKI certificate is not trusted by your git client. Ask your administrator for the CA bundle and install
+it:
 
 ```shell
 git config http.sslCAInfo /path/to/corporate-ca.pem
@@ -434,9 +431,9 @@ git config --local http.https://fogwall.corp.example.com.sslCAInfo /path/to/corp
 
 ### Push succeeds but commits appear with wrong author
 
-The push was forwarded using your PAT, but your `git config user.name` / `user.email` were not set correctly when
-you committed. The upstream shows the author from the commit object — fix your git config and amend before pushing
-next time.
+The push was forwarded using your PAT, but your `git config user.name` / `user.email` were not set correctly when you
+committed. The upstream shows the author from the commit object — fix your git config and amend before pushing next
+time.
 
 ### `error: src refspec main does not match any`
 
@@ -448,13 +445,12 @@ Standard git error — the branch name in your push command does not match a loc
 
 ### Clone through the proxy from the start
 
-The recommended approach is to clone via the proxy rather than cloning directly from the upstream and adding
-a proxy remote later. Most repos are permitted for both fetch and push — push-only access rules are the
-exception rather than the norm. Cloning through the proxy means all activity is audited from the first
-checkout, and your `origin` remote is already pointed at the proxy with no extra setup needed.
+The recommended approach is to clone via the proxy rather than cloning directly from the upstream and adding a proxy
+remote later. Most repos are permitted for both fetch and push — push-only access rules are the exception rather than
+the norm. Cloning through the proxy means all activity is audited from the first checkout, and your `origin` remote is
+already pointed at the proxy with no extra setup needed.
 
-Use the **Clone via proxy** button on the **Repositories** page in the dashboard, or construct the URL
-manually:
+Use the **Clone via proxy** button on the **Repositories** page in the dashboard, or construct the URL manually:
 
 ```shell
 # Clone directly through the proxy — origin is set to the proxy URL automatically
@@ -465,8 +461,8 @@ cd myrepo
 git remote -v
 ```
 
-If you need a reference to the upstream directly (e.g. to pull in upstream changes that are not yet in your
-fork), add it as a second remote after cloning:
+If you need a reference to the upstream directly (e.g. to pull in upstream changes that are not yet in your fork), add
+it as a second remote after cloning:
 
 ```shell
 git remote add upstream https://github.com/myorg/myrepo
@@ -474,8 +470,8 @@ git remote add upstream https://github.com/myorg/myrepo
 
 ### Managing multiple remotes
 
-If you already have a local clone pointed directly at the upstream, add the proxy as a named remote or
-redirect pushes through it while keeping direct fetch:
+If you already have a local clone pointed directly at the upstream, add the proxy as a named remote or redirect pushes
+through it while keeping direct fetch:
 
 ```shell
 git remote set-url --push origin https://fogwall.corp.example.com/push/github.com/myorg/myrepo
@@ -483,8 +479,8 @@ git remote set-url --push origin https://fogwall.corp.example.com/push/github.co
 
 ### Private forks and internal mirrors
 
-If your org maintains a private internal fork of a public repo (e.g. a patched version of an upstream
-library), both can be proxied independently. A common three-remote setup:
+If your org maintains a private internal fork of a public repo (e.g. a patched version of an upstream library), both can
+be proxied independently. A common three-remote setup:
 
 ```shell
 # upstream — the public project (fetch only, direct)
@@ -497,25 +493,25 @@ git remote add origin https://fogwall.corp.example.com/push/github.corp.example.
 # it does not have to be the same provider as upstream.
 ```
 
-Each remote is a separate entry in the proxy's access rules and permission grants. Coordinate with your
-administrator to ensure both the public upstream and internal fork URLs are configured.
+Each remote is a separate entry in the proxy's access rules and permission grants. Coordinate with your administrator to
+ensure both the public upstream and internal fork URLs are configured.
 
 ### Finding proxy URLs from the dashboard
 
-The **Repositories** page in the dashboard lists every repo that has seen activity through the proxy. Each
-entry has a **Clone via proxy** button that copies the ready-to-use `git clone` command to your clipboard —
-useful when setting up a new local clone or adding a proxy remote to an existing one.
+The **Repositories** page in the dashboard lists every repo that has seen activity through the proxy. Each entry has a
+**Clone via proxy** button that copies the ready-to-use `git clone` command to your clipboard — useful when setting up a
+new local clone or adding a proxy remote to an existing one.
 
-The Clone button uses the `/proxy/` mode URL. Swap `/proxy/` for `/push/` if you want the store-and-forward
-path instead.
+The Clone button uses the `/proxy/` mode URL. Swap `/proxy/` for `/push/` if you want the store-and-forward path
+instead.
 
-> The repository only appears in the list after it has been pushed to or fetched through the proxy at least
-> once. If you do not see it yet, push or fetch first.
+> The repository only appears in the list after it has been pushed to or fetched through the proxy at least once. If you
+> do not see it yet, push or fetch first.
 
 ### Scrubbing a commit history before pushing
 
-If the proxy blocks your push due to secrets, blocked URLs, or disallowed commit authors in older commits,
-a simple `git commit --amend` only fixes the tip. You need to rewrite history. The recommended tool is
+If the proxy blocks your push due to secrets, blocked URLs, or disallowed commit authors in older commits, a simple
+`git commit --amend` only fixes the tip. You need to rewrite history. The recommended tool is
 [`git filter-repo`](https://github.com/newren/git-filter-repo):
 
 ```shell
@@ -529,6 +525,6 @@ git filter-repo --replace-text <(echo 'internal.corp.example.com==>REDACTED')
 git filter-repo --email-callback 'return email.replace(b"old@corp.com", b"new@corp.com")'
 ```
 
-After rewriting, force-push to a new branch and open a pull request rather than force-pushing to a
-protected branch. If you're pushing through the proxy, the rewritten history will be re-validated from
-scratch — confirm the issues are gone with a dry-run push to a test branch first.
+After rewriting, force-push to a new branch and open a pull request rather than force-pushing to a protected branch. If
+you're pushing through the proxy, the rewritten history will be re-validated from scratch — confirm the issues are gone
+with a dry-run push to a test branch first.

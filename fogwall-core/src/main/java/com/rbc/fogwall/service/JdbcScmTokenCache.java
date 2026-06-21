@@ -22,7 +22,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * <p>Only positive resolutions are cached — a failed or empty SCM API response is never stored.
  */
-public class JdbcScmTokenCache {
+public class JdbcScmTokenCache implements ScmTokenCache {
 
     private static final Logger log = LoggerFactory.getLogger(JdbcScmTokenCache.class);
 

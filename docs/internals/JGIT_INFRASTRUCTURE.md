@@ -1,7 +1,7 @@
 # JGit infrastructure
 
-How fogwall uses [Eclipse JGit](https://github.com/eclipse-jgit/jgit) to implement the store-and-forward proxy mode
-and to support commit inspection in the transparent proxy mode.
+How fogwall uses [Eclipse JGit](https://github.com/eclipse-jgit/jgit) to implement the store-and-forward proxy mode and
+to support commit inspection in the transparent proxy mode.
 
 For low-level details on git wire-protocol behaviour and how individual hooks/filters handle edge cases (tags, new
 branches, force pushes, deletions, etc.), see [GIT_INTERNALS.md](GIT_INTERNALS.md).

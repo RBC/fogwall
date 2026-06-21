@@ -1,6 +1,6 @@
 package com.rbc.fogwall.user;
 
-import com.rbc.fogwall.service.JdbcScmTokenCache;
+import com.rbc.fogwall.service.ScmTokenCache;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -22,9 +22,9 @@ public class JdbcUserStore implements UserStore {
     private static final Logger log = LoggerFactory.getLogger(JdbcUserStore.class);
 
     private final NamedParameterJdbcTemplate jdbc;
-    private final JdbcScmTokenCache tokenCache;
+    private final ScmTokenCache tokenCache;
 
-    public JdbcUserStore(DataSource dataSource, JdbcScmTokenCache tokenCache) {
+    public JdbcUserStore(DataSource dataSource, ScmTokenCache tokenCache) {
         this.jdbc = new NamedParameterJdbcTemplate(dataSource);
         this.tokenCache = tokenCache;
     }

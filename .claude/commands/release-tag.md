@@ -9,12 +9,12 @@ allowed-tools:
 
 # /release-tag — Tag and publish a release after checks pass.
 
-This is phase 2 of the release process. Phase 1 (`/release`) bumped the version and pushed to main.
-This command creates the git tag and pushes it, which triggers the Docker publish workflow.
+This is phase 2 of the release process. Phase 1 (`/release`) bumped the version and pushed to main. This command creates
+the git tag and pushes it, which triggers the Docker publish workflow.
 
-When the tag is pushed, the publish workflow promotes the already-built `:edge` image to the release
-tags (`:v<version>`, `:latest`, etc.) — it does **not** rebuild the image. The image being released is
-byte-for-byte identical to what was scanned when the version bump merged to main.
+When the tag is pushed, the publish workflow promotes the already-built `:edge` image to the release tags
+(`:v<version>`, `:latest`, etc.) — it does **not** rebuild the image. The image being released is byte-for-byte
+identical to what was scanned when the version bump merged to main.
 
 Arguments passed: `$ARGUMENTS`
 
@@ -27,9 +27,11 @@ Arguments passed: `$ARGUMENTS`
 1. **Validate the argument.** If blank or not semver, stop and ask.
 
 2. **Verify checks passed.** Run:
+
    ```
    gh run list --branch main --limit 6 --json name,status,conclusion
    ```
+
    Confirm that these checks all show `conclusion: "success"`:
    - `CI / Build & Test`
    - `CI / E2E Test`
@@ -41,29 +43,36 @@ Arguments passed: `$ARGUMENTS`
 
    If any are still in progress or failed, tell the user and stop.
 
-3. **Verify the version matches.** Read `build.gradle` and confirm the `version` in `allprojects` matches the
-   argument. If not, warn the user — they may be tagging the wrong commit.
+3. **Verify the version matches.** Read `build.gradle` and confirm the `version` in `allprojects` matches the argument.
+   If not, warn the user — they may be tagging the wrong commit.
 
 4. **Verify the tag doesn't already exist.** Run `git tag -l v<version>`. If it exists, stop and tell the user.
 
 5. **Sync with origin/main and verify HEAD.** Run:
+
    ```
    git fetch origin main
    git rev-parse HEAD
    git rev-parse origin/main
    ```
+
    If the two SHAs differ, **stop** and tell the user:
-   > Your local HEAD (`<local sha>`) is not the same commit as `origin/main` (`<remote sha>`).
-   > The Docker build ran on `origin/main`. Tagging a different commit will break the promote-not-rebuild flow.
-   > Run `git checkout main && git reset --hard origin/main` to fix this, then re-run `/release-tag`.
+
+   > Your local HEAD (`<local sha>`) is not the same commit as `origin/main` (`<remote sha>`). The Docker build ran on
+   > `origin/main`. Tagging a different commit will break the promote-not-rebuild flow. Run
+   > `git checkout main && git reset --hard origin/main` to fix this, then re-run `/release-tag`.
 
    Only proceed once HEAD == origin/main.
 
 6. **Create the signed annotated tag.** Attempt a signed tag first:
+
    ```
    git tag -s v<version> -m "Release v<version>"
    ```
-   If signing fails (no GPG/SSH key configured), fall back to an unsigned annotated tag and note that signing was skipped:
+
+   If signing fails (no GPG/SSH key configured), fall back to an unsigned annotated tag and note that signing was
+   skipped:
+
    ```
    git tag -a v<version> -m "Release v<version>"
    ```
@@ -71,8 +80,8 @@ Arguments passed: `$ARGUMENTS`
 7. **Show and confirm.** Show the user:
    - `git show v<version> --stat`
 
-   Then ask: "Ready to push the tag? This will trigger the Docker publish workflow."
-   If they confirm, run `git push origin v<version>`. If they decline, remind them to push manually.
+   Then ask: "Ready to push the tag? This will trigger the Docker publish workflow." If they confirm, run
+   `git push origin v<version>`. If they decline, remind them to push manually.
 
 8. **Create GitHub release with auto-generated notes.**
    ```
@@ -81,5 +90,5 @@ Arguments passed: `$ARGUMENTS`
      --generate-notes \
      --prerelease
    ```
-   Omit `--prerelease` if the version has no pre-release suffix (i.e. stable semver like `1.0.0`).
-   Show the user the release URL when done.
+   Omit `--prerelease` if the version has no pre-release suffix (i.e. stable semver like `1.0.0`). Show the user the
+   release URL when done.
