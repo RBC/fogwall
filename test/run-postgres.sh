@@ -28,7 +28,7 @@ teardown() {
         echo ""
         echo "==> --no-teardown: environment left running."
         echo "    GIT_USERNAME=${ADMIN_USER}  GIT_PASSWORD=${ADMIN_PASS}"
-        echo "    GIT_REPO=gitea/${TEST_ORG}/${TEST_REPO}.git  FOGWALL_API_KEY=change-me-in-production"
+        echo "    GIT_REPO=gitea:3000/${TEST_ORG}/${TEST_REPO}.git  FOGWALL_API_KEY=change-me-in-production"
         echo "    Stop with: $COMPOSE down -v"
     else
         echo "==> Tearing down..."
@@ -62,7 +62,7 @@ done
 # Env vars consumed by all test/*.sh scripts
 export GIT_USERNAME="$ADMIN_USER"
 export GIT_PASSWORD="$ADMIN_PASS"
-export GIT_REPO="gitea/${TEST_ORG}/${TEST_REPO}.git"
+export GIT_REPO="gitea:3000/${TEST_ORG}/${TEST_REPO}.git"
 export FOGWALL_API_KEY="change-me-in-production"
 
 # push-pass* scripts expect store-and-forward to forward immediately, but the dashboard
