@@ -18,11 +18,12 @@ concurrency:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   cleanup:
     runs-on: ubuntu-latest
+    permissions:
+      packages: write
     steps:
       - name: Delete stale build-* package versions
         env:
