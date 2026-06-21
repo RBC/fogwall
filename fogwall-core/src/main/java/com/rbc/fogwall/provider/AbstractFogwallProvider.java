@@ -22,7 +22,11 @@ public abstract class AbstractFogwallProvider implements FogwallProvider {
      */
     @Override
     public String servletPath() {
-        return basePath + "/" + uri.getHost();
+        int port = uri.getPort();
+        boolean defaultPort = port < 0
+                || ("https".equals(uri.getScheme()) && port == 443)
+                || ("http".equals(uri.getScheme()) && port == 80);
+        return defaultPort ? basePath + "/" + uri.getHost() : basePath + "/" + uri.getHost() + ":" + port;
     }
 
     /**

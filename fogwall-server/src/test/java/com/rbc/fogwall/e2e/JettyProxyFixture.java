@@ -55,6 +55,7 @@ class JettyProxyFixture implements AutoCloseable {
     private final int port;
     private final PushStore pushStore;
     private final String providerId;
+    private final String giteaHostPort;
 
     /**
      * Create a fixture with UI (block-then-approve) approval mode for the transparent proxy path. This is the
@@ -136,6 +137,7 @@ class JettyProxyFixture implements AutoCloseable {
                 .basePath("")
                 .build();
         this.providerId = provider.getProviderId();
+        this.giteaHostPort = giteaUri.getHost() + ":" + giteaUri.getPort();
 
         var commitConfig = buildCommitConfig();
         var context = new ServletContextHandler("/", false, false);
@@ -254,14 +256,16 @@ class JettyProxyFixture implements AutoCloseable {
         return providerId;
     }
 
-    /** Base URL for push (store-and-forward) operations: {@code http://localhost:{port}/push/localhost}. */
-    String getPushBase() {
-        return "http://localhost:" + port + PUSH_PREFIX + "/localhost";
+    String getGiteaHostPort() {
+        return giteaHostPort;
     }
 
-    /** Base URL for proxy (transparent proxy) operations: {@code http://localhost:{port}/proxy/localhost}. */
+    String getPushBase() {
+        return "http://localhost:" + port + PUSH_PREFIX + "/" + giteaHostPort;
+    }
+
     String getProxyBase() {
-        return "http://localhost:" + port + PROXY_PREFIX + "/localhost";
+        return "http://localhost:" + port + PROXY_PREFIX + "/" + giteaHostPort;
     }
 
     @Override

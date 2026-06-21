@@ -102,7 +102,7 @@ jobs:
           source test/gitea/tokens.env
           export GIT_PASSWORD="${GITEA_TESTUSER_TOKEN}"
           export GIT_USERNAME="me"
-          export GIT_REPO="gitea/test-owner/test-repo.git"
+          export GIT_REPO="gitea:3000/test-owner/test-repo.git"
           export GIT_AUTHOR_NAME="test-user"
           export GIT_EMAIL="testuser@example.com"
           # Proxy mode only — store-and-forward passes queue for approval and hang

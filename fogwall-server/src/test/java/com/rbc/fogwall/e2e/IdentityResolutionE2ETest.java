@@ -108,7 +108,7 @@ class IdentityResolutionE2ETest {
                 + ":"
                 + URLEncoder.encode(GiteaContainer.TEST_USER_PASSWORD, StandardCharsets.UTF_8);
         return "http://" + creds + "@localhost:" + proxy.getPort()
-                + "/proxy/localhost/"
+                + "/proxy/" + proxy.getGiteaHostPort() + "/"
                 + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO + ".git";
     }
 
@@ -121,7 +121,7 @@ class IdentityResolutionE2ETest {
                 + ":"
                 + URLEncoder.encode(GiteaContainer.ADMIN_PASSWORD, StandardCharsets.UTF_8);
         return "http://" + creds + "@localhost:" + proxy.getPort()
-                + "/proxy/localhost/"
+                + "/proxy/" + proxy.getGiteaHostPort() + "/"
                 + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO + ".git";
     }
 
@@ -210,7 +210,7 @@ class IdentityResolutionE2ETest {
                     + ":"
                     + URLEncoder.encode(GiteaContainer.TEST_USER_PASSWORD, StandardCharsets.UTF_8);
             url = "http://" + url + "@localhost:" + strictProxy.getPort()
-                    + "/proxy/localhost/"
+                    + "/proxy/" + proxy.getGiteaHostPort() + "/"
                     + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO + ".git";
 
             GitHelper git = new GitHelper(tempDir);

@@ -1,0 +1,43 @@
+server:
+  approval-mode: auto
+
+users:
+  - username: benchuser
+    password-hash: "{noop}Bench1234!"
+    emails:
+      - benchuser@example.com
+    scm-identities:
+      - provider: gitea
+        username: benchuser
+
+permissions:
+  - username: benchuser
+    provider: gitea
+    match:
+      target: SLUG
+      value: /perf/bench-repo
+      type: LITERAL
+    operations: PUSH
+
+providers:
+  gitea:
+    enabled: true
+    uri: http://localhost:3000
+
+commit:
+  author:
+    email:
+      domain:
+        allow: ".*"
+  identity-verification: OFF
+
+rules:
+  allow:
+    - enabled: true
+      order: 100
+      operations: BOTH
+      provider: gitea
+      match:
+        target: OWNER
+        value: perf
+        type: LITERAL

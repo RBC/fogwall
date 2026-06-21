@@ -1,0 +1,7 @@
+providers:
+  gitea:
+    uri: https://localhost:3443
+
+server:
+  tls:
+    trust-ca-bundle: ../perf/tls/ca.pem

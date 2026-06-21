@@ -69,3 +69,11 @@ fogwall-dashboard/src/main/resources/static/assets/
 fogwall-dashboard/src/main/resources/static/index.html
 fogwall-dashboard/src/main/resources/static/logo.png
 break-glass.token
+
+### Performance benchmark outputs ###
+perf/results/*/
+perf/.env
+perf/.git-proxy-local.json
+perf/tls/*.pem
+perf/tls/*.jks
+fogwall-server/src/main/resources/fogwall-perf.yml

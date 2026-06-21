@@ -55,7 +55,7 @@ class StoreForwardModeE2ETest {
                 + ":"
                 + URLEncoder.encode(GiteaContainer.ADMIN_PASSWORD, StandardCharsets.UTF_8);
         return "http://" + creds + "@localhost:" + proxy.getPort()
-                + "/push/localhost/"
+                + "/push/" + proxy.getGiteaHostPort() + "/"
                 + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO + ".git";
     }
 

@@ -144,8 +144,9 @@ class LargePackPushE2ETest {
                     + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
             gitea.createRepo(GiteaContainer.TEST_ORG, repoName);
 
-            String repoUrl =
-                    credUrl(proxy.getPort(), "/proxy/localhost/" + GiteaContainer.TEST_ORG + "/" + repoName + ".git");
+            String repoUrl = credUrl(
+                    proxy.getPort(),
+                    "/proxy/" + proxy.getGiteaHostPort() + "/" + GiteaContainer.TEST_ORG + "/" + repoName + ".git");
 
             GitHelper git = new GitHelper(tempDir);
             Path repo = git.clone(repoUrl, "proxy-large-" + repoName);
@@ -186,7 +187,8 @@ class LargePackPushE2ETest {
         void largePack_newBranch_storeAndForward_passesValidationAndForwards() throws Exception {
             String repoUrl = credUrl(
                     proxy.getPort(),
-                    "/push/localhost/" + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO + ".git");
+                    "/push/" + proxy.getGiteaHostPort() + "/" + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO
+                            + ".git");
 
             GitHelper git = new GitHelper(tempDir);
             Path repo = git.clone(

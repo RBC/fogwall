@@ -48,7 +48,7 @@ class ProxyModeAutoApproveE2ETest {
                 + ":"
                 + URLEncoder.encode(GiteaContainer.ADMIN_PASSWORD, StandardCharsets.UTF_8);
         return "http://" + creds + "@localhost:" + proxy.getPort()
-                + "/proxy/localhost/"
+                + "/proxy/" + proxy.getGiteaHostPort() + "/"
                 + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO + ".git";
     }
 

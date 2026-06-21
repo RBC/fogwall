@@ -10,6 +10,8 @@ import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * JDBC-backed cache for SCM token identity resolutions.
@@ -25,10 +27,12 @@ public class JdbcScmTokenCache {
     private static final Logger log = LoggerFactory.getLogger(JdbcScmTokenCache.class);
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final TransactionTemplate tx;
     private final Duration maxAge;
 
     public JdbcScmTokenCache(DataSource dataSource, Duration maxAge) {
         this.jdbc = new NamedParameterJdbcTemplate(dataSource);
+        this.tx = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
         this.maxAge = maxAge;
     }
 
@@ -75,17 +79,18 @@ public class JdbcScmTokenCache {
     }
 
     public void store(String provider, String tokenHash, String proxyUsername) {
-        jdbc.update(
-                "DELETE FROM scm_token_cache WHERE token_hash = :hash AND provider = :provider",
-                Map.of("hash", tokenHash, "provider", provider));
-        jdbc.update(
-                "INSERT INTO scm_token_cache (token_hash, provider, proxy_username, cached_at)"
-                        + " VALUES (:hash, :provider, :username, :now)",
-                Map.of(
-                        "hash", tokenHash,
-                        "provider", provider,
-                        "username", proxyUsername,
-                        "now", Timestamp.from(Instant.now())));
+        var params = Map.of(
+                "hash", tokenHash,
+                "provider", provider,
+                "username", proxyUsername,
+                "now", Timestamp.from(Instant.now()));
+        tx.executeWithoutResult(status -> {
+            jdbc.update("DELETE FROM scm_token_cache WHERE token_hash = :hash AND provider = :provider", params);
+            jdbc.update(
+                    "INSERT INTO scm_token_cache (token_hash, provider, proxy_username, cached_at)"
+                            + " VALUES (:hash, :provider, :username, :now)",
+                    params);
+        });
         log.debug("SCM token cached: provider={}, user={}", provider, proxyUsername);
     }
 }
