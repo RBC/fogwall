@@ -153,18 +153,6 @@ jobs:
       - name: Set image name
         run: echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
 
-      - name: Install grype
-        env:
-          GRYPE_VERSION: "0.112.0"
-        run: |
-          cd /tmp
-          curl -sSfL -o "grype_${GRYPE_VERSION}_linux_amd64.tar.gz" \
-            "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_linux_amd64.tar.gz"
-          curl -sSfL -o "grype_${GRYPE_VERSION}_checksums.txt" \
-            "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_checksums.txt"
-          grep "grype_${GRYPE_VERSION}_linux_amd64.tar.gz" "grype_${GRYPE_VERSION}_checksums.txt" | sha256sum --check
-          tar -xzf "grype_${GRYPE_VERSION}_linux_amd64.tar.gz" -C /usr/local/bin grype
-
       # Resolve the digest of the build-{sha} image produced when this commit landed on main.
       # The tag ruleset enforces Container Scan passed on this commit before the tag could be
       # pushed, so the build image is guaranteed scanned. Using the commit-pinned build tag
@@ -180,23 +168,6 @@ jobs:
           echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "Promoting ${TAG} @ ${DIGEST}"
-
-      - name: Scan build image
-        run: |
-          grype "${IMAGE}@${{ steps.build.outputs.digest }}" \
-            --config .grype.yaml \
-            -o "template=grype-report.txt" \
-            -o "json=grype-report.json"
-
-      - name: Upload scan reports
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # ratchet:actions/upload-artifact@v7
-        with:
-          name: grype-release-scan
-          path: |
-            grype-report.txt
-            grype-report.json
-          retention-days: 90
 
       - name: Promote build image to release tags
         run: |

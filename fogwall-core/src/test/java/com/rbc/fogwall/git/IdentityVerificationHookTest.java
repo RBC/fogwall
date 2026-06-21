@@ -261,7 +261,7 @@ class IdentityVerificationHookTest {
                 .findFirst();
         assertTrue(step.isPresent(), "WARN mode should record an identityVerification step");
         assertNotNull(step.get().getContent(), "Step content should contain violation details");
-        assertTrue(step.get().getContent().contains("not registered"));
+        assertTrue(step.get().getContent().contains("not in proxy user registry"));
     }
 
     // ---- resolver returns empty → skip (CheckUserPushPermissionHook handles "not registered") ----

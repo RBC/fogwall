@@ -42,7 +42,7 @@ public class LocalRepositoryCache {
      * Default minimum interval between upstream re-fetches for the same repository. Prevents concurrent serve requests
      * from each triggering a separate fetch when the mirror is already fresh.
      */
-    private static final long DEFAULT_FETCH_COOLDOWN_MS = 30_000;
+    private static final long DEFAULT_FETCH_COOLDOWN_MS = 5_000;
 
     private final Path cacheDirectory;
     private final Map<String, CachedRepository> cache = new ConcurrentHashMap<>();

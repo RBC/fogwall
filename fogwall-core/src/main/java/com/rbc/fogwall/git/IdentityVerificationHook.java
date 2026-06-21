@@ -131,12 +131,8 @@ public class IdentityVerificationHook implements FogwallHook {
                     "Identity verification warnings for push user '{}': {} mismatch(es)",
                     user.getUsername(),
                     violations.size());
-            rp.sendMessage(GitClientUtils.color(
-                    YELLOW,
-                    sym(WARNING) + "  Identity warning: " + violations.size() + " commit email(s) not registered to "
-                            + user.getUsername()));
             for (String v : violations) {
-                rp.sendMessage("  " + v);
+                rp.sendMessage(GitClientUtils.color(YELLOW, sym(WARNING) + "  " + v));
             }
             pushContext.addStep(PushStep.builder()
                     .stepName(STEP_NAME)
@@ -155,7 +151,8 @@ public class IdentityVerificationHook implements FogwallHook {
         if (commit.getAuthor() != null) {
             String email = commit.getAuthor().getEmail();
             if (email != null && !registeredEmails.contains(email)) {
-                violations.add(sha + ": author <" + email + "> not registered to " + pushUsername);
+                violations.add("Unrecognised commit email: <" + email + "> (commit " + sha
+                        + ", author) — not in proxy user registry");
                 authorFlagged = true;
             }
         }
@@ -166,9 +163,11 @@ public class IdentityVerificationHook implements FogwallHook {
                 boolean sameAsAuthor = commit.getAuthor() != null
                         && email.equals(commit.getAuthor().getEmail());
                 if (!sameAsAuthor) {
-                    violations.add(sha + ": committer <" + email + "> not registered to " + pushUsername);
+                    violations.add("Unrecognised commit email: <" + email + "> (commit " + sha
+                            + ", committer) — not in proxy user registry");
                 } else if (!authorFlagged) {
-                    violations.add(sha + ": author+committer <" + email + "> not registered to " + pushUsername);
+                    violations.add("Unrecognised commit email: <" + email + "> (commit " + sha
+                            + ", author+committer) — not in proxy user registry");
                 }
             }
         }

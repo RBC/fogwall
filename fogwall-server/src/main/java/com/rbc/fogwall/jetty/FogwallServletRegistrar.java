@@ -155,6 +155,7 @@ public final class FogwallServletRegistrar {
                 urlRuleRegistry);
         factory.setFailFast(failFast);
         factory.setConnectTimeoutSeconds(connectTimeoutSeconds);
+        factory.setCache(cache);
 
         var gitServlet = new GitServlet();
         gitServlet.setRepositoryResolver(resolver);

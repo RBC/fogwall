@@ -11,6 +11,7 @@ import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.diff.DiffEntry;
 import org.eclipse.jgit.diff.DiffFormatter;
+import org.eclipse.jgit.diff.RenameDetector;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectReader;
 import org.eclipse.jgit.lib.PersonIdent;
@@ -129,10 +130,14 @@ public class CommitInspectionService {
             }
 
             try (Git git = new Git(repository)) {
-                return git.diff()
+                List<DiffEntry> diffs = git.diff()
                         .setOldTree(oldTreeParser)
                         .setNewTree(newTreeParser)
                         .call();
+
+                RenameDetector rd = new RenameDetector(repository);
+                rd.addAll(diffs);
+                return rd.compute();
             } catch (GitAPIException e) {
                 throw new IOException("Failed to get diff", e);
             }

@@ -8,6 +8,7 @@ import static com.rbc.fogwall.git.GitClientUtils.sym;
 import com.rbc.fogwall.db.model.PushStep;
 import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.provider.FogwallProvider;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -33,9 +34,11 @@ public class ForwardingPostReceiveHook implements PostReceiveHook {
     /** JGit transport timeout in seconds. 0 = no timeout (JGit default). */
     private final int connectTimeoutSeconds;
 
+    private final LocalRepositoryCache cache;
+
     public ForwardingPostReceiveHook(
             FogwallProvider provider, CredentialsProvider credentials, PushContext pushContext) {
-        this(provider, credentials, pushContext, 0);
+        this(provider, credentials, pushContext, 0, null);
     }
 
     public ForwardingPostReceiveHook(
@@ -43,10 +46,20 @@ public class ForwardingPostReceiveHook implements PostReceiveHook {
             CredentialsProvider credentials,
             PushContext pushContext,
             int connectTimeoutSeconds) {
+        this(provider, credentials, pushContext, connectTimeoutSeconds, null);
+    }
+
+    public ForwardingPostReceiveHook(
+            FogwallProvider provider,
+            CredentialsProvider credentials,
+            PushContext pushContext,
+            int connectTimeoutSeconds,
+            LocalRepositoryCache cache) {
         this.provider = provider;
         this.credentials = credentials;
         this.pushContext = pushContext;
         this.connectTimeoutSeconds = connectTimeoutSeconds;
+        this.cache = cache;
     }
 
     @Override
@@ -106,6 +119,15 @@ public class ForwardingPostReceiveHook implements PostReceiveHook {
             logs.add("ERROR: " + e.getMessage());
             forwardFailed = true;
             forwardError = e.getMessage();
+        }
+
+        if (forwardFailed && cache != null && upstreamUrl != null) {
+            try {
+                cache.remove(upstreamUrl);
+                log.info("Invalidated local mirror for {} after forward failure", upstreamUrl);
+            } catch (IOException e) {
+                log.warn("Failed to invalidate local mirror for {}", upstreamUrl, e);
+            }
         }
 
         pushContext.addStep(PushStep.builder()
