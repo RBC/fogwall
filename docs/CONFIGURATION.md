@@ -443,8 +443,10 @@ auth:
       - CN=git-admins,OU=Groups,DC=corp,DC=example,DC=com
 ```
 
-> **Tip:** The AD provider understands Active Directory error sub-codes on bind failure 49 (expired passwords, locked
-> accounts, etc.) and maps them to specific Spring Security exceptions.
+<!-- prettier-ignore-start -->
+> [!TIP]
+> The AD provider understands Active Directory error sub-codes on bind failure 49 (expired passwords, locked accounts, etc.) and maps them to specific Spring Security exceptions.
+<!-- prettier-ignore-end -->
 
 ### OIDC
 
@@ -516,11 +518,13 @@ auth:
       - <object-id-of-admin-group>
 ```
 
+<!-- prettier-ignore-start -->
+> [!IMPORTANT]
 > **App registration checklist:**
->
 > 1. Platform: Web — redirect URI `https://<your-host>/login/oauth2/code/fogwall`
 > 2. API permissions: `openid`, `profile`, `email` (delegated)
 > 3. Token configuration → add Groups claim → select "Security groups"
+<!-- prettier-ignore-end -->
 
 ### Role mappings
 
@@ -600,9 +604,10 @@ accepts the internal username, not an email address.
 
 **Required API token scopes:** `read:user:bitbucket` and `write:repository:bitbucket`.
 
-> **M&A / private server use case:** This same mechanism works for self-hosted Bitbucket Data Center instances. Set
-> `uri` to your internal Bitbucket URL and the proxy will route and rewrite credentials accordingly, making it
-> straightforward to gate pushes to acquired-company repositories during an integration period.
+<!-- prettier-ignore-start -->
+> [!TIP]
+> **M&A / private server use case:** This same mechanism works for self-hosted Bitbucket Data Center instances. Set `uri` to your internal Bitbucket URL and the proxy will route and rewrite credentials accordingly, making it straightforward to gate pushes to acquired-company repositories during an integration period.
+<!-- prettier-ignore-end -->
 
 ## Commit validation
 
@@ -771,9 +776,10 @@ For every push, the proxy runs two checks:
    LDAP/OIDC login, or from additional associations added via the dashboard. This is what ties commit attribution back
    to a verified real person. The `identity-verification` mode controls this check only.
 
-> **The HTTP Basic-auth username in the remote URL is not used for identity resolution.** It is ignored by all providers
-> (except Bitbucket). Configure your remote URL with any username — `git`, `me`, your actual name — it makes no
-> difference.
+<!-- prettier-ignore-start -->
+> [!NOTE]
+> The HTTP Basic-auth username in the remote URL is not used for identity resolution. It is ignored by all providers (except Bitbucket). Configure your remote URL with any username — `git`, `me`, your actual name — it makes no difference.
+<!-- prettier-ignore-end -->
 
 ### Modes
 
@@ -785,9 +791,12 @@ For every push, the proxy runs two checks:
 | `warn`   | Allows the push through but emits a sideband warning to the git client and records the mismatch | Rolling out to an existing team — lets you observe mismatches before enforcing |
 | `off`    | Commit email check is disabled entirely                                                         | Migrations or environments where email data is not yet populated               |
 
-> **`warn` is not a security control.** Pushes succeed regardless of the email check outcome. Only `strict` blocks
-> mismatched commits. The default is `warn` to avoid breaking existing deployments on first install — but `strict`
-> should be the target for any production deployment once users have their emails registered.
+<!-- prettier-ignore-start -->
+> [!CAUTION]
+> `warn` is not a security control. Pushes succeed regardless of the email check outcome. Only `strict` blocks mismatched commits. The default is `warn` to avoid breaking existing deployments on first install.
+>
+> **Known limitation:** `strict` currently checks **author** emails, not committer emails. This means rebased commits (where the original author is a different person) will be blocked even though the pusher is legitimate. Teams that rebase should use `warn` until this is fixed — see [#348](https://github.com/RBC/fogwall/issues/348).
+<!-- prettier-ignore-end -->
 
 ### Token scope requirements
 
@@ -1144,10 +1153,10 @@ GLOB on `target: SLUG` follows slug path conventions:
 | `/acme/service-*`           | `/acme/service-api`, `/acme/service-worker` | `/acme/repo`   |
 | `/*/proj0-*`                | `/acme/proj0-api`, `/other/proj0-db`        | `/acme/other`  |
 
-> **Conflict detection:** At config load time and when saving via the dashboard API, fogwall rejects any new permission
-> entry whose pattern overlaps with an existing entry for the same user and provider. Two entries overlap when they are
-> equal, or when one is a GLOB/REGEX pattern that would match the other's value. This prevents silent misconfiguration
-> where the effective permission depends on evaluation order.
+<!-- prettier-ignore-start -->
+> [!NOTE]
+> **Conflict detection:** At config load time and when saving via the dashboard API, fogwall rejects any new permission entry whose pattern overlaps with an existing entry for the same user and provider. Two entries overlap when they are equal, or when one is a GLOB/REGEX pattern that would match the other's value. This prevents silent misconfiguration where the effective permission depends on evaluation order.
+<!-- prettier-ignore-end -->
 
 ### Real-world permission examples
 
@@ -1234,8 +1243,10 @@ permissions:
 | `PUSH_AND_REVIEW` | Shorthand for both PUSH and REVIEW; does **not** include SELF_CERTIFY                                                     |
 | `SELF_CERTIFY`    | Trusted contributor: may approve their own clean pushes without a peer reviewer. Requires the `SELF_CERTIFY` role as well |
 
-> **`SELF_CERTIFY` is a two-key lock:** the user must have both a `SELF_CERTIFY` permission entry for the repository
-> _and_ the `SELF_CERTIFY` role (set via `users[].roles` or `auth.role-mappings`). Either alone is not sufficient.
+<!-- prettier-ignore-start -->
+> [!IMPORTANT]
+> `SELF_CERTIFY` is a two-key lock: the user must have both a `SELF_CERTIFY` permission entry for the repository _and_ the `SELF_CERTIFY` role (set via `users[].roles` or `auth.role-mappings`). Either alone is not sufficient.
+<!-- prettier-ignore-end -->
 
 ## Attestations
 
