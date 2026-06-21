@@ -324,6 +324,19 @@ database:
   name: fogwall
 ```
 
+### SCM token identity cache
+
+When users are configured, fogwall caches successful token-to-username resolutions so that repeated pushes from the same
+PAT do not incur a provider API call every time. The cache is backed by the configured database (JDBC or MongoDB) and
+keyed on a SHA-512 digest of the token — the raw token is never stored.
+
+| Variable | Default | Effect |
+| -------- | ------- | ------ |
+| `FOGWALL_SCM_CACHE_MAX_AGE_DAYS` | `7` | Maximum age of a cache entry in days. Entries older than this are ignored on read and overwritten on the next successful resolution. |
+
+Token rotation is handled automatically: a new PAT produces a new cache key, so the old entry simply ages out. There is
+no need to flush the cache manually when tokens are rotated.
+
 ### MongoDB: coexisting with the upstream Node.js git-proxy
 
 If you are migrating from [finos/git-proxy](https://github.com/finos/git-proxy) (the Node.js implementation) and pointing this proxy at a database that previously held its data, the two applications use incompatible document schemas. The safest path is to **provision a new MongoDB database** (e.g. `gitproxy-java`) and point `database.url` at it. This avoids all collision risk and keeps indexes, backups, and ops tooling cleanly separated.
