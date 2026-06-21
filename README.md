@@ -17,66 +17,44 @@ pioneered the concept of an enterprise-grade, policy-enforcing git push gateway.
 [Jetty](https://github.com/jetty/jetty.project) for the HTTP layer, and [Spring](https://spring.io/),
 [React](https://react.dev/) & [Tailwind](https://tailwindcss.com/) for the dashboard.
 
-![Store-and-forward — validation failure and fix](https://github.com/RBC/fogwall/releases/download/demo-assets/demo-push-fix-message.gif)
+![Store-and-forward push demo](demos/demo.gif)
 
-## Getting Started
+## Validation Features
 
-### Prerequisites
+Both proxy modes enforce the same set of configurable validation rules:
 
-- Java 25+
-- Node 24+ (for the dashboard frontend)
-- Gradle (wrapper included)
+- 🔒 Repository URL allow/deny rules (literal, glob, and regex)
+- ✉️ Author email domain allow/block list
+- 📝 Commit message validation (literal + regex)
+- 🔍 Diff generation and content scanning
+- 🔑 Secret scanning ([gitleaks](https://github.com/gitleaks/gitleaks))
+- 🪪 SCM identity verification (resolve token → SCM user)
+- 🛡️ User push permissions (per-repo RBAC)
+- 🕵️ Hidden commit detection (force-push / history rewrite guard)
+- 🌿 Empty branch protection
+- ✍️ GPG/SSH commit signature verification
+- ✅ Approval gate with full lifecycle (RECEIVED → APPROVED → FORWARDED)
+- 📋 Aggregate failure reporting (all errors surfaced at once)
+- 📡 Real-time sideband progress (store-and-forward)
+- 📊 Fetch auditing
 
-The easiest way to get the right versions is [mise](https://mise.jdx.dev/):
+## Dashboard
 
-```shell
-mise install   # installs Java 21 (Temurin) and Node 24 from mise.toml
-```
+![Push detail — timeline and review](demos/demo-ui2.png)
 
-### Clone and build
+![Push detail — diff and attestation](demos/demo-ui1.png)
 
-```shell
-git clone https://github.com/RBC/fogwall.git
-cd fogwall
-./gradlew build
-```
+The web dashboard provides push management, approval workflows, and operational tooling:
 
-### Run the main application (UI + proxy)
-
-The full application includes the proxy, approval dashboard, and REST API:
-
-```shell
-./gradlew :fogwall-dashboard:run
-```
-
-Open `http://localhost:8080/` in a browser to access the dashboard. Stop with:
-
-```shell
-./gradlew :fogwall-dashboard:stop
-```
-
-### Run the proxy server (standalone, no UI or review gates)
-
-If you only need the proxy without the dashboard or management API:
-
-```shell
-./gradlew :fogwall-server:run
-```
-
-Logs are written to `fogwall-server/logs/application.log`. Stop with:
-
-```shell
-./gradlew :fogwall-server:stop
-```
-
-### Configure and test
-
-Configuration is YAML-based. See the [Configuration Reference](docs/CONFIGURATION.md) for the full schema, environment
-variable overrides, and provider settings.
-
-To verify the proxy end-to-end against your own repo, follow the
-[Running tests against your own repo](CONTRIBUTING.md#running-tests-against-your-own-repo) guide in CONTRIBUTING.md — it
-walks through PAT setup, allow rules, permissions, and running the smoke test scripts.
+- 📜 Push lifecycle timeline (received → validated → approved → forwarded)
+- ✅ Attestation questionnaire with approve/reject/cancel and audit trail
+- 🔓 Self-certify grant for trusted contributors (IdP group-backed)
+- 🛡️ Admin override with explicit opt-in and separate audit logging
+- 🔒 Allow/deny access rules (literal, glob, regex) scoped by provider and operation
+- 👤 Per-user push permissions with the same target/match model as access rules
+- 📄 Inline diff viewer with side-by-side toggle; large diffs (>1000 lines) on a dedicated page
+- 🔌 Provider connectivity diagnostics (TCP, TLS, HTTP, git-specific probe)
+- 🔄 Live config reload without server restart
 
 ## Proxy Modes
 
@@ -121,24 +99,64 @@ git clone http://localhost:8080/push/github.com/owner/repo.git
 git push http://localhost:8080/push/github.com/owner/repo.git
 ```
 
-## Validation Features
+## Getting Started
 
-Both proxy modes enforce the same set of configurable validation rules:
+### Prerequisites
 
-- 🔒 Repository URL allow/deny rules (literal, glob, and regex)
-- ✉️ Author email domain allow/block list
-- 📝 Commit message validation (literal + regex)
-- 🔍 Diff generation and content scanning
-- 🔑 Secret scanning ([gitleaks](https://github.com/gitleaks/gitleaks))
-- 🪪 SCM identity verification (resolve token → SCM user)
-- 🛡️ User push permissions (per-repo RBAC)
-- 🕵️ Hidden commit detection (force-push / history rewrite guard)
-- 🌿 Empty branch protection
-- ✍️ GPG/SSH commit signature verification
-- ✅ Approval gate with full lifecycle (RECEIVED → APPROVED → FORWARDED)
-- 📋 Aggregate failure reporting (all errors surfaced at once)
-- 📡 Real-time sideband progress (store-and-forward)
-- 📊 Fetch auditing
+- Java 25+
+- Node 24+ (for the dashboard frontend)
+- Gradle (wrapper included)
+
+The easiest way to get the right versions is [mise](https://mise.jdx.dev/):
+
+```shell
+mise install   # installs Java 21 (Temurin) and Node 24 from mise.toml
+```
+
+### Clone and build
+
+```shell
+git clone https://github.com/RBC/fogwall.git
+cd fogwall
+./gradlew build
+```
+
+### Run the main application (UI + proxy)
+
+The full application includes the proxy, approval dashboard, and REST API:
+
+```shell
+./gradlew :fogwall-dashboard:run
+```
+
+Stop with:
+
+```shell
+./gradlew :fogwall-dashboard:stop
+```
+
+### Run the proxy server (standalone, no UI or review gates)
+
+If you only need the proxy without the dashboard or management API:
+
+```shell
+./gradlew :fogwall-server:run
+```
+
+Logs are written to `fogwall-server/logs/application.log`. Stop with:
+
+```shell
+./gradlew :fogwall-server:stop
+```
+
+### Configure and test
+
+Configuration is YAML-based. See the [Configuration Reference](docs/CONFIGURATION.md) for the full schema, environment
+variable overrides, and provider settings.
+
+To verify the proxy end-to-end against your own repo, follow the
+[Running tests against your own repo](CONTRIBUTING.md#running-tests-against-your-own-repo) guide in CONTRIBUTING.md — it
+walks through PAT setup, allow rules, permissions, and running the smoke test scripts.
 
 ## Supported Providers
 
@@ -198,7 +216,6 @@ This is a multi-module Gradle project:
 | [Administrator Guide](docs/ADMIN_GUIDE.md)                   | For operators: RBAC vs permissions, approval modes, logging, JGit filesystem requirements, production checklist  |
 | [Configuration Reference](docs/CONFIGURATION.md)             | YAML config structure, environment variable overrides, provider settings, validation rules                       |
 | [Architecture](docs/ARCHITECTURE.md)                         | How the proxy works: two proxy modes, validation pipeline, core abstractions, advanced use cases                 |
-| [Demo Gallery](DEMO.md)                                      | Animated demos and screenshots of both proxy modes and the dashboard UI                                          |
 | [JGit Infrastructure](docs/internals/JGIT_INFRASTRUCTURE.md) | Store-and-forward internals: ReceivePackFactory, hook chain, forwarding, credential flow (contributor reference) |
 | [Git Internals](docs/internals/GIT_INTERNALS.md)             | Wire-protocol edge cases: tags, new branches, force pushes, pack parsing (contributor reference)                 |
 
@@ -207,11 +224,11 @@ This is a multi-module Gradle project:
 The backlog is tracked in [GitHub Issues](https://github.com/RBC/fogwall/issues). The following gists cover design
 rationale and reference material:
 
-| Document                                                                                        | Description                                                                                                                                                           |
-| ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Project vision & design](https://gist.github.com/coopernetes/d02d48efa759282ff8187da0d5dcae64) | High-level goals and priority tracks: sideband streaming UX, checkpoint-based resumption, lifecycle hooks, DAG pipeline execution, SCM OAuth integration, SSH support |
-| [Framework rationale](https://gist.github.com/coopernetes/626541b83a148f4ae21ae2c62c57edea)     | Why Java/Jetty + JGit over Node.js/Express: native git protocol handling, in-process pack inspection, sideband streaming                                              |
-| [Performance benchmarks](perf/)                                                                 | Side-by-side comparison vs finos/git-proxy: sequential and concurrent clone, fetch, push throughput against a shared Gitea backend                                    |
+| Document                                                                                             | Description                                                                                                                        |
+| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| [Background & architecture](https://gist.github.com/coopernetes/d02d48efa759282ff8187da0d5dcae64)    | Project background, relationship to finos/git-proxy, store-and-forward vs transparent proxy, near-term and moonshot roadmap        |
+| [Programming model comparison](https://gist.github.com/coopernetes/626541b83a148f4ae21ae2c62c57edea) | JGit + Jetty vs Express + child-process git: stack comparison, capability deep-dive, honest assessment of both sides               |
+| [Performance benchmarks](perf/)                                                                      | Side-by-side comparison vs finos/git-proxy: sequential and concurrent clone, fetch, push throughput against a shared Gitea backend |
 
 ## Acknowledgments
 

@@ -4,11 +4,14 @@ import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.rbc.fogwall.db.mongo.MongoFetchStore;
 import com.rbc.fogwall.db.mongo.MongoPushStore;
+import com.rbc.fogwall.db.mongo.MongoScmTokenCache;
 import com.rbc.fogwall.db.mongo.MongoUrlRuleRegistry;
 import com.rbc.fogwall.permission.MongoRepoPermissionStore;
 import com.rbc.fogwall.permission.RepoPermissionStore;
+import com.rbc.fogwall.service.ScmTokenCache;
 import com.rbc.fogwall.user.MongoUserStore;
 import com.rbc.fogwall.user.UserStore;
+import java.time.Duration;
 
 /**
  * Factory that creates MongoDB-backed stores sharing a single {@link MongoClient}. Callers that need both a
@@ -68,6 +71,20 @@ public final class MongoStoreFactory implements AutoCloseable {
         MongoUserStore store = new MongoUserStore(client, databaseName);
         store.initialize();
         return store;
+    }
+
+    /** Create and initialize a {@link UserStore} backed by this factory's client, with cache eviction wired in. */
+    public UserStore userStore(ScmTokenCache tokenCache) {
+        MongoUserStore store = new MongoUserStore(client, databaseName, tokenCache);
+        store.initialize();
+        return store;
+    }
+
+    /** Create and initialize a {@link ScmTokenCache} backed by this factory's client. */
+    public ScmTokenCache tokenCache(Duration maxAge) {
+        MongoScmTokenCache cache = new MongoScmTokenCache(client, databaseName, maxAge);
+        cache.initialize();
+        return cache;
     }
 
     @Override

@@ -31,6 +31,7 @@ import com.rbc.fogwall.provider.*;
 import com.rbc.fogwall.service.CachingTokenPushIdentityResolver;
 import com.rbc.fogwall.service.JdbcScmTokenCache;
 import com.rbc.fogwall.service.PushIdentityResolver;
+import com.rbc.fogwall.service.ScmTokenCache;
 import com.rbc.fogwall.service.TokenPushIdentityResolver;
 import com.rbc.fogwall.tls.SslUtil;
 import com.rbc.fogwall.user.CompositeUserStore;
@@ -71,7 +72,7 @@ public class JettyConfigurationBuilder {
     private PushStore cachedPushStore;
     private FetchStore cachedFetchStore;
     private UserStore cachedUserStore;
-    private JdbcScmTokenCache cachedTokenCache;
+    private ScmTokenCache cachedTokenCache;
     private RepoPermissionService cachedRepoPermissionService;
     private UrlRuleRegistry cachedUrlRuleRegistry;
     private ConfigHolder cachedConfigHolder;
@@ -639,7 +640,8 @@ public class JettyConfigurationBuilder {
 
         String type = config.getDatabase().getType();
         if ("mongo".equals(type)) {
-            var mongoStore = requireMongoStoreFactory().userStore();
+            cachedTokenCache = buildTokenCache();
+            var mongoStore = requireMongoStoreFactory().userStore(cachedTokenCache);
             var configStore = new StaticUserStore(staticUsers);
             log.info("Using composite user store ({} config users + MongoDB)", staticUsers.size());
             cachedUserStore = new CompositeUserStore(configStore, mongoStore);
@@ -671,21 +673,22 @@ public class JettyConfigurationBuilder {
 
         PushIdentityResolver tokenResolver = new TokenPushIdentityResolver(userStore);
 
-        String dbType = config.getDatabase().getType();
-        if (!"mongo".equals(dbType)) {
-            JdbcScmTokenCache tokenCache = cachedTokenCache != null ? cachedTokenCache : buildTokenCache();
-            tokenResolver = new CachingTokenPushIdentityResolver(tokenResolver, tokenCache, userStore);
-        }
+        ScmTokenCache tokenCache = cachedTokenCache != null ? cachedTokenCache : buildTokenCache();
+        tokenResolver = new CachingTokenPushIdentityResolver(tokenResolver, tokenCache, userStore);
 
         return tokenResolver;
     }
 
-    private JdbcScmTokenCache buildTokenCache() {
+    private ScmTokenCache buildTokenCache() {
         long maxAgeDays = Optional.ofNullable(System.getenv("FOGWALL_SCM_CACHE_MAX_AGE_DAYS"))
                 .map(Long::parseLong)
                 .orElse(7L);
+        Duration maxAge = Duration.ofDays(maxAgeDays);
         log.info("SCM token identity cache enabled (max age {} days)", maxAgeDays);
-        return new JdbcScmTokenCache(requireJdbcDataSource(), Duration.ofDays(maxAgeDays));
+        if ("mongo".equals(config.getDatabase().getType())) {
+            return requireMongoStoreFactory().tokenCache(maxAge);
+        }
+        return new JdbcScmTokenCache(requireJdbcDataSource(), maxAge);
     }
 
     private MongoStoreFactory requireMongoStoreFactory() {

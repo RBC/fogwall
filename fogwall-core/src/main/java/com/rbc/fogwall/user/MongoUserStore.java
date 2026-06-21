@@ -6,6 +6,7 @@ import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Indexes;
 import com.mongodb.client.model.Updates;
+import com.rbc.fogwall.service.ScmTokenCache;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -40,9 +41,15 @@ public class MongoUserStore implements UserStore {
     private static final String COLLECTION_NAME = "proxy_users";
 
     private final MongoDatabase database;
+    private final ScmTokenCache tokenCache;
 
     public MongoUserStore(MongoClient mongoClient, String databaseName) {
+        this(mongoClient, databaseName, null);
+    }
+
+    public MongoUserStore(MongoClient mongoClient, String databaseName, ScmTokenCache tokenCache) {
         this.database = mongoClient.getDatabase(databaseName);
+        this.tokenCache = tokenCache;
     }
 
     public void initialize() {
@@ -275,6 +282,7 @@ public class MongoUserStore implements UserStore {
                                         .append("username", scmUsername)
                                         .append("verified", false)));
         log.debug("Added SCM identity '{}/{}' for user '{}'", provider, scmUsername, username);
+        if (tokenCache != null) tokenCache.evictByUsername(provider, username);
     }
 
     @Override
@@ -285,6 +293,7 @@ public class MongoUserStore implements UserStore {
                         Updates.pull(
                                 "scmIdentities", new Document("provider", provider).append("username", scmUsername)));
         log.debug("Removed SCM identity '{}/{}' for user '{}'", provider, scmUsername, username);
+        if (tokenCache != null) tokenCache.evictByUsername(provider, username);
     }
 
     // ── helpers ────────────────────────────────────────────────────────────────
