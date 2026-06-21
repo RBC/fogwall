@@ -90,6 +90,12 @@ git remote add proxy https://me:ghp_yourtoken@fogwall.corp.example.com/push/gith
 
 Or use `git credential store` / your OS keychain as you normally would.
 
+> [!TIP] Most credential helpers (macOS Keychain, Windows Credential Manager, `git-credential-store`) pin credentials to
+> a hostname. Since the proxy hostname differs from the upstream SCM, your helper won't automatically supply the right
+> token — it will look for a stored credential for `fogwall.corp.example.com`, not `github.com`. Either store a separate
+> credential entry for the proxy hostname, or embed the token in the remote URL as shown above. For local development
+> environments that are frequently recreated, embedding the token in the URL is simpler than managing keychain entries.
+
 **Bitbucket only:** the username in the remote URL must be your Bitbucket account email address (e.g.
 `you@company.com`). This is required for identity resolution — see the
 [Configuration Reference](CONFIGURATION.md#bitbucket-identity-resolution) for details.
