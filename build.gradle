@@ -56,9 +56,6 @@ ext {
     // BouncyCastle
     bouncyCastleVersion = '1.84'
 
-    // Commons
-    commonsValidatorVersion = '1.10.1'
-
     // Lombok
     lombokVersion = '1.18.46'
 

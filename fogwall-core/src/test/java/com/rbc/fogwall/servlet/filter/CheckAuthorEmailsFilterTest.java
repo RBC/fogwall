@@ -201,7 +201,7 @@ class CheckAuthorEmailsFilterTest {
     }
 
     @Test
-    void invalidEmailFormat_blocks() throws Exception {
+    void missingAtSign_blocks() throws Exception {
         GitRequestDetails details = makeRequestDetails(List.of(commitWithEmail("notanemail")));
         CheckAuthorEmailsFilter filter = new CheckAuthorEmailsFilter(testConfig());
         FakeResponse fakeResponse = new FakeResponse();
@@ -209,6 +209,29 @@ class CheckAuthorEmailsFilterTest {
         filter.doHttpFilter(mockPushRequest(details), fakeResponse.mock);
 
         assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+    }
+
+    @Test
+    void githubBotEmail_withDomainPolicy_allowedWhenDomainMatches() throws Exception {
+        // RFC-noncompliant bot emails must be evaluated against configured policy only — no format gatekeeping.
+        String botEmail = "49699333+dependabot[bot]@users.noreply.github.com";
+        CommitConfig config = CommitConfig.builder()
+                .committer(CommitConfig.CommitterConfig.builder()
+                        .email(CommitConfig.EmailConfig.builder()
+                                .domain(CommitConfig.DomainConfig.builder()
+                                        .allow(Pattern.compile("github\\.com$"))
+                                        .build())
+                                .local(CommitConfig.LocalConfig.builder().build())
+                                .build())
+                        .build())
+                .build();
+        GitRequestDetails details = makeRequestDetails(List.of(commitWithEmail(botEmail)));
+        CheckAuthorEmailsFilter filter = new CheckAuthorEmailsFilter(config);
+        FakeResponse fakeResponse = new FakeResponse();
+
+        filter.doHttpFilter(mockPushRequest(details), fakeResponse.mock);
+
+        assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
     }
 
     @Test
@@ -289,6 +312,20 @@ class CheckAuthorEmailsFilterTest {
     @Test
     void noConfigRestrictions_anyEmailPasses() throws Exception {
         GitRequestDetails details = makeRequestDetails(List.of(commitWithEmail("anything@notrestricted.biz")));
+        CheckAuthorEmailsFilter filter = new CheckAuthorEmailsFilter(CommitConfig.defaultConfig());
+        FakeResponse fakeResponse = new FakeResponse();
+
+        filter.doHttpFilter(mockPushRequest(details), fakeResponse.mock);
+
+        assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
+    }
+
+    @Test
+    void noConfigRestrictions_githubBotEmail_passes() throws Exception {
+        // GitHub generates RFC-noncompliant emails for bot accounts (square brackets in local part).
+        // The format check must be skipped when no policy is configured.
+        String botEmail = "49699333+dependabot[bot]@users.noreply.github.com";
+        GitRequestDetails details = makeRequestDetails(List.of(commitWithEmail(botEmail)));
         CheckAuthorEmailsFilter filter = new CheckAuthorEmailsFilter(CommitConfig.defaultConfig());
         FakeResponse fakeResponse = new FakeResponse();
 
