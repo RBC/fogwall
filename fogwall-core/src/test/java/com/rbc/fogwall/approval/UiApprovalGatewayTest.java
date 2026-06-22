@@ -168,6 +168,21 @@ class UiApprovalGatewayTest {
                 "Progress message should mention awaiting review");
     }
 
+    // ---- client disconnect ----
+
+    @Test
+    void returnsCanceled_whenProgressSenderThrowsClientDisconnectedException() {
+        PushRecord r = blockedRecord();
+
+        ProgressSender disconnectingSender = msg -> {
+            throw new ClientDisconnectedException(new java.io.IOException("Broken pipe"));
+        };
+
+        ApprovalResult result = gateway.waitForApproval(r.getId(), disconnectingSender, Duration.ofSeconds(10));
+
+        assertEquals(ApprovalResult.CANCELED, result);
+    }
+
     // ---- interrupt handling ----
 
     @Test

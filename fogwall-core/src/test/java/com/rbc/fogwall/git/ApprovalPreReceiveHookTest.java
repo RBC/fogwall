@@ -308,7 +308,7 @@ class ApprovalPreReceiveHookTest {
     }
 
     @Test
-    void blockedPush_gatewayTimesOut_commandRejected() throws Exception {
+    void blockedPush_gatewayTimesOut_commandRejectedAndPushStoreCanceled() throws Exception {
         String recordId = UUID.randomUUID().toString();
         PushContext pushContext = new PushContext();
         pushContext.setValidationRecordId(recordId);
@@ -327,5 +327,56 @@ class ApprovalPreReceiveHookTest {
                 .onPreReceive(rp, List.of(cmd));
 
         assertEquals(ReceiveCommand.Result.REJECTED_OTHER_REASON, cmd.getResult());
+        verify(pushStore).cancel(eq(recordId), any(Attestation.class));
+    }
+
+    @Test
+    void blockedPush_clientDisconnects_pushStoreCanceledAndCommandRejected() throws Exception {
+        String recordId = UUID.randomUUID().toString();
+        PushContext pushContext = new PushContext();
+        pushContext.setValidationRecordId(recordId);
+        PushRecord pending =
+                PushRecord.builder().id(recordId).status(PushStatus.PENDING).build();
+        // First call: initial fetch; second call: re-fetch inside CANCELED branch
+        when(pushStore.findById(recordId)).thenReturn(Optional.of(pending));
+        when(approvalGateway.waitForApproval(eq(recordId), any(), any(Duration.class)))
+                .thenReturn(ApprovalResult.CANCELED);
+
+        RevCommit c1 = createCommit("init");
+        RevCommit c2 = createCommit("second");
+        ReceivePack rp = new ReceivePack(repo);
+        ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
+
+        new ApprovalPreReceiveHook(pushStore, approvalGateway, Duration.ofSeconds(5), null, null, pushContext)
+                .onPreReceive(rp, List.of(cmd));
+
+        assertEquals(ReceiveCommand.Result.REJECTED_OTHER_REASON, cmd.getResult());
+        verify(pushStore).cancel(eq(recordId), any(Attestation.class));
+    }
+
+    @Test
+    void blockedPush_reviewerCancels_pushStoreAlreadyCanceled_noDuplicateCancel() throws Exception {
+        String recordId = UUID.randomUUID().toString();
+        PushContext pushContext = new PushContext();
+        pushContext.setValidationRecordId(recordId);
+        PushRecord pending =
+                PushRecord.builder().id(recordId).status(PushStatus.PENDING).build();
+        PushRecord alreadyCanceled =
+                PushRecord.builder().id(recordId).status(PushStatus.CANCELED).build();
+        // First call returns PENDING (hook start), second call returns CANCELED (re-fetch in CANCELED branch)
+        when(pushStore.findById(recordId)).thenReturn(Optional.of(pending)).thenReturn(Optional.of(alreadyCanceled));
+        when(approvalGateway.waitForApproval(eq(recordId), any(), any(Duration.class)))
+                .thenReturn(ApprovalResult.CANCELED);
+
+        RevCommit c1 = createCommit("init");
+        RevCommit c2 = createCommit("second");
+        ReceivePack rp = new ReceivePack(repo);
+        ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
+
+        new ApprovalPreReceiveHook(pushStore, approvalGateway, Duration.ofSeconds(5), null, null, pushContext)
+                .onPreReceive(rp, List.of(cmd));
+
+        assertEquals(ReceiveCommand.Result.REJECTED_OTHER_REASON, cmd.getResult());
+        verify(pushStore, never()).cancel(any(), any());
     }
 }

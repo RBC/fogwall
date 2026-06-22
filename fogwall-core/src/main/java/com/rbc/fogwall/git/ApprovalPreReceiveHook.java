@@ -7,8 +7,10 @@ import static com.rbc.fogwall.git.GitClientUtils.sym;
 
 import com.rbc.fogwall.approval.ApprovalGateway;
 import com.rbc.fogwall.approval.ApprovalResult;
+import com.rbc.fogwall.approval.ClientDisconnectedException;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.model.Attestation;
+import com.rbc.fogwall.db.model.Attestation.Type;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
 import com.rbc.fogwall.permission.RepoPermissionService;
@@ -190,10 +192,35 @@ public class ApprovalPreReceiveHook implements PreReceiveHook {
                     rejectAll(commands, reason);
                 }
                 case CANCELED -> {
-                    sendAndFlush(rp, msgOut, color(YELLOW, "" + sym(WARNING) + "  Push canceled"));
+                    // Transition to CANCELED only if still PENDING — a reviewer-initiated cancel
+                    // already wrote CANCELED to the store; a client disconnect leaves it PENDING.
+                    var current = pushStore.findById(validationRecordId).orElse(null);
+                    if (current != null && current.getStatus() == PushStatus.PENDING) {
+                        pushStore.cancel(
+                                validationRecordId,
+                                Attestation.builder()
+                                        .pushId(validationRecordId)
+                                        .type(Type.CANCELLATION)
+                                        .automated(true)
+                                        .reason("Client disconnected")
+                                        .build());
+                    }
+                    try {
+                        sendAndFlush(rp, msgOut, color(YELLOW, "" + sym(WARNING) + "  Push canceled"));
+                    } catch (ClientDisconnectedException ignored) {
+                        // client already gone; message cannot be delivered
+                    }
                     rejectAll(commands, "Push canceled");
                 }
                 case TIMED_OUT -> {
+                    pushStore.cancel(
+                            validationRecordId,
+                            Attestation.builder()
+                                    .pushId(validationRecordId)
+                                    .type(Type.CANCELLATION)
+                                    .automated(true)
+                                    .reason("Approval timed out after " + timeout.toMinutes() + " minutes")
+                                    .build());
                     sendAndFlush(
                             rp,
                             msgOut,
@@ -253,7 +280,7 @@ public class ApprovalPreReceiveHook implements PreReceiveHook {
         try {
             msgOut.flush();
         } catch (IOException e) {
-            log.warn("Failed to flush sideband message", e);
+            throw new ClientDisconnectedException(e);
         }
     }
 }
