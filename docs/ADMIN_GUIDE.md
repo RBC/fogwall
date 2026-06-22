@@ -812,6 +812,20 @@ One or more commit author/committer emails are not registered to the authenticat
 2. Check the redirect URI registered in the IdP matches `https://<your-host>/login/oauth2/code/fogwall` exactly.
 3. For Entra ID: verify `jwk-set-uri` is set — without it, token issuer validation fails silently.
 
+### Upgrading from a pre-1.2.0 deployment: OIDC redirect URI mismatch (AADSTS50011)
+
+The project was renamed in 1.2.0, which changed the Spring Security OAuth2 registration ID from `gitproxy` to `fogwall`.
+This shifts the callback URL that fogwall sends to the IdP in the authorization request:
+
+| Version | Redirect URI sent to IdP                    |
+| ------- | ------------------------------------------- |
+| < 1.2.0 | `https://<host>/login/oauth2/code/gitproxy` |
+| ≥ 1.2.0 | `https://<host>/login/oauth2/code/fogwall`  |
+
+**Fix:** add the new URI to your IdP app registration alongside the existing one. In Entra ID: App registrations → your
+app → Authentication → add `https://<host>/login/oauth2/code/fogwall` as a redirect URI. Both URIs can coexist — remove
+the old one once all deployments are on 1.2.0+.
+
 ### Gitleaks produces no output / scan appears to be skipped
 
 Check `logs/application.log` for lines containing `gitleaks`. The log will show which binary path was resolved and
