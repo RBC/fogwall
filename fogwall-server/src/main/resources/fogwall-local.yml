@@ -95,7 +95,7 @@ permissions:
       target: SLUG
       value: /RBC/fogwall
       type: LITERAL
-    operations: PUSH
+    grant: PUSH
   # Add more permissions for your own repos, e.g.:
   # - username: dev
   #   provider: github
@@ -103,7 +103,7 @@ permissions:
   #     target: SLUG
   #     value: /your-org/your-repo
   #     type: LITERAL
-  #   operations: PUSH
+  #   operation: PUSH
 
 rules:
   # Evaluated like firewall rules: all allow and deny rules merged into a single list
@@ -112,7 +112,7 @@ rules:
     # Example: block pushes to *.github.io repos
     - enabled: true
       order: 20
-      operations: PUSH
+      operation: PUSH
       provider: github
       match:
         target: NAME
@@ -123,7 +123,7 @@ rules:
     # Allow fetch and push to this project's own repo
     - enabled: true
       order: 100
-      operations: BOTH
+      operation: BOTH
       provider: github
       match:
         target: SLUG
@@ -133,7 +133,7 @@ rules:
     # Add more allow rules for your own repos, e.g.:
     # - enabled: true
     #   order: 110
-    #   operations: BOTH
+    #   operation: BOTH
     #   provider: github
     #   match:
     #     target: SLUG

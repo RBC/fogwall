@@ -156,7 +156,7 @@ class PermissionE2ETest {
                 .target(MatchTarget.SLUG)
                 .value(path)
                 .matchType(MatchType.LITERAL)
-                .operations(RepoPermission.Operations.PUSH)
+                .grant(RepoPermission.Grant.PUSH)
                 .build());
 
         var result = cloneCommitPush(authorisedUrl(), "perm-literal");
@@ -180,7 +180,7 @@ class PermissionE2ETest {
                 .target(MatchTarget.SLUG)
                 .value("/" + GiteaContainer.TEST_ORG + "/*")
                 .matchType(MatchType.GLOB)
-                .operations(RepoPermission.Operations.PUSH)
+                .grant(RepoPermission.Grant.PUSH)
                 .build());
 
         var result = cloneCommitPush(authorisedUrl(), "perm-glob");
@@ -203,7 +203,7 @@ class PermissionE2ETest {
                 .target(MatchTarget.SLUG)
                 .value("^/" + GiteaContainer.TEST_ORG + "/.+")
                 .matchType(MatchType.REGEX)
-                .operations(RepoPermission.Operations.PUSH)
+                .grant(RepoPermission.Grant.PUSH)
                 .build());
 
         var result = cloneCommitPush(authorisedUrl(), "perm-regex");
@@ -227,7 +227,7 @@ class PermissionE2ETest {
                 .target(MatchTarget.SLUG)
                 .value("/other-owner/*")
                 .matchType(MatchType.GLOB)
-                .operations(RepoPermission.Operations.PUSH)
+                .grant(RepoPermission.Grant.PUSH)
                 .build());
 
         var result = cloneCommitPush(authorisedUrl(), "perm-glob-wrong-owner");

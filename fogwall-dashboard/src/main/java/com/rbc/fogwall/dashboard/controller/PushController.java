@@ -332,7 +332,7 @@ public class PushController {
      *       audit log.
      *   <li>Self-review (admin or otherwise) without override: allowed only when the reviewer has both
      *       {@code ROLE_SELF_CERTIFY} (the capability, attested by the org's IdP/IAM via {@code auth.role-mappings} or
-     *       the local {@code users[].roles} block) and a {@link RepoPermission.Operations#SELF_CERTIFY} repo permission
+     *       the local {@code users[].roles} block) and a {@link RepoPermission.Operation#SELF_CERTIFY} repo permission
      *       entry for this specific repository. Both must be present.
      *   <li>The pusher must have been resolved to a proxy user — if not, we cannot guarantee identity.
      *   <li>Non-self reviewer: by default any authenticated user may review. When

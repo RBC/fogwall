@@ -26,7 +26,7 @@ class RowMapperTest {
         when(rs.getString("match_value")).thenReturn("org");
         when(rs.getString("match_type")).thenReturn("GLOB");
         when(rs.getString("access")).thenReturn("DENY");
-        when(rs.getString("operations")).thenReturn("PUSH");
+        when(rs.getString("operation")).thenReturn("PUSH");
         when(rs.getString("description")).thenReturn("Block all pushes");
         when(rs.getBoolean("enabled")).thenReturn(true);
         when(rs.getInt("rule_order")).thenReturn(50);
@@ -40,7 +40,7 @@ class RowMapperTest {
         assertEquals("org", rule.getValue());
         assertEquals(MatchType.GLOB, rule.getMatchType());
         assertEquals(AccessRule.Access.DENY, rule.getAccess());
-        assertEquals(AccessRule.Operations.PUSH, rule.getOperations());
+        assertEquals(AccessRule.Operation.PUSH, rule.getOperation());
         assertEquals("Block all pushes", rule.getDescription());
         assertTrue(rule.isEnabled());
         assertEquals(50, rule.getRuleOrder());
@@ -56,7 +56,7 @@ class RowMapperTest {
         when(rs.getString("match_value")).thenReturn("/org/**");
         when(rs.getString("match_type")).thenReturn("GLOB");
         when(rs.getString("access")).thenReturn("ALLOW");
-        when(rs.getString("operations")).thenReturn("BOTH");
+        when(rs.getString("operation")).thenReturn("BOTH");
         when(rs.getString("description")).thenReturn(null);
         when(rs.getBoolean("enabled")).thenReturn(false);
         when(rs.getInt("rule_order")).thenReturn(100);
@@ -70,7 +70,7 @@ class RowMapperTest {
         assertEquals(MatchType.GLOB, rule.getMatchType());
         assertNull(rule.getDescription());
         assertEquals(AccessRule.Access.ALLOW, rule.getAccess());
-        assertEquals(AccessRule.Operations.BOTH, rule.getOperations());
+        assertEquals(AccessRule.Operation.BOTH, rule.getOperation());
         assertEquals(AccessRule.Source.DB, rule.getSource());
         assertFalse(rule.isEnabled());
     }

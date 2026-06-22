@@ -52,7 +52,7 @@ permissions:
       target: SLUG
       value: /test-owner/test-repo
       type: LITERAL
-    operations: PUSH
+    grant: PUSH
 
   # user2: GLOB — any repo under otherorg
   - username: user2
@@ -61,7 +61,7 @@ permissions:
       target: OWNER
       value: otherorg
       type: GLOB
-    operations: PUSH
+    grant: PUSH
 
   # user3: REGEX — test-owner repos matching test-repo.*
   - username: user3
@@ -70,7 +70,7 @@ permissions:
       target: SLUG
       value: '/test-owner/test-repo.*'
       type: REGEX
-    operations: PUSH
+    grant: PUSH
 
   # reviewer: APPROVE on all the same paths
   - username: reviewer
@@ -79,14 +79,14 @@ permissions:
       target: SLUG
       value: /test-owner/test-repo
       type: LITERAL
-    operations: REVIEW
+    grant: REVIEW
   - username: reviewer
     provider: gitea
     match:
       target: OWNER
       value: otherorg
       type: GLOB
-    operations: REVIEW
+    grant: REVIEW
 
   # LDAP testuser (maps to gitea/test-user): same literal grant as test-user above.
   # When docker-default,ldap profiles are combined, GITEA_TESTUSER_TOKEN resolves to
@@ -98,7 +98,7 @@ permissions:
       target: SLUG
       value: /test-owner/test-repo
       type: LITERAL
-    operations: PUSH
+    grant: PUSH
 
   # admin APPROVE grants for LDAP setup (admin approves via dashboard).
   - username: admin
@@ -107,14 +107,14 @@ permissions:
       target: SLUG
       value: /test-owner/test-repo
       type: LITERAL
-    operations: REVIEW
+    grant: REVIEW
   - username: admin
     provider: gitea
     match:
       target: OWNER
       value: otherorg
       type: GLOB
-    operations: REVIEW
+    grant: REVIEW
 
 providers:
   # Local gitea included in docker compose setup
@@ -170,7 +170,7 @@ rules:
   allow:
     - enabled: true
       order: 110
-      operations: BOTH
+      operation: BOTH
       provider: gitea
       match:
         target: SLUG
@@ -179,7 +179,7 @@ rules:
 
     - enabled: true
       order: 111
-      operations: BOTH
+      operation: BOTH
       provider: gitea
       match:
         target: OWNER
@@ -188,7 +188,7 @@ rules:
 
     - enabled: true
       order: 120
-      operations: FETCH
+      operation: FETCH
       provider: github
       match:
         target: OWNER
@@ -201,7 +201,7 @@ rules:
     # the allow rule covers all of otherorg, but this repo is explicitly off-limits.
     - enabled: true
       order: 100
-      operations: BOTH
+      operation: BOTH
       provider: gitea
       match:
         target: SLUG
@@ -212,7 +212,7 @@ rules:
     # that should not receive new commits through the proxy.
     - enabled: true
       order: 101
-      operations: PUSH
+      operation: PUSH
       provider: gitea
       match:
         target: NAME
@@ -221,7 +221,7 @@ rules:
 
     - enabled: true
       order: 101
-      operations: PUSH
+      operation: PUSH
       provider: gitea
       match:
         target: NAME
@@ -231,7 +231,7 @@ rules:
     # Regex deny: block any repo whose name contains "secret" as a distinct segment.
     - enabled: true
       order: 102
-      operations: PUSH
+      operation: PUSH
       provider: gitea
       match:
         target: NAME

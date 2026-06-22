@@ -35,10 +35,10 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class RepoPermissionService {
 
-    private final RepoPermissionStore store;
+    private final PermissionStore<RepoPermission> store;
     private final ConcurrentHashMap<String, Pattern> patternCache = new ConcurrentHashMap<>();
 
-    public RepoPermissionService(RepoPermissionStore store) {
+    public RepoPermissionService(PermissionStore<RepoPermission> store) {
         this.store = store;
     }
 
@@ -47,7 +47,7 @@ public class RepoPermissionService {
      * Fail-closed: returns {@code false} if no grants exist for the path.
      */
     public boolean isAllowedToPush(String username, String provider, String path) {
-        return isAllowed(username, provider, path, RepoPermission.Operations.PUSH);
+        return isAllowed(username, provider, path, RepoPermission.Grant.PUSH);
     }
 
     /**
@@ -55,14 +55,13 @@ public class RepoPermissionService {
      * {@code provider}. Fail-closed: returns {@code false} if no grants exist for the path.
      */
     public boolean isAllowedToReview(String username, String provider, String path) {
-        return isAllowed(username, provider, path, RepoPermission.Operations.REVIEW);
+        return isAllowed(username, provider, path, RepoPermission.Grant.REVIEW);
     }
 
     /**
-     * Returns {@code true} when {@code username} has an explicit {@link RepoPermission.Operations#SELF_CERTIFY} grant
-     * for {@code path} at {@code provider}. Unlike push/approve checks,
-     * {@link RepoPermission.Operations#PUSH_AND_REVIEW} does <em>not</em> imply self-certify — the grant must be
-     * explicit.
+     * Returns {@code true} when {@code username} has an explicit {@link RepoPermission.Grant#SELF_CERTIFY} grant for
+     * {@code path} at {@code provider}. Unlike push/approve checks, {@link RepoPermission.Grant#PUSH_AND_REVIEW} does
+     * <em>not</em> imply self-certify — the grant must be explicit.
      */
     public boolean isBypassReviewAllowed(String username, String provider, String path) {
         List<RepoPermission> forProvider = store.findByProvider(provider);
@@ -74,7 +73,7 @@ public class RepoPermissionService {
         }
 
         boolean allowed = forPath.stream()
-                .filter(p -> p.getOperations() == RepoPermission.Operations.SELF_CERTIFY)
+                .filter(p -> p.getGrant() == RepoPermission.Grant.SELF_CERTIFY)
                 .anyMatch(p -> username.equals(p.getUsername()));
 
         log.debug(
@@ -91,9 +90,9 @@ public class RepoPermissionService {
      *
      * <p>Two permissions conflict when they share the same username and provider, their paths overlap (exact string
      * equality, or one pattern matches the other path string), AND their operations affect the same permission check.
-     * {@link RepoPermission.Operations#SELF_CERTIFY} is evaluated by a separate code path from push/review operations,
-     * so a {@code SELF_CERTIFY} entry does not conflict with a {@code PUSH_AND_REVIEW} entry on the same path — both
-     * are needed for a trusted committer configuration.
+     * {@link RepoPermission.Grant#SELF_CERTIFY} is evaluated by a separate code path from push/review operations, so a
+     * {@code SELF_CERTIFY} entry does not conflict with a {@code PUSH_AND_REVIEW} entry on the same path — both are
+     * needed for a trusted committer configuration.
      */
     public Optional<RepoPermission> findConflict(RepoPermission incoming) {
         return store.findAll().stream()
@@ -101,7 +100,7 @@ public class RepoPermissionService {
                 .filter(e -> e.getUsername().equals(incoming.getUsername()))
                 .filter(e -> e.getProvider().equals(incoming.getProvider()))
                 .filter(e -> pathsOverlap(e, incoming))
-                .filter(e -> operationsOverlap(e.getOperations(), incoming.getOperations()))
+                .filter(e -> grantsOverlap(e.getGrant(), incoming.getGrant()))
                 .findFirst();
     }
 
@@ -163,18 +162,18 @@ public class RepoPermissionService {
 
     // ---- internals ----
 
-    private boolean operationsOverlap(RepoPermission.Operations a, RepoPermission.Operations b) {
+    private boolean grantsOverlap(RepoPermission.Grant a, RepoPermission.Grant b) {
         // SELF_CERTIFY is evaluated by isBypassReviewAllowed(), independent of push/review checks.
         // A SELF_CERTIFY entry only conflicts with another SELF_CERTIFY entry.
-        if (a == RepoPermission.Operations.SELF_CERTIFY || b == RepoPermission.Operations.SELF_CERTIFY) {
+        if (a == RepoPermission.Grant.SELF_CERTIFY || b == RepoPermission.Grant.SELF_CERTIFY) {
             return a == b;
         }
         // Among PUSH / REVIEW / PUSH_AND_REVIEW: conflict if both entries would affect the same check.
         // PUSH_AND_REVIEW overlaps with both PUSH and REVIEW; PUSH and REVIEW don't overlap each other.
-        boolean aPush = a == RepoPermission.Operations.PUSH || a == RepoPermission.Operations.PUSH_AND_REVIEW;
-        boolean bPush = b == RepoPermission.Operations.PUSH || b == RepoPermission.Operations.PUSH_AND_REVIEW;
-        boolean aReview = a == RepoPermission.Operations.REVIEW || a == RepoPermission.Operations.PUSH_AND_REVIEW;
-        boolean bReview = b == RepoPermission.Operations.REVIEW || b == RepoPermission.Operations.PUSH_AND_REVIEW;
+        boolean aPush = a == RepoPermission.Grant.PUSH || a == RepoPermission.Grant.PUSH_AND_REVIEW;
+        boolean bPush = b == RepoPermission.Grant.PUSH || b == RepoPermission.Grant.PUSH_AND_REVIEW;
+        boolean aReview = a == RepoPermission.Grant.REVIEW || a == RepoPermission.Grant.PUSH_AND_REVIEW;
+        boolean bReview = b == RepoPermission.Grant.REVIEW || b == RepoPermission.Grant.PUSH_AND_REVIEW;
         return (aPush && bPush) || (aReview && bReview);
     }
 
@@ -185,7 +184,7 @@ public class RepoPermissionService {
         return false;
     }
 
-    private boolean isAllowed(String username, String provider, String path, RepoPermission.Operations op) {
+    private boolean isAllowed(String username, String provider, String path, RepoPermission.Grant op) {
         List<RepoPermission> forProvider = store.findByProvider(provider);
 
         List<RepoPermission> forPath =
@@ -197,7 +196,7 @@ public class RepoPermissionService {
         }
 
         boolean allowed = forPath.stream()
-                .filter(p -> p.getOperations() == op || p.getOperations() == RepoPermission.Operations.PUSH_AND_REVIEW)
+                .filter(p -> p.getGrant() == op || p.getGrant() == RepoPermission.Grant.PUSH_AND_REVIEW)
                 .anyMatch(p -> username.equals(p.getUsername()));
 
         log.debug(

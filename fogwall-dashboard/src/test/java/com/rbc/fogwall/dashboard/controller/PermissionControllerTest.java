@@ -48,7 +48,7 @@ class PermissionControllerTest {
             .target(MatchTarget.SLUG)
             .value("/acme/repo")
             .matchType(MatchType.LITERAL)
-            .operations(RepoPermission.Operations.PUSH)
+            .grant(RepoPermission.Grant.PUSH)
             .source(RepoPermission.Source.DB)
             .build();
 
@@ -58,7 +58,7 @@ class PermissionControllerTest {
             .target(MatchTarget.OWNER)
             .value("acme")
             .matchType(MatchType.GLOB)
-            .operations(RepoPermission.Operations.PUSH_AND_REVIEW)
+            .grant(RepoPermission.Grant.PUSH_AND_REVIEW)
             .source(RepoPermission.Source.CONFIG)
             .build();
 
@@ -87,8 +87,8 @@ class PermissionControllerTest {
     // ── POST /api/users/{username}/permissions ───────────────────────────────────
 
     private static PermissionController.AddPermissionRequest req(
-            String provider, String target, String value, String matchType, String operations) {
-        return new PermissionController.AddPermissionRequest(provider, target, value, matchType, operations);
+            String provider, String target, String value, String matchType, String grant) {
+        return new PermissionController.AddPermissionRequest(provider, target, value, matchType, grant);
     }
 
     @Test
@@ -138,7 +138,7 @@ class PermissionControllerTest {
     }
 
     @Test
-    void add_invalidOperations_returns400() {
+    void add_invalidGrant_returns400() {
         when(userStore.findByUsername("alice")).thenReturn(Optional.of(ALICE));
 
         var resp = controller.add("alice", req("github", null, "/a/b", null, "READ"));
@@ -161,7 +161,7 @@ class PermissionControllerTest {
         assertEquals("/a/b", saved.getValue());
         assertEquals(MatchTarget.SLUG, saved.getTarget());
         assertEquals(MatchType.LITERAL, saved.getMatchType());
-        assertEquals(RepoPermission.Operations.PUSH, saved.getOperations());
+        assertEquals(RepoPermission.Grant.PUSH, saved.getGrant());
         assertEquals(RepoPermission.Source.DB, saved.getSource());
     }
 
@@ -188,7 +188,7 @@ class PermissionControllerTest {
         var saved = captor.getValue();
         assertEquals(MatchTarget.OWNER, saved.getTarget());
         assertEquals(MatchType.GLOB, saved.getMatchType());
-        assertEquals(RepoPermission.Operations.PUSH, saved.getOperations());
+        assertEquals(RepoPermission.Grant.PUSH, saved.getGrant());
     }
 
     // ── DELETE /api/users/{username}/permissions/{id} ────────────────────────────

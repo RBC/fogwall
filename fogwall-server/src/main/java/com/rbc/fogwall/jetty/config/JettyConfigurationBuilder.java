@@ -24,9 +24,9 @@ import com.rbc.fogwall.jetty.FogwallContext;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.jetty.reload.LiveConfigLoader;
 import com.rbc.fogwall.permission.JdbcRepoPermissionStore;
+import com.rbc.fogwall.permission.PermissionStore;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.permission.RepoPermissionService;
-import com.rbc.fogwall.permission.RepoPermissionStore;
 import com.rbc.fogwall.provider.*;
 import com.rbc.fogwall.service.CachingTokenPushIdentityResolver;
 import com.rbc.fogwall.service.JdbcScmTokenCache;
@@ -423,8 +423,8 @@ public class JettyConfigurationBuilder {
         return config.getServer().getTls();
     }
 
-    /** Builds a {@link RepoPermissionStore} backed by the configured database. */
-    public RepoPermissionStore buildRepoPermissionStore() {
+    /** Builds a {@link PermissionStore} backed by the configured database. */
+    public PermissionStore<RepoPermission> buildRepoPermissionStore() {
         String type = config.getDatabase().getType();
         if ("mongo".equals(type)) {
             return requireMongoStoreFactory().repoPermissionStore();
@@ -438,7 +438,7 @@ public class JettyConfigurationBuilder {
      */
     public RepoPermissionService buildRepoPermissionService() {
         if (cachedRepoPermissionService != null) return cachedRepoPermissionService;
-        RepoPermissionStore store = buildRepoPermissionStore();
+        PermissionStore<RepoPermission> store = buildRepoPermissionStore();
         store.initialize();
         cachedRepoPermissionService = new RepoPermissionService(store);
 
@@ -518,14 +518,13 @@ public class JettyConfigurationBuilder {
                     String resolvedId =
                             resolveProviderName("Permission for user '" + p.getUsername() + "'", p.getProvider());
                     MatchConfig m = p.getMatch();
-                    return RepoPermission.builder()
+                    return (RepoPermission) RepoPermission.builder()
                             .username(p.getUsername())
                             .provider(resolvedId)
                             .target(MatchTarget.valueOf(m.getTarget().toUpperCase()))
                             .value(m.getValue())
                             .matchType(MatchType.valueOf((m.getType() != null ? m.getType() : "GLOB").toUpperCase()))
-                            .operations(RepoPermission.Operations.valueOf(
-                                    p.getOperations().toUpperCase()))
+                            .grant(RepoPermission.Grant.valueOf(p.getGrant().toUpperCase()))
                             .source(RepoPermission.Source.CONFIG)
                             .build();
                 })
@@ -573,7 +572,7 @@ public class JettyConfigurationBuilder {
     private void appendAccessRules(List<AccessRule> result, List<RuleConfig> rules, AccessRule.Access access) {
         for (RuleConfig rule : rules) {
             if (!rule.isEnabled()) continue;
-            AccessRule.Operations ops = toOperations(rule.getOperations());
+            AccessRule.Operation ops = toOperations(rule.getOperation());
             String rawProvider = rule.getProvider().isBlank() ? null : rule.getProvider();
             String resolvedId =
                     resolveProviderName(access.name() + " rule (order=" + rule.getOrder() + ")", rawProvider);
@@ -584,19 +583,19 @@ public class JettyConfigurationBuilder {
                     .value(m.getValue())
                     .matchType(MatchType.valueOf((m.getType() != null ? m.getType() : "GLOB").toUpperCase()))
                     .access(access)
-                    .operations(ops)
+                    .operation(ops)
                     .source(AccessRule.Source.CONFIG)
                     .ruleOrder(rule.getOrder())
                     .build());
         }
     }
 
-    private static AccessRule.Operations toOperations(String ops) {
-        if (ops == null || ops.isBlank()) return AccessRule.Operations.BOTH;
+    private static AccessRule.Operation toOperations(String ops) {
+        if (ops == null || ops.isBlank()) return AccessRule.Operation.BOTH;
         return switch (ops.toUpperCase()) {
-            case "FETCH" -> AccessRule.Operations.FETCH;
-            case "PUSH" -> AccessRule.Operations.PUSH;
-            default -> AccessRule.Operations.BOTH;
+            case "FETCH" -> AccessRule.Operation.FETCH;
+            case "PUSH" -> AccessRule.Operation.PUSH;
+            default -> AccessRule.Operation.BOTH;
         };
     }
 

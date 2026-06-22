@@ -34,10 +34,10 @@ public class JdbcUrlRuleRegistry implements UrlRuleRegistry {
     public void save(AccessRule rule) {
         jdbc.update("""
                 INSERT INTO access_rules
-                    (id, provider, target, match_value, match_type, access, operations,
+                    (id, provider, target, match_value, match_type, access, operation,
                      description, enabled, rule_order, source)
                 VALUES
-                    (:id, :provider, :target, :matchValue, :matchType, :access, :operations,
+                    (:id, :provider, :target, :matchValue, :matchType, :access, :operation,
                      :description, :enabled, :ruleOrder, :source)
                 """, params(rule));
     }
@@ -47,7 +47,7 @@ public class JdbcUrlRuleRegistry implements UrlRuleRegistry {
         jdbc.update("""
                 UPDATE access_rules SET
                     provider = :provider, target = :target, match_value = :matchValue, match_type = :matchType,
-                    access = :access, operations = :operations, description = :description,
+                    access = :access, operation = :operation, description = :description,
                     enabled = :enabled, rule_order = :ruleOrder, source = :source
                 WHERE id = :id
                 """, params(rule));
@@ -88,7 +88,7 @@ public class JdbcUrlRuleRegistry implements UrlRuleRegistry {
                 .addValue("matchValue", rule.getValue())
                 .addValue("matchType", rule.getMatchType().name())
                 .addValue("access", rule.getAccess().name())
-                .addValue("operations", rule.getOperations().name())
+                .addValue("operation", rule.getOperation().name())
                 .addValue("description", rule.getDescription())
                 .addValue("enabled", rule.isEnabled())
                 .addValue("ruleOrder", rule.getRuleOrder())

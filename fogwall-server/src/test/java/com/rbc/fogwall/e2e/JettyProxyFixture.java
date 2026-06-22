@@ -148,7 +148,7 @@ class JettyProxyFixture implements AutoCloseable {
             urlRuleRegistry.save(AccessRule.builder()
                     .ruleOrder(1)
                     .access(AccessRule.Access.ALLOW)
-                    .operations(AccessRule.Operations.BOTH)
+                    .operation(AccessRule.Operation.BOTH)
                     .target(MatchTarget.OWNER)
                     .value("*")
                     .matchType(MatchType.GLOB)

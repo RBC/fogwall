@@ -9,7 +9,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * A single authorization grant: {@link #username} is permitted to perform {@link #operations} on repos matching
+ * A single authorization grant: {@link #username} is permitted to perform {@link #grant} on repos matching
  * {@link #value} at {@link #provider}.
  *
  * <p>{@link #target} selects which part of the repo URL is compared (default {@link MatchTarget#SLUG});
@@ -20,7 +20,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-public class RepoPermission {
+public class RepoPermission implements FogwallPermission {
 
     @Builder.Default
     private String id = UUID.randomUUID().toString();
@@ -40,12 +40,12 @@ public class RepoPermission {
     private MatchType matchType = MatchType.GLOB;
 
     @Builder.Default
-    private Operations operations = Operations.PUSH;
+    private Grant grant = Grant.PUSH;
 
     @Builder.Default
     private Source source = Source.DB;
 
-    public enum Operations {
+    public enum Grant {
         /** Can submit pushes for review. */
         PUSH,
         /** Can review (approve or reject) pushes submitted by others. */

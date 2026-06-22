@@ -75,7 +75,7 @@ class ConfigHotReloadE2ETest {
         Files.writeString(allowAll, """
                 rules:
                   allow:
-                    - operations: BOTH
+                    - operation: BOTH
                       match:
                         target: SLUG
                         value: '/**'
@@ -257,7 +257,7 @@ class ConfigHotReloadE2ETest {
                 rules:
                   allow: []
                   deny:
-                    - operations: PUSH
+                    - operation: PUSH
                       match:
                         target: SLUG
                         value: '%s'
@@ -272,7 +272,7 @@ class ConfigHotReloadE2ETest {
         Path permissive = writeOverride("""
                 rules:
                   allow:
-                    - operations: BOTH
+                    - operation: BOTH
                       match:
                         target: SLUG
                         value: '/**'

@@ -247,7 +247,7 @@ export async function fetchUserPermissions(username: string) {
 
 export async function addUserPermission(
   username: string,
-  data: { provider: string; value: string; matchType: string; operations: string },
+  data: { provider: string; value: string; matchType: string; grant: string },
 ) {
   const res = await apiFetch(`/api/users/${encodeURIComponent(username)}/permissions`, {
     method: 'POST',
@@ -260,7 +260,7 @@ export async function addUserPermission(
 
 export async function createUrlRule(rule: {
   access: 'ALLOW' | 'DENY'
-  operations: 'BOTH' | 'PUSH' | 'FETCH'
+  operation: 'BOTH' | 'PUSH' | 'FETCH'
   target: 'SLUG' | 'OWNER' | 'NAME'
   value: string
   matchType: 'LITERAL' | 'GLOB' | 'REGEX'
