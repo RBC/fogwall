@@ -69,7 +69,6 @@ import org.springframework.security.oauth2.client.registration.ClientRegistratio
 import org.springframework.security.oauth2.client.registration.ClientRegistrations;
 import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
 import org.springframework.security.oauth2.client.web.HttpSessionOAuth2AuthorizedClientRepository;
-import org.springframework.security.oauth2.client.web.OAuth2LoginAuthenticationFilter;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
@@ -389,8 +388,6 @@ public class SecurityConfig {
         if (!oidcCfg.getJwkSetUri().isBlank()) builder.jwkSetUri(oidcCfg.getJwkSetUri());
         if (!usePrivateKeyJwt) builder.clientSecret(oidcCfg.getClientSecret());
         ClientRegistration registration = builder.build();
-
-        http.addFilterBefore(new LegacyOidcCallbackRedirectFilter(), OAuth2LoginAuthenticationFilter.class);
 
         http.oauth2Login(oauth2 -> {
                     oauth2.clientRegistrationRepository(new InMemoryClientRegistrationRepository(registration))
