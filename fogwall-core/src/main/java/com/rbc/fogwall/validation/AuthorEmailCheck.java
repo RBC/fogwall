@@ -11,7 +11,6 @@ import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
-import org.apache.commons.validator.routines.EmailValidator;
 
 /**
  * Validates committer and author emails in the pushed commits against configured domain/local rules.
@@ -63,26 +62,28 @@ public class AuthorEmailCheck implements CommitCheck {
 
     /** Returns the reason the email is rejected under the given email config, or {@code null} if it is allowed. */
     private String violationReason(String email, CommitConfig.EmailConfig emailConfig) {
+        Pattern localBlock = emailConfig.getLocal().getBlock();
+        Pattern domainAllow = emailConfig.getDomain().getAllow();
+
+        if (localBlock == null && domainAllow == null) {
+            return null;
+        }
+
         if (email == null || email.isEmpty()) {
             return "empty email";
         }
-        if (!EmailValidator.getInstance().isValid(email)) {
-            return "invalid email format";
-        }
 
-        String[] parts = email.split("@");
-        if (parts.length != 2) {
-            return "invalid email format";
+        int atIndex = email.lastIndexOf('@');
+        if (atIndex < 0) {
+            return "missing @ in email";
         }
-        String local = parts[0];
-        String domain = parts[1];
+        String local = email.substring(0, atIndex);
+        String domain = email.substring(atIndex + 1);
 
-        Pattern localBlock = emailConfig.getLocal().getBlock();
         if (localBlock != null && localBlock.matcher(local).find()) {
             return "blocked local part (" + local + ")";
         }
 
-        Pattern domainAllow = emailConfig.getDomain().getAllow();
         if (domainAllow != null && !domainAllow.matcher(domain).find()) {
             return "domain not allowed (" + domain + ")";
         }
