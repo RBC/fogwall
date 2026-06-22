@@ -83,7 +83,7 @@ class IdentityResolutionE2ETest {
                 .target(MatchTarget.SLUG)
                 .value("/" + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO)
                 .matchType(MatchType.LITERAL)
-                .operations(RepoPermission.Operations.PUSH)
+                .grant(RepoPermission.Grant.PUSH)
                 .build());
 
         tempDir = Files.createTempDirectory("fogwall-ident-e2e-");
@@ -203,7 +203,7 @@ class IdentityResolutionE2ETest {
                     .target(MatchTarget.SLUG)
                     .value("/" + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO)
                     .matchType(MatchType.LITERAL)
-                    .operations(RepoPermission.Operations.PUSH)
+                    .grant(RepoPermission.Grant.PUSH)
                     .build());
 
             String url = URLEncoder.encode(GiteaContainer.TEST_USER, StandardCharsets.UTF_8)

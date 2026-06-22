@@ -579,7 +579,7 @@ function AddPermissionModal({
   const [provider, setProvider] = useState('')
   const [path, setPath] = useState('')
   const [pathType, setPathType] = useState<'LITERAL' | 'GLOB' | 'REGEX'>('GLOB')
-  const [operations, setOperations] = useState<RepoPermission['operations']>('PUSH_AND_REVIEW')
+  const [grant, setGrant] = useState<RepoPermission['grant']>('PUSH_AND_REVIEW')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [regexError, setRegexError] = useState<string | null>(null)
@@ -630,7 +630,7 @@ function AddPermissionModal({
         provider: provider.trim(),
         value: path.trim(),
         matchType: pathType,
-        operations,
+        grant,
       })
       onAdded()
       onClose()
@@ -687,10 +687,10 @@ function AddPermissionModal({
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Operations</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Grant</label>
             <select
-              value={operations}
-              onChange={(e) => setOperations(e.target.value as typeof operations)}
+              value={grant}
+              onChange={(e) => setGrant(e.target.value as typeof grant)}
               className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none"
             >
               <option value="PUSH_AND_REVIEW">Push and review</option>
@@ -778,7 +778,7 @@ function PermissionsTab({ username, isAdmin }: { username: string; isAdmin: bool
                 <th className="px-4 py-3">Provider</th>
                 <th className="px-4 py-3">Type</th>
                 <th className="px-4 py-3">Path</th>
-                <th className="px-4 py-3">Operations</th>
+                <th className="px-4 py-3">Grant</th>
                 <th className="px-4 py-3">Source</th>
                 {isAdmin && <th className="px-4 py-3" />}
               </tr>
@@ -796,7 +796,7 @@ function PermissionsTab({ username, isAdmin }: { username: string; isAdmin: bool
                   </td>
                   <td className="px-4 py-3 font-mono text-gray-700 text-xs">{p.value}</td>
                   <td className="px-4 py-3">
-                    <OperationsBadge operations={p.operations} />
+                    <OperationsBadge operations={p.grant} />
                   </td>
                   <td className="px-4 py-3">
                     {p.source === 'CONFIG' ? (

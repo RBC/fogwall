@@ -18,7 +18,7 @@ interface Rule {
   value: string | null
   matchType: 'LITERAL' | 'GLOB' | 'REGEX'
   access: 'ALLOW' | 'DENY'
-  operations: 'FETCH' | 'PUSH' | 'BOTH'
+  operation: 'FETCH' | 'PUSH' | 'BOTH'
   description: string | null
   enabled: boolean
   ruleOrder: number
@@ -105,7 +105,7 @@ interface AddRuleForm {
   patternType: PatternType
   pattern: string
   provider: string
-  operations: 'BOTH' | 'PUSH' | 'FETCH'
+  operation: 'BOTH' | 'PUSH' | 'FETCH'
   ruleOrder: number
 }
 
@@ -115,7 +115,7 @@ const DEFAULT_FORM: AddRuleForm = {
   patternType: 'GLOB',
   pattern: '',
   provider: '',
-  operations: 'BOTH',
+  operation: 'BOTH',
   ruleOrder: 100,
 }
 
@@ -181,7 +181,7 @@ function AddRuleModal({
     try {
       const payload: Parameters<typeof createUrlRule>[0] = {
         access: form.access,
-        operations: form.operations,
+        operation: form.operation,
         target: form.targetType.toUpperCase() as 'SLUG' | 'OWNER' | 'NAME',
         value: form.pattern.trim(),
         matchType: form.patternType,
@@ -319,12 +319,12 @@ function AddRuleModal({
             </select>
           </div>
 
-          {/* Operations */}
+          {/* Operation */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Operations</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Operation</label>
             <select
-              value={form.operations}
-              onChange={(e) => set('operations', e.target.value as AddRuleForm['operations'])}
+              value={form.operation}
+              onChange={(e) => set('operation', e.target.value as AddRuleForm['operation'])}
               className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm"
             >
               <option value="BOTH">Push &amp; Fetch</option>
@@ -560,14 +560,14 @@ export function Repos() {
                     <span
                       className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600 font-mono border border-gray-200 cursor-help"
                       title={
-                        rule.operations === 'FETCH'
+                        rule.operation === 'FETCH'
                           ? 'git clone / git fetch'
-                          : rule.operations === 'PUSH'
+                          : rule.operation === 'PUSH'
                             ? 'git push'
                             : 'git push / git clone'
                       }
                     >
-                      {rule.operations === 'BOTH' ? 'PUSH & FETCH' : rule.operations}
+                      {rule.operation === 'BOTH' ? 'PUSH & FETCH' : rule.operation}
                     </span>
                     <span className="text-xs text-gray-400">
                       {rule.source === 'CONFIG' ? 'config' : 'local'}

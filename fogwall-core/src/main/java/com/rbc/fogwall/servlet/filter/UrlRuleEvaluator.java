@@ -91,7 +91,7 @@ public class UrlRuleEvaluator {
      * {@code BOTH} matches everything; {@code PUSH} matches only push; {@code FETCH} matches only fetch.
      */
     static boolean operationMatches(AccessRule rule, HttpOperation operation) {
-        return switch (rule.getOperations()) {
+        return switch (rule.getOperation()) {
             case BOTH -> true;
             case PUSH -> operation == HttpOperation.PUSH;
             case FETCH -> operation == HttpOperation.FETCH;

@@ -262,7 +262,7 @@ export function Profile() {
                     <th className="px-4 py-3">Provider</th>
                     <th className="px-4 py-3">Type</th>
                     <th className="px-4 py-3">Path</th>
-                    <th className="px-4 py-3">Operations</th>
+                    <th className="px-4 py-3">Grant</th>
                     <th className="px-4 py-3">Source</th>
                   </tr>
                 </thead>
@@ -279,7 +279,7 @@ export function Profile() {
                       </td>
                       <td className="px-4 py-3 font-mono text-gray-700 text-xs">{p.value}</td>
                       <td className="px-4 py-3">
-                        <OperationsBadge operations={p.operations} />
+                        <OperationsBadge operations={p.grant} />
                       </td>
                       <td className="px-4 py-3">
                         {p.source === 'CONFIG' ? (

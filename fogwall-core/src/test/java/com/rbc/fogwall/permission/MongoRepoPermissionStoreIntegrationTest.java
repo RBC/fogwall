@@ -48,7 +48,7 @@ class MongoRepoPermissionStoreIntegrationTest {
                 .target(MatchTarget.OWNER)
                 .value("myorg")
                 .matchType(MatchType.GLOB)
-                .operations(RepoPermission.Operations.PUSH)
+                .grant(RepoPermission.Grant.PUSH)
                 .source(RepoPermission.Source.CONFIG)
                 .build();
         store.save(p);
@@ -60,7 +60,7 @@ class MongoRepoPermissionStoreIntegrationTest {
         assertEquals(MatchTarget.OWNER, found.getTarget());
         assertEquals("myorg", found.getValue());
         assertEquals(MatchType.GLOB, found.getMatchType());
-        assertEquals(RepoPermission.Operations.PUSH, found.getOperations());
+        assertEquals(RepoPermission.Grant.PUSH, found.getGrant());
         assertEquals(RepoPermission.Source.CONFIG, found.getSource());
     }
 

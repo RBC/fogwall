@@ -856,7 +856,7 @@ rules:
     # Specific repo by exact slug — both operations, scoped to one provider
     - enabled: true
       order: 110
-      operations: BOTH
+      operation: BOTH
       provider: github
       match:
         target: SLUG
@@ -866,7 +866,7 @@ rules:
     # All repos under an owner — fetch only, any provider
     - enabled: true
       order: 120
-      operations: FETCH
+      operation: FETCH
       match:
         target: OWNER
         value: finos
@@ -889,7 +889,7 @@ rules:
   allow:
     - enabled: true
       order: 110
-      operations: BOTH
+      operation: BOTH
       provider: internal-github
       match:
         target: OWNER
@@ -899,16 +899,16 @@ rules:
 
 ### URL rule properties
 
-| Property       | Type    | Default | Description                                                       |
-| -------------- | ------- | ------- | ----------------------------------------------------------------- |
-| `enabled`      | boolean | `true`  | Whether this entry is active                                      |
-| `order`        | int     | `1100`  | Evaluation order (lower = earlier; first match wins)              |
-| `operations`   | string  | `BOTH`  | `FETCH`, `PUSH`, or `BOTH` — which operations this entry matches  |
-| `provider`     | string  | _(all)_ | Provider name to scope this entry to; omit or leave blank for all |
-| `match`        | object  | —       | Repository match criteria — see below                             |
-| `match.target` | enum    | `SLUG`  | What to match: `SLUG` (`/owner/repo`), `OWNER`, or `NAME`         |
-| `match.value`  | string  | —       | The pattern to match against the chosen target                    |
-| `match.type`   | enum    | `GLOB`  | How to interpret the pattern: `LITERAL`, `GLOB`, or `REGEX`       |
+| Property       | Type    | Default | Description                                                         |
+| -------------- | ------- | ------- | ------------------------------------------------------------------- |
+| `enabled`      | boolean | `true`  | Whether this entry is active                                        |
+| `order`        | int     | `1100`  | Evaluation order (lower = earlier; first match wins)                |
+| `operation`    | string  | `BOTH`  | `FETCH`, `PUSH`, or `BOTH` — which git operation this entry matches |
+| `provider`     | string  | _(all)_ | Provider name to scope this entry to; omit or leave blank for all   |
+| `match`        | object  | —       | Repository match criteria — see below                               |
+| `match.target` | enum    | `SLUG`  | What to match: `SLUG` (`/owner/repo`), `OWNER`, or `NAME`           |
+| `match.value`  | string  | —       | The pattern to match against the chosen target                      |
+| `match.type`   | enum    | `GLOB`  | How to interpret the pattern: `LITERAL`, `GLOB`, or `REGEX`         |
 
 ### Pattern matching
 
@@ -966,7 +966,7 @@ rules:
     # Block any repo whose name contains "secret" as a distinct word segment (case-insensitive)
     - enabled: true
       order: 50
-      operations: PUSH
+      operation: PUSH
       match:
         target: NAME
         value: "(?i)(^|-)secret(-|$).*"
@@ -975,7 +975,7 @@ rules:
     # Block repos matching multiple owner orgs using alternation
     - enabled: true
       order: 51
-      operations: BOTH
+      operation: BOTH
       match:
         target: OWNER
         value: "(blocked-org|suspended-org)"
@@ -991,7 +991,7 @@ rules:
   allow:
     - enabled: true
       order: 110
-      operations: BOTH
+      operation: BOTH
       provider: internal-github
       match:
         target: OWNER
@@ -1006,7 +1006,7 @@ rules:
   allow:
     - enabled: true
       order: 110
-      operations: BOTH
+      operation: BOTH
       provider: internal-github
       match:
         target: OWNER
@@ -1024,7 +1024,7 @@ rules:
   allow:
     - enabled: true
       order: 110
-      operations: PUSH
+      operation: PUSH
       provider: internal-github
       match:
         target: NAME
@@ -1035,7 +1035,7 @@ rules:
   allow:
     - enabled: true
       order: 111
-      operations: PUSH
+      operation: PUSH
       provider: internal-github
       match:
         target: NAME
@@ -1053,7 +1053,7 @@ rules:
     # Allow fetch from the source SCM for a specific org + name prefix (glob AND)
     - enabled: true
       order: 110
-      operations: FETCH
+      operation: FETCH
       provider: source-github
       match:
         target: SLUG
@@ -1063,7 +1063,7 @@ rules:
     # Allow push to the destination SCM — stricter control with regex
     - enabled: true
       order: 120
-      operations: PUSH
+      operation: PUSH
       provider: dest-gitlab
       match:
         target: SLUG
@@ -1087,7 +1087,7 @@ permissions:
       target: SLUG
       value: /myorg/myrepo
       type: LITERAL
-    operations: PUSH
+    grant: PUSH
 
   # GLOB: wildcard repo name under a specific owner
   - username: bob
@@ -1096,7 +1096,7 @@ permissions:
       target: SLUG
       value: /myorg/*
       type: GLOB
-    operations: PUSH_AND_REVIEW
+    grant: PUSH_AND_REVIEW
 
   # OWNER target: grant access to all repos under an org
   - username: carol
@@ -1105,7 +1105,7 @@ permissions:
       target: OWNER
       value: myorg
       type: GLOB
-    operations: REVIEW
+    grant: REVIEW
 
   # REGEX on SLUG: match repos under multiple orgs
   - username: dave
@@ -1114,7 +1114,7 @@ permissions:
       target: SLUG
       value: "/team-(alpha|beta)/.*"
       type: REGEX
-    operations: PUSH_AND_REVIEW
+    grant: PUSH_AND_REVIEW
 
   # SELF_CERTIFY: trusted contributor who can approve their own clean pushes.
   # Requires both this permission entry AND the SELF_CERTIFY role on the user.
@@ -1124,7 +1124,7 @@ permissions:
       target: SLUG
       value: /myorg/myrepo
       type: LITERAL
-    operations: SELF_CERTIFY
+    grant: SELF_CERTIFY
 ```
 
 ### Permission properties
@@ -1137,7 +1137,7 @@ permissions:
 | `match.target` | enum   | `SLUG`            | What to match: `SLUG` (`/owner/repo`), `OWNER`, or `NAME`                 |
 | `match.value`  | string | —                 | The pattern to match against the chosen target                            |
 | `match.type`   | enum   | `GLOB`            | How to interpret the pattern: `LITERAL`, `GLOB`, or `REGEX`               |
-| `operations`   | enum   | `PUSH_AND_REVIEW` | What the user may do: `PUSH`, `REVIEW`, `PUSH_AND_REVIEW`, `SELF_CERTIFY` |
+| `grant`        | enum   | `PUSH_AND_REVIEW` | What the user may do: `PUSH`, `REVIEW`, `PUSH_AND_REVIEW`, `SELF_CERTIFY` |
 
 ### Pattern matching
 
@@ -1170,7 +1170,7 @@ permissions:
       target: OWNER
       value: "*"
       type: GLOB
-    operations: PUSH_AND_REVIEW
+    grant: PUSH_AND_REVIEW
 ```
 
 **Allow push to repos whose name starts with a project code:**
@@ -1183,7 +1183,7 @@ permissions:
       target: NAME
       value: "proj0-*"
       type: GLOB
-    operations: PUSH
+    grant: PUSH
 
   # Or match the same prefix across any owner using SLUG:
   - username: alice
@@ -1192,7 +1192,7 @@ permissions:
       target: SLUG
       value: "/*/proj0-*"
       type: GLOB
-    operations: PUSH
+    grant: PUSH
 ```
 
 **Regex — match repos under multiple owner orgs:**
@@ -1205,7 +1205,7 @@ permissions:
       target: SLUG
       value: "/team-(alpha|beta)/.*"
       type: REGEX
-    operations: PUSH_AND_REVIEW
+    grant: PUSH_AND_REVIEW
 ```
 
 **Self-certify for a trusted committer scoped to a prefix:**
@@ -1222,7 +1222,7 @@ permissions:
       target: NAME
       value: "proj0-*"
       type: GLOB
-    operations: PUSH_AND_REVIEW
+    grant: PUSH_AND_REVIEW
 
   # Self-certify on the same scope (requires SELF_CERTIFY role on the user too)
   - username: trusted-dev
@@ -1231,10 +1231,10 @@ permissions:
       target: NAME
       value: "proj0-*"
       type: GLOB
-    operations: SELF_CERTIFY
+    grant: SELF_CERTIFY
 ```
 
-### Operations
+### Grant
 
 | Value             | Effect                                                                                                                    |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------- |

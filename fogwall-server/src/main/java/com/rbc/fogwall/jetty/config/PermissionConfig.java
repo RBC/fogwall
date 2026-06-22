@@ -15,7 +15,7 @@ import lombok.Data;
  *       target: SLUG
  *       value: /owner/repo
  *       type: LITERAL
- *     operations: PUSH
+ *     grant: PUSH
  * </pre>
  */
 @Data
@@ -31,8 +31,8 @@ public class PermissionConfig {
     private MatchConfig match = new MatchConfig();
 
     /**
-     * Which operations are granted. {@code PUSH}, {@code REVIEW}, {@code PUSH_AND_REVIEW}, or {@code SELF_CERTIFY}
+     * The grant of the permission. {@code PUSH}, {@code REVIEW}, {@code PUSH_AND_REVIEW}, or {@code SELF_CERTIFY}
      * (default: {@code PUSH_AND_REVIEW}).
      */
-    private String operations = "PUSH_AND_REVIEW";
+    private String grant = "PUSH_AND_REVIEW";
 }

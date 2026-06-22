@@ -6,8 +6,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Thread-safe in-memory {@link RepoPermissionStore}. Used for the {@code mongo} database type and in tests. */
-public class InMemoryRepoPermissionStore implements RepoPermissionStore {
+public class InMemoryRepoPermissionStore implements PermissionStore<RepoPermission> {
 
     private final Map<String, RepoPermission> store = new ConcurrentHashMap<>();
 

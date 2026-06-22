@@ -28,19 +28,19 @@ class RepoPermissionServiceTest {
                 .provider(provider)
                 .value(value)
                 .matchType(MatchType.LITERAL)
-                .operations(RepoPermission.Operations.PUSH_AND_REVIEW)
+                .grant(RepoPermission.Grant.PUSH_AND_REVIEW)
                 .source(RepoPermission.Source.DB)
                 .build();
     }
 
     private RepoPermission grant(
-            String username, String provider, String value, MatchType matchType, RepoPermission.Operations ops) {
+            String username, String provider, String value, MatchType matchType, RepoPermission.Grant ops) {
         return RepoPermission.builder()
                 .username(username)
                 .provider(provider)
                 .value(value)
                 .matchType(matchType)
-                .operations(ops)
+                .grant(ops)
                 .source(RepoPermission.Source.DB)
                 .build();
     }
@@ -84,21 +84,21 @@ class RepoPermissionServiceTest {
 
     @Test
     void pushOnlyGrant_allowsPush_deniesApprove() {
-        svc.save(grant("alice", "github", "/owner/repo", MatchType.LITERAL, RepoPermission.Operations.PUSH));
+        svc.save(grant("alice", "github", "/owner/repo", MatchType.LITERAL, RepoPermission.Grant.PUSH));
         assertTrue(svc.isAllowedToPush("alice", "github", "/owner/repo"));
         assertFalse(svc.isAllowedToReview("alice", "github", "/owner/repo"));
     }
 
     @Test
     void approveOnlyGrant_allowsApprove_deniesPush() {
-        svc.save(grant("alice", "github", "/owner/repo", MatchType.LITERAL, RepoPermission.Operations.REVIEW));
+        svc.save(grant("alice", "github", "/owner/repo", MatchType.LITERAL, RepoPermission.Grant.REVIEW));
         assertFalse(svc.isAllowedToPush("alice", "github", "/owner/repo"));
         assertTrue(svc.isAllowedToReview("alice", "github", "/owner/repo"));
     }
 
     @Test
     void allGrant_allowsBothOperations() {
-        svc.save(grant("alice", "github", "/owner/repo", MatchType.LITERAL, RepoPermission.Operations.PUSH_AND_REVIEW));
+        svc.save(grant("alice", "github", "/owner/repo", MatchType.LITERAL, RepoPermission.Grant.PUSH_AND_REVIEW));
         assertTrue(svc.isAllowedToPush("alice", "github", "/owner/repo"));
         assertTrue(svc.isAllowedToReview("alice", "github", "/owner/repo"));
     }
@@ -115,20 +115,20 @@ class RepoPermissionServiceTest {
 
     @Test
     void globGrant_matchesAllReposUnderOwner_allowed() {
-        svc.save(grant("alice", "github", "/owner/*", MatchType.GLOB, RepoPermission.Operations.PUSH_AND_REVIEW));
+        svc.save(grant("alice", "github", "/owner/*", MatchType.GLOB, RepoPermission.Grant.PUSH_AND_REVIEW));
         assertTrue(svc.isAllowedToPush("alice", "github", "/owner/repo-a"));
         assertTrue(svc.isAllowedToPush("alice", "github", "/owner/repo-b"));
     }
 
     @Test
     void globGrant_doesNotMatchOtherOwner() {
-        svc.save(grant("alice", "github", "/owner/*", MatchType.GLOB, RepoPermission.Operations.PUSH_AND_REVIEW));
+        svc.save(grant("alice", "github", "/owner/*", MatchType.GLOB, RepoPermission.Grant.PUSH_AND_REVIEW));
         assertFalse(svc.isAllowedToPush("alice", "github", "/other/repo"));
     }
 
     @Test
     void globGrant_doubleWildcard_matchesAnyPath() {
-        svc.save(grant("alice", "github", "/**", MatchType.GLOB, RepoPermission.Operations.PUSH_AND_REVIEW));
+        svc.save(grant("alice", "github", "/**", MatchType.GLOB, RepoPermission.Grant.PUSH_AND_REVIEW));
         assertTrue(svc.isAllowedToPush("alice", "github", "/owner/repo"));
         assertTrue(svc.isAllowedToPush("alice", "github", "/other/thing"));
     }
@@ -144,33 +144,33 @@ class RepoPermissionServiceTest {
 
     @Test
     void glob_singleStar_matchesRepoName() {
-        svc.save(grant("alice", "github", "/acme/*", MatchType.GLOB, RepoPermission.Operations.PUSH));
+        svc.save(grant("alice", "github", "/acme/*", MatchType.GLOB, RepoPermission.Grant.PUSH));
         assertTrue(svc.isAllowedToPush("alice", "github", "/acme/repo"));
     }
 
     @Test
     void glob_singleStar_matchesHyphenatedName() {
-        svc.save(grant("alice", "github", "/acme/*", MatchType.GLOB, RepoPermission.Operations.PUSH));
+        svc.save(grant("alice", "github", "/acme/*", MatchType.GLOB, RepoPermission.Grant.PUSH));
         assertTrue(svc.isAllowedToPush("alice", "github", "/acme/my-service"));
         assertTrue(svc.isAllowedToPush("alice", "github", "/acme/repo-v2"));
     }
 
     @Test
     void glob_singleStar_doesNotCrossPathSeparator() {
-        svc.save(grant("alice", "github", "/acme/*", MatchType.GLOB, RepoPermission.Operations.PUSH));
+        svc.save(grant("alice", "github", "/acme/*", MatchType.GLOB, RepoPermission.Grant.PUSH));
         // /acme/sub/repo has two segments after /acme — single * does not match
         assertFalse(svc.isAllowedToPush("alice", "github", "/acme/sub/repo"));
     }
 
     @Test
     void glob_singleStar_doesNotMatchOtherOwner() {
-        svc.save(grant("alice", "github", "/acme/*", MatchType.GLOB, RepoPermission.Operations.PUSH));
+        svc.save(grant("alice", "github", "/acme/*", MatchType.GLOB, RepoPermission.Grant.PUSH));
         assertFalse(svc.isAllowedToPush("alice", "github", "/other/repo"));
     }
 
     @Test
     void glob_doubleStar_matchesAcrossSegments() {
-        svc.save(grant("alice", "github", "/acme/**", MatchType.GLOB, RepoPermission.Operations.PUSH));
+        svc.save(grant("alice", "github", "/acme/**", MatchType.GLOB, RepoPermission.Grant.PUSH));
         assertTrue(svc.isAllowedToPush("alice", "github", "/acme/repo"));
         assertTrue(svc.isAllowedToPush("alice", "github", "/acme/sub/repo"));
         assertTrue(svc.isAllowedToPush("alice", "github", "/acme/a/b/c"));
@@ -178,20 +178,20 @@ class RepoPermissionServiceTest {
 
     @Test
     void glob_doubleStar_doesNotMatchOtherOwner() {
-        svc.save(grant("alice", "github", "/acme/**", MatchType.GLOB, RepoPermission.Operations.PUSH));
+        svc.save(grant("alice", "github", "/acme/**", MatchType.GLOB, RepoPermission.Grant.PUSH));
         assertFalse(svc.isAllowedToPush("alice", "github", "/other/repo"));
     }
 
     @Test
     void glob_leadingDoubleStar_matchesAllPaths() {
-        svc.save(grant("alice", "github", "/**", MatchType.GLOB, RepoPermission.Operations.PUSH));
+        svc.save(grant("alice", "github", "/**", MatchType.GLOB, RepoPermission.Grant.PUSH));
         assertTrue(svc.isAllowedToPush("alice", "github", "/acme/repo"));
         assertTrue(svc.isAllowedToPush("alice", "github", "/other/thing"));
     }
 
     @Test
     void glob_wildcardOwner_matchesSpecificRepo() {
-        svc.save(grant("alice", "github", "/*/repo", MatchType.GLOB, RepoPermission.Operations.PUSH));
+        svc.save(grant("alice", "github", "/*/repo", MatchType.GLOB, RepoPermission.Grant.PUSH));
         assertTrue(svc.isAllowedToPush("alice", "github", "/acme/repo"));
         assertTrue(svc.isAllowedToPush("alice", "github", "/other/repo"));
         assertFalse(svc.isAllowedToPush("alice", "github", "/acme/other-repo"));
@@ -199,7 +199,7 @@ class RepoPermissionServiceTest {
 
     @Test
     void glob_prefixSuffix_matchesNames() {
-        svc.save(grant("alice", "github", "/acme/service-*", MatchType.GLOB, RepoPermission.Operations.PUSH));
+        svc.save(grant("alice", "github", "/acme/service-*", MatchType.GLOB, RepoPermission.Grant.PUSH));
         assertTrue(svc.isAllowedToPush("alice", "github", "/acme/service-api"));
         assertTrue(svc.isAllowedToPush("alice", "github", "/acme/service-worker"));
         assertFalse(svc.isAllowedToPush("alice", "github", "/acme/repo"));
@@ -208,7 +208,7 @@ class RepoPermissionServiceTest {
 
     @Test
     void glob_questionMark_matchesSingleChar() {
-        svc.save(grant("alice", "github", "/acme/repo-?", MatchType.GLOB, RepoPermission.Operations.PUSH));
+        svc.save(grant("alice", "github", "/acme/repo-?", MatchType.GLOB, RepoPermission.Grant.PUSH));
         assertTrue(svc.isAllowedToPush("alice", "github", "/acme/repo-1"));
         assertTrue(svc.isAllowedToPush("alice", "github", "/acme/repo-a"));
         assertFalse(svc.isAllowedToPush("alice", "github", "/acme/repo-12"));
@@ -220,11 +220,7 @@ class RepoPermissionServiceTest {
     @Test
     void regexGrant_matchesPattern() {
         svc.save(grant(
-                "alice",
-                "github",
-                "/coopernetes/test-repo-.*",
-                MatchType.REGEX,
-                RepoPermission.Operations.PUSH_AND_REVIEW));
+                "alice", "github", "/coopernetes/test-repo-.*", MatchType.REGEX, RepoPermission.Grant.PUSH_AND_REVIEW));
         assertTrue(svc.isAllowedToPush("alice", "github", "/coopernetes/test-repo-codeberg"));
         assertTrue(svc.isAllowedToPush("alice", "github", "/coopernetes/test-repo-gitlab"));
         assertFalse(svc.isAllowedToPush("alice", "github", "/coopernetes/test-repo"));
@@ -233,13 +229,13 @@ class RepoPermissionServiceTest {
 
     @Test
     void regexGrant_invalidPattern_treatedAsNoMatch() {
-        svc.save(grant("alice", "github", "[invalid", MatchType.REGEX, RepoPermission.Operations.PUSH_AND_REVIEW));
+        svc.save(grant("alice", "github", "[invalid", MatchType.REGEX, RepoPermission.Grant.PUSH_AND_REVIEW));
         assertFalse(svc.isAllowedToPush("alice", "github", "/owner/repo"));
     }
 
     @Test
     void regexGrant_patternCompiledOnce_multipleEvaluations() {
-        svc.save(grant("alice", "github", "/org/repo-.*", MatchType.REGEX, RepoPermission.Operations.PUSH_AND_REVIEW));
+        svc.save(grant("alice", "github", "/org/repo-.*", MatchType.REGEX, RepoPermission.Grant.PUSH_AND_REVIEW));
         for (int i = 0; i < 10; i++) {
             assertTrue(svc.isAllowedToPush("alice", "github", "/org/repo-" + i));
             assertFalse(svc.isAllowedToPush("alice", "github", "/org/other"));
@@ -254,7 +250,7 @@ class RepoPermissionServiceTest {
                 .username("bob")
                 .provider("github")
                 .value("/owner/repo")
-                .operations(RepoPermission.Operations.PUSH_AND_REVIEW)
+                .grant(RepoPermission.Grant.PUSH_AND_REVIEW)
                 .source(RepoPermission.Source.DB)
                 .build();
         svc.save(dbRow);
@@ -263,7 +259,7 @@ class RepoPermissionServiceTest {
                 .username("alice")
                 .provider("github")
                 .value("/owner/repo")
-                .operations(RepoPermission.Operations.PUSH_AND_REVIEW)
+                .grant(RepoPermission.Grant.PUSH_AND_REVIEW)
                 .source(RepoPermission.Source.CONFIG)
                 .build();
         svc.seedFromConfig(List.of(configRow));
@@ -281,64 +277,60 @@ class RepoPermissionServiceTest {
     @Test
     void findConflict_exactDuplicatePath_sameOps_detected() {
         svc.save(grant("alice", "github", "/acme/repo"));
-        RepoPermission incoming =
-                grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Operations.PUSH);
+        RepoPermission incoming = grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Grant.PUSH);
         assertTrue(svc.findConflict(incoming).isPresent());
     }
 
     @Test
     void findConflict_pushVsPushAndReview_detected() {
-        svc.save(grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Operations.PUSH));
+        svc.save(grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Grant.PUSH));
         RepoPermission incoming =
-                grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Operations.PUSH_AND_REVIEW);
+                grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Grant.PUSH_AND_REVIEW);
         assertTrue(svc.findConflict(incoming).isPresent());
     }
 
     @Test
     void findConflict_pushAndReviewVsSelfCertify_noConflict() {
-        svc.save(grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Operations.PUSH_AND_REVIEW));
+        svc.save(grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Grant.PUSH_AND_REVIEW));
         RepoPermission incoming =
-                grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Operations.SELF_CERTIFY);
+                grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Grant.SELF_CERTIFY);
         assertTrue(svc.findConflict(incoming).isEmpty());
     }
 
     @Test
     void findConflict_selfCertifyVsSelfCertify_detected() {
-        svc.save(grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Operations.SELF_CERTIFY));
+        svc.save(grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Grant.SELF_CERTIFY));
         RepoPermission incoming =
-                grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Operations.SELF_CERTIFY);
+                grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Grant.SELF_CERTIFY);
         assertTrue(svc.findConflict(incoming).isPresent());
     }
 
     @Test
     void findConflict_pushVsReview_noConflict() {
-        svc.save(grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Operations.PUSH));
+        svc.save(grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Grant.PUSH));
         RepoPermission incoming =
-                grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Operations.REVIEW);
+                grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Grant.REVIEW);
         assertTrue(svc.findConflict(incoming).isEmpty());
     }
 
     @Test
     void findConflict_differentUser_noConflict() {
         svc.save(grant("alice", "github", "/acme/repo"));
-        RepoPermission incoming =
-                grant("bob", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Operations.PUSH);
+        RepoPermission incoming = grant("bob", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Grant.PUSH);
         assertTrue(svc.findConflict(incoming).isEmpty());
     }
 
     @Test
     void findConflict_differentProvider_noConflict() {
         svc.save(grant("alice", "github", "/acme/repo"));
-        RepoPermission incoming =
-                grant("alice", "gitlab", "/acme/repo", MatchType.LITERAL, RepoPermission.Operations.PUSH);
+        RepoPermission incoming = grant("alice", "gitlab", "/acme/repo", MatchType.LITERAL, RepoPermission.Grant.PUSH);
         assertTrue(svc.findConflict(incoming).isEmpty());
     }
 
     @Test
     void findConflict_literalMatchedByExistingGlob_detected() {
-        svc.save(grant("alice", "github", "/acme/**", MatchType.GLOB, RepoPermission.Operations.PUSH));
-        RepoPermission incoming =
-                grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Operations.PUSH);
+        svc.save(grant("alice", "github", "/acme/**", MatchType.GLOB, RepoPermission.Grant.PUSH));
+        RepoPermission incoming = grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Grant.PUSH);
         assertTrue(svc.findConflict(incoming).isPresent());
     }
 
@@ -346,15 +338,15 @@ class RepoPermissionServiceTest {
     void findConflict_incomingGlobMatchesExistingLiteral_detected() {
         svc.save(grant("alice", "github", "/acme/repo"));
         RepoPermission incoming =
-                grant("alice", "github", "/acme/**", MatchType.GLOB, RepoPermission.Operations.PUSH_AND_REVIEW);
+                grant("alice", "github", "/acme/**", MatchType.GLOB, RepoPermission.Grant.PUSH_AND_REVIEW);
         assertTrue(svc.findConflict(incoming).isPresent());
     }
 
     @Test
     void findConflict_globOverlap_subsetDetected() {
-        svc.save(grant("alice", "github", "/acme/**", MatchType.GLOB, RepoPermission.Operations.PUSH_AND_REVIEW));
+        svc.save(grant("alice", "github", "/acme/**", MatchType.GLOB, RepoPermission.Grant.PUSH_AND_REVIEW));
         RepoPermission incoming =
-                grant("alice", "github", "/acme/*", MatchType.GLOB, RepoPermission.Operations.PUSH_AND_REVIEW);
+                grant("alice", "github", "/acme/*", MatchType.GLOB, RepoPermission.Grant.PUSH_AND_REVIEW);
         assertTrue(svc.findConflict(incoming).isPresent());
     }
 
@@ -362,7 +354,7 @@ class RepoPermissionServiceTest {
     void findConflict_noOverlap_noConflict() {
         svc.save(grant("alice", "github", "/acme/repo-a"));
         RepoPermission incoming =
-                grant("alice", "github", "/acme/repo-b", MatchType.LITERAL, RepoPermission.Operations.PUSH);
+                grant("alice", "github", "/acme/repo-b", MatchType.LITERAL, RepoPermission.Grant.PUSH);
         assertTrue(svc.findConflict(incoming).isEmpty());
     }
 
@@ -374,7 +366,7 @@ class RepoPermissionServiceTest {
                         .provider("github")
                         .value("/acme/**")
                         .matchType(MatchType.GLOB)
-                        .operations(RepoPermission.Operations.PUSH_AND_REVIEW)
+                        .grant(RepoPermission.Grant.PUSH_AND_REVIEW)
                         .source(RepoPermission.Source.CONFIG)
                         .build(),
                 RepoPermission.builder()
@@ -382,7 +374,7 @@ class RepoPermissionServiceTest {
                         .provider("github")
                         .value("/acme/*")
                         .matchType(MatchType.GLOB)
-                        .operations(RepoPermission.Operations.PUSH)
+                        .grant(RepoPermission.Grant.PUSH)
                         .source(RepoPermission.Source.CONFIG)
                         .build());
         assertThrows(IllegalStateException.class, () -> svc.seedFromConfig(permissions));
@@ -390,13 +382,13 @@ class RepoPermissionServiceTest {
 
     @Test
     void seedFromConfig_configConflictsWithExistingDb_throwsIllegalStateException() {
-        svc.save(grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Operations.PUSH));
+        svc.save(grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Grant.PUSH));
         List<RepoPermission> permissions = List.of(RepoPermission.builder()
                 .username("alice")
                 .provider("github")
                 .value("/acme/**")
                 .matchType(MatchType.GLOB)
-                .operations(RepoPermission.Operations.PUSH_AND_REVIEW)
+                .grant(RepoPermission.Grant.PUSH_AND_REVIEW)
                 .source(RepoPermission.Source.CONFIG)
                 .build());
         assertThrows(IllegalStateException.class, () -> svc.seedFromConfig(permissions));
@@ -410,7 +402,7 @@ class RepoPermissionServiceTest {
                         .provider("github")
                         .value("/acme/**")
                         .matchType(MatchType.GLOB)
-                        .operations(RepoPermission.Operations.PUSH_AND_REVIEW)
+                        .grant(RepoPermission.Grant.PUSH_AND_REVIEW)
                         .source(RepoPermission.Source.CONFIG)
                         .build(),
                 RepoPermission.builder()
@@ -418,7 +410,7 @@ class RepoPermissionServiceTest {
                         .provider("github")
                         .value("/acme/**")
                         .matchType(MatchType.GLOB)
-                        .operations(RepoPermission.Operations.SELF_CERTIFY)
+                        .grant(RepoPermission.Grant.SELF_CERTIFY)
                         .source(RepoPermission.Source.CONFIG)
                         .build());
         assertDoesNotThrow(() -> svc.seedFromConfig(permissions));

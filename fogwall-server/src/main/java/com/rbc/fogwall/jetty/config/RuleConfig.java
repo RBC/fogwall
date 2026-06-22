@@ -9,8 +9,8 @@ public class RuleConfig {
     private boolean enabled = true;
     private int order = 1100;
 
-    /** Git operations this entry matches: {@code FETCH}, {@code PUSH}, or {@code BOTH} (default). */
-    private String operations = "BOTH";
+    /** Git operation this entry matches: {@code FETCH}, {@code PUSH}, or {@code BOTH} (default). */
+    private String operation = "BOTH";
 
     /** Provider name to scope this entry to. Omit (or leave blank) to match all providers. */
     private String provider = "";

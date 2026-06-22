@@ -34,25 +34,25 @@ permissions:
       target: SLUG
       value: /test-owner/test-repo
       type: LITERAL
-    operations: PUSH
+    grant: PUSH
   - username: testuser
     provider: gitea
     match:
       target: OWNER
       value: otherorg
       type: GLOB
-    operations: PUSH
+    grant: PUSH
   - username: admin
     provider: gitea
     match:
       target: SLUG
       value: /test-owner/test-repo
       type: LITERAL
-    operations: REVIEW
+    grant: REVIEW
   - username: admin
     provider: gitea
     match:
       target: OWNER
       value: otherorg
       type: GLOB
-    operations: REVIEW
+    grant: REVIEW

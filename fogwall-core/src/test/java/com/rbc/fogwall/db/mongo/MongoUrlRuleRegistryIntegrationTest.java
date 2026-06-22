@@ -38,7 +38,7 @@ class MongoUrlRuleRegistryIntegrationTest {
                 .value(value)
                 .matchType(MatchType.GLOB)
                 .access(AccessRule.Access.ALLOW)
-                .operations(AccessRule.Operations.BOTH)
+                .operation(AccessRule.Operation.BOTH)
                 .enabled(true)
                 .build();
     }
@@ -51,7 +51,7 @@ class MongoUrlRuleRegistryIntegrationTest {
                 .value("org/repo")
                 .matchType(MatchType.LITERAL)
                 .access(AccessRule.Access.DENY)
-                .operations(AccessRule.Operations.PUSH)
+                .operation(AccessRule.Operation.PUSH)
                 .description("block pushes")
                 .enabled(false)
                 .ruleOrder(42)
@@ -66,7 +66,7 @@ class MongoUrlRuleRegistryIntegrationTest {
         assertEquals("org/repo", found.getValue());
         assertEquals(MatchType.LITERAL, found.getMatchType());
         assertEquals(AccessRule.Access.DENY, found.getAccess());
-        assertEquals(AccessRule.Operations.PUSH, found.getOperations());
+        assertEquals(AccessRule.Operation.PUSH, found.getOperation());
         assertEquals("block pushes", found.getDescription());
         assertFalse(found.isEnabled());
         assertEquals(42, found.getRuleOrder());
@@ -87,7 +87,7 @@ class MongoUrlRuleRegistryIntegrationTest {
                 .matchType(MatchType.GLOB)
                 .ruleOrder(10)
                 .access(AccessRule.Access.ALLOW)
-                .operations(AccessRule.Operations.BOTH)
+                .operation(AccessRule.Operation.BOTH)
                 .build();
         AccessRule low = AccessRule.builder()
                 .id("zzz")
@@ -96,7 +96,7 @@ class MongoUrlRuleRegistryIntegrationTest {
                 .matchType(MatchType.GLOB)
                 .ruleOrder(200)
                 .access(AccessRule.Access.ALLOW)
-                .operations(AccessRule.Operations.BOTH)
+                .operation(AccessRule.Operation.BOTH)
                 .build();
         registry.save(low);
         registry.save(high);
@@ -119,7 +119,7 @@ class MongoUrlRuleRegistryIntegrationTest {
                 .value("org")
                 .matchType(MatchType.GLOB)
                 .access(AccessRule.Access.DENY)
-                .operations(AccessRule.Operations.FETCH)
+                .operation(AccessRule.Operation.FETCH)
                 .enabled(false)
                 .build();
         registry.update(updated);
@@ -147,7 +147,7 @@ class MongoUrlRuleRegistryIntegrationTest {
                 .value("global-org")
                 .matchType(MatchType.GLOB)
                 .access(AccessRule.Access.ALLOW)
-                .operations(AccessRule.Operations.BOTH)
+                .operation(AccessRule.Operation.BOTH)
                 .enabled(true)
                 .build();
         AccessRule disabledRule = AccessRule.builder()
@@ -156,7 +156,7 @@ class MongoUrlRuleRegistryIntegrationTest {
                 .value("disabled-org")
                 .matchType(MatchType.GLOB)
                 .access(AccessRule.Access.DENY)
-                .operations(AccessRule.Operations.BOTH)
+                .operation(AccessRule.Operation.BOTH)
                 .enabled(false)
                 .build();
         registry.save(githubRule);

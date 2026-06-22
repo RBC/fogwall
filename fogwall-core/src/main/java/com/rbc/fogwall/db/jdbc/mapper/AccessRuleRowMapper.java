@@ -23,7 +23,7 @@ public final class AccessRuleRowMapper implements RowMapper<AccessRule> {
                 .value(rs.getString("match_value"))
                 .matchType(MatchType.valueOf(rs.getString("match_type")))
                 .access(AccessRule.Access.valueOf(rs.getString("access")))
-                .operations(AccessRule.Operations.valueOf(rs.getString("operations")))
+                .operation(AccessRule.Operation.valueOf(rs.getString("operation")))
                 .description(rs.getString("description"))
                 .enabled(rs.getBoolean("enabled"))
                 .ruleOrder(rs.getInt("rule_order"))

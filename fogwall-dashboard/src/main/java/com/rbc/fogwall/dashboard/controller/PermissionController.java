@@ -61,13 +61,13 @@ public class PermissionController {
             return ResponseEntity.badRequest().body(Map.of("error", "invalid matchType: " + req.matchType()));
         }
 
-        RepoPermission.Operations operations;
+        RepoPermission.Grant grant;
         try {
-            operations = req.operations() != null
-                    ? RepoPermission.Operations.valueOf(req.operations().toUpperCase())
-                    : RepoPermission.Operations.PUSH;
+            grant = req.grant() != null
+                    ? RepoPermission.Grant.valueOf(req.grant().toUpperCase())
+                    : RepoPermission.Grant.PUSH;
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", "invalid operations: " + req.operations()));
+            return ResponseEntity.badRequest().body(Map.of("error", "invalid grant: " + req.grant()));
         }
 
         var permission = RepoPermission.builder()
@@ -76,7 +76,7 @@ public class PermissionController {
                 .target(target)
                 .value(req.value().trim())
                 .matchType(matchType)
-                .operations(operations)
+                .grant(grant)
                 .source(RepoPermission.Source.DB)
                 .build();
         var conflict = permissionService.findConflict(permission);
@@ -115,6 +115,5 @@ public class PermissionController {
         return ResponseEntity.noContent().build();
     }
 
-    public record AddPermissionRequest(
-            String provider, String target, String value, String matchType, String operations) {}
+    public record AddPermissionRequest(String provider, String target, String value, String matchType, String grant) {}
 }

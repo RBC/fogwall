@@ -38,9 +38,9 @@ public class AccessRule {
     @Builder.Default
     private Access access = Access.ALLOW;
 
-    /** Which git operations this rule applies to. */
+    /** Which git operation this rule applies to. */
     @Builder.Default
-    private Operations operations = Operations.BOTH;
+    private Operation operation = Operation.BOTH;
 
     private String description;
 
@@ -61,7 +61,7 @@ public class AccessRule {
         DENY
     }
 
-    public enum Operations {
+    public enum Operation {
         FETCH,
         PUSH,
         BOTH

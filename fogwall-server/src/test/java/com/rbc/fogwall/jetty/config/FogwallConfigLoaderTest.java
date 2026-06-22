@@ -186,7 +186,7 @@ class FogwallConfigLoaderTest {
                     match:
                       target: SLUG
                       value: /org/repo
-                    operations: PUSH
+                    grant: PUSH
                 """);
         var config = FogwallConfigLoader.loadWithOverride(override);
         assertFalse(config.getPermissions().isEmpty(), "permissions from override should be loaded");

@@ -15,8 +15,7 @@ import org.bson.Document;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** MongoDB implementation of {@link RepoPermissionStore}. */
-public class MongoRepoPermissionStore implements RepoPermissionStore {
+public class MongoRepoPermissionStore implements PermissionStore<RepoPermission> {
 
     private static final Logger log = LoggerFactory.getLogger(MongoRepoPermissionStore.class);
     private static final String COLLECTION_NAME = "repo_permissions";
@@ -92,7 +91,7 @@ public class MongoRepoPermissionStore implements RepoPermissionStore {
                 .append("target", p.getTarget().name())
                 .append("value", p.getValue())
                 .append("matchType", p.getMatchType().name())
-                .append("operations", p.getOperations().name())
+                .append("operation", p.getGrant().name())
                 .append("source", p.getSource().name());
     }
 
@@ -104,7 +103,7 @@ public class MongoRepoPermissionStore implements RepoPermissionStore {
                 .target(MatchTarget.valueOf(doc.getString("target")))
                 .value(doc.getString("value"))
                 .matchType(MatchType.valueOf(doc.getString("matchType")))
-                .operations(RepoPermission.Operations.valueOf(doc.getString("operations")))
+                .grant(RepoPermission.Grant.valueOf(doc.getString("operation")))
                 .source(RepoPermission.Source.valueOf(doc.getString("source")))
                 .build();
     }

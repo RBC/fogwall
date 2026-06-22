@@ -22,14 +22,14 @@ permissions:
       target: SLUG
       value: /test-owner/test-repo
       type: LITERAL
-    operations: PUSH_AND_REVIEW
+    grant: PUSH_AND_REVIEW
   - username: admin
     provider: gitea
     match:
       target: OWNER
       value: otherorg
       type: GLOB
-    operations: PUSH_AND_REVIEW
+    grant: PUSH_AND_REVIEW
 
 providers:
   # Disable the default cloud providers; we only need the local Gitea instance.

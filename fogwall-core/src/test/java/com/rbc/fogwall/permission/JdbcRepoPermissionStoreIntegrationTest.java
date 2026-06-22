@@ -44,7 +44,7 @@ class JdbcRepoPermissionStoreIntegrationTest {
                 .target(MatchTarget.SLUG)
                 .value(value)
                 .matchType(MatchType.LITERAL)
-                .operations(RepoPermission.Operations.PUSH_AND_REVIEW)
+                .grant(RepoPermission.Grant.PUSH_AND_REVIEW)
                 .source(RepoPermission.Source.DB)
                 .build();
     }
@@ -63,7 +63,7 @@ class JdbcRepoPermissionStoreIntegrationTest {
         assertEquals(MatchTarget.SLUG, found.get().getTarget());
         assertEquals("/owner/repo", found.get().getValue());
         assertEquals(MatchType.LITERAL, found.get().getMatchType());
-        assertEquals(RepoPermission.Operations.PUSH_AND_REVIEW, found.get().getOperations());
+        assertEquals(RepoPermission.Grant.PUSH_AND_REVIEW, found.get().getGrant());
         assertEquals(RepoPermission.Source.DB, found.get().getSource());
     }
 
@@ -130,13 +130,13 @@ class JdbcRepoPermissionStoreIntegrationTest {
                 .target(MatchTarget.OWNER)
                 .value("myorg")
                 .matchType(MatchType.GLOB)
-                .operations(RepoPermission.Operations.PUSH)
+                .grant(RepoPermission.Grant.PUSH)
                 .source(RepoPermission.Source.CONFIG)
                 .build();
         store.save(p);
 
         var found = store.findById(p.getId()).orElseThrow();
-        assertEquals(RepoPermission.Operations.PUSH, found.getOperations());
+        assertEquals(RepoPermission.Grant.PUSH, found.getGrant());
         assertEquals(MatchTarget.OWNER, found.getTarget());
         assertEquals(MatchType.GLOB, found.getMatchType());
         assertEquals(RepoPermission.Source.CONFIG, found.getSource());

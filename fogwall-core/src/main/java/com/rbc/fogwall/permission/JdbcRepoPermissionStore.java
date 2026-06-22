@@ -13,7 +13,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 /** JDBC-backed {@link RepoPermissionStore}. Works with H2, PostgreSQL, and SQLite. */
-public class JdbcRepoPermissionStore implements RepoPermissionStore {
+public class JdbcRepoPermissionStore implements PermissionStore<RepoPermission> {
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -28,8 +28,8 @@ public class JdbcRepoPermissionStore implements RepoPermissionStore {
         // We only insert — never update — so existing DB users' roles are not touched.
         ensureUserRow(p.getUsername());
         jdbc.update("""
-                INSERT INTO repo_permissions (id, username, provider, target, match_value, match_type, operations, source)
-                VALUES (:id, :username, :provider, :target, :matchValue, :matchType, :operations, :source)
+                INSERT INTO repo_permissions (id, username, provider, target, match_value, match_type, operation, source)
+                VALUES (:id, :username, :provider, :target, :matchValue, :matchType, :operation, :source)
                 """, params(p));
     }
 
@@ -84,7 +84,7 @@ public class JdbcRepoPermissionStore implements RepoPermissionStore {
                 .addValue("target", p.getTarget().name())
                 .addValue("matchValue", p.getValue())
                 .addValue("matchType", p.getMatchType().name())
-                .addValue("operations", p.getOperations().name())
+                .addValue("operation", p.getGrant().name())
                 .addValue("source", p.getSource().name());
     }
 
@@ -98,7 +98,7 @@ public class JdbcRepoPermissionStore implements RepoPermissionStore {
                 .target(MatchTarget.valueOf(rs.getString("target")))
                 .value(rs.getString("match_value"))
                 .matchType(MatchType.valueOf(rs.getString("match_type")))
-                .operations(RepoPermission.Operations.valueOf(rs.getString("operations")))
+                .grant(RepoPermission.Grant.valueOf(rs.getString("operation")))
                 .source(RepoPermission.Source.valueOf(rs.getString("source")))
                 .build();
     }

@@ -130,6 +130,6 @@ export interface RepoPermission {
   provider: string
   value: string
   matchType: 'LITERAL' | 'GLOB' | 'REGEX'
-  operations: 'PUSH' | 'REVIEW' | 'PUSH_AND_REVIEW' | 'SELF_CERTIFY'
+  grant: 'PUSH' | 'REVIEW' | 'PUSH_AND_REVIEW' | 'SELF_CERTIFY'
   source: 'CONFIG' | 'DB'
 }

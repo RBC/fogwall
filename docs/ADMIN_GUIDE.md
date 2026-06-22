@@ -191,7 +191,7 @@ permissions:
   - username: alice
     provider: github/github.com
     path: /myorg/myrepo
-    operations: PUSH
+    grant: PUSH
 ```
 
 ### Operations
@@ -228,17 +228,17 @@ permissions:
   - username: bob
     provider: github/github.com
     path: /myorg/myrepo
-    operations: PUSH
+    grant: PUSH
   - username: bob
     provider: github/github.com
     path: /myorg/myrepo
-    operations: SELF_CERTIFY
+    grant: SELF_CERTIFY
 ```
 
 Bob's pushes are validated as normal (commit rules, secret scanning, identity checks). Once validation passes, the proxy
 records a self-certification in the audit log and forwards without waiting for a reviewer.
 
-If Bob also needs to review others' pushes to that repo, add a third entry with `operations: REVIEW`.
+If Bob also needs to review others' pushes to that repo, add a third entry with `grant: REVIEW`.
 
 ### Path matching
 
@@ -250,14 +250,14 @@ Paths default to exact (`LITERAL`) matching. Use `path-type` for wildcards:
   provider: gitlab/gitlab.com
   path: /myorg/*
   path-type: GLOB
-  operations: PUSH
+  grant: PUSH
 
 # REGEX — Java regex matched against /owner/repo
 - username: alice
   provider: github/github.com
   path: \/myorg\/service\-.*
   path-type: REGEX
-  operations: PUSH
+  grant: PUSH
 ```
 
 ### Permissions vs access rules
@@ -281,7 +281,7 @@ rules:
   allow:
     - enabled: true
       order: 110
-      operations: [FETCH, PUSH]
+      operation: [FETCH, PUSH]
       providers: [github/github.com]
       slugs:
         - /myorg/repo-one
@@ -290,7 +290,7 @@ rules:
   deny:
     - enabled: true
       order: 100 # deny rules with lower order numbers take precedence
-      operations: [PUSH]
+      operation: [PUSH]
       slugs:
         - /myorg/archived-repo
 ```
@@ -298,7 +298,7 @@ rules:
 Rules are evaluated in `order` number order (lower = earlier). Deny rules override allow rules at the same order number.
 The proxy is **default-deny**: if no allow rule matches, the request is rejected.
 
-`operations` scopes a rule to `PUSH`, `FETCH`, or both. A repo can be open for fetch but restricted for push.
+`operation` scopes a rule to `PUSH`, `FETCH`, or both. A repo can be open for fetch but restricted for push.
 
 ---
 
@@ -775,7 +775,7 @@ that needs an audit trail.
 Check both layers:
 
 1. Is the repo in `rules.allow`? Verify the slug matches exactly (including leading `/`).
-2. Does the user have a `permissions` entry for this provider + path with `operations: PUSH`?
+2. Does the user have a `permissions` entry for this provider + path with `grant: PUSH`?
 
 ### Push hangs waiting for approval indefinitely
 

@@ -15,8 +15,8 @@ export function PathTypeBadge({ matchType }: { matchType: RepoPermission['matchT
   )
 }
 
-export function OperationsBadge({ operations }: { operations: RepoPermission['operations'] }) {
-  const styles: Record<RepoPermission['operations'], string> = {
+export function OperationsBadge({ operations }: { operations: RepoPermission['grant'] }) {
+  const styles: Record<RepoPermission['grant'], string> = {
     PUSH: 'bg-blue-50 text-blue-700',
     REVIEW: 'bg-green-50 text-green-700',
     PUSH_AND_REVIEW: 'bg-teal-50 text-teal-700',
