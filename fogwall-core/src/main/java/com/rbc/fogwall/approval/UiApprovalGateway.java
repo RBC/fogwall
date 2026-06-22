@@ -46,6 +46,9 @@ public class UiApprovalGateway implements ApprovalGateway {
                 long remainingSecs = (deadlineMs - System.currentTimeMillis()) / 1000;
                 progress.send(
                         String.format("Awaiting review... (%ds elapsed, ~%ds remaining)", elapsedSecs, remainingSecs));
+            } catch (ClientDisconnectedException e) {
+                log.debug("Client disconnected during approval wait for push {}", pushId);
+                return ApprovalResult.CANCELED;
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return ApprovalResult.TIMED_OUT;
