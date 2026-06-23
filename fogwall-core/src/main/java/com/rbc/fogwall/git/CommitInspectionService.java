@@ -99,6 +99,29 @@ public class CommitInspectionService {
     }
 
     /**
+     * Returns all commits reachable from {@code toCommit} with no lower-bound exclusion. Used when a branch is being
+     * re-pushed to S&F mode after a prior push was canceled or rejected — the local cache already has the branch tip
+     * but the upstream has nothing, so the full ancestor chain must be enumerated.
+     *
+     * <p>Unlike {@link #getCommitRange}, this does NOT exclude commits reachable from existing local refs, so it
+     * correctly returns commits that are cached locally but not yet forwarded upstream.
+     */
+    public static List<Commit> getCommitRangeUpTo(Repository repository, String toCommit)
+            throws IOException, GitAPIException {
+        List<Commit> commits = new ArrayList<>();
+        try (Git git = new Git(repository)) {
+            ObjectId toId = repository.resolve(toCommit + "^{commit}");
+            if (toId == null) {
+                throw new IOException("Commit not found: " + toCommit);
+            }
+            for (RevCommit revCommit : git.log().add(toId).call()) {
+                commits.add(convertToCommit(revCommit));
+            }
+        }
+        return commits;
+    }
+
+    /**
      * Get the diff between two commits.
      *
      * @param repository The JGit repository

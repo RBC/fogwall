@@ -55,9 +55,16 @@ public class DiffGenerationHook implements FogwallHook {
                 log.debug("Skipping diff generation for tag push: {}", refName);
                 continue;
             }
-            String commitFrom = cmd.getOldId().name();
             String commitTo = cmd.getNewId().name();
-            boolean isNewBranch = ObjectId.zeroId().equals(cmd.getOldId());
+
+            // PriorPushEnrichmentHook may have detected that this branch has cached-but-not-forwarded
+            // commits. Use the effective upstream base so the diff (and downstream scanners that read it)
+            // covers the full range relative to upstream, not just the local cache delta.
+            String effectiveFrom = pushContext.getEffectiveFromId(refName);
+            boolean hasNonZeroEffectiveBase = effectiveFrom != null && !effectiveFrom.matches("^0+$");
+            String commitFrom =
+                    hasNonZeroEffectiveBase ? effectiveFrom : cmd.getOldId().name();
+            boolean isNewBranch = ObjectId.zeroId().equals(cmd.getOldId()) && effectiveFrom == null;
 
             // 1. Push diff: what changed in this push
             generatePushDiff(rp, repo, refName, commitFrom, commitTo, isNewBranch);
