@@ -84,4 +84,52 @@ class DiffGenerationHookTest {
 
         assertTrue(ctx.getSteps().isEmpty(), "delete command must not generate any steps");
     }
+
+    // ---- effectiveFromId enrichment ----
+
+    @Test
+    void effectiveFromId_nonZero_usedAsDiffBase() throws Exception {
+        // Simulate: c1 was forwarded upstream. c2 was locally approved but forwarding failed.
+        // c3 is the new commit. effectiveFromId = c1 (last forwarded).
+        // Diff should cover c1..c3 (includes c2 and c3 content), not c2..c3.
+        ObjectId c3 = commit("extra.txt", "extra content").getId();
+
+        ReceivePack rp = new ReceivePack(repo);
+        // cmd represents the local-cache delta: c2 → c3
+        ReceiveCommand cmd = new ReceiveCommand(c2, c3, "refs/heads/main", ReceiveCommand.Type.UPDATE);
+        PushContext ctx = new PushContext();
+        // PriorPushEnrichmentHook would have set effectiveFromId = c1 (last forwarded)
+        ctx.setEffectiveFromId("refs/heads/main", c1.name());
+
+        new DiffGenerationHook(ctx).onPreReceive(rp, List.of(cmd));
+
+        var diffStep = ctx.getSteps().stream()
+                .filter(s -> DiffGenerationHook.STEP_NAME_PUSH_DIFF.equals(s.getStepName()))
+                .findFirst()
+                .orElseThrow();
+
+        // The range log should record c1..c3, not c2..c3
+        assertTrue(
+                diffStep.getLogs().stream().anyMatch(l -> l.contains(c1.name()) && l.contains(c3.name())),
+                "diff range should use effectiveFromId (c1) not cmd.getOldId() (c2)");
+        // The diff content should include changes from c2 (change.txt) and c3 (extra.txt)
+        assertNotNull(diffStep.getContent(), "diff content must not be null");
+        assertTrue(diffStep.getContent().contains("extra.txt"), "diff must include c3 content");
+    }
+
+    @Test
+    void effectiveFromId_zero_fallsBackToNormalNewBranchBehavior() throws Exception {
+        ReceivePack rp = new ReceivePack(repo);
+        ReceiveCommand cmd = new ReceiveCommand(c1, c2, "refs/heads/feature", ReceiveCommand.Type.UPDATE);
+        PushContext ctx = new PushContext();
+        // Enrichment hook sets zero base when nothing was ever forwarded for this branch
+        ctx.setEffectiveFromId("refs/heads/feature", ObjectId.zeroId().name());
+
+        new DiffGenerationHook(ctx).onPreReceive(rp, List.of(cmd));
+
+        // A diff step should still be generated
+        boolean hasDiff =
+                ctx.getSteps().stream().anyMatch(s -> DiffGenerationHook.STEP_NAME_PUSH_DIFF.equals(s.getStepName()));
+        assertTrue(hasDiff, "diff step must be generated even with zero effectiveFromId");
+    }
 }

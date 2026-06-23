@@ -294,6 +294,53 @@ class PushStorePersistenceHookTest {
         assertFalse(records.isEmpty(), "a successful forward should produce a FORWARDED record");
     }
 
+    // ---- commit enrichment on re-push (PriorPushEnrichmentHook integration) ----
+
+    @Test
+    void validationResultHook_withEffectiveFromId_rebuildsFullCommitList() throws Exception {
+        // Simulate: c1 (commitId) was forwarded. c2 was locally cached but not forwarded.
+        // c3 is the new commit in the re-push. effectiveFromId = commitId (c1).
+        // The PENDING record should list c2 and c3, not just c3.
+        Git g = Git.open(tempDir.toFile());
+        File f2 = new File(tempDir.toFile(), "second.txt");
+        Files.writeString(f2.toPath(), "second");
+        g.add().addFilepattern(".").call();
+        RevCommit c2 = g.commit()
+                .setAuthor(new PersonIdent("Dev", "dev@example.com"))
+                .setCommitter(new PersonIdent("Dev", "dev@example.com"))
+                .setMessage("second commit")
+                .call();
+        File f3 = new File(tempDir.toFile(), "third.txt");
+        Files.writeString(f3.toPath(), "third");
+        g.add().addFilepattern(".").call();
+        RevCommit c3 = g.commit()
+                .setAuthor(new PersonIdent("Dev", "dev@example.com"))
+                .setCommitter(new PersonIdent("Dev", "dev@example.com"))
+                .setMessage("third commit")
+                .call();
+
+        ReceivePack rp = makeReceivePack();
+        // cmd represents the local-cache delta: c2 → c3
+        ReceiveCommand cmd = new ReceiveCommand(c2.getId(), c3.getId(), "refs/heads/test", ReceiveCommand.Type.UPDATE);
+
+        hook.preReceiveHook().onPreReceive(rp, List.of(cmd));
+
+        // Enrichment hook detected: c2 not forwarded, effectiveFrom = commitId (the first commit, c1)
+        pushContext.setEffectiveFromId("refs/heads/test", commitId.name());
+
+        hook.validationResultHook(new ValidationContext()).onPreReceive(rp, List.of(cmd));
+
+        var records =
+                pushStore.find(PushQuery.builder().status(PushStatus.PENDING).build());
+        assertFalse(records.isEmpty());
+        var commits = records.get(0).getCommits();
+        // Should include both c2 and c3 (range from commitId to c3), not just c3
+        assertTrue(commits.size() >= 2, "enriched PENDING record must include commits from effectiveFrom..c3");
+        var shas = commits.stream().map(pc -> pc.getSha()).toList();
+        assertTrue(shas.contains(c3.getId().name()), "c3 must be in enriched commit list");
+        assertTrue(shas.contains(c2.getId().name()), "c2 must be in enriched commit list (was cached, not forwarded)");
+    }
+
     // ---- email validation config ----
 
     private CommitConfig blockNoreplyConfig() {
