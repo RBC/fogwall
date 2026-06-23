@@ -24,7 +24,7 @@ export function Nav({ currentUser }: NavProps) {
   return (
     <header className="bg-slate-800 text-white px-6 py-4 flex items-center gap-4 shadow">
       <NavLink to="/" className="flex items-center shrink-0 hover:opacity-80 transition-opacity">
-        <img src="/logo.png" alt="git-proxy-java" className="h-10 w-auto" />
+        <img src="/favicon.svg" alt="fogwall" className="h-10 w-auto" />
       </NavLink>
 
       <nav className="flex gap-1 ml-2">
@@ -92,7 +92,7 @@ export function Nav({ currentUser }: NavProps) {
 
       <div className="ml-auto flex items-center gap-3 text-sm text-slate-300">
         <a
-          href="https://github.com/coopernetes/git-proxy-java/blob/main/docs/CONFIGURATION.md"
+          href="https://github.com/RBC/fogwall/blob/main/docs/CONFIGURATION.md"
           target="_blank"
           rel="noopener noreferrer"
           className="text-slate-400 hover:text-white transition-colors"

@@ -61,7 +61,7 @@ FROM docker.io/eclipse-temurin:25-jre-noble@sha256:f9bd8815e73632c22985ebb133ec4
 # Packages to upgrade beyond what the base image ships, space-separated.
 # Used to patch CVEs that are fixed in Ubuntu's repos but not yet picked up by
 # the upstream temurin image rebuild. Clear once the base image catches up.
-ARG SECURITY_UPGRADE_PKGS="libssl3t64 openssl"
+ARG SECURITY_UPGRADE_PKGS="libssl3t64 openssl libgnutls30t64 libgcrypt20 libsystemd0 libudev1 liblzma5"
 
 WORKDIR /app
 

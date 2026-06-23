@@ -55,16 +55,16 @@ export default function App() {
           <span>
             &copy; 2024&ndash;{new Date().getFullYear()}{' '}
             <a
-              href="https://github.com/coopernetes/git-proxy-java"
+              href="https://github.com/RBC/fogwall"
               target="_blank"
               rel="noopener noreferrer"
               className="hover:text-slate-300 transition-colors"
             >
-              git-proxy-java
+              fogwall
             </a>{' '}
             contributors &middot;{' '}
             <a
-              href="https://github.com/coopernetes/git-proxy-java/blob/main/LICENSE"
+              href="https://github.com/RBC/fogwall/blob/main/LICENSE"
               target="_blank"
               rel="noopener noreferrer"
               className="hover:text-slate-300 transition-colors"
@@ -73,7 +73,7 @@ export default function App() {
             </a>
           </span>
           <a
-            href="https://github.com/coopernetes/git-proxy-java"
+            href="https://github.com/RBC/fogwall"
             target="_blank"
             rel="noopener noreferrer"
             className="hover:text-slate-300 transition-colors flex items-center gap-1"
