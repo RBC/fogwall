@@ -88,7 +88,11 @@ public class ConnectivityController {
      * @param repoPath optional — repo path (e.g. {@code /owner/repo.git}) appended to the provider base URI for the git
      *     probe step; requires {@code provider}
      */
-    @Operation(operationId = "checkConnectivity", summary = "Test outbound connectivity to configured providers")
+    @Operation(
+            operationId = "checkConnectivity",
+            summary = "Test outbound connectivity to configured providers",
+            description =
+                    "Runs TCP, TLS, and HTTP checks against each configured upstream provider. Pass provider= to target a single provider. Add repoPath= (e.g. /owner/repo.git) to also run a git-upload-pack/git-receive-pack probe.")
     @GetMapping("/api/admin/connectivity")
     public Map<String, Object> check(
             @RequestParam(name = "provider", required = false) String providerName,

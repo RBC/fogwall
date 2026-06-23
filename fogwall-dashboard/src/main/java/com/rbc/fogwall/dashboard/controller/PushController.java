@@ -55,7 +55,11 @@ public class PushController {
      * List push records. Optional query params: status, project, repo, user, search (matches project OR repo name),
      * limit (default 50).
      */
-    @Operation(operationId = "listPushes", summary = "List push records")
+    @Operation(
+            operationId = "listPushes",
+            summary = "List push records",
+            description =
+                    "Returns push records ordered by most recent first. Filter by status (PENDING, APPROVED, REJECTED, FORWARDED, BLOCKED, CANCELED), project slug, repo, or username. Paginate with limit/offset.")
     @GetMapping
     public List<PushSummary> list(
             @RequestParam(required = false) String status,
@@ -91,7 +95,11 @@ public class PushController {
      * Count push records grouped by status. Accepts the same filter params as {@link #list} except {@code status} —
      * returns counts for all statuses so the caller can populate all filter tabs in one round trip.
      */
-    @Operation(operationId = "countPushes", summary = "Count push records by status")
+    @Operation(
+            operationId = "countPushes",
+            summary = "Count push records by status",
+            description =
+                    "Returns a map of status → count. Supports the same project/repo/user/search filters as listPushes but excludes the status filter.")
     @GetMapping("/counts")
     public Map<String, Long> counts(
             @RequestParam(required = false) String project,

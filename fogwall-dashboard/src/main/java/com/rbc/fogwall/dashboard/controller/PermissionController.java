@@ -33,7 +33,11 @@ public class PermissionController {
         return ResponseEntity.ok(permissionService.findByUsername(username));
     }
 
-    @Operation(operationId = "addUserPermission", summary = "Grant a permission to a user")
+    @Operation(
+            operationId = "addUserPermission",
+            summary = "Grant a permission to a user",
+            description =
+                    "target: SLUG (owner/repo slug, default), OWNER, REPO_FULL_PATH, PROVIDER. matchType: LITERAL (default), GLOB, REGEX. grant: PUSH (default), REVIEW, SELF_CERTIFY.")
     @PostMapping
     public ResponseEntity<?> add(@PathVariable String username, @RequestBody AddPermissionRequest req) {
         if (userStore.findByUsername(username).isEmpty()) {
