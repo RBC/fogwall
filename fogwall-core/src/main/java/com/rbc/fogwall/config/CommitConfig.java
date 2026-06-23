@@ -19,13 +19,13 @@ import lombok.Data;
 @Builder
 public class CommitConfig {
 
-    /** Controls whether commit identity is verified against the authenticated push user. */
+    /** Per-check mode for identity verification. */
     public enum IdentityVerificationMode {
-        /** Block the push when any commit author/committer email is not registered to the push user. */
+        /** Block the push when the email is not registered to the push user. */
         STRICT,
-        /** Warn the push user but allow the push through. Default. */
+        /** Warn the push user but allow the push through. */
         WARN,
-        /** Skip identity verification entirely. */
+        /** Skip this check entirely. */
         OFF;
 
         public static IdentityVerificationMode fromString(String value) {
@@ -39,12 +39,35 @@ public class CommitConfig {
     }
 
     /**
-     * Whether to verify that commit author/committer emails are registered to the authenticated push user. When users
-     * are configured, {@code WARN} is the default — mismatches produce a warning but do not block. {@code STRICT}
-     * blocks the push. {@code OFF} skips the check entirely.
+     * Independent mode settings for each identity check. Committer email is the primary mechanism for linking commit
+     * data back to a fogwall identity — it identifies who last touched the commit object (or the rebaser/amender).
+     * Author email is attribution metadata and should not gate push access for most workflows.
+     */
+    @Data
+    @Builder
+    public static class IdentityVerificationConfig {
+
+        /** Check that each commit's committer email is registered to the push user. Default: {@code WARN}. */
+        @Builder.Default
+        private IdentityVerificationMode committer = IdentityVerificationMode.WARN;
+
+        /** Check that each commit's author email is registered to the push user. Default: {@code OFF}. */
+        @Builder.Default
+        private IdentityVerificationMode author = IdentityVerificationMode.OFF;
+
+        /** {@code true} when both checks are off — used to short-circuit resolver calls. */
+        public boolean isEffectivelyOff() {
+            return committer == IdentityVerificationMode.OFF && author == IdentityVerificationMode.OFF;
+        }
+    }
+
+    /**
+     * Per-check identity verification configuration. Committer defaults to {@code WARN}; author defaults to {@code OFF}
+     * so rebase workflows (which preserve the original author email) are not blocked by default.
      */
     @Builder.Default
-    private IdentityVerificationMode identityVerification = IdentityVerificationMode.WARN;
+    private IdentityVerificationConfig identityVerification =
+            IdentityVerificationConfig.builder().build();
 
     /** Configuration for author email validation. */
     @Builder.Default

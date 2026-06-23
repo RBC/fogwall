@@ -114,15 +114,21 @@ commit:
       patterns: []
 #        - '(?i)(password|secret|token)\s*[=:]\s*\S+'
 
-  # Resolves the pusher's real SCM identity by calling the upstream provider's user API with the
-  # supplied token, then cross-checks the returned username and all commit author/committer emails
-  # against the authenticated fogwall user's scm-identities and emails.
-  #   warn   — allow the push but emit a sideband warning (default; safe starting point)
-  #   strict — block the push if identity cannot be verified (use this in production)
-  #   off    — disable the check entirely
+  # Independent identity checks for committer and author emails. Each can be set to:
+  #   strict — block the push on mismatch
+  #   warn   — allow the push but emit a sideband warning
+  #   off    — skip this check entirely
+  #
+  # committer: who last touched the commit object (or the rebaser/amender).
+  #            Primary mechanism for linking commit data back to a fogwall identity. Default: warn.
+  # author:    who originally wrote the commit (preserved across rebase/cherry-pick).
+  #            Should not gate push access in most workflows. Default: off.
+  #
   # NOTE: 'warn' is not a security control — pushes succeed regardless of outcome.
   # See docs/CONFIGURATION.md#identity-verification for token scope requirements and rollout guidance.
-  # identity-verification: warn
+  # identity-verification:
+  #   committer: warn
+  #   author: off
 
 # Push-level diff content scanning. Runs once per push against the aggregate diff (all commits combined).
 # Blocks pushes that introduce lines matching any configured literal or regex pattern.

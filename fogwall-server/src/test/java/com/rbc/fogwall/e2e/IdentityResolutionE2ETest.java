@@ -195,7 +195,9 @@ class IdentityResolutionE2ETest {
                 UiApprovalGateway::new,
                 strictResolver,
                 new RepoPermissionService(strictPermissionStore),
-                CommitConfig.IdentityVerificationMode.STRICT)) {
+                CommitConfig.IdentityVerificationConfig.builder()
+                        .committer(CommitConfig.IdentityVerificationMode.STRICT)
+                        .build())) {
 
             strictPermissionStore.save(RepoPermission.builder()
                     .username(GiteaContainer.TEST_USER)

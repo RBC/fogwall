@@ -263,11 +263,15 @@ public class JettyConfigurationBuilder {
                 .block(buildBlockConfig(cs.getMessage().getBlock()))
                 .build();
 
-        CommitConfig.IdentityVerificationMode identityVerificationMode =
-                CommitConfig.IdentityVerificationMode.fromString(cs.getIdentityVerification());
+        CommitSettings.IdentityVerificationSettings ivs = cs.getIdentityVerification();
+        CommitConfig.IdentityVerificationConfig identityVerificationConfig =
+                CommitConfig.IdentityVerificationConfig.builder()
+                        .committer(CommitConfig.IdentityVerificationMode.fromString(ivs.getCommitter()))
+                        .author(CommitConfig.IdentityVerificationMode.fromString(ivs.getAuthor()))
+                        .build();
 
         CommitConfig commitConfig = CommitConfig.builder()
-                .identityVerification(identityVerificationMode)
+                .identityVerification(identityVerificationConfig)
                 .author(authorConfig)
                 .committer(committerConfig)
                 .message(messageConfig)

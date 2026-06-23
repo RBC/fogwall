@@ -149,7 +149,12 @@ class IdentityVerificationFilterTest {
                 .thenReturn(Optional.of(aliceEntry()));
         FakeResponse resp = new FakeResponse();
 
-        new IdentityVerificationFilter(resolver, CommitConfig.IdentityVerificationMode.OFF)
+        new IdentityVerificationFilter(
+                        resolver,
+                        CommitConfig.IdentityVerificationConfig.builder()
+                                .committer(CommitConfig.IdentityVerificationMode.OFF)
+                                .author(CommitConfig.IdentityVerificationMode.OFF)
+                                .build())
                 .doHttpFilter(mockRequest(details, basicAuth("alice-git", "token")), resp.mock);
 
         assertFalse(resp.committed.get());
@@ -164,7 +169,11 @@ class IdentityVerificationFilterTest {
         GitRequestDetails details = pushDetailsWithCommits(List.of(commitWith("abc1234", "other@example.com")));
         FakeResponse resp = new FakeResponse();
 
-        new IdentityVerificationFilter(null, CommitConfig.IdentityVerificationMode.STRICT)
+        new IdentityVerificationFilter(
+                        null,
+                        CommitConfig.IdentityVerificationConfig.builder()
+                                .committer(CommitConfig.IdentityVerificationMode.STRICT)
+                                .build())
                 .doHttpFilter(mockRequest(details, basicAuth("alice-git", "token")), resp.mock);
 
         assertFalse(resp.committed.get());
@@ -178,7 +187,11 @@ class IdentityVerificationFilterTest {
         GitRequestDetails details = pushDetailsWithCommits(List.of());
         FakeResponse resp = new FakeResponse();
 
-        new IdentityVerificationFilter(resolver, CommitConfig.IdentityVerificationMode.STRICT)
+        new IdentityVerificationFilter(
+                        resolver,
+                        CommitConfig.IdentityVerificationConfig.builder()
+                                .committer(CommitConfig.IdentityVerificationMode.STRICT)
+                                .build())
                 .doHttpFilter(mockRequest(details, basicAuth("alice-git", "token")), resp.mock);
 
         assertFalse(resp.committed.get());
@@ -194,7 +207,11 @@ class IdentityVerificationFilterTest {
                 .thenReturn(Optional.of(aliceEntry()));
         FakeResponse resp = new FakeResponse();
 
-        new IdentityVerificationFilter(resolver, CommitConfig.IdentityVerificationMode.STRICT)
+        new IdentityVerificationFilter(
+                        resolver,
+                        CommitConfig.IdentityVerificationConfig.builder()
+                                .committer(CommitConfig.IdentityVerificationMode.STRICT)
+                                .build())
                 .doHttpFilter(mockRequest(details, basicAuth("alice-git", "token")), resp.mock);
 
         assertFalse(resp.committed.get());
@@ -210,7 +227,11 @@ class IdentityVerificationFilterTest {
                 .thenReturn(Optional.of(aliceEntry()));
         FakeResponse resp = new FakeResponse();
 
-        new IdentityVerificationFilter(resolver, CommitConfig.IdentityVerificationMode.STRICT)
+        new IdentityVerificationFilter(
+                        resolver,
+                        CommitConfig.IdentityVerificationConfig.builder()
+                                .committer(CommitConfig.IdentityVerificationMode.STRICT)
+                                .build())
                 .doHttpFilter(mockRequest(details, basicAuth("alice-git", "token")), resp.mock);
 
         // recordIssue sets REJECTED but does not commit the response (ValidationSummaryFilter does that)
@@ -229,7 +250,11 @@ class IdentityVerificationFilterTest {
                 .thenReturn(Optional.of(aliceEntry()));
         FakeResponse resp = new FakeResponse();
 
-        new IdentityVerificationFilter(resolver, CommitConfig.IdentityVerificationMode.WARN)
+        new IdentityVerificationFilter(
+                        resolver,
+                        CommitConfig.IdentityVerificationConfig.builder()
+                                .committer(CommitConfig.IdentityVerificationMode.WARN)
+                                .build())
                 .doHttpFilter(mockRequest(details, basicAuth("alice-git", "token")), resp.mock);
 
         assertFalse(resp.committed.get());
@@ -251,17 +276,21 @@ class IdentityVerificationFilterTest {
                 .thenReturn(Optional.empty());
         FakeResponse resp = new FakeResponse();
 
-        new IdentityVerificationFilter(resolver, CommitConfig.IdentityVerificationMode.STRICT)
+        new IdentityVerificationFilter(
+                        resolver,
+                        CommitConfig.IdentityVerificationConfig.builder()
+                                .committer(CommitConfig.IdentityVerificationMode.STRICT)
+                                .build())
                 .doHttpFilter(mockRequest(details, basicAuth("unknown", "token")), resp.mock);
 
         assertFalse(resp.committed.get());
         assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
     }
 
-    // ---- committer-only mismatch (different from author) is also flagged in strict mode ----
+    // ---- committer strict: committer mismatch blocks even when author matches ----
 
     @Test
-    void strictMode_committerMismatch_recordsIssue() throws Exception {
+    void committerStrict_committerMismatch_authorMatches_recordsIssue() throws Exception {
         Commit commit = Commit.builder()
                 .sha("abc1234")
                 .author(Contributor.builder()
@@ -278,7 +307,73 @@ class IdentityVerificationFilterTest {
                 .thenReturn(Optional.of(aliceEntry()));
         FakeResponse resp = new FakeResponse();
 
-        new IdentityVerificationFilter(resolver, CommitConfig.IdentityVerificationMode.STRICT)
+        new IdentityVerificationFilter(
+                        resolver,
+                        CommitConfig.IdentityVerificationConfig.builder()
+                                .committer(CommitConfig.IdentityVerificationMode.STRICT)
+                                .build())
+                .doHttpFilter(mockRequest(details, basicAuth("alice-git", "token")), resp.mock);
+
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+    }
+
+    // ---- rebase scenario: committer strict + author off → external author email does not block ----
+
+    @Test
+    void committerStrict_authorOff_rebaseScenario_passes() throws Exception {
+        Commit commit = Commit.builder()
+                .sha("abc1234")
+                .author(Contributor.builder()
+                        .name("External")
+                        .email("external@other.org")
+                        .build())
+                .committer(Contributor.builder()
+                        .name("Alice")
+                        .email("alice@example.com")
+                        .build())
+                .build();
+        GitRequestDetails details = pushDetailsWithCommits(List.of(commit));
+        when(resolver.resolve(any(FogwallProvider.class), eq("alice-git"), eq("token")))
+                .thenReturn(Optional.of(aliceEntry()));
+        FakeResponse resp = new FakeResponse();
+
+        new IdentityVerificationFilter(
+                        resolver,
+                        CommitConfig.IdentityVerificationConfig.builder()
+                                .committer(CommitConfig.IdentityVerificationMode.STRICT)
+                                .author(CommitConfig.IdentityVerificationMode.OFF)
+                                .build())
+                .doHttpFilter(mockRequest(details, basicAuth("alice-git", "token")), resp.mock);
+
+        assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
+    }
+
+    // ---- author strict: external author blocks even when committer matches ----
+
+    @Test
+    void authorStrict_externalAuthor_recordsIssue() throws Exception {
+        Commit commit = Commit.builder()
+                .sha("abc1234")
+                .author(Contributor.builder()
+                        .name("External")
+                        .email("external@other.org")
+                        .build())
+                .committer(Contributor.builder()
+                        .name("Alice")
+                        .email("alice@example.com")
+                        .build())
+                .build();
+        GitRequestDetails details = pushDetailsWithCommits(List.of(commit));
+        when(resolver.resolve(any(FogwallProvider.class), eq("alice-git"), eq("token")))
+                .thenReturn(Optional.of(aliceEntry()));
+        FakeResponse resp = new FakeResponse();
+
+        new IdentityVerificationFilter(
+                        resolver,
+                        CommitConfig.IdentityVerificationConfig.builder()
+                                .committer(CommitConfig.IdentityVerificationMode.OFF)
+                                .author(CommitConfig.IdentityVerificationMode.STRICT)
+                                .build())
                 .doHttpFilter(mockRequest(details, basicAuth("alice-git", "token")), resp.mock);
 
         assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
