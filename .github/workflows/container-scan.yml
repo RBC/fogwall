@@ -6,6 +6,8 @@ permissions:
 on:
   schedule:
     - cron: '0 6 * * 1' # weekly Monday 06:00 UTC
+  push:
+    branches: ["release/*"]
 
 jobs:
   grype:
@@ -30,13 +32,20 @@ jobs:
       # Single scan — fail on high+, emit template report and JSON in one pass.
       # SARIF upload intentionally omitted — OS-layer CVEs are triaged with application
       # context; uploading creates misleading noise in the GitHub Security tab.
-      - name: Set image name
-        run: echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+      - name: Set image name (scheduled — scan published :latest)
+        if: github.event_name == 'schedule'
+        run: echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]'):latest" >> "$GITHUB_ENV"
+
+      - name: Build image (release branch — scan local build)
+        if: github.event_name == 'push'
+        run: |
+          docker build -t fogwall:release-candidate .
+          echo "IMAGE=fogwall:release-candidate" >> "$GITHUB_ENV"
 
       - name: Scan image
         if: always()
         run: |
-          grype "${IMAGE}:latest" \
+          grype "${IMAGE}" \
             --config .grype.yaml \
             -o "template=grype-report.txt" \
             -o "json=grype-report.json"
