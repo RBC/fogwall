@@ -29,7 +29,9 @@ commit:
     email:
       domain:
         allow: ".*"
-  identity-verification: OFF
+  identity-verification:
+    committer: off
+    author: off
 
 rules:
   allow:

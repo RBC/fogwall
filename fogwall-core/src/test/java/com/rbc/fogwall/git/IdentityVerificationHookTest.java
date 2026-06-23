@@ -57,8 +57,31 @@ class IdentityVerificationHookTest {
     }
 
     private IdentityVerificationHook hook(
-            CommitConfig.IdentityVerificationMode mode, ValidationContext vc, PushContext pc) {
-        return new IdentityVerificationHook(resolver, mode, vc, pc, GITHUB);
+            CommitConfig.IdentityVerificationConfig config, ValidationContext vc, PushContext pc) {
+        return new IdentityVerificationHook(resolver, config, vc, pc, GITHUB);
+    }
+
+    private static CommitConfig.IdentityVerificationConfig committerOnly(
+            CommitConfig.IdentityVerificationMode committerMode) {
+        return CommitConfig.IdentityVerificationConfig.builder()
+                .committer(committerMode)
+                .author(CommitConfig.IdentityVerificationMode.OFF)
+                .build();
+    }
+
+    private static CommitConfig.IdentityVerificationConfig authorOnly(
+            CommitConfig.IdentityVerificationMode authorMode) {
+        return CommitConfig.IdentityVerificationConfig.builder()
+                .committer(CommitConfig.IdentityVerificationMode.OFF)
+                .author(authorMode)
+                .build();
+    }
+
+    private static CommitConfig.IdentityVerificationConfig bothOff() {
+        return CommitConfig.IdentityVerificationConfig.builder()
+                .committer(CommitConfig.IdentityVerificationMode.OFF)
+                .author(CommitConfig.IdentityVerificationMode.OFF)
+                .build();
     }
 
     private static UserEntry alice() {
@@ -80,7 +103,7 @@ class IdentityVerificationHookTest {
         PushContext pc = new PushContext();
         ValidationContext vc = new ValidationContext();
 
-        hook(CommitConfig.IdentityVerificationMode.OFF, vc, pc).onPreReceive(rp, List.of(cmd));
+        hook(bothOff(), vc, pc).onPreReceive(rp, List.of(cmd));
 
         assertFalse(vc.hasIssues());
         assertFalse(pc.getSteps().isEmpty());
@@ -99,7 +122,7 @@ class IdentityVerificationHookTest {
         PushContext pc = new PushContext();
         ValidationContext vc = new ValidationContext();
 
-        new IdentityVerificationHook(null, CommitConfig.IdentityVerificationMode.STRICT, vc, pc, GITHUB)
+        new IdentityVerificationHook(null, committerOnly(CommitConfig.IdentityVerificationMode.STRICT), vc, pc, GITHUB)
                 .onPreReceive(rp, List.of(cmd));
 
         assertFalse(vc.hasIssues());
@@ -118,7 +141,7 @@ class IdentityVerificationHookTest {
         PushContext pc = new PushContext();
         ValidationContext vc = new ValidationContext();
 
-        hook(CommitConfig.IdentityVerificationMode.WARN, vc, pc).onPreReceive(rp, List.of(cmd));
+        hook(committerOnly(CommitConfig.IdentityVerificationMode.WARN), vc, pc).onPreReceive(rp, List.of(cmd));
 
         assertFalse(vc.hasIssues());
         assertFalse(pc.getSteps().isEmpty());
@@ -141,17 +164,18 @@ class IdentityVerificationHookTest {
         pc.setPushUser("alice-git");
         ValidationContext vc = new ValidationContext();
 
-        hook(CommitConfig.IdentityVerificationMode.STRICT, vc, pc).onPreReceive(rp, List.of(cmd));
+        hook(committerOnly(CommitConfig.IdentityVerificationMode.STRICT), vc, pc)
+                .onPreReceive(rp, List.of(cmd));
 
         assertFalse(vc.hasIssues());
         assertFalse(pc.getSteps().isEmpty());
         assertEquals(StepStatus.PASS, pc.getSteps().get(0).getStatus());
     }
 
-    // ---- strict mode + email mismatch → validation issue (blocked) ----
+    // ---- committer strict + mismatch → blocked ----
 
     @Test
-    void strictMode_emailMismatch_addsIssue() throws Exception {
+    void committerStrict_mismatch_addsIssue() throws Exception {
         when(resolver.resolve(any(FogwallProvider.class), eq("alice-git"), isNull()))
                 .thenReturn(Optional.of(alice()));
 
@@ -163,17 +187,18 @@ class IdentityVerificationHookTest {
         pc.setPushUser("alice-git");
         ValidationContext vc = new ValidationContext();
 
-        hook(CommitConfig.IdentityVerificationMode.STRICT, vc, pc).onPreReceive(rp, List.of(cmd));
+        hook(committerOnly(CommitConfig.IdentityVerificationMode.STRICT), vc, pc)
+                .onPreReceive(rp, List.of(cmd));
 
         assertTrue(vc.hasIssues());
         assertEquals(IdentityVerificationHook.STEP_NAME, vc.getIssues().get(0).hookName());
         assertTrue(vc.getIssues().get(0).summary().contains("alice"));
     }
 
-    // ---- warn mode + email mismatch → no issue, push proceeds ----
+    // ---- committer warn + mismatch → no issue, push proceeds ----
 
     @Test
-    void warnMode_emailMismatch_noIssue_recordsPass() throws Exception {
+    void committerWarn_mismatch_noIssue_recordsPass() throws Exception {
         when(resolver.resolve(any(FogwallProvider.class), eq("alice-git"), isNull()))
                 .thenReturn(Optional.of(alice()));
 
@@ -185,7 +210,7 @@ class IdentityVerificationHookTest {
         pc.setPushUser("alice-git");
         ValidationContext vc = new ValidationContext();
 
-        hook(CommitConfig.IdentityVerificationMode.WARN, vc, pc).onPreReceive(rp, List.of(cmd));
+        hook(committerOnly(CommitConfig.IdentityVerificationMode.WARN), vc, pc).onPreReceive(rp, List.of(cmd));
 
         assertFalse(vc.hasIssues(), "WARN mode should not block the push");
         assertFalse(pc.getSteps().isEmpty());
@@ -208,39 +233,87 @@ class IdentityVerificationHookTest {
         pc.setPushUser("alice-git");
         ValidationContext vc = new ValidationContext();
 
-        hook(CommitConfig.IdentityVerificationMode.STRICT, vc, pc).onPreReceive(rp, List.of(cmd));
+        hook(committerOnly(CommitConfig.IdentityVerificationMode.STRICT), vc, pc)
+                .onPreReceive(rp, List.of(cmd));
 
         assertFalse(vc.hasIssues(), "DELETE commands should not trigger identity violation");
     }
 
-    // ---- author and committer same unregistered email → single combined violation ----
+    // ---- rebase scenario: committer matches, author is external → passes when author=off ----
 
     @Test
-    void strictMode_authorAndCommitterSameEmail_singleViolation() throws Exception {
+    void rebaseScenario_committerMatches_authorExternal_authorOff_passes() throws Exception {
         when(resolver.resolve(any(FogwallProvider.class), eq("alice-git"), isNull()))
-                .thenReturn(Optional.of(alice())); // alice only has alice@example.com
+                .thenReturn(Optional.of(alice()));
 
-        // Commit where author and committer are both "other@example.com" (unregistered, same address)
-        RevCommit c1 = createCommit("init", "other@example.com");
-        RevCommit c2 = createCommit("second", "other@example.com");
+        // createCommit sets author=committer; we need a commit where committer=alice but author=external.
+        // Use the lower-level JGit API to set them independently.
+        File f = new File(tempDir.toFile(), java.util.UUID.randomUUID() + ".txt");
+        java.nio.file.Files.writeString(f.toPath(), "content");
+        git.add().addFilepattern(".").call();
+        RevCommit base = git.commit()
+                .setAuthor(new PersonIdent("Dev", "alice@example.com"))
+                .setCommitter(new PersonIdent("Dev", "alice@example.com"))
+                .setMessage("base")
+                .call();
+        git.add().addFilepattern(".").call();
+        RevCommit rebased = git.commit()
+                .setAuthor(new PersonIdent("External", "external@other.org")) // preserved author
+                .setCommitter(new PersonIdent("Alice", "alice@example.com")) // rebaser is alice
+                .setMessage("rebased external commit")
+                .call();
+
         ReceivePack rp = new ReceivePack(repo);
-        ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
+        ReceiveCommand cmd =
+                new ReceiveCommand(base.getId(), rebased.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
         PushContext pc = new PushContext();
         pc.setPushUser("alice-git");
         ValidationContext vc = new ValidationContext();
 
-        hook(CommitConfig.IdentityVerificationMode.STRICT, vc, pc).onPreReceive(rp, List.of(cmd));
+        hook(committerOnly(CommitConfig.IdentityVerificationMode.STRICT), vc, pc)
+                .onPreReceive(rp, List.of(cmd));
 
-        assertTrue(vc.hasIssues());
-        // Should produce exactly one violation per commit (author+committer collapsed), not two
-        String summary = vc.getIssues().get(0).summary();
-        assertTrue(summary.contains("alice"), "Violation should reference the push user");
+        assertFalse(vc.hasIssues(), "Rebase should not be blocked when author check is off");
+    }
+
+    // ---- author strict + external author → blocked ----
+
+    @Test
+    void authorStrict_externalAuthor_addsIssue() throws Exception {
+        when(resolver.resolve(any(FogwallProvider.class), eq("alice-git"), isNull()))
+                .thenReturn(Optional.of(alice()));
+
+        File f = new File(tempDir.toFile(), java.util.UUID.randomUUID() + ".txt");
+        java.nio.file.Files.writeString(f.toPath(), "content");
+        git.add().addFilepattern(".").call();
+        RevCommit base = git.commit()
+                .setAuthor(new PersonIdent("Dev", "alice@example.com"))
+                .setCommitter(new PersonIdent("Dev", "alice@example.com"))
+                .setMessage("base")
+                .call();
+        git.add().addFilepattern(".").call();
+        RevCommit rebased = git.commit()
+                .setAuthor(new PersonIdent("External", "external@other.org"))
+                .setCommitter(new PersonIdent("Alice", "alice@example.com"))
+                .setMessage("rebased external commit")
+                .call();
+
+        ReceivePack rp = new ReceivePack(repo);
+        ReceiveCommand cmd =
+                new ReceiveCommand(base.getId(), rebased.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
+        PushContext pc = new PushContext();
+        pc.setPushUser("alice-git");
+        ValidationContext vc = new ValidationContext();
+
+        hook(authorOnly(CommitConfig.IdentityVerificationMode.STRICT), vc, pc).onPreReceive(rp, List.of(cmd));
+
+        assertTrue(vc.hasIssues(), "Author strict should block external author email");
     }
 
     // ---- warn mode records step content with violation details ----
 
     @Test
-    void warnMode_emailMismatch_stepContentContainsViolations() throws Exception {
+    void committerWarn_mismatch_stepContentContainsViolations() throws Exception {
         when(resolver.resolve(any(FogwallProvider.class), eq("alice-git"), isNull()))
                 .thenReturn(Optional.of(alice()));
 
@@ -252,10 +325,9 @@ class IdentityVerificationHookTest {
         pc.setPushUser("alice-git");
         ValidationContext vc = new ValidationContext();
 
-        hook(CommitConfig.IdentityVerificationMode.WARN, vc, pc).onPreReceive(rp, List.of(cmd));
+        hook(committerOnly(CommitConfig.IdentityVerificationMode.WARN), vc, pc).onPreReceive(rp, List.of(cmd));
 
         assertFalse(vc.hasIssues());
-        // WARN mode records a PASS step with the violation in content (for the amber UI badge)
         var step = pc.getSteps().stream()
                 .filter(s -> "identityVerification".equals(s.getStepName()))
                 .findFirst();
@@ -264,7 +336,7 @@ class IdentityVerificationHookTest {
         assertTrue(step.get().getContent().contains("not in proxy user registry"));
     }
 
-    // ---- resolver returns empty → skip (CheckUserPushPermissionHook handles "not registered") ----
+    // ---- resolver returns empty → skip ----
 
     @Test
     void resolverEmpty_skipsCheck_noStep() throws Exception {
@@ -278,7 +350,8 @@ class IdentityVerificationHookTest {
         pc.setPushUser("unknown");
         ValidationContext vc = new ValidationContext();
 
-        hook(CommitConfig.IdentityVerificationMode.STRICT, vc, pc).onPreReceive(rp, List.of(cmd));
+        hook(committerOnly(CommitConfig.IdentityVerificationMode.STRICT), vc, pc)
+                .onPreReceive(rp, List.of(cmd));
 
         assertFalse(vc.hasIssues());
         assertTrue(pc.getSteps().isEmpty(), "No step should be recorded when user cannot be resolved");

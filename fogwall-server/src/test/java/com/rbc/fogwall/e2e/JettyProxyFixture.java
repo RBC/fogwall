@@ -77,8 +77,8 @@ class JettyProxyFixture implements AutoCloseable {
      * Create a fixture with optional identity and permission filters enabled on the transparent proxy path. When
      * {@code identityResolver} is non-null, {@link CheckUserPushPermissionFilter} and
      * {@link IdentityVerificationFilter} are added to the filter chain (matching production order). The
-     * {@code permissionService} must also be non-null when identity checking is enabled. Uses
-     * {@link CommitConfig.IdentityVerificationMode#WARN} by default.
+     * {@code permissionService} must also be non-null when identity checking is enabled. Defaults to committer=warn,
+     * author=off.
      */
     JettyProxyFixture(
             URI giteaUri,
@@ -91,7 +91,7 @@ class JettyProxyFixture implements AutoCloseable {
                 proxyGatewayFactory,
                 identityResolver,
                 permissionService,
-                CommitConfig.IdentityVerificationMode.WARN);
+                CommitConfig.IdentityVerificationConfig.builder().build());
     }
 
     /**
@@ -99,18 +99,26 @@ class JettyProxyFixture implements AutoCloseable {
      * path. Uses auto-approve for the approval gateway so that allowed pushes go through without a review step.
      */
     JettyProxyFixture(URI giteaUri, List<AccessRule> configRules) throws Exception {
-        this(giteaUri, AutoApprovalGateway::new, null, null, CommitConfig.IdentityVerificationMode.WARN, configRules);
+        this(
+                giteaUri,
+                AutoApprovalGateway::new,
+                null,
+                null,
+                CommitConfig.IdentityVerificationConfig.builder().build(),
+                configRules);
     }
 
-    /** Create a fixture with identity and permission filters enabled, using an explicit identity verification mode. */
+    /**
+     * Create a fixture with identity and permission filters enabled, using an explicit identity verification config.
+     */
     JettyProxyFixture(
             URI giteaUri,
             Function<PushStore, ApprovalGateway> proxyGatewayFactory,
             PushIdentityResolver identityResolver,
             RepoPermissionService permissionService,
-            CommitConfig.IdentityVerificationMode identityVerificationMode)
+            CommitConfig.IdentityVerificationConfig identityVerificationConfig)
             throws Exception {
-        this(giteaUri, proxyGatewayFactory, identityResolver, permissionService, identityVerificationMode, List.of());
+        this(giteaUri, proxyGatewayFactory, identityResolver, permissionService, identityVerificationConfig, List.of());
     }
 
     /** Full constructor — all options. */
@@ -119,7 +127,7 @@ class JettyProxyFixture implements AutoCloseable {
             Function<PushStore, ApprovalGateway> proxyGatewayFactory,
             PushIdentityResolver identityResolver,
             RepoPermissionService permissionService,
-            CommitConfig.IdentityVerificationMode identityVerificationMode,
+            CommitConfig.IdentityVerificationConfig identityVerificationConfig,
             List<AccessRule> configRules)
             throws Exception {
         server = new Server();
@@ -218,7 +226,7 @@ class JettyProxyFixture implements AutoCloseable {
         filters.add(new UrlRuleAggregateFilter(100, provider, PROXY_PREFIX, urlRuleRegistry));
         if (identityResolver != null && permissionService != null) {
             filters.add(new CheckUserPushPermissionFilter(identityResolver, permissionService));
-            filters.add(new IdentityVerificationFilter(identityResolver, identityVerificationMode));
+            filters.add(new IdentityVerificationFilter(identityResolver, identityVerificationConfig));
         }
         filters.add(new CheckEmptyBranchFilter());
         filters.add(new CheckHiddenCommitsFilter(provider));

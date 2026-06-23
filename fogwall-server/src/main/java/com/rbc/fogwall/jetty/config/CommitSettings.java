@@ -14,11 +14,16 @@ import lombok.Data;
 @Data
 public class CommitSettings {
 
-    /**
-     * Controls whether SCM usernames & author/committer emails are verified against an authenticated user. Options:
-     * {@code warn} (default), {@code strict}, {@code off}.
-     */
-    private String identityVerification = "warn";
+    /** Per-check identity verification modes. */
+    private IdentityVerificationSettings identityVerification = new IdentityVerificationSettings();
+
+    @Data
+    public static class IdentityVerificationSettings {
+        /** Mode for committer email check: {@code warn} (default), {@code strict}, {@code off}. */
+        private String committer = "warn";
+        /** Mode for author email check: {@code warn}, {@code strict}, {@code off} (default). */
+        private String author = "off";
+    }
 
     private AuthorSettings author = new AuthorSettings();
     private CommitterSettings committer = new CommitterSettings();

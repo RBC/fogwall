@@ -42,19 +42,21 @@ public class IdentityVerificationHook implements FogwallHook {
     static final String STEP_NAME = "identityVerification";
 
     private final PushIdentityResolver identityResolver;
-    private final CommitConfig.IdentityVerificationMode mode;
+    private final CommitConfig.IdentityVerificationConfig config;
     private final ValidationContext validationContext;
     private final PushContext pushContext;
     private final FogwallProvider provider;
 
     public IdentityVerificationHook(
             PushIdentityResolver identityResolver,
-            CommitConfig.IdentityVerificationMode mode,
+            CommitConfig.IdentityVerificationConfig config,
             ValidationContext validationContext,
             PushContext pushContext,
             FogwallProvider provider) {
         this.identityResolver = identityResolver;
-        this.mode = mode != null ? mode : CommitConfig.IdentityVerificationMode.WARN;
+        this.config = config != null
+                ? config
+                : CommitConfig.IdentityVerificationConfig.builder().build();
         this.validationContext = validationContext;
         this.pushContext = pushContext;
         this.provider = provider;
@@ -62,8 +64,8 @@ public class IdentityVerificationHook implements FogwallHook {
 
     @Override
     public void onPreReceive(ReceivePack rp, Collection<ReceiveCommand> commands) {
-        if (mode == CommitConfig.IdentityVerificationMode.OFF) {
-            log.debug("Identity verification disabled (mode=off)");
+        if (config.isEffectivelyOff()) {
+            log.debug("Identity verification disabled (committer=off, author=off)");
             recordPass();
             return;
         }
@@ -85,7 +87,6 @@ public class IdentityVerificationHook implements FogwallHook {
 
         Optional<UserEntry> resolved = identityResolver.resolve(provider, pushUser, pushToken);
         if (resolved.isEmpty()) {
-            // CheckUserPushPermissionHook handles "user not registered" upstream; skip silently here
             log.debug("Push user '{}' could not be resolved — skipping identity verification", pushUser);
             return;
         }
@@ -93,83 +94,81 @@ public class IdentityVerificationHook implements FogwallHook {
         UserEntry user = resolved.get();
         List<String> registeredEmails = user.getEmails() != null ? user.getEmails() : List.of();
         Repository repo = rp.getRepository();
-        List<String> violations = new ArrayList<>();
+        List<String> blockingViolations = new ArrayList<>();
+        List<String> warnViolations = new ArrayList<>();
 
         for (ReceiveCommand cmd : commands) {
             if (cmd.getType() == ReceiveCommand.Type.DELETE) continue;
             try {
-                List<Commit> commits = getCommits(repo, cmd);
-                for (Commit commit : commits) {
-                    collectViolations(commit, user.getUsername(), registeredEmails, violations);
+                for (Commit commit : getCommits(repo, cmd)) {
+                    String sha = abbrev(commit.getSha());
+
+                    if (config.getCommitter() != CommitConfig.IdentityVerificationMode.OFF
+                            && commit.getCommitter() != null) {
+                        String email = commit.getCommitter().getEmail();
+                        if (email != null && !registeredEmails.contains(email)) {
+                            String msg = "Unrecognised committer email: <" + email + "> (commit " + sha
+                                    + ") — not in proxy user registry";
+                            if (config.getCommitter() == CommitConfig.IdentityVerificationMode.STRICT) {
+                                blockingViolations.add(msg);
+                            } else {
+                                warnViolations.add(msg);
+                            }
+                        }
+                    }
+
+                    if (config.getAuthor() != CommitConfig.IdentityVerificationMode.OFF && commit.getAuthor() != null) {
+                        String email = commit.getAuthor().getEmail();
+                        if (email != null && !registeredEmails.contains(email)) {
+                            String msg = "Unrecognised author email: <" + email + "> (commit " + sha
+                                    + ") — not in proxy user registry";
+                            if (config.getAuthor() == CommitConfig.IdentityVerificationMode.STRICT) {
+                                blockingViolations.add(msg);
+                            } else {
+                                warnViolations.add(msg);
+                            }
+                        }
+                    }
                 }
             } catch (Exception e) {
                 log.error("Failed to verify identity for {}", cmd.getRefName(), e);
             }
         }
 
-        if (violations.isEmpty()) {
+        if (blockingViolations.isEmpty() && warnViolations.isEmpty()) {
             log.debug("Identity verification passed for push user '{}'", user.getUsername());
             recordPass();
             return;
         }
 
-        if (mode == CommitConfig.IdentityVerificationMode.STRICT) {
+        if (!blockingViolations.isEmpty()) {
+            List<String> allViolations = new ArrayList<>(blockingViolations);
+            allViolations.addAll(warnViolations);
             log.warn(
-                    "Identity verification failed for push user '{}': {} mismatch(es)",
+                    "Identity verification failed for push user '{}': {} violation(s)",
                     user.getUsername(),
-                    violations.size());
+                    allViolations.size());
             String detail = GitClientUtils.format(
                     sym(NO_ENTRY) + "  Push Blocked — Commit Identity Mismatch",
-                    String.join("\n", violations),
+                    String.join("\n", allViolations),
                     RED,
                     null);
             validationContext.addIssue(
                     STEP_NAME, "Commit identity does not match push user " + user.getUsername(), detail);
         } else {
-            // WARN mode — push proceeds but developer is warned at the terminal and in the dashboard.
             log.warn(
                     "Identity verification warnings for push user '{}': {} mismatch(es)",
                     user.getUsername(),
-                    violations.size());
-            for (String v : violations) {
+                    warnViolations.size());
+            for (String v : warnViolations) {
                 rp.sendMessage(GitClientUtils.color(YELLOW, sym(WARNING) + "  " + v));
             }
             pushContext.addStep(PushStep.builder()
                     .stepName(STEP_NAME)
                     .stepOrder(ORDER)
                     .status(StepStatus.PASS)
-                    .content(String.join("\n", violations))
+                    .content(String.join("\n", warnViolations))
                     .build());
-        }
-    }
-
-    private void collectViolations(
-            Commit commit, String pushUsername, List<String> registeredEmails, List<String> violations) {
-        String sha = abbrev(commit.getSha());
-        boolean authorFlagged = false;
-
-        if (commit.getAuthor() != null) {
-            String email = commit.getAuthor().getEmail();
-            if (email != null && !registeredEmails.contains(email)) {
-                violations.add("Unrecognised commit email: <" + email + "> (commit " + sha
-                        + ", author) — not in proxy user registry");
-                authorFlagged = true;
-            }
-        }
-
-        if (commit.getCommitter() != null) {
-            String email = commit.getCommitter().getEmail();
-            if (email != null && !registeredEmails.contains(email)) {
-                boolean sameAsAuthor = commit.getAuthor() != null
-                        && email.equals(commit.getAuthor().getEmail());
-                if (!sameAsAuthor) {
-                    violations.add("Unrecognised commit email: <" + email + "> (commit " + sha
-                            + ", committer) — not in proxy user registry");
-                } else if (!authorFlagged) {
-                    violations.add("Unrecognised commit email: <" + email + "> (commit " + sha
-                            + ", author+committer) — not in proxy user registry");
-                }
-            }
         }
     }
 
