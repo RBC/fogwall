@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Diff2HtmlUI } from 'diff2html/lib/ui/js/diff2html-ui-slim'
+import { ColorSchemeType } from 'diff2html/lib/types'
 import 'diff2html/bundles/css/diff2html.min.css'
 import { approvePush, cancelPush, fetchDiff, fetchProviders, fetchPush, rejectPush } from '../api'
 import { StatusBadge } from '../components/StatusBadge'
@@ -50,13 +51,12 @@ const STEP_DISPLAY_NAMES: Record<string, string> = {
 
 function IdentityBadge({ record }: { record: PushRecord }) {
   if (record.resolvedUser) {
-    // Check if identity verification step passed but had email warnings (content is set)
     const idStep = (record.steps ?? []).find((s) => s.stepName === 'identityVerification')
     const hasEmailWarning = idStep?.status === 'PASS' && !!idStep?.content
     if (hasEmailWarning) {
       return (
         <span
-          className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700"
+          className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
           title={idStep?.content ?? undefined}
         >
           ⚠ identity resolved, email unregistered
@@ -64,15 +64,14 @@ function IdentityBadge({ record }: { record: PushRecord }) {
       )
     }
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+      <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-300">
         ✓ identity resolved
       </span>
     )
   }
-  // Only show "unresolved" if there's actually a push user — not for anonymous/open-mode pushes
   if (record.user) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
+      <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500 dark:bg-slate-700 dark:text-gray-400">
         identity unresolved
       </span>
     )
@@ -100,18 +99,12 @@ function formatTime(ts: string | number | undefined) {
   }
 }
 
-/**
- * Build a direct link to the commit on the upstream SCM.
- * GitHub / Gitea / Codeberg: {repo}/commit/{sha}
- * GitLab: {repo}/-/commit/{sha}
- */
 function upstreamCommitUrl(upstreamUrl: string, sha: string): string {
   const base = upstreamUrl.replace(/\/$/, '').replace(/\.git$/, '')
   if (/gitlab\./.test(base)) return `${base}/-/commit/${sha}`
   return `${base}/commit/${sha}`
 }
 
-// Steps that represent forwarding/post-receive operations
 const FORWARDING_STEPS = new Set(['ForwardingPostReceiveHook', 'forward', 'ForwardingHook'])
 
 function PushTimeline({ record }: { record: PushRecord }) {
@@ -126,15 +119,13 @@ function PushTimeline({ record }: { record: PushRecord }) {
 
   const events: TimelineEvent[] = []
 
-  // 1. Received
   events.push({
     icon: '↓',
     label: 'Push received',
     time: record.timestamp,
-    color: 'text-gray-500',
+    color: 'text-gray-500 dark:text-gray-400',
   })
 
-  // 2. Validation ran — summarise as a single event using the first/last step timestamp
   const visibleSteps = (record.steps ?? []).filter((s) => !NON_VALIDATION_STEPS.has(s.stepName))
   if (visibleSteps.length > 0) {
     const failed = visibleSteps.filter((s) => s.status === 'FAIL' || s.status === 'BLOCKED')
@@ -147,12 +138,11 @@ function PushTimeline({ record }: { record: PushRecord }) {
           : `Validation passed (${visibleSteps.length} check${visibleSteps.length > 1 ? 's' : ''})`,
       detail: failed.map((s) => stepDisplayName(s.stepName)).join(', ') || undefined,
       time: lastStep?.timestamp,
-      color: failed.length > 0 ? 'text-red-500' : 'text-green-500',
+      color:
+        failed.length > 0 ? 'text-red-500 dark:text-red-400' : 'text-green-500 dark:text-green-400',
     })
   }
 
-  // 3. Pending event — show if currently pending review, or if there was a review
-  //    (attestation present means it went through the approval gate)
   const wasBlocked = record.status === 'PENDING' || record.attestation != null
   if (wasBlocked) {
     events.push({
@@ -160,11 +150,10 @@ function PushTimeline({ record }: { record: PushRecord }) {
       label: 'Pending review',
       detail: record.blockedMessage ?? undefined,
       time: record.timestamp,
-      color: 'text-amber-500',
+      color: 'text-amber-500 dark:text-amber-400',
     })
   }
 
-  // 4. Attestation (review event)
   if (record.attestation) {
     const att = record.attestation
     const typeLabel =
@@ -188,14 +177,13 @@ function PushTimeline({ record }: { record: PushRecord }) {
       time: att.timestamp,
       color:
         att.type === 'APPROVAL'
-          ? 'text-green-600'
+          ? 'text-green-600 dark:text-green-400'
           : att.type === 'REJECTION'
-            ? 'text-red-600'
-            : 'text-gray-400',
+            ? 'text-red-600 dark:text-red-400'
+            : 'text-gray-400 dark:text-gray-500',
     })
   }
 
-  // 5. Forwarded — check for a forwarding step first (S&F), else use record status
   const forwardStep = (record.steps ?? []).find((s) => FORWARDING_STEPS.has(s.stepName))
   if (record.status === 'FORWARDED') {
     const commitLink =
@@ -208,45 +196,56 @@ function PushTimeline({ record }: { record: PushRecord }) {
       detail: record.upstreamUrl ?? undefined,
       link: commitLink,
       time: forwardStep?.timestamp,
-      color: 'text-blue-500',
+      color: 'text-blue-500 dark:text-blue-400',
     })
   }
 
-  // 6. Error
   if (record.status === 'ERROR') {
     events.push({
       icon: '!',
       label: 'Error',
       detail: record.errorMessage ?? undefined,
       time: record.timestamp,
-      color: 'text-red-600',
+      color: 'text-red-600 dark:text-red-400',
     })
   }
 
   return (
-    <div className="bg-white rounded-lg shadow border border-gray-200 px-6 py-4">
-      <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Timeline</h2>
-      <ol className="relative border-l border-gray-200 ml-2 space-y-4">
+    <div className="bg-white rounded-lg shadow border border-gray-200 px-6 py-4 dark:bg-slate-800 dark:border-slate-700">
+      <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 dark:text-gray-400">
+        Timeline
+      </h2>
+      <ol className="relative border-l border-gray-200 ml-2 space-y-4 dark:border-slate-700">
         {events.map((ev, i) => (
           <li key={i} className="ml-5">
             <span
-              className={`absolute -left-2.5 flex h-5 w-5 items-center justify-center rounded-full bg-white border border-gray-200 text-xs font-bold ${ev.color}`}
+              className={`absolute -left-2.5 flex h-5 w-5 items-center justify-center rounded-full bg-white border border-gray-200 text-xs font-bold dark:bg-slate-800 dark:border-slate-700 ${ev.color}`}
             >
               {ev.icon}
             </span>
-            <div className="text-sm text-gray-800 font-medium leading-snug">{ev.label}</div>
-            {ev.detail && <div className="text-xs text-gray-500 mt-0.5 font-mono">{ev.detail}</div>}
+            <div className="text-sm text-gray-800 font-medium leading-snug dark:text-gray-200">
+              {ev.label}
+            </div>
+            {ev.detail && (
+              <div className="text-xs text-gray-500 mt-0.5 font-mono dark:text-gray-400">
+                {ev.detail}
+              </div>
+            )}
             {ev.link && (
               <a
                 href={ev.link}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-blue-600 hover:underline mt-0.5 block"
+                className="text-xs text-blue-600 hover:underline mt-0.5 block dark:text-blue-400"
               >
                 View commit ↗
               </a>
             )}
-            {ev.time && <div className="text-xs text-gray-400 mt-0.5">{formatTime(ev.time)}</div>}
+            {ev.time && (
+              <div className="text-xs text-gray-400 mt-0.5 dark:text-gray-500">
+                {formatTime(ev.time)}
+              </div>
+            )}
           </li>
         ))}
       </ol>
@@ -266,7 +265,7 @@ function AttestationQuestionField({
   onChange: (val: string) => void
 }) {
   const labelEl = (
-    <span className="text-sm text-gray-700">
+    <span className="text-sm text-gray-700 dark:text-gray-300">
       {question.label}
       {question.required && <span className="ml-1 text-red-500">*</span>}
     </span>
@@ -280,7 +279,7 @@ function AttestationQuestionField({
           checked={value === 'true'}
           disabled={disabled}
           onChange={(e) => onChange(e.target.checked ? 'true' : 'false')}
-          className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+          className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50 dark:border-slate-600"
         />
         {labelEl}
       </label>
@@ -295,7 +294,7 @@ function AttestationQuestionField({
           value={value}
           disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
-          className="border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-gray-50 disabled:text-gray-400"
+          className="border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-gray-50 disabled:text-gray-400 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:disabled:bg-gray-800 dark:disabled:text-gray-500"
         >
           <option value="">— select —</option>
           {(question.options ?? []).map((opt) => (
@@ -308,7 +307,6 @@ function AttestationQuestionField({
     )
   }
 
-  // text
   return (
     <div className="flex flex-col gap-1">
       {labelEl}
@@ -318,7 +316,7 @@ function AttestationQuestionField({
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
         placeholder={question.tooltip ?? ''}
-        className="border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-gray-50 disabled:text-gray-400"
+        className="border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-gray-50 disabled:text-gray-400 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:disabled:bg-gray-800 dark:disabled:text-gray-500"
       />
     </div>
   )
@@ -329,14 +327,14 @@ function RePushGuidance({ record }: { record: PushRecord }) {
 
   if (record.status === 'APPROVED') {
     return (
-      <div className="bg-blue-50 border border-blue-200 rounded-lg px-6 py-4">
-        <div className="text-sm font-semibold text-blue-800 mb-1">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg px-6 py-4 dark:bg-blue-900/20 dark:border-blue-700">
+        <div className="text-sm font-semibold text-blue-800 mb-1 dark:text-blue-300">
           Push approved — re-push to forward
         </div>
-        <p className="text-sm text-blue-700 mb-3">
+        <p className="text-sm text-blue-700 mb-3 dark:text-blue-400">
           This push has been approved. Push the same commits again to forward them upstream.
         </p>
-        <pre className="text-xs bg-white border border-blue-200 rounded px-3 py-2 font-mono text-blue-900 select-all">
+        <pre className="text-xs bg-white border border-blue-200 rounded px-3 py-2 font-mono text-blue-900 select-all dark:bg-slate-900 dark:border-blue-700 dark:text-blue-300">
           git push origin {branch}
         </pre>
       </div>
@@ -349,9 +347,11 @@ function RePushGuidance({ record }: { record: PushRecord }) {
 
   if (record.status === 'CANCELED') {
     return (
-      <div className="bg-gray-50 border border-gray-200 rounded-lg px-6 py-4">
-        <div className="text-sm font-semibold text-gray-700 mb-1">Push canceled</div>
-        <p className="text-sm text-gray-600 mb-3">
+      <div className="bg-gray-50 border border-gray-200 rounded-lg px-6 py-4 dark:bg-slate-800 dark:border-slate-700">
+        <div className="text-sm font-semibold text-gray-700 mb-1 dark:text-gray-300">
+          Push canceled
+        </div>
+        <p className="text-sm text-gray-600 mb-3 dark:text-gray-400">
           <strong>{reviewer}</strong> canceled this push before review
           {reason ? (
             <>
@@ -362,24 +362,22 @@ function RePushGuidance({ record }: { record: PushRecord }) {
           )}{' '}
           The commits themselves are fine — re-push when ready.
         </p>
-        <pre className="text-xs bg-white border border-gray-200 rounded px-3 py-2 font-mono text-gray-800 select-all">
+        <pre className="text-xs bg-white border border-gray-200 rounded px-3 py-2 font-mono text-gray-800 select-all dark:bg-slate-900 dark:border-slate-700 dark:text-gray-300">
           git push origin {branch}
         </pre>
       </div>
     )
   }
 
-  // Rejection: check if it's a reviewer rejection or validation failure
   const isReviewerRejected = att && att.type === 'REJECTION'
 
   if (isReviewerRejected) {
-    // Reviewer explicitly rejected the push
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg px-6 py-4">
-        <div className="text-sm font-semibold text-red-800 mb-1">
+      <div className="bg-red-50 border border-red-200 rounded-lg px-6 py-4 dark:bg-red-900/20 dark:border-red-700">
+        <div className="text-sm font-semibold text-red-800 mb-1 dark:text-red-300">
           Push rejected — action required
         </div>
-        <p className="text-sm text-red-700 mb-1">
+        <p className="text-sm text-red-700 mb-1 dark:text-red-400">
           <strong>{reviewer}</strong> rejected this push
           {reason ? (
             <>
@@ -389,10 +387,10 @@ function RePushGuidance({ record }: { record: PushRecord }) {
             '.'
           )}
         </p>
-        <p className="text-sm text-red-700 mb-3">
+        <p className="text-sm text-red-700 mb-3 dark:text-red-400">
           Address the feedback, amend your commits, and push again.
         </p>
-        <pre className="text-xs bg-white border border-red-200 rounded px-3 py-2 font-mono text-red-900 select-all whitespace-pre-wrap">{`# Amend the last commit and re-push
+        <pre className="text-xs bg-white border border-red-200 rounded px-3 py-2 font-mono text-red-900 select-all whitespace-pre-wrap dark:bg-slate-900 dark:border-red-700 dark:text-red-300">{`# Amend the last commit and re-push
 git commit --amend
 git push origin ${branch}
 
@@ -402,17 +400,16 @@ git push origin :${branch}`}</pre>
     )
   }
 
-  // Validation failure (auto-rejected)
   return (
-    <div className="bg-red-50 border border-red-200 rounded-lg px-6 py-4">
-      <div className="text-sm font-semibold text-red-800 mb-1">
+    <div className="bg-red-50 border border-red-200 rounded-lg px-6 py-4 dark:bg-red-900/20 dark:border-red-700">
+      <div className="text-sm font-semibold text-red-800 mb-1 dark:text-red-300">
         Push blocked by validation — action required
       </div>
-      <p className="text-sm text-red-700 mb-3">
+      <p className="text-sm text-red-700 mb-3 dark:text-red-400">
         Your push was blocked by an automated check. Review the validation results above, fix the
         issues in your commits, and re-push.
       </p>
-      <pre className="text-xs bg-white border border-red-200 rounded px-3 py-2 font-mono text-red-900 select-all whitespace-pre-wrap">{`# Fix the issues, amend the last commit, and re-push
+      <pre className="text-xs bg-white border border-red-200 rounded px-3 py-2 font-mono text-red-900 select-all whitespace-pre-wrap dark:bg-slate-900 dark:border-red-700 dark:text-red-300">{`# Fix the issues, amend the last commit, and re-push
 git commit --amend
 git push origin ${branch}
 
@@ -424,11 +421,12 @@ git push origin :${branch}`}</pre>
 
 interface PushDetailProps {
   currentUser: CurrentUser | null
+  dark?: boolean
 }
 
 const DIFF_INLINE_THRESHOLD = 1000
 
-export function PushDetail({ currentUser }: PushDetailProps) {
+export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const diffRef = useRef<HTMLDivElement>(null)
@@ -446,7 +444,6 @@ export function PushDetail({ currentUser }: PushDetailProps) {
   const [attestationAnswers, setAttestationAnswers] = useState<Record<string, string>>({})
   const [adminOverrideEnabled, setAdminOverrideEnabled] = useState(false)
 
-  // Diff state — loaded separately so it never blocks the main page render
   const [diffContent, setDiffContent] = useState<string | null>(null)
   const [diffLoading, setDiffLoading] = useState(false)
   const [diffLines, setDiffLines] = useState(0)
@@ -454,7 +451,6 @@ export function PushDetail({ currentUser }: PushDetailProps) {
   const [diffHighlight, setDiffHighlight] = useState(true)
   const [diffSideBySide, setDiffSideBySide] = useState(true)
 
-  // Commits pagination
   const COMMITS_PAGE = 20
   const [showAllCommits, setShowAllCommits] = useState(false)
 
@@ -485,7 +481,6 @@ export function PushDetail({ currentUser }: PushDetailProps) {
     if (id) void Promise.resolve().then(() => load(id))
   }, [id])
 
-  // Fetch diff separately after record loads — avoids blocking page render on large diffs
   useEffect(() => {
     if (!id || !record) return
     void Promise.resolve().then(() => {
@@ -500,7 +495,6 @@ export function PushDetail({ currentUser }: PushDetailProps) {
     })
   }, [id, record])
 
-  // Render diff2html inline only when diff is small enough
   useEffect(() => {
     if (!diffContent || diffLines >= DIFF_INLINE_THRESHOLD || !diffRef.current) return
     setDiffRendering(true)
@@ -512,13 +506,14 @@ export function PushDetail({ currentUser }: PushDetailProps) {
           matching: 'lines',
           outputFormat: diffSideBySide ? 'side-by-side' : 'line-by-line',
           highlight: diffHighlight,
+          colorScheme: dark ? ColorSchemeType.DARK : ColorSchemeType.LIGHT,
         })
         ui.draw()
         if (diffHighlight) ui.highlightCode()
       } catch {
         if (diffRef.current) {
           diffRef.current.innerHTML =
-            '<pre class="text-xs text-gray-700 whitespace-pre-wrap overflow-x-auto">' +
+            '<pre class="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto">' +
             diffContent.replace(/</g, '&lt;') +
             '</pre>'
         }
@@ -527,7 +522,7 @@ export function PushDetail({ currentUser }: PushDetailProps) {
       }
     }, 16)
     return () => clearTimeout(timer)
-  }, [diffContent, diffLines, diffHighlight, diffSideBySide])
+  }, [diffContent, diffLines, diffHighlight, diffSideBySide, dark])
 
   const validationSteps: Step[] = (record?.steps ?? [])
     .filter((s) => !NON_VALIDATION_STEPS.has(s.stepName))
@@ -591,59 +586,62 @@ export function PushDetail({ currentUser }: PushDetailProps) {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
-      <button onClick={() => navigate('/')} className="text-sm text-blue-600 hover:underline">
+      <button
+        onClick={() => navigate('/')}
+        className="text-sm text-blue-600 hover:underline dark:text-blue-400"
+      >
         ← Back to push records
       </button>
 
-      {loading && <div className="text-center text-gray-400 py-16">Loading…</div>}
-      {error && <div className="text-red-600 py-8 text-center">{error}</div>}
+      {loading && (
+        <div className="text-center text-gray-400 py-16 dark:text-gray-500">Loading…</div>
+      )}
+      {error && <div className="text-red-600 py-8 text-center dark:text-red-400">{error}</div>}
 
       {record && !loading && (
         <>
           {/* Header card */}
-          <div className="bg-white rounded-lg shadow border border-gray-200 px-6 py-4">
+          <div className="bg-white rounded-lg shadow border border-gray-200 px-6 py-4 dark:bg-slate-800 dark:border-slate-700">
             <div className="flex items-start gap-4">
               <StatusBadge status={record.status} className="mt-1" />
 
-              {/* Left: commit details */}
               <div className="flex-1 min-w-0 space-y-0.5">
-                <div className="font-mono text-sm text-gray-900 truncate">
+                <div className="font-mono text-sm text-gray-900 truncate dark:text-gray-100">
                   {record.upstreamUrl ??
                     record.url ??
                     (record.project ?? '') + '/' + (record.repoName ?? '')}
                 </div>
-                <div className="text-xs text-gray-500 font-mono">{record.branch}</div>
-                <div className="text-xs font-mono text-gray-400 break-all">{record.commitTo}</div>
+                <div className="text-xs text-gray-500 font-mono dark:text-gray-400">
+                  {record.branch}
+                </div>
+                <div className="text-xs font-mono text-gray-400 break-all dark:text-gray-500">
+                  {record.commitTo}
+                </div>
                 {record.message && (
-                  <div className="text-xs text-gray-600 italic pt-0.5">{record.message}</div>
+                  <div className="text-xs text-gray-600 italic pt-0.5 dark:text-gray-400">
+                    {record.message}
+                  </div>
                 )}
               </div>
 
-              {/* Right: identity + timestamp */}
-              <div className="text-right text-xs text-gray-500 shrink-0 space-y-1">
-                {/* Git author (forgeable — labelled) */}
+              <div className="text-right text-xs text-gray-500 shrink-0 space-y-1 dark:text-gray-400">
                 {record.author && (
                   <div>
-                    <span className="text-gray-400">author: </span>
-                    <span className="text-gray-600">{record.author}</span>
+                    <span className="text-gray-400 dark:text-gray-500">author: </span>
+                    <span className="text-gray-600 dark:text-gray-300">{record.author}</span>
                   </div>
                 )}
-                {/* Git committer — only if different from author */}
                 {record.committer && record.committer !== record.author && (
                   <div>
-                    <span className="text-gray-400">committer: </span>
-                    <span className="text-gray-600">{record.committer}</span>
+                    <span className="text-gray-400 dark:text-gray-500">committer: </span>
+                    <span className="text-gray-600 dark:text-gray-300">{record.committer}</span>
                   </div>
                 )}
-                {/* Authenticated push identity */}
                 {(() => {
                   try {
                     const upstreamHost = record.upstreamUrl
                       ? new URL(record.upstreamUrl).hostname
                       : null
-                    // scmUsername  = real provider handle (coopernetes) — use for link
-                    // resolvedUser = proxy account (admin) — show when it differs from scmUsername
-                    // user         = raw HTTP Basic username — only show in open/unresolved mode
                     const displayHandle =
                       record.scmUsername ?? (record.resolvedUser ? null : record.user)
                     if (!displayHandle && !record.resolvedUser) return null
@@ -651,7 +649,7 @@ export function PushDetail({ currentUser }: PushDetailProps) {
                       <div className="space-y-0.5">
                         {displayHandle && (
                           <div className="flex items-center justify-end gap-1">
-                            <span className="text-gray-400">pusher</span>
+                            <span className="text-gray-400 dark:text-gray-500">pusher</span>
                             {upstreamHost && record.scmUsername && (
                               <img
                                 src={`https://${upstreamHost}/favicon.ico`}
@@ -666,17 +664,21 @@ export function PushDetail({ currentUser }: PushDetailProps) {
                                 href={`https://${upstreamHost}/${record.scmUsername}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-blue-600 hover:underline font-medium"
+                                className="text-blue-600 hover:underline font-medium dark:text-blue-400"
                               >
                                 {record.scmUsername}
                               </a>
                             ) : (
-                              <span className="text-gray-600">{displayHandle}</span>
+                              <span className="text-gray-600 dark:text-gray-300">
+                                {displayHandle}
+                              </span>
                             )}
                           </div>
                         )}
                         {record.resolvedUser && record.resolvedUser !== record.scmUsername && (
-                          <div className="text-gray-400">user: {record.resolvedUser}</div>
+                          <div className="text-gray-400 dark:text-gray-500">
+                            user: {record.resolvedUser}
+                          </div>
                         )}
                       </div>
                     )
@@ -686,17 +688,19 @@ export function PushDetail({ currentUser }: PushDetailProps) {
                   return null
                 })()}
                 <IdentityBadge record={record} />
-                <div className="text-gray-400">{formatTime(record.timestamp)}</div>
+                <div className="text-gray-400 dark:text-gray-500">
+                  {formatTime(record.timestamp)}
+                </div>
               </div>
             </div>
             {record.blockedMessage && (
-              <div className="mt-3 flex gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+              <div className="mt-3 flex gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-300">
                 <span>⚠️</span>
                 <span>{record.blockedMessage}</span>
               </div>
             )}
             {record.attestation && (
-              <div className="mt-3 text-sm text-gray-500 border-t border-gray-100 pt-2">
+              <div className="mt-3 text-sm text-gray-500 border-t border-gray-100 pt-2 dark:text-gray-400 dark:border-slate-700">
                 Reviewed by <strong>{record.attestation.reviewerUsername}</strong>
                 {record.attestation.reviewerEmail && ` (${record.attestation.reviewerEmail})`}
                 {record.attestation.reason && ` · "${record.attestation.reason}"`}
@@ -709,37 +713,42 @@ export function PushDetail({ currentUser }: PushDetailProps) {
 
           {/* Commits */}
           {record.commits && record.commits.length > 0 && (
-            <div className="bg-white rounded-lg shadow border border-gray-200 px-6 py-4">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+            <div className="bg-white rounded-lg shadow border border-gray-200 px-6 py-4 dark:bg-slate-800 dark:border-slate-700">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 dark:text-gray-400">
                 Commits ({record.commits.length})
               </h2>
               <div className="space-y-2">
                 {(showAllCommits ? record.commits : record.commits.slice(0, COMMITS_PAGE)).map(
                   (c) => (
-                    <div key={c.sha} className="border border-gray-100 rounded p-3 space-y-1">
-                      <div className="font-mono text-xs text-gray-400">{c.sha}</div>
-                      <div className="text-sm text-gray-800 whitespace-pre-wrap">
+                    <div
+                      key={c.sha}
+                      className="border border-gray-100 rounded p-3 space-y-1 dark:border-slate-700"
+                    >
+                      <div className="font-mono text-xs text-gray-400 dark:text-gray-500">
+                        {c.sha}
+                      </div>
+                      <div className="text-sm text-gray-800 whitespace-pre-wrap dark:text-gray-200">
                         {(c.message ?? '').split('\n')[0].trim()}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
                         <span className="font-medium">Author: </span>
                         {c.authorName} &lt;{c.authorEmail}&gt;
                       </div>
                       {c.committerName &&
                         (c.committerName !== c.authorName ||
                           c.committerEmail !== c.authorEmail) && (
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
                             <span className="font-medium">Committer: </span>
                             {c.committerName} &lt;{c.committerEmail}&gt;
                           </div>
                         )}
                       {c.signedOffBy && c.signedOffBy.length > 0 && (
-                        <div className="text-xs text-gray-500">
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
                           <span className="font-medium">Signed-off-by: </span>
                           {c.signedOffBy.map((sob) => (
                             <span
                               key={sob}
-                              className="ml-1 bg-green-50 text-green-700 border border-green-200 rounded px-1"
+                              className="ml-1 bg-green-50 text-green-700 border border-green-200 rounded px-1 dark:bg-green-900/20 dark:text-green-300 dark:border-green-700"
                             >
                               {sob}
                             </span>
@@ -753,7 +762,7 @@ export function PushDetail({ currentUser }: PushDetailProps) {
               {record.commits.length > COMMITS_PAGE && (
                 <button
                   onClick={() => setShowAllCommits((v) => !v)}
-                  className="mt-3 text-xs text-slate-500 hover:text-slate-700 transition-colors"
+                  className="mt-3 text-xs text-slate-500 hover:text-slate-700 transition-colors dark:text-slate-400 dark:hover:text-slate-300"
                 >
                   {showAllCommits
                     ? '▲ Show fewer'
@@ -765,8 +774,8 @@ export function PushDetail({ currentUser }: PushDetailProps) {
 
           {/* Validation steps */}
           {validationSteps.length > 0 && (
-            <div className="bg-white rounded-lg shadow border border-gray-200 px-6 py-4">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+            <div className="bg-white rounded-lg shadow border border-gray-200 px-6 py-4 dark:bg-slate-800 dark:border-slate-700">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 dark:text-gray-400">
                 Validation steps
               </h2>
               <div className="space-y-1">
@@ -783,31 +792,31 @@ export function PushDetail({ currentUser }: PushDetailProps) {
                         <span
                           className={
                             s.status === 'PASS'
-                              ? 'text-green-500'
+                              ? 'text-green-500 dark:text-green-400'
                               : isFailed
-                                ? 'text-red-500'
+                                ? 'text-red-500 dark:text-red-400'
                                 : isSkipped
-                                  ? 'text-yellow-500'
-                                  : 'text-gray-400'
+                                  ? 'text-yellow-500 dark:text-yellow-400'
+                                  : 'text-gray-400 dark:text-gray-500'
                           }
                         >
                           {s.status === 'PASS' ? '✓' : isFailed ? '✗' : isSkipped ? '⚠' : '–'}
                         </span>
-                        <span className="text-sm text-gray-700 w-56 shrink-0">
+                        <span className="text-sm text-gray-700 w-56 shrink-0 dark:text-gray-300">
                           {stepDisplayName(s.stepName)}
                         </span>
-                        <span className="text-gray-500 text-xs truncate flex-1">
+                        <span className="text-gray-500 text-xs truncate flex-1 dark:text-gray-400">
                           {s.errorMessage ?? s.blockedMessage ?? (isSkipped ? 'skipped' : '')}
                         </span>
                         {(isFailed || isSkipped) &&
                           (s.content || s.errorMessage || s.blockedMessage) && (
-                            <span className="text-xs text-gray-400 shrink-0">
+                            <span className="text-xs text-gray-400 shrink-0 dark:text-gray-500">
                               {isOpen ? '▲ hide' : '▼ details'}
                             </span>
                           )}
                       </div>
                       {isOpen && (s.content || s.errorMessage || s.blockedMessage) && (
-                        <pre className="mt-2 ml-6 text-xs bg-gray-50 border border-gray-200 rounded p-3 whitespace-pre-wrap font-mono text-gray-800 overflow-x-auto">
+                        <pre className="mt-2 ml-6 text-xs bg-gray-50 border border-gray-200 rounded p-3 whitespace-pre-wrap font-mono text-gray-800 overflow-x-auto dark:bg-slate-900 dark:border-slate-700 dark:text-gray-200">
                           {[s.errorMessage ?? s.blockedMessage, s.content]
                             .filter(Boolean)
                             .join('\n\n')}
@@ -821,46 +830,60 @@ export function PushDetail({ currentUser }: PushDetailProps) {
           )}
 
           {/* Diff */}
-          <div className="bg-white rounded-lg shadow border border-gray-200 px-6 py-4">
+          <div className="bg-white rounded-lg shadow border border-gray-200 px-6 py-4 dark:bg-slate-800 dark:border-slate-700">
             <div className="flex items-center gap-3 mb-3">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Diff</h2>
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide dark:text-gray-400">
+                Diff
+              </h2>
               {!diffLoading && diffContent && diffLines < DIFF_INLINE_THRESHOLD && (
                 <div className="flex items-center gap-2 ml-auto">
                   {diffRendering && (
-                    <span className="text-xs text-gray-400 italic">Rendering…</span>
+                    <span className="text-xs text-gray-400 italic dark:text-gray-500">
+                      Rendering…
+                    </span>
                   )}
                   <button
                     onClick={() => setDiffSideBySide((v) => !v)}
-                    className={`px-2.5 py-1 rounded text-xs transition-colors ${diffSideBySide ? 'bg-slate-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                    className={`px-2.5 py-1 rounded text-xs transition-colors ${
+                      diffSideBySide
+                        ? 'bg-slate-600 text-white'
+                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-slate-700 dark:text-gray-400 dark:hover:bg-gray-600'
+                    }`}
                   >
                     Side-by-side
                   </button>
                   <button
                     onClick={() => setDiffHighlight((v) => !v)}
-                    className={`px-2.5 py-1 rounded text-xs transition-colors ${diffHighlight ? 'bg-slate-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                    className={`px-2.5 py-1 rounded text-xs transition-colors ${
+                      diffHighlight
+                        ? 'bg-slate-600 text-white'
+                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-slate-700 dark:text-gray-400 dark:hover:bg-gray-600'
+                    }`}
                   >
                     Syntax highlight
                   </button>
                   <Link
                     to={`/push/${id}/diff`}
-                    className="px-2.5 py-1 rounded text-xs text-slate-500 hover:text-slate-700 bg-gray-100 hover:bg-gray-200 transition-colors"
+                    className="px-2.5 py-1 rounded text-xs text-slate-500 hover:text-slate-700 bg-gray-100 hover:bg-gray-200 transition-colors dark:bg-slate-700 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-600"
                   >
                     Full page →
                   </Link>
                 </div>
               )}
             </div>
-            {diffLoading && <div className="text-gray-400 text-sm">Loading diff…</div>}
+            {diffLoading && (
+              <div className="text-gray-400 text-sm dark:text-gray-500">Loading diff…</div>
+            )}
             {!diffLoading && !diffContent && (
-              <div className="text-gray-400 text-sm">No diff available.</div>
+              <div className="text-gray-400 text-sm dark:text-gray-500">No diff available.</div>
             )}
             {!diffLoading && diffContent && diffLines >= DIFF_INLINE_THRESHOLD && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-center justify-between gap-4">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-center justify-between gap-4 dark:bg-amber-900/20 dark:border-amber-700">
                 <div>
-                  <p className="text-sm font-medium text-amber-800">
+                  <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
                     This diff is large ({diffLines.toLocaleString()} lines)
                   </p>
-                  <p className="text-xs text-amber-600 mt-0.5">
+                  <p className="text-xs text-amber-600 mt-0.5 dark:text-amber-400">
                     Rendering it inline would degrade page performance.
                   </p>
                 </div>
@@ -886,16 +909,11 @@ export function PushDetail({ currentUser }: PushDetailProps) {
           {record.status === 'PENDING' &&
             (() => {
               const isAdmin = currentUser?.authorities?.includes('ROLE_ADMIN') ?? false
-              // canCurrentUserSelfCertify is computed server-side and requires BOTH the
-              // ROLE_SELF_CERTIFY authority AND a SELF_CERTIFY repo permission row for this push's
-              // path. A user with the role but no per-repo permission gets `false` here.
               const canSelfCertify = record.canCurrentUserSelfCertify ?? false
               const isPusher =
                 !!currentUser?.username &&
                 !!record.resolvedUser &&
                 currentUser.username === record.resolvedUser
-              // Admins are treated the same as regular users for their own pushes: they need
-              // self-certify permissions or must explicitly activate the admin override.
               const isSelfReview = isPusher && !canSelfCertify
               const canCancel = isAdmin || isPusher
               const attestationsComplete = attestationQuestions
@@ -907,11 +925,11 @@ export function PushDetail({ currentUser }: PushDetailProps) {
                   return true
                 })
               return (
-                <div className="bg-white rounded-lg shadow border border-gray-200 px-6 py-5">
-                  <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                <div className="bg-white rounded-lg shadow border border-gray-200 px-6 py-5 dark:bg-slate-800 dark:border-slate-700">
+                  <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 dark:text-gray-400">
                     Review
                   </h2>
-                  <div className="text-xs text-gray-400 mb-3">
+                  <div className="text-xs text-gray-400 mb-3 dark:text-gray-500">
                     Reviewing as{' '}
                     <strong>
                       {currentUser
@@ -920,13 +938,13 @@ export function PushDetail({ currentUser }: PushDetailProps) {
                         : '…'}
                     </strong>
                     {isAdmin && (
-                      <span className="ml-2 inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                      <span className="ml-2 inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                         admin
                       </span>
                     )}
                   </div>
                   {isSelfReview && !adminOverrideEnabled && (
-                    <div className="flex gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-3">
+                    <div className="flex gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-3 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-300">
                       <span>⚠</span>
                       <span>
                         Self-approval is not permitted — you pushed these commits. Another reviewer
@@ -935,8 +953,8 @@ export function PushDetail({ currentUser }: PushDetailProps) {
                     </div>
                   )}
                   {canSelfCertify && isPusher && (
-                    <div className="flex gap-2 text-sm text-blue-800 bg-blue-50 border border-blue-200 rounded px-3 py-2 mb-3">
-                      <span>{'\u2139\uFE0F'}</span>
+                    <div className="flex gap-2 text-sm text-blue-800 bg-blue-50 border border-blue-200 rounded px-3 py-2 mb-3 dark:bg-blue-900/20 dark:border-blue-700 dark:text-blue-300">
+                      <span>{'ℹ️'}</span>
                       <span>
                         You are self-certifying your own push. This approval will be permanently
                         recorded in the audit log.
@@ -946,13 +964,13 @@ export function PushDetail({ currentUser }: PushDetailProps) {
                   {isAdmin && isPusher && !canSelfCertify && !adminOverrideEnabled && (
                     <button
                       onClick={() => setAdminOverrideEnabled(true)}
-                      className="w-full text-left text-xs text-gray-500 hover:text-gray-700 underline mb-3"
+                      className="w-full text-left text-xs text-gray-500 hover:text-gray-700 underline mb-3 dark:text-gray-400 dark:hover:text-gray-300"
                     >
                       Enable admin override
                     </button>
                   )}
                   {isAdmin && isPusher && adminOverrideEnabled && (
-                    <div className="flex gap-2 text-sm text-red-800 bg-red-50 border border-red-200 rounded px-3 py-2 mb-3">
+                    <div className="flex gap-2 text-sm text-red-800 bg-red-50 border border-red-200 rounded px-3 py-2 mb-3 dark:bg-red-900/20 dark:border-red-700 dark:text-red-300">
                       <span>⚠</span>
                       <span>
                         <strong>WARNING:</strong> You are about to approve your own push as an admin
@@ -963,7 +981,7 @@ export function PushDetail({ currentUser }: PushDetailProps) {
                   )}
                   {attestationQuestions.length > 0 && (
                     <div className="mb-4 space-y-3">
-                      <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide dark:text-gray-400">
                         Attestation
                       </div>
                       {attestationQuestions.map((q) => (
@@ -987,9 +1005,11 @@ export function PushDetail({ currentUser }: PushDetailProps) {
                       'Reason (required for both approve and reject)\nDescribe the basis for your decision...'
                     }
                     disabled={isSelfReview && !adminOverrideEnabled}
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm mb-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-gray-50 disabled:text-gray-400"
+                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm mb-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-gray-50 disabled:text-gray-400 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400 dark:disabled:bg-gray-800 dark:disabled:text-gray-500"
                   />
-                  {actionError && <div className="text-red-600 text-sm mb-3">{actionError}</div>}
+                  {actionError && (
+                    <div className="text-red-600 text-sm mb-3 dark:text-red-400">{actionError}</div>
+                  )}
                   <div className="flex gap-3">
                     <button
                       onClick={handleApprove}
@@ -1020,7 +1040,7 @@ export function PushDetail({ currentUser }: PushDetailProps) {
                       <button
                         onClick={handleCancel}
                         disabled={saving || canceling}
-                        className="ml-auto px-4 py-2 text-sm font-medium rounded border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                        className="ml-auto px-4 py-2 text-sm font-medium rounded border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-slate-600 dark:text-gray-400 dark:hover:bg-gray-700"
                       >
                         {canceling ? 'Canceling…' : 'Cancel push'}
                       </button>

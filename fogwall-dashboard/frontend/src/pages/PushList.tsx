@@ -16,13 +16,20 @@ const STATUSES: PushStatus[] = [
 ]
 
 const STATUS_COLORS: Record<string, string> = {
-  PENDING: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100',
-  APPROVED: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100',
-  FORWARDED: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100',
-  REJECTED: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100',
-  RECEIVED: 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100',
-  CANCELED: 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100',
-  ERROR: 'bg-rose-50 text-rose-800 border-rose-200 hover:bg-rose-100',
+  PENDING:
+    'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-700 dark:hover:bg-amber-900/40',
+  APPROVED:
+    'bg-green-50 text-green-700 border-green-200 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-300 dark:border-green-700 dark:hover:bg-green-900/40',
+  FORWARDED:
+    'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-700 dark:hover:bg-blue-900/40',
+  REJECTED:
+    'bg-red-50 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-300 dark:border-red-700 dark:hover:bg-red-900/40',
+  RECEIVED:
+    'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 dark:bg-slate-700/40 dark:text-slate-300 dark:border-slate-600 dark:hover:bg-slate-700/60',
+  CANCELED:
+    'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100 dark:bg-slate-700/40 dark:text-gray-400 dark:border-slate-600 dark:hover:bg-gray-700/60',
+  ERROR:
+    'bg-rose-50 text-rose-800 border-rose-200 hover:bg-rose-100 dark:bg-rose-900/20 dark:text-rose-300 dark:border-rose-700 dark:hover:bg-rose-900/40',
 }
 
 function formatTime(ts: string | number | undefined) {
@@ -197,8 +204,8 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
           }}
           className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
             filterStatus === ''
-              ? 'bg-gray-900 text-white border-gray-900'
-              : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+              ? 'bg-gray-900 text-white border-gray-900 dark:bg-slate-100 dark:text-gray-900 dark:border-slate-100'
+              : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-300 dark:border-slate-600 dark:hover:bg-gray-700'
           }`}
         >
           All
@@ -212,8 +219,9 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
             }}
             className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
               filterStatus === s
-                ? 'bg-gray-900 text-white border-gray-900'
-                : (STATUS_COLORS[s] ?? 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50')
+                ? 'bg-gray-900 text-white border-gray-900 dark:bg-slate-100 dark:text-gray-900 dark:border-slate-100'
+                : (STATUS_COLORS[s] ??
+                  'bg-white text-gray-600 border-gray-300 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-300 dark:border-slate-600 dark:hover:bg-gray-700')
             }`}
           >
             {s.charAt(0) + s.slice(1).toLowerCase()}
@@ -224,8 +232,8 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
 
       {/* Bulk action bar — shown when items are selected */}
       {selectionEnabled && selectedIds.size > 0 && (
-        <div className="max-w-7xl mx-auto px-4 py-3 flex gap-3 flex-wrap items-center bg-amber-50 border-y border-amber-200">
-          <span className="text-sm font-medium text-amber-800">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex gap-3 flex-wrap items-center bg-amber-50 border-y border-amber-200 dark:bg-amber-900/20 dark:border-amber-700">
+          <span className="text-sm font-medium text-amber-800 dark:text-amber-300">
             {selectedIds.size} push{selectedIds.size !== 1 ? 'es' : ''} selected
           </span>
           <input
@@ -233,7 +241,7 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
             onChange={(e) => setBulkReason(e.target.value)}
             type="text"
             placeholder="Reason (required)..."
-            className="flex-1 min-w-40 border border-amber-300 rounded px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-300"
+            className="flex-1 min-w-40 border border-amber-300 rounded px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-300 dark:bg-slate-700 dark:border-amber-700 dark:text-gray-200 dark:placeholder-gray-400 dark:focus:ring-amber-600"
           />
           <button
             onClick={handleBulkApprove}
@@ -255,18 +263,20 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
               setBulkReason('')
               setBulkError('')
             }}
-            className="text-sm text-amber-700 hover:underline ml-auto"
+            className="text-sm text-amber-700 hover:underline ml-auto dark:text-amber-400"
           >
             Clear
           </button>
-          {bulkError && <div className="w-full text-sm text-red-600">{bulkError}</div>}
+          {bulkError && (
+            <div className="w-full text-sm text-red-600 dark:text-red-400">{bulkError}</div>
+          )}
         </div>
       )}
 
       {/* Filter bar */}
-      <div className="max-w-7xl mx-auto px-4 py-3 flex gap-3 flex-wrap items-center border-b border-gray-100">
+      <div className="max-w-7xl mx-auto px-4 py-3 flex gap-3 flex-wrap items-center border-b border-gray-100 dark:border-slate-700">
         {selectionEnabled && (
-          <label className="flex items-center gap-1.5 text-sm text-gray-500 cursor-pointer select-none">
+          <label className="flex items-center gap-1.5 text-sm text-gray-500 cursor-pointer select-none dark:text-gray-400">
             <input
               type="checkbox"
               checked={
@@ -274,7 +284,7 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
                 selectedIds.size === pushes.filter((p) => p.status === 'PENDING').length
               }
               onChange={toggleSelectAll}
-              className="rounded border-gray-300"
+              className="rounded border-gray-300 dark:border-slate-600"
             />
             <span className="text-xs">All</span>
           </label>
@@ -284,7 +294,7 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
           onChange={(e) => handleRepoChange(e.target.value)}
           type="text"
           placeholder="Filter by project or repo..."
-          className="border border-gray-300 rounded px-3 py-1.5 text-sm bg-white shadow-sm w-52"
+          className="border border-gray-300 rounded px-3 py-1.5 text-sm bg-white shadow-sm w-52 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400"
         />
 
         {currentUser && (
@@ -296,7 +306,7 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
             className={`px-3 py-1.5 text-sm rounded border transition-colors ${
               myPushesOnly
                 ? 'bg-blue-600 text-white border-blue-600'
-                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-300 dark:border-slate-600 dark:hover:bg-gray-700'
             }`}
           >
             My pushes
@@ -308,13 +318,13 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
             setNewestFirst((v) => !v)
             setPage(0)
           }}
-          className="px-3 py-1.5 text-sm rounded border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 transition-colors"
+          className="px-3 py-1.5 text-sm rounded border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 transition-colors dark:bg-slate-800 dark:text-gray-300 dark:border-slate-600 dark:hover:bg-gray-700"
           title={newestFirst ? 'Currently: newest first' : 'Currently: oldest first'}
         >
           {newestFirst ? '↓ Newest first' : '↑ Oldest first'}
         </button>
 
-        <div className="ml-auto flex items-center gap-4 text-sm text-gray-400">
+        <div className="ml-auto flex items-center gap-4 text-sm text-gray-400 dark:text-gray-500">
           <span>
             {pushes.length} record{pushes.length !== 1 ? 's' : ''}
             {page > 0 ? ` (page ${page + 1})` : ''}
@@ -322,7 +332,7 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
           {lastRefresh && <span>refreshed {lastRefresh}</span>}
           <button
             onClick={() => load(filterStatus, filterRepo, myPushesOnly, newestFirst, page)}
-            className="text-blue-600 hover:underline"
+            className="text-blue-600 hover:underline dark:text-blue-400"
           >
             &#8635; Refresh
           </button>
@@ -332,16 +342,18 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
       {/* List */}
       <div className="max-w-7xl mx-auto px-4 space-y-2 py-4 pb-12">
         {pushes.length === 0 && (
-          <div className="text-center text-gray-400 py-16">No push records found.</div>
+          <div className="text-center text-gray-400 dark:text-gray-500 py-16">
+            No push records found.
+          </div>
         )}
         {pushes.map((push) => (
           <div
             key={push.id}
             onClick={() => navigate(`/push/${push.id}`)}
-            className={`bg-white rounded-lg shadow border transition-colors cursor-pointer ${
+            className={`bg-white rounded-lg shadow border transition-colors cursor-pointer dark:bg-slate-800 ${
               selectedIds.has(push.id)
-                ? 'border-amber-300 bg-amber-50'
-                : 'border-gray-200 hover:border-blue-300'
+                ? 'border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20'
+                : 'border-gray-200 hover:border-blue-300 dark:border-slate-700 dark:hover:border-blue-500'
             }`}
           >
             <div className="flex items-center gap-4 px-5 py-3">
@@ -351,36 +363,40 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
                   checked={selectedIds.has(push.id)}
                   onClick={(e) => toggleSelect(push.id, e)}
                   onChange={() => {}}
-                  className="rounded border-gray-300 shrink-0"
+                  className="rounded border-gray-300 shrink-0 dark:border-slate-600"
                 />
               )}
               <StatusBadge status={push.status} />
               <div className="flex-1 min-w-0 space-y-0.5">
-                <div className="font-mono text-sm text-gray-900 truncate">
+                <div className="font-mono text-sm text-gray-900 truncate dark:text-gray-100">
                   {push.upstreamUrl ??
                     push.url ??
                     (push.project ?? '') + '/' + (push.repoName ?? 'unknown')}
                 </div>
-                <div className="text-xs text-gray-500 truncate">{push.branch ?? '—'}</div>
-                <div className="font-mono text-xs text-gray-400 break-all">
+                <div className="text-xs text-gray-500 truncate dark:text-gray-400">
+                  {push.branch ?? '—'}
+                </div>
+                <div className="font-mono text-xs text-gray-400 break-all dark:text-gray-500">
                   {push.commitTo ?? '—'}
                 </div>
               </div>
-              <div className="text-right text-sm text-gray-500 shrink-0">
+              <div className="text-right text-sm text-gray-500 shrink-0 dark:text-gray-400">
                 <div>{push.author ?? push.user ?? '—'}</div>
                 {push.resolvedUser ? (
-                  <span className="inline-flex items-center gap-0.5 text-xs text-green-600 font-medium">
+                  <span className="inline-flex items-center gap-0.5 text-xs text-green-600 font-medium dark:text-green-400">
                     ● identity resolved
                   </span>
                 ) : push.user ? (
-                  <span className="inline-flex items-center gap-0.5 text-xs text-gray-400 font-medium">
+                  <span className="inline-flex items-center gap-0.5 text-xs text-gray-400 font-medium dark:text-gray-500">
                     ● identity unresolved
                   </span>
                 ) : null}
-                <div className="text-xs text-gray-400 mt-0.5">{formatTime(push.timestamp)}</div>
+                <div className="text-xs text-gray-400 mt-0.5 dark:text-gray-500">
+                  {formatTime(push.timestamp)}
+                </div>
               </div>
               <svg
-                className="w-4 h-4 text-gray-300 shrink-0"
+                className="w-4 h-4 text-gray-300 shrink-0 dark:text-gray-600"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -403,15 +419,17 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
           <button
             onClick={() => setPage((p) => Math.max(0, p - 1))}
             disabled={page === 0}
-            className="px-4 py-2 text-sm rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+            className="px-4 py-2 text-sm rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 dark:bg-slate-800 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-gray-700"
           >
             ← Previous
           </button>
-          <span className="px-4 py-2 text-sm text-gray-500">Page {page + 1}</span>
+          <span className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
+            Page {page + 1}
+          </span>
           <button
             onClick={() => setPage((p) => p + 1)}
             disabled={!hasMore}
-            className="px-4 py-2 text-sm rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+            className="px-4 py-2 text-sm rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 dark:bg-slate-800 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-gray-700"
           >
             Next →
           </button>

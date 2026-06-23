@@ -1,4 +1,5 @@
 import { Diff2HtmlUI } from 'diff2html/lib/ui/js/diff2html-ui-slim'
+import { ColorSchemeType } from 'diff2html/lib/types'
 import 'diff2html/bundles/css/diff2html.min.css'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
@@ -35,7 +36,7 @@ function ToggleButton({
   )
 }
 
-export function PushDiff() {
+export function PushDiff({ dark = false }: { dark?: boolean }) {
   const { id } = useParams<{ id: string }>()
   const diffRef = useRef<HTMLDivElement>(null)
 
@@ -84,6 +85,7 @@ export function PushDiff() {
           matching: 'none',
           outputFormat: sideBySide ? 'side-by-side' : 'line-by-line',
           highlight,
+          colorScheme: dark ? ColorSchemeType.DARK : ColorSchemeType.LIGHT,
         })
         ui.draw()
         if (highlight) ui.highlightCode()
@@ -99,10 +101,10 @@ export function PushDiff() {
       }
     }, 16)
     return () => clearTimeout(timer)
-  }, [diffContent, highlight, sideBySide])
+  }, [diffContent, highlight, sideBySide, dark])
 
   return (
-    <div className="min-h-screen flex flex-col bg-white">
+    <div className="min-h-screen flex flex-col bg-white dark:bg-slate-900">
       {/* Header */}
       <div className="bg-slate-800 text-white px-6 py-3 flex items-center gap-4 text-sm shrink-0 flex-wrap">
         <Link
@@ -145,12 +147,14 @@ export function PushDiff() {
       {/* Diff body */}
       <div className="flex-1 overflow-auto">
         {loading && (
-          <div className="flex items-center justify-center h-64 text-gray-400 text-sm">
+          <div className="flex items-center justify-center h-64 text-gray-400 text-sm dark:text-gray-500">
             Loading diff…
           </div>
         )}
         {error && (
-          <div className="flex items-center justify-center h-64 text-red-500 text-sm">{error}</div>
+          <div className="flex items-center justify-center h-64 text-red-500 text-sm dark:text-red-400">
+            {error}
+          </div>
         )}
         {!loading && !error && (
           <div className="p-4">

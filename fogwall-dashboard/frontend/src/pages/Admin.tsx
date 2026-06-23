@@ -22,7 +22,9 @@ function TcpBadge({ tcp }: { tcp: TcpResult }) {
   return (
     <span
       className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
-        ok ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+        ok
+          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+          : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
       }`}
     >
       {ok ? '✓' : '✗'} TCP {ok ? ms(tcp.durationMs) : (tcp.error ?? 'ERROR')}
@@ -36,7 +38,9 @@ function TlsBadge({ tls }: { tls: TlsResult | null | undefined }) {
   return (
     <span
       className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
-        ok ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+        ok
+          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+          : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
       }`}
     >
       {ok ? '✓' : '✗'} TLS {ok ? ms(tls.durationMs) : (tls.error ?? 'ERROR')}
@@ -52,7 +56,9 @@ function HttpBadge({ http }: { http: HttpResult | null | undefined }) {
   return (
     <span
       className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
-        ok ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+        ok
+          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+          : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
       }`}
     >
       {ok ? '✓' : '✗'} {label}
@@ -66,7 +72,9 @@ function GitProbeBadge({ label, result }: { label: string; result: GitProbeResul
   return (
     <span
       className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
-        ok ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+        ok
+          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+          : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
       }`}
     >
       {ok ? '✓' : '✗'} {label} {detail}
@@ -120,7 +128,7 @@ function ConnectivityRow({ result }: { name: string; result: ProviderConnectivit
   const tlsOk = result.tls == null || result.tls.status === 'ok'
 
   return (
-    <div className="border border-gray-200 rounded-lg p-4 space-y-2">
+    <div className="border border-gray-200 rounded-lg p-4 space-y-2 dark:border-slate-700">
       {/* Header row */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-wrap gap-1.5 shrink-0">
@@ -128,7 +136,9 @@ function ConnectivityRow({ result }: { name: string; result: ProviderConnectivit
           <TlsBadge tls={result.tls} />
           <HttpBadge http={result.http} />
         </div>
-        <span className="text-xs text-gray-400 font-mono text-right break-all">{result.uri}</span>
+        <span className="text-xs text-gray-400 font-mono text-right break-all dark:text-gray-500">
+          {result.uri}
+        </span>
       </div>
       {result.gitProbe && (
         <div className="flex flex-wrap gap-1.5">
@@ -139,26 +149,32 @@ function ConnectivityRow({ result }: { name: string; result: ProviderConnectivit
 
       {/* Error details */}
       {!tcpOk && (
-        <div className="text-xs font-mono bg-red-50 text-red-700 rounded px-2 py-1.5 space-y-0.5">
+        <div className="text-xs font-mono bg-red-50 text-red-700 rounded px-2 py-1.5 space-y-0.5 dark:bg-red-900/20 dark:text-red-300">
           <div>
             TCP {result.tcp.host}:{result.tcp.port} → <strong>{result.tcp.error}</strong> (
             {ms(result.tcp.durationMs)})
           </div>
-          {result.tcp.detail && <div className="text-red-500">{result.tcp.detail}</div>}
+          {result.tcp.detail && (
+            <div className="text-red-500 dark:text-red-400">{result.tcp.detail}</div>
+          )}
         </div>
       )}
       {tcpOk && !tlsOk && result.tls && (
-        <div className="text-xs font-mono bg-red-50 text-red-700 rounded px-2 py-1.5 space-y-0.5">
+        <div className="text-xs font-mono bg-red-50 text-red-700 rounded px-2 py-1.5 space-y-0.5 dark:bg-red-900/20 dark:text-red-300">
           <div>
             TLS → <strong>{result.tls.error}</strong> ({ms(result.tls.durationMs)})
           </div>
-          {result.tls.detail && <div className="text-red-500">{result.tls.detail}</div>}
+          {result.tls.detail && (
+            <div className="text-red-500 dark:text-red-400">{result.tls.detail}</div>
+          )}
         </div>
       )}
       {result.http && typeof result.http.status === 'string' && (
-        <div className="text-xs font-mono bg-red-50 text-red-700 rounded px-2 py-1.5">
+        <div className="text-xs font-mono bg-red-50 text-red-700 rounded px-2 py-1.5 dark:bg-red-900/20 dark:text-red-300">
           HTTP → ERROR ({ms(result.http.durationMs)})
-          {result.http.detail && <div className="text-red-500">{result.http.detail}</div>}
+          {result.http.detail && (
+            <div className="text-red-500 dark:text-red-400">{result.http.detail}</div>
+          )}
         </div>
       )}
       {result.gitProbe &&
@@ -170,37 +186,41 @@ function ConnectivityRow({ result }: { name: string; result: ProviderConnectivit
             return (
               <div
                 key={k}
-                className="text-xs font-mono bg-red-50 text-red-700 rounded px-2 py-1.5 space-y-0.5"
+                className="text-xs font-mono bg-red-50 text-red-700 rounded px-2 py-1.5 space-y-0.5 dark:bg-red-900/20 dark:text-red-300"
               >
                 <div>
                   Git {label} → <strong>{r.error}</strong> ({ms(r.durationMs)})
                 </div>
-                {r.detail && <div className="text-red-500">{r.detail}</div>}
-                {r.probeUrl && <div className="text-red-400 break-all">URL: {r.probeUrl}</div>}
+                {r.detail && <div className="text-red-500 dark:text-red-400">{r.detail}</div>}
+                {r.probeUrl && (
+                  <div className="text-red-400 break-all dark:text-red-500">URL: {r.probeUrl}</div>
+                )}
               </div>
             )
           })}
 
       {/* Success details */}
       {tcpOk && tlsOk && result.tls && result.tls.status === 'ok' && (
-        <div className="text-xs text-gray-400 font-mono">
+        <div className="text-xs text-gray-400 font-mono dark:text-gray-500">
           {result.tls.protocol} · {result.tls.cipher}
           {result.tls.peerCn && <span className="ml-2">· CN={result.tls.peerCn}</span>}
         </div>
       )}
       {result.http && typeof result.http.status === 'number' && result.http.location && (
-        <div className="text-xs text-gray-400 font-mono">→ {result.http.location}</div>
+        <div className="text-xs text-gray-400 font-mono dark:text-gray-500">
+          → {result.http.location}
+        </div>
       )}
       {result.gitProbe && (
         <>
           {result.gitProbe.uploadPack.status === 'ok' && result.gitProbe.uploadPack.contentType && (
-            <div className="text-xs text-gray-400 font-mono">
+            <div className="text-xs text-gray-400 font-mono dark:text-gray-500">
               fetch content-type: {result.gitProbe.uploadPack.contentType}
             </div>
           )}
           {result.gitProbe.receivePack.status === 'ok' &&
             result.gitProbe.receivePack.contentType && (
-              <div className="text-xs text-gray-400 font-mono">
+              <div className="text-xs text-gray-400 font-mono dark:text-gray-500">
                 push content-type: {result.gitProbe.receivePack.contentType}
               </div>
             )}
@@ -289,12 +309,14 @@ export function Admin() {
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-800">Admin</h1>
+      <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-200">Admin</h1>
 
-      <section className="bg-white rounded-lg shadow p-6 space-y-4">
+      <section className="bg-white rounded-lg shadow p-6 space-y-4 dark:bg-slate-800">
         <div>
-          <h2 className="text-lg font-medium text-gray-700">Configuration Reload</h2>
-          <p className="text-sm text-gray-500 mt-1">
+          <h2 className="text-lg font-medium text-gray-700 dark:text-gray-300">
+            Configuration Reload
+          </h2>
+          <p className="text-sm text-gray-500 mt-1 dark:text-gray-400">
             Reloads config from the configured source (file or git) without restarting the server.
             Select a section to reload only that portion, or choose <em>All sections</em> to reload
             everything. Provider, server, and database changes still require a restart.
@@ -306,7 +328,7 @@ export function Admin() {
             value={reloadSection}
             onChange={(e) => setReloadSection(e.target.value)}
             disabled={reloadStatus === 'loading'}
-            className="px-3 py-2 border border-gray-300 rounded text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-50"
+            className="px-3 py-2 border border-gray-300 rounded text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-50 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"
           >
             <option value="all">All sections</option>
             <option value="commit">Commit rules</option>
@@ -327,7 +349,10 @@ export function Admin() {
           {reloadMessage && (
             <p
               className={
-                'text-sm ' + (reloadStatus === 'error' ? 'text-red-600' : 'text-green-700')
+                'text-sm ' +
+                (reloadStatus === 'error'
+                  ? 'text-red-600 dark:text-red-400'
+                  : 'text-green-700 dark:text-green-400')
               }
             >
               {reloadMessage}
@@ -336,10 +361,12 @@ export function Admin() {
         </div>
       </section>
 
-      <section className="bg-white rounded-lg shadow p-6 space-y-4">
+      <section className="bg-white rounded-lg shadow p-6 space-y-4 dark:bg-slate-800">
         <div>
-          <h2 className="text-lg font-medium text-gray-700">Provider Connectivity</h2>
-          <p className="text-sm text-gray-500 mt-1">
+          <h2 className="text-lg font-medium text-gray-700 dark:text-gray-300">
+            Provider Connectivity
+          </h2>
+          <p className="text-sm text-gray-500 mt-1 dark:text-gray-400">
             Tests outbound connectivity to each configured upstream provider: TCP handshake, TLS
             negotiation, and HTTP response. Error codes: REFUSED (RST received — port closed or
             firewall REJECT), TIMEOUT (no response — firewall DROP), RESET (connection torn down
@@ -357,13 +384,13 @@ export function Admin() {
             {connStatus === 'loading' ? 'Checking…' : 'Run connectivity check'}
           </button>
           {connCheckedAt && (
-            <span className="text-xs text-gray-400">
+            <span className="text-xs text-gray-400 dark:text-gray-500">
               checked at {new Date(connCheckedAt).toLocaleTimeString()}
             </span>
           )}
         </div>
 
-        {connError && <p className="text-sm text-red-600">{connError}</p>}
+        {connError && <p className="text-sm text-red-600 dark:text-red-400">{connError}</p>}
 
         {connResults && (
           <div className="space-y-2">
@@ -374,10 +401,12 @@ export function Admin() {
         )}
       </section>
 
-      <section className="bg-white rounded-lg shadow p-6 space-y-4">
+      <section className="bg-white rounded-lg shadow p-6 space-y-4 dark:bg-slate-800">
         <div>
-          <h2 className="text-lg font-medium text-gray-700">Targeted Git Probe</h2>
-          <p className="text-sm text-gray-500 mt-1">
+          <h2 className="text-lg font-medium text-gray-700 dark:text-gray-300">
+            Targeted Git Probe
+          </h2>
+          <p className="text-sm text-gray-500 mt-1 dark:text-gray-400">
             Runs the full connectivity check for a single provider, then sends{' '}
             <code className="font-mono">GET /info/refs?service=git-upload-pack</code> with{' '}
             <code className="font-mono">User-Agent: git/2.x.x</code> to a specific repo — the same
@@ -391,11 +420,13 @@ export function Admin() {
         <div className="space-y-3">
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1 sm:w-48">
-              <label className="text-xs font-medium text-gray-600">Provider</label>
+              <label className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                Provider
+              </label>
               <select
                 value={selectedProvider}
                 onChange={(e) => setSelectedProvider(e.target.value)}
-                className="border border-gray-300 rounded px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400"
+                className="border border-gray-300 rounded px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"
               >
                 {providerList.map((p) => (
                   <option key={p.name} value={p.name}>
@@ -405,14 +436,14 @@ export function Admin() {
               </select>
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-600">
+              <label className="text-xs font-medium text-gray-600 dark:text-gray-400">
                 Repo path{' '}
-                <span className="font-normal text-gray-400">
+                <span className="font-normal text-gray-400 dark:text-gray-500">
                   (optional — skips git probe if blank)
                 </span>
               </label>
               <div className="flex items-stretch">
-                <span className="inline-flex items-center px-3 rounded-l border border-r-0 border-gray-300 bg-gray-50 text-gray-400 text-xs font-mono select-none">
+                <span className="inline-flex items-center px-3 rounded-l border border-r-0 border-gray-300 bg-gray-50 text-gray-400 text-xs font-mono select-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-500">
                   {providerList.find((p) => p.name === selectedProvider)?.uri ?? ''}
                 </span>
                 <input
@@ -420,7 +451,7 @@ export function Admin() {
                   placeholder="/owner/repo.git"
                   value={repoPath}
                   onChange={(e) => setRepoPath(e.target.value)}
-                  className="flex-1 border border-gray-300 rounded-r px-3 py-2 text-sm font-mono text-gray-800 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  className="flex-1 border border-gray-300 rounded-r px-3 py-2 text-sm font-mono text-gray-800 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"
                 />
               </div>
             </div>
@@ -435,14 +466,14 @@ export function Admin() {
               {targetStatus === 'loading' ? 'Checking…' : 'Run targeted check'}
             </button>
             {targetCheckedAt && (
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-gray-400 dark:text-gray-500">
                 checked at {new Date(targetCheckedAt).toLocaleTimeString()}
               </span>
             )}
           </div>
         </div>
 
-        {targetError && <p className="text-sm text-red-600">{targetError}</p>}
+        {targetError && <p className="text-sm text-red-600 dark:text-red-400">{targetError}</p>}
 
         {targetResults && (
           <div className="space-y-2">
