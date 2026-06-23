@@ -40,7 +40,11 @@ public class ConfigReloadController {
     @Autowired
     private LiveConfigLoader liveConfigLoader;
 
-    @Operation(operationId = "reloadConfig", summary = "Trigger a live config reload")
+    @Operation(
+            operationId = "reloadConfig",
+            summary = "Trigger a live config reload",
+            description =
+                    "Valid section values: all (default), commit, diff-scan, secret-scan, rules, permissions. Provider, server, and database changes require a restart.")
     @PostMapping("/reload")
     public ResponseEntity<Map<String, String>> reload(
             @RequestParam(name = "section", defaultValue = "all") String sectionParam) {

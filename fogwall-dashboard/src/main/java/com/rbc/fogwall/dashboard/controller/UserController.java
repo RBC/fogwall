@@ -32,7 +32,10 @@ public class UserController {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
-    @Operation(operationId = "listUsers", summary = "List all users")
+    @Operation(
+            operationId = "listUsers",
+            summary = "List all users",
+            description = "Returns all users with their primary email, SCM provider links, and push counts by status.")
     @GetMapping
     public List<UserSummary> list() {
         Map<String, Map<String, Long>> allPushCounts = pushStore.countPushStatusByUser();

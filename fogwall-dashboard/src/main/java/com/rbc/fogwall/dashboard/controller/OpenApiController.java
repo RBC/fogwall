@@ -1,5 +1,8 @@
 package com.rbc.fogwall.dashboard.controller;
 
+import io.swagger.v3.core.converter.AnnotatedType;
+import io.swagger.v3.core.converter.ModelConverters;
+import io.swagger.v3.core.converter.ResolvedSchema;
 import io.swagger.v3.core.util.Json;
 import io.swagger.v3.core.util.Yaml;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -9,21 +12,30 @@ import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.Paths;
 import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.media.Content;
+import io.swagger.v3.oas.models.media.MediaType;
+import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.parameters.Parameter;
+import io.swagger.v3.oas.models.responses.ApiResponse;
+import io.swagger.v3.oas.models.responses.ApiResponses;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.lang.reflect.WildcardType;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -40,6 +52,9 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  * Serves the OpenAPI 3 specification for the fogwall REST API. The spec is generated at startup by walking Spring's
  * {@link RequestMappingHandlerMapping}, so it always reflects the actual registered routes.
  *
+ * <p>Request body and response schemas are resolved via {@link ModelConverters} (Jackson-backed) and collected into the
+ * spec's {@code components/schemas} section so that Swagger UI can render them.
+ *
  * <ul>
  *   <li>{@code GET /api/openapi.yaml} — YAML format (machine-readable)
  *   <li>{@code GET /api/openapi.json} — JSON format
@@ -47,6 +62,7 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  *
  * Both endpoints are public (no authentication required). Swagger UI is served at {@code /swagger-ui/}.
  */
+@Slf4j
 @RestController
 @RequestMapping("/api")
 public class OpenApiController {
@@ -78,6 +94,8 @@ public class OpenApiController {
 
     @PostConstruct
     public void buildSpec() {
+        Map<String, Schema> componentSchemas = new LinkedHashMap<>();
+
         OpenAPI spec = new OpenAPI()
                 .info(
                         new Info()
@@ -93,7 +111,7 @@ public class OpenApiController {
                                         .in(SecurityScheme.In.HEADER)
                                         .name("X-Api-Key")
                                         .description(
-                                                "API key for programmatic access. Configured via the fogwall_API_KEY environment variable."))
+                                                "API key for programmatic access. Configured via the FOGWALL_API_KEY environment variable."))
                         .addSecuritySchemes(
                                 "session",
                                 new SecurityScheme()
@@ -117,7 +135,7 @@ public class OpenApiController {
         for (var entry : byPath.entrySet()) {
             PathItem pathItem = new PathItem();
             for (var mapping : entry.getValue()) {
-                Operation op = buildOperation(mapping.getValue(), mapping.getKey());
+                Operation op = buildOperation(mapping.getValue(), mapping.getKey(), componentSchemas);
                 for (RequestMethod method : effectiveMethods(mapping.getKey())) {
                     assignOperation(pathItem, method, op);
                 }
@@ -125,6 +143,10 @@ public class OpenApiController {
             paths.addPathItem(entry.getKey(), pathItem);
         }
         spec.setPaths(paths);
+
+        if (!componentSchemas.isEmpty()) {
+            componentSchemas.forEach((k, v) -> spec.getComponents().addSchemas(k, v));
+        }
 
         this.specYaml = Yaml.pretty(spec);
         this.specJson = Json.pretty(spec);
@@ -143,10 +165,11 @@ public class OpenApiController {
         return methods.isEmpty() ? Set.of(RequestMethod.GET) : methods;
     }
 
-    private Operation buildOperation(HandlerMethod handler, RequestMappingInfo info) {
+    private Operation buildOperation(
+            HandlerMethod handler, RequestMappingInfo info, Map<String, Schema> componentSchemas) {
         Operation op = new Operation();
 
-        // Prefer @Operation annotation for operationId and summary; fall back to method name.
+        // Prefer @Operation annotation for operationId, summary, and description; fall back to method name.
         // Using FQN for the annotation class to avoid a name collision with io.swagger.v3.oas.models.Operation.
         var opAnnotation = handler.getMethodAnnotation(io.swagger.v3.oas.annotations.Operation.class);
         op.setOperationId(
@@ -156,6 +179,9 @@ public class OpenApiController {
         if (opAnnotation != null && !opAnnotation.summary().isEmpty()) {
             op.setSummary(opAnnotation.summary());
         }
+        if (opAnnotation != null && !opAnnotation.description().isEmpty()) {
+            op.setDescription(opAnnotation.description());
+        }
 
         // Prefer @Tag on the controller class; fall back to trimmed class name.
         Tag tagAnnotation = handler.getBeanType().getAnnotation(Tag.class);
@@ -164,6 +190,7 @@ public class OpenApiController {
                         ? tagAnnotation.name()
                         : handler.getBeanType().getSimpleName().replace("Controller", ""));
 
+        // Path and query parameters
         List<Parameter> params = new ArrayList<>();
         for (var mp : handler.getMethodParameters()) {
             PathVariable pv = mp.getParameterAnnotation(PathVariable.class);
@@ -185,7 +212,71 @@ public class OpenApiController {
         }
         if (!params.isEmpty()) op.setParameters(params);
 
+        // Request body — resolve schema from the @RequestBody parameter type
+        for (var mp : handler.getMethodParameters()) {
+            if (mp.getParameterAnnotation(org.springframework.web.bind.annotation.RequestBody.class) != null) {
+                Type bodyType = mp.getGenericParameterType();
+                Schema<?> schema = resolveSchemaRef(bodyType, componentSchemas);
+                if (schema != null) {
+                    op.setRequestBody(new io.swagger.v3.oas.models.parameters.RequestBody()
+                            .required(true)
+                            .content(new Content().addMediaType("application/json", new MediaType().schema(schema))));
+                }
+                break;
+            }
+        }
+
+        // Response — unwrap ResponseEntity<T> and resolve the body schema
+        Type rawReturn = handler.getMethod().getGenericReturnType();
+        Type returnType = unwrapResponseEntity(rawReturn);
+        ApiResponses responses = new ApiResponses();
+        if (returnType instanceof Class<?> c && (c == Void.class || c == void.class)) {
+            responses.addApiResponse("204", new ApiResponse().description("No content"));
+        } else {
+            Schema<?> responseSchema = resolveSchemaRef(returnType, componentSchemas);
+            ApiResponse ok = new ApiResponse().description("Success");
+            if (responseSchema != null) {
+                ok.content(new Content().addMediaType("application/json", new MediaType().schema(responseSchema)));
+            }
+            responses.addApiResponse("200", ok);
+        }
+        op.setResponses(responses);
+
         return op;
+    }
+
+    /** Unwraps {@code ResponseEntity<T>} to {@code T}; returns the type unchanged for all other types. */
+    private static Type unwrapResponseEntity(Type type) {
+        if (type instanceof ParameterizedType pt
+                && ResponseEntity.class.equals(pt.getRawType())
+                && pt.getActualTypeArguments().length > 0) {
+            return pt.getActualTypeArguments()[0];
+        }
+        return type;
+    }
+
+    /**
+     * Resolves a Java type to an OpenAPI {@link Schema}, adding any referenced component schemas to
+     * {@code componentSchemas}. Returns {@code null} when the type is a wildcard, {@code void}, or cannot be resolved.
+     */
+    @SuppressWarnings("rawtypes")
+    private Schema<?> resolveSchemaRef(Type type, Map<String, Schema> componentSchemas) {
+        if (type instanceof WildcardType) return null;
+        if (type instanceof Class<?> c && (c == Void.class || c == void.class)) return null;
+        if (type instanceof Class<?> c && c == Object.class) return new Schema<>().type("object");
+        if (type instanceof ParameterizedType pt && Map.class.isAssignableFrom((Class<?>) pt.getRawType())) {
+            return new Schema<>().type("object");
+        }
+        try {
+            ResolvedSchema resolved =
+                    ModelConverters.getInstance().resolveAsResolvedSchema(new AnnotatedType(type).resolveAsRef(true));
+            if (resolved == null || resolved.schema == null) return null;
+            if (resolved.referencedSchemas != null) componentSchemas.putAll(resolved.referencedSchemas);
+            return resolved.schema;
+        } catch (Exception e) {
+            log.debug("Could not resolve schema for {}: {}", type, e.getMessage());
+            return null;
+        }
     }
 
     private static void assignOperation(PathItem item, RequestMethod method, Operation op) {
@@ -208,7 +299,10 @@ public class OpenApiController {
         return specYaml;
     }
 
-    @RequestMapping(value = "/openapi.json", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
+    @RequestMapping(
+            value = "/openapi.json",
+            method = RequestMethod.GET,
+            produces = org.springframework.http.MediaType.APPLICATION_JSON_VALUE)
     public String getJson() {
         return specJson;
     }
