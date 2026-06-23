@@ -5,7 +5,7 @@ permissions:
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "release/*"]
   pull_request:
     branches: ["main"]
 
@@ -189,7 +189,8 @@ jobs:
     if: >
       github.ref == 'refs/heads/main' ||
       github.ref == 'refs/heads/jetty' ||
-      github.event_name == 'pull_request'
+      github.event_name == 'pull_request' ||
+      startsWith(github.ref, 'refs/heads/release/')
 
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # ratchet:actions/checkout@v7.0.0
