@@ -2,7 +2,7 @@ name: Docker Build & Publish
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "release/*"]
     tags: ["v*"]
   pull_request:
     branches: ["main"]
@@ -60,7 +60,7 @@ jobs:
           tags: |
             type=ref,event=pr
             type=raw,value=edge,enable={{is_default_branch}}
-            type=sha,prefix=build-,format=short,enable={{is_default_branch}}
+            type=sha,prefix=build-,format=short,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/') }}
             type=raw,value=${{ inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
 
       - name: Build and push
