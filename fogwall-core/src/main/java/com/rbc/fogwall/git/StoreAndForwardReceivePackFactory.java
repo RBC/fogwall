@@ -244,6 +244,9 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
         if (provider instanceof BitbucketProvider bitbucketProvider) {
             validationHooks.add(new BitbucketCredentialRewriteHook(bitbucketProvider, pushContext));
         }
+        if (pushStore != null) {
+            validationHooks.add(new PriorPushEnrichmentHook(pushStore, pushContext));
+        }
         validationHooks.sort(Comparator.comparingInt(FogwallHook::getOrder));
 
         PreReceiveHook[] preHooks;

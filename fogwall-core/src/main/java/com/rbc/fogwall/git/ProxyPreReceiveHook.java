@@ -74,20 +74,34 @@ public class ProxyPreReceiveHook implements FogwallHook {
 
     private void inspectCommits(ReceivePack rp, Repository repo, ReceiveCommand cmd, List<String> logs)
             throws Exception {
-        String fromCommit = cmd.getOldId().name();
         String toCommit = cmd.getNewId().name();
+        String refName = cmd.getRefName();
 
-        // For new branches (old is zero ID), we can't do a range - just inspect the tip
-        if (ObjectId.zeroId().equals(cmd.getOldId())) {
+        // PriorPushEnrichmentHook may have detected that this re-push includes commits already cached
+        // locally but not yet forwarded upstream. Use the effective base instead of cmd.getOldId()
+        // so the full commit range relative to upstream is enumerated.
+        String effectiveFrom = pushContext.getEffectiveFromId(refName);
+        boolean isTrulyNewBranch = ObjectId.zeroId().equals(cmd.getOldId()) && effectiveFrom == null;
+        boolean isEffectiveNewBranch = effectiveFrom != null && effectiveFrom.matches("^0+$");
+
+        if (isTrulyNewBranch) {
             Commit tipCommit = CommitInspectionService.getCommitDetails(repo, toCommit);
-            String tipLine =
-                    "New branch - tip commit by " + tipCommit.getAuthor().getName() + " <"
-                            + tipCommit.getAuthor().getEmail() + ">";
-            logs.add(tipLine);
+            logs.add("New branch - tip commit by " + tipCommit.getAuthor().getName() + " <"
+                    + tipCommit.getAuthor().getEmail() + ">");
             return;
         }
 
-        List<Commit> commits = CommitInspectionService.getCommitRange(repo, fromCommit, toCommit);
+        List<Commit> commits;
+        if (isEffectiveNewBranch) {
+            // Re-push of a branch that is new from upstream's perspective — walk full history
+            commits = CommitInspectionService.getCommitRangeUpTo(repo, toCommit);
+            logs.add("Re-push enriched (branch new from upstream perspective): " + commits.size() + " commit(s)");
+        } else {
+            String fromCommit =
+                    effectiveFrom != null ? effectiveFrom : cmd.getOldId().name();
+            commits = CommitInspectionService.getCommitRange(repo, fromCommit, toCommit);
+        }
+
         for (Commit commit : commits) {
             String shortSha = commit.getSha().substring(0, 7);
             String firstLine = commit.getMessage().lines().findFirst().orElse("(empty)");

@@ -121,6 +121,11 @@ public class PushStorePersistenceHook {
                         record.setScmUsername(scmUsernameLate);
                     }
 
+                    // If PriorPushEnrichmentHook detected a re-push with cached-but-not-forwarded commits,
+                    // rebuild the commit list using the effective upstream base so the PENDING/REJECTED
+                    // record shows the complete commit history relative to upstream, not just the local delta.
+                    enrichCommitsIfNeeded(record, rp, commands);
+
                     // Collect all steps: validation issues + push context (diffs, etc.)
                     List<PushStep> steps = new ArrayList<>();
                     String recordId = record.getId();
@@ -277,6 +282,58 @@ public class PushStorePersistenceHook {
                 log.error("Failed to save forwarding result record", e);
             }
         };
+    }
+
+    /**
+     * If {@link PriorPushEnrichmentHook} stored an effective upstream base for any ref in the push context, rebuild the
+     * commit list on {@code record} using the full range from that base to the new tip. No-op when no enrichment was
+     * detected.
+     */
+    private void enrichCommitsIfNeeded(PushRecord record, ReceivePack rp, Collection<ReceiveCommand> commands) {
+        if (pushContext == null) return;
+        boolean anyEnriched = false;
+        List<PushCommit> enrichedCommits = new ArrayList<>();
+
+        for (ReceiveCommand cmd : commands) {
+            if (cmd.getType() == ReceiveCommand.Type.DELETE) continue;
+            String effectiveFrom = pushContext.getEffectiveFromId(cmd.getRefName());
+            if (effectiveFrom == null) continue;
+
+            anyEnriched = true;
+            try {
+                List<Commit> range;
+                if (effectiveFrom.matches("^0+$")) {
+                    range = CommitInspectionService.getCommitRangeUpTo(
+                            rp.getRepository(), cmd.getNewId().name());
+                } else {
+                    range = CommitInspectionService.getCommitRange(
+                            rp.getRepository(), effectiveFrom, cmd.getNewId().name());
+                }
+                for (Commit c : range) {
+                    enrichedCommits.add(PushRecordMapper.mapCommit(record.getId(), c));
+                }
+                if (!range.isEmpty()) {
+                    Commit head = range.get(0);
+                    if (head.getAuthor() != null) {
+                        record.setAuthor(head.getAuthor().getName());
+                        record.setAuthorEmail(head.getAuthor().getEmail());
+                    }
+                    if (head.getCommitter() != null) {
+                        record.setCommitter(head.getCommitter().getName());
+                        record.setCommitterEmail(head.getCommitter().getEmail());
+                    }
+                    if (head.getMessage() != null) {
+                        record.setMessage(head.getMessage().lines().findFirst().orElse(null));
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Failed to enrich commits for {} during re-push", cmd.getRefName(), e);
+            }
+        }
+
+        if (anyEnriched) {
+            record.setCommits(enrichedCommits);
+        }
     }
 
     /**

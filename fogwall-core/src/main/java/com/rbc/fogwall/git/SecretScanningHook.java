@@ -58,8 +58,14 @@ public class SecretScanningHook implements FogwallHook {
                 continue;
             }
 
-            String commitFrom = cmd.getOldId().name();
             String commitTo = cmd.getNewId().name();
+
+            // Use the effective upstream base when PriorPushEnrichmentHook detected cached-but-not-forwarded
+            // commits, so the secret scan covers the full range relative to upstream.
+            String effectiveFrom = pushContext.getEffectiveFromId(cmd.getRefName());
+            boolean hasNonZeroEffectiveBase = effectiveFrom != null && !effectiveFrom.matches("^0+$");
+            String commitFrom =
+                    hasNonZeroEffectiveBase ? effectiveFrom : cmd.getOldId().name();
 
             Optional<List<GitleaksRunner.Finding>> result = runner.scanGit(repoDir, commitFrom, commitTo, config);
 
