@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { fetchConfig, fetchMe } from './api'
 import { Nav } from './components/Nav'
+import { useDarkMode } from './hooks/useDarkMode'
 import { Admin } from './pages/Admin'
 import { Providers } from './pages/Providers'
 import { PushDetail } from './pages/PushDetail'
@@ -14,6 +15,7 @@ import { UserDetail } from './pages/UserDetail'
 import type { CurrentUser } from './types'
 
 export default function App() {
+  const { dark, toggle: toggleDark } = useDarkMode()
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
   const [authProvider, setAuthProvider] = useState<string>('local')
   const [bulkReview, setBulkReview] = useState<boolean>(false)
@@ -30,16 +32,19 @@ export default function App() {
 
   return (
     <BrowserRouter basename="/dashboard">
-      <div className="bg-gray-100 min-h-screen flex flex-col">
-        <Nav currentUser={currentUser} />
+      <div className="bg-gray-100 dark:bg-slate-900 min-h-screen flex flex-col" data-hmr-test="1">
+        <Nav currentUser={currentUser} dark={dark} toggleDark={toggleDark} />
         <main className="flex-1">
           <Routes>
             <Route
               path="/"
               element={<PushList currentUser={currentUser} bulkReviewEnabled={bulkReview} />}
             />
-            <Route path="/push/:id" element={<PushDetail currentUser={currentUser} />} />
-            <Route path="/push/:id/diff" element={<PushDiff />} />
+            <Route
+              path="/push/:id"
+              element={<PushDetail currentUser={currentUser} dark={dark} />}
+            />
+            <Route path="/push/:id/diff" element={<PushDiff dark={dark} />} />
             <Route path="/providers" element={<Providers />} />
             <Route path="/repos" element={<Repos />} />
             <Route path="/profile" element={<Profile />} />
@@ -51,7 +56,7 @@ export default function App() {
             <Route path="/admin" element={<Admin />} />
           </Routes>
         </main>
-        <footer className="bg-slate-800 text-slate-500 text-xs px-6 py-3 flex items-center justify-between">
+        <footer className="bg-slate-800 dark:bg-slate-950 text-slate-500 text-xs px-6 py-3 flex items-center justify-between">
           <span>
             &copy; 2024&ndash;{new Date().getFullYear()} fogwall contributors &middot;{' '}
             <a

@@ -33,11 +33,9 @@ interface UserDetailProps {
 
 type Tab = 'overview' | 'pushes' | 'permissions'
 
-// ── Sub-components ───────────────────────────────────────────────────────────
-
 function LockedBadge({ source }: { source: string }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
+    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">
       locked ({source})
     </span>
   )
@@ -45,11 +43,23 @@ function LockedBadge({ source }: { source: string }) {
 
 function VerifiedBadge() {
   return (
-    <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-600">
+    <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-600 dark:bg-green-900/30 dark:text-green-300">
       verified
     </span>
   )
 }
+
+const modalClass =
+  'fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60'
+const modalPanelClass = 'w-full max-w-sm rounded-lg bg-white p-6 shadow-xl dark:bg-slate-800'
+const modalTitleClass = 'text-base font-semibold text-gray-800 mb-4 dark:text-gray-200'
+const labelClass = 'block text-xs font-medium text-gray-600 mb-1 dark:text-gray-400'
+const inputClass =
+  'w-full rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200'
+const cancelBtnClass =
+  'px-3 py-1.5 rounded border border-gray-200 text-xs text-gray-600 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-400 dark:hover:bg-gray-700'
+const submitBtnClass =
+  'px-3 py-1.5 rounded bg-slate-700 text-white text-xs hover:bg-slate-800 disabled:opacity-50'
 
 function AddEmailModal({
   username,
@@ -80,9 +90,9 @@ function AddEmailModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl">
-        <h3 className="text-base font-semibold text-gray-800 mb-4">Add Email</h3>
+    <div className={modalClass}>
+      <div className={modalPanelClass}>
+        <h3 className={modalTitleClass}>Add Email</h3>
         <form onSubmit={handleSubmit} className="space-y-3">
           <input
             required
@@ -90,22 +100,14 @@ function AddEmailModal({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="user@example.com"
-            className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none"
+            className={inputClass}
           />
-          {error && <p className="text-xs text-red-500">{error}</p>}
+          {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
           <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3 py-1.5 rounded border border-gray-200 text-xs text-gray-600 hover:bg-gray-50"
-            >
+            <button type="button" onClick={onClose} className={cancelBtnClass}>
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="px-3 py-1.5 rounded bg-slate-700 text-white text-xs hover:bg-slate-800 disabled:opacity-50"
-            >
+            <button type="submit" disabled={submitting} className={submitBtnClass}>
               {submitting ? 'Adding…' : 'Add'}
             </button>
           </div>
@@ -155,18 +157,18 @@ function AddScmIdentityModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl">
-        <h3 className="text-base font-semibold text-gray-800 mb-4">Add SCM Identity</h3>
+    <div className={modalClass}>
+      <div className={modalPanelClass}>
+        <h3 className={modalTitleClass}>Add SCM Identity</h3>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Provider</label>
+            <label className={labelClass}>Provider</label>
             <select
               required
               value={provider}
               onChange={(e) => setProvider(e.target.value)}
               disabled={providers.length === 0}
-              className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
+              className={`${inputClass} disabled:opacity-50`}
             >
               {providers.length === 0 && <option value="">Loading…</option>}
               {providers.map((p) => (
@@ -177,29 +179,21 @@ function AddScmIdentityModal({
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">SCM Username</label>
+            <label className={labelClass}>SCM Username</label>
             <input
               required
               value={scmUsername}
               onChange={(e) => setScmUsername(e.target.value)}
               placeholder="github-handle"
-              className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none"
+              className={inputClass}
             />
           </div>
-          {error && <p className="text-xs text-red-500">{error}</p>}
+          {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
           <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3 py-1.5 rounded border border-gray-200 text-xs text-gray-600 hover:bg-gray-50"
-            >
+            <button type="button" onClick={onClose} className={cancelBtnClass}>
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="px-3 py-1.5 rounded bg-slate-700 text-white text-xs hover:bg-slate-800 disabled:opacity-50"
-            >
+            <button type="submit" disabled={submitting} className={submitBtnClass}>
               {submitting ? 'Adding…' : 'Add'}
             </button>
           </div>
@@ -235,17 +229,16 @@ function ResetPasswordModal({ username, onClose }: { username: string; onClose: 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl">
-        <h3 className="text-base font-semibold text-gray-800 mb-4">Reset Password — {username}</h3>
+    <div className={modalClass}>
+      <div className={modalPanelClass}>
+        <h3 className={modalTitleClass}>Reset Password — {username}</h3>
         {done ? (
           <div className="space-y-3">
-            <p className="text-sm text-green-600">Password updated successfully.</p>
+            <p className="text-sm text-green-600 dark:text-green-400">
+              Password updated successfully.
+            </p>
             <div className="flex justify-end">
-              <button
-                onClick={onClose}
-                className="px-3 py-1.5 rounded bg-slate-700 text-white text-xs"
-              >
+              <button onClick={onClose} className={submitBtnClass}>
                 Close
               </button>
             </div>
@@ -253,41 +246,31 @@ function ResetPasswordModal({ username, onClose }: { username: string; onClose: 
         ) : (
           <form onSubmit={handleSubmit} className="space-y-3">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">New Password</label>
+              <label className={labelClass}>New Password</label>
               <input
                 required
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none"
+                className={inputClass}
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Confirm Password
-              </label>
+              <label className={labelClass}>Confirm Password</label>
               <input
                 required
                 type="password"
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
-                className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none"
+                className={inputClass}
               />
             </div>
-            {error && <p className="text-xs text-red-500">{error}</p>}
+            {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
             <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-3 py-1.5 rounded border border-gray-200 text-xs text-gray-600 hover:bg-gray-50"
-              >
+              <button type="button" onClick={onClose} className={cancelBtnClass}>
                 Cancel
               </button>
-              <button
-                type="submit"
-                disabled={submitting}
-                className="px-3 py-1.5 rounded bg-slate-700 text-white text-xs hover:bg-slate-800 disabled:opacity-50"
-              >
+              <button type="submit" disabled={submitting} className={submitBtnClass}>
                 {submitting ? 'Saving…' : 'Update Password'}
               </button>
             </div>
@@ -359,6 +342,9 @@ function OverviewTab({
     }
   }
 
+  const listClass =
+    'divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white dark:bg-slate-800 dark:border-slate-700 dark:divide-gray-700'
+
   return (
     <div className="space-y-6">
       {showAddEmail && (
@@ -382,24 +368,28 @@ function OverviewTab({
       {/* Emails */}
       <section className="space-y-2">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-gray-700">Email Addresses</h3>
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+            Email Addresses
+          </h3>
           {isAdmin && (
             <button
               onClick={() => setShowAddEmail(true)}
-              className="text-xs text-slate-600 hover:text-slate-800"
+              className="text-xs text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
             >
               + Add
             </button>
           )}
         </div>
         {user.emails.length === 0 ? (
-          <p className="text-sm text-gray-400 italic">No email addresses registered.</p>
+          <p className="text-sm text-gray-400 italic dark:text-gray-500">
+            No email addresses registered.
+          </p>
         ) : (
-          <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
+          <ul className={listClass}>
             {user.emails.map((entry: EmailEntry) => (
               <li key={entry.email} className="flex items-center justify-between px-4 py-3 text-sm">
                 <span className="flex items-center gap-2">
-                  <span className="text-gray-800">{entry.email}</span>
+                  <span className="text-gray-800 dark:text-gray-200">{entry.email}</span>
                   {entry.verified && <VerifiedBadge />}
                   {entry.locked && <LockedBadge source={entry.source} />}
                 </span>
@@ -407,7 +397,7 @@ function OverviewTab({
                   <button
                     onClick={() => handleRemoveEmail(entry.email)}
                     disabled={deletingEmail === entry.email}
-                    className="text-red-400 text-xs hover:text-red-600 disabled:opacity-40"
+                    className="text-red-400 text-xs hover:text-red-600 disabled:opacity-40 dark:text-red-500 dark:hover:text-red-300"
                   >
                     {deletingEmail === entry.email ? '…' : 'Remove'}
                   </button>
@@ -421,30 +411,32 @@ function OverviewTab({
       {/* SCM Identities */}
       <section className="space-y-2">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-gray-700">SCM Identities</h3>
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">SCM Identities</h3>
           {isAdmin && (
             <button
               onClick={() => setShowAddScm(true)}
-              className="text-xs text-slate-600 hover:text-slate-800"
+              className="text-xs text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
             >
               + Add
             </button>
           )}
         </div>
         {user.scmIdentities.length === 0 ? (
-          <p className="text-sm text-gray-400 italic">No SCM identities registered.</p>
+          <p className="text-sm text-gray-400 italic dark:text-gray-500">
+            No SCM identities registered.
+          </p>
         ) : (
-          <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
+          <ul className={listClass}>
             {user.scmIdentities.map((id: ScmIdentity) => (
               <li
                 key={`${id.provider}/${id.username}`}
                 className="flex items-center justify-between px-4 py-3 text-sm"
               >
                 <span className="flex items-center gap-2">
-                  <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                  <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
                     {id.provider}
                   </span>
-                  <span className="text-gray-800">{id.username}</span>
+                  <span className="text-gray-800 dark:text-gray-200">{id.username}</span>
                   {id.verified && <VerifiedBadge />}
                   {id.source === 'config' && <LockedBadge source="config" />}
                 </span>
@@ -452,7 +444,7 @@ function OverviewTab({
                   <button
                     onClick={() => handleRemoveScm(id.provider, id.username)}
                     disabled={deletingScm === `${id.provider}/${id.username}`}
-                    className="text-red-400 text-xs hover:text-red-600 disabled:opacity-40"
+                    className="text-red-400 text-xs hover:text-red-600 disabled:opacity-40 dark:text-red-500 dark:hover:text-red-300"
                   >
                     {deletingScm === `${id.provider}/${id.username}` ? '…' : 'Remove'}
                   </button>
@@ -465,31 +457,37 @@ function OverviewTab({
 
       {/* Push summary */}
       <section className="space-y-2">
-        <h3 className="text-sm font-semibold text-gray-700">Push Summary</h3>
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Push Summary</h3>
         <div className="flex flex-wrap gap-3">
           {Object.entries(user.pushCounts).length === 0 ? (
-            <p className="text-sm text-gray-400 italic">No push activity recorded.</p>
+            <p className="text-sm text-gray-400 italic dark:text-gray-500">
+              No push activity recorded.
+            </p>
           ) : (
             Object.entries(user.pushCounts).map(([status, count]) => (
               <div key={status} className="flex items-center gap-2">
                 <StatusBadge status={status} />
-                <span className="text-sm font-semibold text-gray-700">{String(count)}</span>
+                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  {String(count)}
+                </span>
               </div>
             ))
           )}
         </div>
       </section>
 
-      {actionError && <p className="text-xs text-red-500">{actionError}</p>}
+      {actionError && <p className="text-xs text-red-500 dark:text-red-400">{actionError}</p>}
 
       {isAdmin && (
-        <section className="border-t border-gray-100 pt-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-2">Account Actions</h3>
+        <section className="border-t border-gray-100 pt-4 dark:border-slate-700">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2 dark:text-gray-300">
+            Account Actions
+          </h3>
           <div className="flex gap-2">
             {isLocalAuth && (
               <button
                 onClick={() => setShowResetPw(true)}
-                className="px-3 py-1.5 rounded border border-gray-200 text-xs text-gray-600 hover:bg-gray-50"
+                className="px-3 py-1.5 rounded border border-gray-200 text-xs text-gray-600 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-400 dark:hover:bg-gray-700"
               >
                 Reset Password
               </button>
@@ -497,7 +495,7 @@ function OverviewTab({
             <button
               onClick={handleDelete}
               disabled={deleting}
-              className="px-3 py-1.5 rounded border border-red-200 text-xs text-red-600 hover:bg-red-50 disabled:opacity-40"
+              className="px-3 py-1.5 rounded border border-red-200 text-xs text-red-600 hover:bg-red-50 disabled:opacity-40 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
             >
               {deleting ? 'Deleting…' : 'Delete User & Permissions'}
             </button>
@@ -521,41 +519,42 @@ function PushesTab({ username }: { username: string }) {
       .finally(() => setLoading(false))
   }, [username])
 
-  if (loading) return <div className="py-8 text-center text-gray-400 text-sm">Loading…</div>
+  if (loading)
+    return <div className="py-8 text-center text-gray-400 text-sm dark:text-gray-500">Loading…</div>
 
   if (pushes.length === 0)
     return (
-      <p className="text-sm text-gray-400 italic py-8 text-center">
+      <p className="text-sm text-gray-400 italic py-8 text-center dark:text-gray-500">
         No push records found for this user.
       </p>
     )
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+    <div className="rounded-lg border border-gray-200 bg-white overflow-hidden dark:bg-slate-800 dark:border-slate-700">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+          <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide dark:bg-slate-700/50 dark:border-slate-700 dark:text-gray-400">
             <th className="px-4 py-3">Status</th>
             <th className="px-4 py-3">Repository</th>
             <th className="px-4 py-3">Branch</th>
             <th className="px-4 py-3">Time</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
           {pushes.map((p) => (
             <tr
               key={p.id}
-              className="hover:bg-gray-50 cursor-pointer transition-colors"
+              className="hover:bg-gray-50 cursor-pointer transition-colors dark:hover:bg-gray-700/50"
               onClick={() => navigate(`/push/${p.id}`)}
             >
               <td className="px-4 py-3">
                 <StatusBadge status={p.status} />
               </td>
-              <td className="px-4 py-3 text-gray-700">
+              <td className="px-4 py-3 text-gray-700 dark:text-gray-300">
                 {p.project && p.repoName ? `${p.project}/${p.repoName}` : (p.repoName ?? '—')}
               </td>
-              <td className="px-4 py-3 text-gray-500">{p.branch ?? '—'}</td>
-              <td className="px-4 py-3 text-gray-400">
+              <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{p.branch ?? '—'}</td>
+              <td className="px-4 py-3 text-gray-400 dark:text-gray-500">
                 {p.timestamp ? new Date(p.timestamp).toLocaleString() : '—'}
               </td>
             </tr>
@@ -642,18 +641,18 @@ function AddPermissionModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl">
-        <h3 className="text-base font-semibold text-gray-800 mb-4">Add Permission</h3>
+    <div className={modalClass}>
+      <div className={modalPanelClass}>
+        <h3 className={modalTitleClass}>Add Permission</h3>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Provider</label>
+            <label className={labelClass}>Provider</label>
             <select
               required
               value={provider}
               onChange={(e) => setProvider(e.target.value)}
               disabled={providers.length === 0}
-              className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
+              className={`${inputClass} disabled:opacity-50`}
             >
               {providers.length === 0 && <option value="">Loading…</option>}
               {providers.map((p) => (
@@ -664,22 +663,28 @@ function AddPermissionModal({
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Path</label>
+            <label className={labelClass}>Path</label>
             <input
               required
               value={path}
               onChange={(e) => handlePathChange(e.target.value)}
               placeholder="/owner/repo"
-              className={`w-full rounded border px-3 py-1.5 text-sm font-mono focus:outline-none ${regexError ? 'border-amber-400 focus:border-amber-500' : 'border-gray-300 focus:border-slate-500'}`}
+              className={`w-full rounded border px-3 py-1.5 text-sm font-mono focus:outline-none dark:bg-slate-700 dark:text-gray-200 ${
+                regexError
+                  ? 'border-amber-400 focus:border-amber-500 dark:border-amber-600'
+                  : 'border-gray-300 focus:border-slate-500 dark:border-slate-600'
+              }`}
             />
-            {regexError && <p className="mt-1 text-xs text-amber-600">⚠ {regexError}</p>}
+            {regexError && (
+              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">⚠ {regexError}</p>
+            )}
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Path Type</label>
+            <label className={labelClass}>Path Type</label>
             <select
               value={pathType}
               onChange={(e) => handlePathTypeChange(e.target.value as typeof pathType)}
-              className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none"
+              className={inputClass}
             >
               <option value="LITERAL">Literal — exact match</option>
               <option value="GLOB">Glob — wildcard (* / **)</option>
@@ -687,11 +692,11 @@ function AddPermissionModal({
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Grant</label>
+            <label className={labelClass}>Grant</label>
             <select
               value={grant}
               onChange={(e) => setGrant(e.target.value as typeof grant)}
-              className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none"
+              className={inputClass}
             >
               <option value="PUSH_AND_REVIEW">Push and review</option>
               <option value="PUSH">Push only</option>
@@ -699,20 +704,12 @@ function AddPermissionModal({
               <option value="SELF_CERTIFY">Self-certify</option>
             </select>
           </div>
-          {error && <p className="text-xs text-red-500">{error}</p>}
+          {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
           <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3 py-1.5 rounded border border-gray-200 text-xs text-gray-600 hover:bg-gray-50"
-            >
+            <button type="button" onClick={onClose} className={cancelBtnClass}>
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="px-3 py-1.5 rounded bg-slate-700 text-white text-xs hover:bg-slate-800 disabled:opacity-50"
-            >
+            <button type="submit" disabled={submitting} className={submitBtnClass}>
               {submitting ? 'Adding…' : 'Add'}
             </button>
           </div>
@@ -754,7 +751,8 @@ function PermissionsTab({ username, isAdmin }: { username: string; isAdmin: bool
     }
   }
 
-  if (loading) return <div className="py-8 text-center text-gray-400 text-sm">Loading…</div>
+  if (loading)
+    return <div className="py-8 text-center text-gray-400 text-sm dark:text-gray-500">Loading…</div>
 
   return (
     <div className="space-y-4">
@@ -767,14 +765,14 @@ function PermissionsTab({ username, isAdmin }: { username: string; isAdmin: bool
       )}
 
       {permissions.length === 0 ? (
-        <p className="text-sm text-gray-400 italic py-4">
+        <p className="text-sm text-gray-400 italic py-4 dark:text-gray-500">
           No permissions configured for this user.
         </p>
       ) : (
-        <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+        <div className="rounded-lg border border-gray-200 bg-white overflow-hidden dark:bg-slate-800 dark:border-slate-700">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide dark:bg-slate-700/50 dark:border-slate-700 dark:text-gray-400">
                 <th className="px-4 py-3">Provider</th>
                 <th className="px-4 py-3">Type</th>
                 <th className="px-4 py-3">Path</th>
@@ -783,18 +781,23 @@ function PermissionsTab({ username, isAdmin }: { username: string; isAdmin: bool
                 {isAdmin && <th className="px-4 py-3" />}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
               {permissions.map((p) => (
-                <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                <tr
+                  key={p.id}
+                  className="hover:bg-gray-50 transition-colors dark:hover:bg-gray-700/50"
+                >
                   <td className="px-4 py-3">
-                    <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                    <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
                       {p.provider}
                     </span>
                   </td>
                   <td className="px-4 py-3">
                     <PathTypeBadge matchType={p.matchType} />
                   </td>
-                  <td className="px-4 py-3 font-mono text-gray-700 text-xs">{p.value}</td>
+                  <td className="px-4 py-3 font-mono text-gray-700 text-xs dark:text-gray-300">
+                    {p.value}
+                  </td>
                   <td className="px-4 py-3">
                     <OperationsBadge operations={p.grant} />
                   </td>
@@ -802,7 +805,7 @@ function PermissionsTab({ username, isAdmin }: { username: string; isAdmin: bool
                     {p.source === 'CONFIG' ? (
                       <LockedBadge source="config" />
                     ) : (
-                      <span className="text-xs text-gray-400">local</span>
+                      <span className="text-xs text-gray-400 dark:text-gray-500">local</span>
                     )}
                   </td>
                   {isAdmin && (
@@ -811,7 +814,7 @@ function PermissionsTab({ username, isAdmin }: { username: string; isAdmin: bool
                         <button
                           onClick={() => handleDelete(p.id)}
                           disabled={deletingId === p.id}
-                          className="text-red-400 text-xs hover:text-red-600 disabled:opacity-40"
+                          className="text-red-400 text-xs hover:text-red-600 disabled:opacity-40 dark:text-red-500 dark:hover:text-red-300"
                         >
                           {deletingId === p.id ? '…' : 'Remove'}
                         </button>
@@ -825,7 +828,7 @@ function PermissionsTab({ username, isAdmin }: { username: string; isAdmin: bool
         </div>
       )}
 
-      {actionError && <p className="text-xs text-red-500">{actionError}</p>}
+      {actionError && <p className="text-xs text-red-500 dark:text-red-400">{actionError}</p>}
 
       {isAdmin && (
         <button
@@ -837,17 +840,23 @@ function PermissionsTab({ username, isAdmin }: { username: string; isAdmin: bool
       )}
 
       <div className="pt-2 space-y-2">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Coming soon</p>
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide dark:text-gray-500">
+          Coming soon
+        </p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-3 space-y-1 opacity-70">
-            <p className="text-sm font-medium text-gray-500">Time-bound permissions</p>
-            <p className="text-xs text-gray-400">
+          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-3 space-y-1 opacity-70 dark:bg-slate-800 dark:border-slate-700">
+            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              Time-bound permissions
+            </p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">
               Grant access valid only within a date range, e.g. valid 2025-01-01 → 2025-12-31.
             </p>
           </div>
-          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-3 space-y-1 opacity-70">
-            <p className="text-sm font-medium text-gray-500">Just-in-time permissions</p>
-            <p className="text-xs text-gray-400">
+          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-3 space-y-1 opacity-70 dark:bg-slate-800 dark:border-slate-700">
+            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              Just-in-time permissions
+            </p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">
               Self-service, short-lived access requests with automatic expiry and audit trail.
             </p>
           </div>
@@ -856,8 +865,6 @@ function PermissionsTab({ username, isAdmin }: { username: string; isAdmin: bool
     </div>
   )
 }
-
-// ── Main component ───────────────────────────────────────────────────────────
 
 export function UserDetail({ authProvider, currentUser }: UserDetailProps) {
   const { username } = useParams<{ username: string }>()
@@ -883,10 +890,14 @@ export function UserDetail({ authProvider, currentUser }: UserDetailProps) {
   }, [loadUser])
 
   if (loading)
-    return <div className="max-w-3xl mx-auto px-4 py-16 text-center text-gray-400">Loading…</div>
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-16 text-center text-gray-400 dark:text-gray-500">
+        Loading…
+      </div>
+    )
   if (error || !user)
     return (
-      <div className="max-w-3xl mx-auto px-4 py-16 text-center text-red-500">
+      <div className="max-w-3xl mx-auto px-4 py-16 text-center text-red-500 dark:text-red-400">
         {error ?? 'User not found'}
       </div>
     )
@@ -903,21 +914,21 @@ export function UserDetail({ authProvider, currentUser }: UserDetailProps) {
       <div className="flex items-center gap-3">
         <button
           onClick={() => navigate('/users')}
-          className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+          className="text-xs text-gray-400 hover:text-gray-600 transition-colors dark:text-gray-500 dark:hover:text-gray-300"
         >
           ← Users
         </button>
-        <span className="text-gray-300">/</span>
-        <h2 className="text-lg font-semibold text-gray-800">{user.username}</h2>
+        <span className="text-gray-300 dark:text-gray-600">/</span>
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">{user.username}</h2>
         {!isLocalAuth && (
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500 dark:bg-slate-700 dark:text-slate-400">
             {authProvider}
           </span>
         )}
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200">
+      <div className="flex gap-1 border-b border-gray-200 dark:border-slate-700">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -925,8 +936,8 @@ export function UserDetail({ authProvider, currentUser }: UserDetailProps) {
             className={
               'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ' +
               (tab === t.id
-                ? 'border-slate-700 text-slate-800'
-                : 'border-transparent text-gray-500 hover:text-gray-700')
+                ? 'border-slate-700 text-slate-800 dark:border-slate-400 dark:text-slate-200'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300')
             }
           >
             {t.label}

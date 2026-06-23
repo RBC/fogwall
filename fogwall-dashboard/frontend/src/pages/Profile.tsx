@@ -17,7 +17,7 @@ function LockedBadge({ source }: { source: string }) {
       : `Managed by your ${source.toUpperCase()} identity provider and cannot be removed`
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600"
+      className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600 dark:bg-blue-900/30 dark:text-blue-300"
       title={title}
     >
       locked ({source})
@@ -122,17 +122,26 @@ export function Profile() {
   }
 
   if (loading)
-    return <div className="max-w-2xl mx-auto px-4 py-16 text-center text-gray-400">Loading…</div>
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-16 text-center text-gray-400 dark:text-gray-500">
+        Loading…
+      </div>
+    )
   if (error)
-    return <div className="max-w-2xl mx-auto px-4 py-16 text-center text-red-500">{error}</div>
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-16 text-center text-red-500 dark:text-red-400">
+        {error}
+      </div>
+    )
   if (!profile) return null
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-gray-800">Profile</h2>
-        <p className="text-sm text-gray-500 mt-1">
-          Signed in as <span className="font-medium text-gray-700">{profile.username}</span>
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Profile</h2>
+        <p className="text-sm text-gray-500 mt-1 dark:text-gray-400">
+          Signed in as{' '}
+          <span className="font-medium text-gray-700 dark:text-gray-300">{profile.username}</span>
         </p>
         <div className="flex flex-wrap gap-1 mt-2">
           {profile.authorities
@@ -141,10 +150,10 @@ export function Profile() {
               const label = a.replace('ROLE_', '')
               const colour =
                 label === 'ADMIN'
-                  ? 'bg-purple-100 text-purple-700'
+                  ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
                   : label === 'SELF_CERTIFY'
-                    ? 'bg-amber-100 text-amber-700'
-                    : 'bg-gray-100 text-gray-600'
+                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                    : 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-300'
               const isSelfCertify = label === 'SELF_CERTIFY'
               return (
                 <span key={a} className="relative group inline-flex">
@@ -167,7 +176,7 @@ export function Profile() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200">
+      <div className="flex gap-1 border-b border-gray-200 dark:border-slate-700">
         {(['emails', 'identities', 'permissions'] as const).map((t) => (
           <button
             key={t}
@@ -175,8 +184,8 @@ export function Profile() {
             className={
               'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ' +
               (tab === t
-                ? 'border-slate-700 text-slate-800'
-                : 'border-transparent text-gray-500 hover:text-gray-700')
+                ? 'border-slate-700 text-slate-800 dark:border-slate-400 dark:text-slate-200'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300')
             }
           >
             {t === 'emails'
@@ -191,28 +200,30 @@ export function Profile() {
       {/* Emails tab */}
       {tab === 'emails' && (
         <div className="space-y-4">
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             Email addresses linked to your commits. The identity verification hook uses these to
             confirm your authorship on push.
           </p>
 
           {profile.emails.length === 0 ? (
-            <p className="text-sm text-gray-400 italic">No email addresses registered.</p>
+            <p className="text-sm text-gray-400 italic dark:text-gray-500">
+              No email addresses registered.
+            </p>
           ) : (
-            <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
+            <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white dark:bg-slate-800 dark:border-slate-700 dark:divide-gray-700">
               {profile.emails.map((entry) => (
                 <li
                   key={entry.email}
                   className="flex items-center justify-between px-4 py-3 text-sm"
                 >
                   <span className="flex items-center gap-2">
-                    <span className="text-gray-800">{entry.email}</span>
+                    <span className="text-gray-800 dark:text-gray-200">{entry.email}</span>
                     {entry.locked && <LockedBadge source={entry.source} />}
                   </span>
                   {!entry.locked && (
                     <button
                       onClick={() => handleRemoveEmail(entry)}
-                      className="text-gray-400 hover:text-red-500 transition-colors text-xs"
+                      className="text-gray-400 hover:text-red-500 transition-colors text-xs dark:text-gray-500 dark:hover:text-red-400"
                       title="Remove"
                     >
                       Remove
@@ -223,7 +234,7 @@ export function Profile() {
             </ul>
           )}
 
-          {emailError && <p className="text-sm text-red-600">{emailError}</p>}
+          {emailError && <p className="text-sm text-red-600 dark:text-red-400">{emailError}</p>}
 
           <form onSubmit={handleAddEmail} className="flex gap-2">
             <input
@@ -231,7 +242,7 @@ export function Profile() {
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
               placeholder="you@example.com"
-              className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+              className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400"
             />
             <button
               type="submit"
@@ -247,18 +258,20 @@ export function Profile() {
       {/* Permissions tab */}
       {tab === 'permissions' && (
         <div className="space-y-4">
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             Repository access permissions granted to your account.
           </p>
           {loading ? (
-            <p className="text-sm text-gray-400">Loading…</p>
+            <p className="text-sm text-gray-400 dark:text-gray-500">Loading…</p>
           ) : permissions.length === 0 ? (
-            <p className="text-sm text-gray-400 italic">No permissions configured.</p>
+            <p className="text-sm text-gray-400 italic dark:text-gray-500">
+              No permissions configured.
+            </p>
           ) : (
-            <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+            <div className="rounded-lg border border-gray-200 bg-white overflow-hidden dark:bg-slate-800 dark:border-slate-700">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide dark:bg-slate-700/50 dark:border-slate-700 dark:text-gray-400">
                     <th className="px-4 py-3">Provider</th>
                     <th className="px-4 py-3">Type</th>
                     <th className="px-4 py-3">Path</th>
@@ -266,18 +279,23 @@ export function Profile() {
                     <th className="px-4 py-3">Source</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                   {permissions.map((p) => (
-                    <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                    <tr
+                      key={p.id}
+                      className="hover:bg-gray-50 transition-colors dark:hover:bg-gray-700/50"
+                    >
                       <td className="px-4 py-3">
-                        <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                        <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
                           {p.provider}
                         </span>
                       </td>
                       <td className="px-4 py-3">
                         <PathTypeBadge matchType={p.matchType} />
                       </td>
-                      <td className="px-4 py-3 font-mono text-gray-700 text-xs">{p.value}</td>
+                      <td className="px-4 py-3 font-mono text-gray-700 text-xs dark:text-gray-300">
+                        {p.value}
+                      </td>
                       <td className="px-4 py-3">
                         <OperationsBadge operations={p.grant} />
                       </td>
@@ -285,7 +303,7 @@ export function Profile() {
                         {p.source === 'CONFIG' ? (
                           <LockedBadge source="config" />
                         ) : (
-                          <span className="text-xs text-gray-400">local</span>
+                          <span className="text-xs text-gray-400 dark:text-gray-500">local</span>
                         )}
                       </td>
                     </tr>
@@ -300,31 +318,33 @@ export function Profile() {
       {/* SCM Identities tab */}
       {tab === 'identities' && (
         <div className="space-y-4">
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             Your usernames on upstream SCM providers. Used to verify that your SCM login matches the
             account pushing code through the proxy.
           </p>
 
           {profile.scmIdentities.length === 0 ? (
-            <p className="text-sm text-gray-400 italic">No SCM identities registered.</p>
+            <p className="text-sm text-gray-400 italic dark:text-gray-500">
+              No SCM identities registered.
+            </p>
           ) : (
-            <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
+            <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white dark:bg-slate-800 dark:border-slate-700 dark:divide-gray-700">
               {profile.scmIdentities.map((id) => (
                 <li
                   key={`${id.provider}/${id.username}`}
                   className="flex items-center justify-between px-4 py-3 text-sm"
                 >
                   <span className="flex items-center gap-2">
-                    <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                    <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
                       {id.provider}
                     </span>
-                    <span className="text-gray-800">{id.username}</span>
+                    <span className="text-gray-800 dark:text-gray-200">{id.username}</span>
                     {id.source === 'config' && <LockedBadge source="config" />}
                   </span>
                   {id.source !== 'config' && (
                     <button
                       onClick={() => handleRemoveIdentity(id)}
-                      className="text-gray-400 hover:text-red-500 transition-colors text-xs"
+                      className="text-gray-400 hover:text-red-500 transition-colors text-xs dark:text-gray-500 dark:hover:text-red-400"
                       title="Remove"
                     >
                       Remove
@@ -335,13 +355,15 @@ export function Profile() {
             </ul>
           )}
 
-          {identityError && <p className="text-sm text-red-600">{identityError}</p>}
+          {identityError && (
+            <p className="text-sm text-red-600 dark:text-red-400">{identityError}</p>
+          )}
 
           <form onSubmit={handleAddIdentity} className="flex gap-2">
             <select
               value={newProvider}
               onChange={(e) => setNewProvider(e.target.value)}
-              className="rounded border border-gray-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+              className="rounded border border-gray-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"
               disabled={providers.length === 0}
             >
               {providers.map((p) => (
@@ -355,7 +377,7 @@ export function Profile() {
               value={newScmUsername}
               onChange={(e) => setNewScmUsername(e.target.value)}
               placeholder="your-username"
-              className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+              className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400"
             />
             <button
               type="submit"

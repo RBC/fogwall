@@ -17,25 +17,29 @@ const PUSH_STAT_CONFIG: {
     status: 'FORWARDED',
     label: 'Forwarded',
     icon: '✓',
-    classes: 'bg-blue-50 text-blue-700 border-blue-200',
+    classes:
+      'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-700',
   },
   {
     status: 'APPROVED',
     label: 'Approved',
     icon: '✓',
-    classes: 'bg-green-50 text-green-700 border-green-200',
+    classes:
+      'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-700',
   },
   {
     status: 'PENDING',
     label: 'Pending',
     icon: '⊘',
-    classes: 'bg-amber-50 text-amber-700 border-amber-200',
+    classes:
+      'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-700',
   },
   {
     status: 'REJECTED',
     label: 'Rejected',
     icon: '✗',
-    classes: 'bg-red-50 text-red-700 border-red-200',
+    classes:
+      'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-700',
   },
 ]
 
@@ -87,41 +91,45 @@ function AddUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl">
-        <h3 className="text-base font-semibold text-gray-800 mb-4">Add User</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60">
+      <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl dark:bg-slate-800">
+        <h3 className="text-base font-semibold text-gray-800 mb-4 dark:text-gray-200">Add User</h3>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Username</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-400">
+              Username
+            </label>
             <input
               required
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none"
+              className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Password</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-400">
+              Password
+            </label>
             <input
               required
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none"
+              className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Email <span className="text-gray-400">(optional)</span>
+            <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-400">
+              Email <span className="text-gray-400 dark:text-gray-500">(optional)</span>
             </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none"
+              className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"
             />
           </div>
-          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer dark:text-gray-300">
             <input
               type="checkbox"
               checked={isAdmin}
@@ -130,12 +138,12 @@ function AddUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
             />
             Grant admin role
           </label>
-          {error && <p className="text-xs text-red-500">{error}</p>}
+          {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 rounded border border-gray-200 text-xs text-gray-600 hover:bg-gray-50"
+              className="px-3 py-1.5 rounded border border-gray-200 text-xs text-gray-600 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-400 dark:hover:bg-gray-700"
             >
               Cancel
             </button>
@@ -181,9 +189,17 @@ export function Users({ authProvider }: UsersProps) {
   )
 
   if (loading)
-    return <div className="max-w-5xl mx-auto px-4 py-16 text-center text-gray-400">Loading…</div>
+    return (
+      <div className="max-w-5xl mx-auto px-4 py-16 text-center text-gray-400 dark:text-gray-500">
+        Loading…
+      </div>
+    )
   if (error)
-    return <div className="max-w-5xl mx-auto px-4 py-16 text-center text-red-500">{error}</div>
+    return (
+      <div className="max-w-5xl mx-auto px-4 py-16 text-center text-red-500 dark:text-red-400">
+        {error}
+      </div>
+    )
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-4">
@@ -191,7 +207,7 @@ export function Users({ authProvider }: UsersProps) {
         <AddUserModal onClose={() => setShowAddModal(false)} onCreated={loadUsers} />
       )}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-800">Users</h2>
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Users</h2>
         {isLocalAuth && (
           <button
             onClick={() => setShowAddModal(true)}
@@ -207,16 +223,18 @@ export function Users({ authProvider }: UsersProps) {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Search by username or email…"
-        className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+        className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400"
       />
 
       {filtered.length === 0 ? (
-        <p className="text-sm text-gray-400 italic py-8 text-center">No users found.</p>
+        <p className="text-sm text-gray-400 italic py-8 text-center dark:text-gray-500">
+          No users found.
+        </p>
       ) : (
-        <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+        <div className="rounded-lg border border-gray-200 bg-white overflow-hidden dark:bg-slate-800 dark:border-slate-700">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide dark:bg-slate-700/50 dark:border-slate-700 dark:text-gray-400">
                 <th className="px-4 py-3">Username</th>
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">SCM Identities</th>
@@ -224,26 +242,32 @@ export function Users({ authProvider }: UsersProps) {
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
               {filtered.map((u) => (
                 <tr
                   key={u.username}
-                  className="hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="hover:bg-gray-50 cursor-pointer transition-colors dark:hover:bg-gray-700/50"
                   onClick={() => navigate(`/users/${encodeURIComponent(u.username)}`)}
                 >
-                  <td className="px-4 py-3 font-medium text-gray-800">{u.username}</td>
-                  <td className="px-4 py-3 text-gray-500">
-                    {u.primaryEmail ?? <span className="italic text-gray-300">none</span>}
+                  <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-200">
+                    {u.username}
+                  </td>
+                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
+                    {u.primaryEmail ?? (
+                      <span className="italic text-gray-300 dark:text-gray-600">none</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
                       {u.scmProviders.length === 0 ? (
-                        <span className="italic text-gray-300 text-xs">none</span>
+                        <span className="italic text-gray-300 text-xs dark:text-gray-600">
+                          none
+                        </span>
                       ) : (
                         u.scmProviders.map((p) => (
                           <span
                             key={p}
-                            className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600"
+                            className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300"
                           >
                             {p}
                           </span>
@@ -265,7 +289,7 @@ export function Users({ authProvider }: UsersProps) {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <span className="text-gray-400 text-xs">›</span>
+                    <span className="text-gray-400 text-xs dark:text-gray-500">›</span>
                   </td>
                 </tr>
               ))}
