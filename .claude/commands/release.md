@@ -41,10 +41,10 @@ automatically by incrementing the last numeric component of the current version:
    the inferred/provided new version alongside the most recent tags.
 
 3. **Ensure a release branch exists.** Run `git branch --show-current` to check the current branch.
-   - If already on a branch named `release/<new-version>`, continue.
-   - If on `main` (or any other branch), create and switch to `release/<new-version>`:
+   - If already on a branch named `chore/bump-<new-version>`, continue.
+   - If on `main` (or any other branch), create and switch to `chore/bump-<new-version>`:
      ```
-     git checkout -b release/<new-version>
+     git checkout -b chore/bump-<new-version>
      ```
 
 4. **Update `build.gradle`.** In the `allprojects { ... }` block, replace the existing `version = '...'` line with
@@ -67,7 +67,7 @@ automatically by incrementing the last numeric component of the current version:
 8. **Push and open a PR with auto-merge.** Run:
 
    ```
-   git push -u origin release/<new-version>
+   git push -u origin chore/bump-<new-version>
    ```
 
    Then create the PR and enable auto-merge:
@@ -79,12 +79,12 @@ automatically by incrementing the last numeric component of the current version:
 
    Tell the user:
 
-   > PR created for `release/<new-version>` with auto-merge enabled. It will merge into main automatically once all
+   > PR created for `chore/bump-<new-version>` with auto-merge enabled. It will merge into main automatically once all
    > checks pass.
    >
    > **Once merged**, run `/release-tag <new-version>` to create and push the tag.
    >
-   > Monitor check status: `gh run list --branch release/<new-version> --limit 4`
+   > Monitor check status: `gh run list --branch chore/bump-<new-version> --limit 4`
 
    **Stop here.** Do NOT create a tag or push tags. The tag ruleset on GitHub will reject the tag push if the required
    status checks haven't passed yet.
