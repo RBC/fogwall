@@ -1,9 +1,9 @@
 package com.rbc.fogwall.jetty.reload;
 
+import com.rbc.fogwall.config.AttestationQuestion;
 import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.config.DiffScanConfig;
 import com.rbc.fogwall.config.SecretScanConfig;
-import com.rbc.fogwall.jetty.config.AttestationQuestion;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;

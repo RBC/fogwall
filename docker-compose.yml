@@ -29,10 +29,16 @@ services:
     image: docker.io/gitea/gitea:1.25-rootless
     ports:
       - "3000:3000"
+      - "3022:2222"    # Gitea SSH (rootless listens on 2222; host maps to 3022)
     environment:
       GITEA__security__INSTALL_LOCK: "true"
       GITEA__security__SECRET_KEY: "change-me-in-production"
       GITEA__server__HTTP_PORT: "3000"
+      GITEA__server__DOMAIN: "localhost"
+      GITEA__server__SSH_DOMAIN: "localhost"
+      GITEA__server__SSH_PORT: "3022"          # advertised port (what git clone URLs show)
+      GITEA__server__SSH_LISTEN_PORT: "2222"   # internal listen port
+      GITEA__server__START_SSH_SERVER: "true"
       GITEA__database__DB_TYPE: "sqlite3"
       GITEA__log__LEVEL: "Warn"
       GITEA__repository__DEFAULT_BRANCH: "main"

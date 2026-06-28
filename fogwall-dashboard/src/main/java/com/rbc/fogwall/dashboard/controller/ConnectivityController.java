@@ -1,6 +1,6 @@
 package com.rbc.fogwall.dashboard.controller;
 
-import com.rbc.fogwall.jetty.config.FogwallConfig;
+import com.rbc.fogwall.config.FogwallConfig;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.ProviderRegistry;
 import com.rbc.fogwall.tls.SslUtil;

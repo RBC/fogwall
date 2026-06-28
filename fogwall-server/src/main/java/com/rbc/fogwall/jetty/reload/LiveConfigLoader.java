@@ -1,10 +1,10 @@
 package com.rbc.fogwall.jetty.reload;
 
+import com.rbc.fogwall.config.FogwallConfig;
+import com.rbc.fogwall.config.FogwallConfigLoader;
+import com.rbc.fogwall.config.JettyConfigurationBuilder;
+import com.rbc.fogwall.config.ReloadConfig;
 import com.rbc.fogwall.db.UrlRuleRegistry;
-import com.rbc.fogwall.jetty.config.FogwallConfig;
-import com.rbc.fogwall.jetty.config.FogwallConfigLoader;
-import com.rbc.fogwall.jetty.config.JettyConfigurationBuilder;
-import com.rbc.fogwall.jetty.config.ReloadConfig;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import java.io.IOException;

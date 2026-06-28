@@ -1,4 +1,4 @@
-package com.rbc.fogwall.jetty.config;
+package com.rbc.fogwall.config;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -77,6 +77,9 @@ public class ServerConfig {
 
     /** TLS configuration for the server listener and upstream trust. Omit entirely to use plain HTTP. */
     private TlsConfig tls = new TlsConfig();
+
+    /** SSH transport configuration. Disabled by default; set {@code server.ssh.enabled: true} to activate. */
+    private SshConfig ssh = new SshConfig();
 
     /**
      * HTTP session persistence backend. Values:

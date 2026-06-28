@@ -149,28 +149,17 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
     public ReceivePack create(HttpServletRequest req, Repository db)
             throws ServiceNotEnabledException, ServiceNotAuthorizedException {
 
-        ReceivePack rp = new ReceivePack(db);
-        rp.setBiDirectionalPipe(false);
-
-        // Try request attribute first (set by RepositoryResolver which sees the first request),
-        // then fall back to Authorization header on this request
         CredentialsProvider creds =
                 (CredentialsProvider) req.getAttribute(StoreAndForwardRepositoryResolver.CREDENTIALS_ATTRIBUTE);
         if (creds == null) {
             creds = extractBasicAuth(req);
         }
 
-        // Per-request shared contexts — created before credentials are extracted so they can be
-        // stored on pushContext rather than the shared cached Repository config.
-        var validationContext = new ValidationContext();
-        var pushContext = new PushContext();
-
-        // Store per-request credentials on pushContext, not the shared Repository config.
-        // Writing to db.getConfig() would race with concurrent pushes to the same cached repo.
         String[] userPass = extractUserPass(req);
-        pushContext.setPushUser(userPass != null ? userPass[0] : null);
-        pushContext.setPushToken(userPass != null ? userPass[1] : null);
+        String pushUser = userPass != null ? userPass[0] : null;
+        String pushToken = userPass != null ? userPass[1] : null;
 
+        String repoSlug = null;
         String pathInfo = req.getPathInfo();
         if (pathInfo != null) {
             String slug = pathInfo.replaceAll("\\.git$", "");
@@ -178,8 +167,36 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
             if (segments.length >= 3) {
                 slug = "/" + segments[1] + "/" + segments[2];
             }
-            pushContext.setRepoSlug(slug);
+            repoSlug = slug;
         }
+
+        return buildReceivePack(db, creds, pushUser, pushToken, repoSlug);
+    }
+
+    /**
+     * Builds a {@link ReceivePack} for an SSH push. Accepts credentials and identity directly rather than extracting
+     * them from an HTTP request.
+     */
+    public ReceivePack createForSsh(
+            Repository db, CredentialsProvider creds, String pushUser, String pushToken, String repoSlug)
+            throws ServiceNotEnabledException, ServiceNotAuthorizedException {
+        return buildReceivePack(db, creds, pushUser, pushToken, repoSlug);
+    }
+
+    private ReceivePack buildReceivePack(
+            Repository db, CredentialsProvider creds, String pushUser, String pushToken, String repoSlug)
+            throws ServiceNotEnabledException, ServiceNotAuthorizedException {
+
+        ReceivePack rp = new ReceivePack(db);
+        rp.setBiDirectionalPipe(false);
+
+        // Per-request shared contexts
+        var validationContext = new ValidationContext();
+        var pushContext = new PushContext();
+
+        pushContext.setPushUser(pushUser);
+        pushContext.setPushToken(pushToken);
+        pushContext.setRepoSlug(repoSlug);
 
         // Persistence hook (records push to database)
         var persistenceHook = pushStore != null ? new PushStorePersistenceHook(pushStore, provider) : null;

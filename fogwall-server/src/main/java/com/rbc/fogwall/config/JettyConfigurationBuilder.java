@@ -1,11 +1,8 @@
-package com.rbc.fogwall.jetty.config;
+package com.rbc.fogwall.config;
 
 import com.rbc.fogwall.approval.ApprovalGateway;
 import com.rbc.fogwall.approval.AutoApprovalGateway;
 import com.rbc.fogwall.approval.UiApprovalGateway;
-import com.rbc.fogwall.config.CommitConfig;
-import com.rbc.fogwall.config.DiffScanConfig;
-import com.rbc.fogwall.config.SecretScanConfig;
 import com.rbc.fogwall.db.CompositeUrlRuleRegistry;
 import com.rbc.fogwall.db.FetchStore;
 import com.rbc.fogwall.db.MongoStoreFactory;

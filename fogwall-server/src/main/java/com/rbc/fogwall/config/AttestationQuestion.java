@@ -1,4 +1,4 @@
-package com.rbc.fogwall.jetty.config;
+package com.rbc.fogwall.config;
 
 import java.util.ArrayList;
 import java.util.List;

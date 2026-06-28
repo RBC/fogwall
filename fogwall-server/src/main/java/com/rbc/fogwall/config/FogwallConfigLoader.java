@@ -1,4 +1,4 @@
-package com.rbc.fogwall.jetty.config;
+package com.rbc.fogwall.config;
 
 import com.rbc.fogwall.jetty.reload.LiveConfigLoader;
 import java.io.IOException;

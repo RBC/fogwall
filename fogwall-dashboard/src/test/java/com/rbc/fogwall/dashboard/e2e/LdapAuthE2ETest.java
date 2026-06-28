@@ -2,7 +2,7 @@ package com.rbc.fogwall.dashboard.e2e;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.rbc.fogwall.jetty.config.FogwallConfig;
+import com.rbc.fogwall.config.FogwallConfig;
 import java.net.CookieManager;
 import java.net.CookiePolicy;
 import java.net.URI;

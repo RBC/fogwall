@@ -1,6 +1,6 @@
 package com.rbc.fogwall.dashboard.controller;
 
-import com.rbc.fogwall.jetty.config.AttestationQuestion;
+import com.rbc.fogwall.config.AttestationQuestion;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.provider.ProviderRegistry;
 import io.swagger.v3.oas.annotations.Operation;

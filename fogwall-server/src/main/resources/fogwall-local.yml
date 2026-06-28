@@ -1,10 +1,26 @@
 server:
+  ssh:
+    enabled: true
+    port: 2222
+    authorized-keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAd/AQ8I21Ti6buhYvegV5q+V3Q5VmFljU7XuxNkZLwG tom@duncan
   # Allow the Vite dev server to make cross-origin requests to the backend.
   # Vite defaults to port 5173; adjust if you've changed it.
   allowed-origins:
     - http://localhost:5173
   # Use default h2 database for local development - save the sessions there as well
   session-store: jdbc
+
+providers:
+  github:
+    enabled: false
+  gitlab:
+    enabled: false
+  codeberg:
+    enabled: false
+  gitea:
+    enabled: true
+    uri: ssh://git@localhost:3022
 
 # Three users for local development:
 #   admin    — full dashboard access, can approve any push
@@ -90,11 +106,11 @@ attestations:
 # admin:    can also approve via the dashboard by virtue of its ADMIN role
 permissions:
   - username: dev
-    provider: github
+    provider: gitea
     match:
       target: SLUG
-      value: /RBC/fogwall
-      type: LITERAL
+      value: .*
+      type: REGEX
     grant: PUSH
   # Add more permissions for your own repos, e.g.:
   # - username: dev
@@ -113,7 +129,7 @@ rules:
     - enabled: true
       order: 20
       operation: PUSH
-      provider: github
+      provider: gitea
       match:
         target: NAME
         value: "*.github.io"
@@ -124,11 +140,11 @@ rules:
     - enabled: true
       order: 100
       operation: BOTH
-      provider: github
+      provider: gitea
       match:
         target: SLUG
-        value: /RBC/fogwall
-        type: LITERAL
+        value: .*
+        type: REGEX
 
     # Add more allow rules for your own repos, e.g.:
     # - enabled: true

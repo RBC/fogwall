@@ -30,6 +30,8 @@
         <!--<Logger name="org.eclipse.jgit" level="DEBUG"/>-->
         <!--<Logger name="org.eclipse.jgit.http.server" level="DEBUG"/>-->
 
+        <Logger name="com.rbc.fogwall.ssh" level="DEBUG"/>
+
         <!-- Application logs -->
         <Logger name="com.rbc.fogwall" level="INFO"/>
 

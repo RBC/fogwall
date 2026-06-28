@@ -1,12 +1,12 @@
 package com.rbc.fogwall.dashboard.e2e;
 
+import com.rbc.fogwall.config.FogwallConfig;
+import com.rbc.fogwall.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.dashboard.SecurityConfig;
 import com.rbc.fogwall.dashboard.SpringWebConfig;
 import com.rbc.fogwall.db.PushStoreFactory;
 import com.rbc.fogwall.db.memory.InMemoryFetchStore;
 import com.rbc.fogwall.db.memory.InMemoryUrlRuleRegistry;
-import com.rbc.fogwall.jetty.config.FogwallConfig;
-import com.rbc.fogwall.jetty.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.jetty.reload.LiveConfigLoader;
 import com.rbc.fogwall.permission.InMemoryRepoPermissionStore;
 import com.rbc.fogwall.permission.RepoPermissionService;

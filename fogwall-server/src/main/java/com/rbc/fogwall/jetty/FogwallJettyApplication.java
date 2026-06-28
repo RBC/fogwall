@@ -1,10 +1,12 @@
 package com.rbc.fogwall.jetty;
 
-import com.rbc.fogwall.jetty.config.FogwallConfigLoader;
-import com.rbc.fogwall.jetty.config.JettyConfigurationBuilder;
-import com.rbc.fogwall.jetty.config.TlsConfig;
+import com.rbc.fogwall.config.FogwallConfigLoader;
+import com.rbc.fogwall.config.JettyConfigurationBuilder;
+import com.rbc.fogwall.config.SshConfig;
+import com.rbc.fogwall.config.TlsConfig;
 import com.rbc.fogwall.jetty.reload.LiveConfigLoader;
 import com.rbc.fogwall.provider.FogwallProvider;
+import com.rbc.fogwall.ssh.SshGitServer;
 import com.rbc.fogwall.tls.SslUtil;
 import java.nio.file.Path;
 import java.util.List;
@@ -71,6 +73,25 @@ public class FogwallJettyApplication {
 
         FogwallServletRegistrar.registerProviders(context, ctx, configBuilder, providers);
 
+        SshConfig sshConfig = fogwallConfig.getServer().getSsh();
+        SshGitServer sshGitServer = null;
+        if (sshConfig.isEnabled()) {
+            if (providers.isEmpty()) {
+                log.warn("SSH transport enabled but no providers configured — SSH server will not start");
+            } else {
+                if (providers.size() > 1) {
+                    log.warn(
+                            "SSH transport MVP supports only a single provider; using '{}' (others ignored)",
+                            providers.get(0).getName());
+                }
+                FogwallProvider sshProvider = providers.get(0);
+                var sshFactory = FogwallServletRegistrar.buildReceivePackFactory(ctx, configBuilder, sshProvider);
+                sshGitServer = SshGitServer.create(sshConfig, sshProvider, ctx.storeForwardCache(), sshFactory);
+                sshGitServer.start();
+            }
+        }
+
+        final SshGitServer finalSshGitServer = sshGitServer;
         var liveConfigLoader = new LiveConfigLoader(
                 configBuilder.buildConfigHolder(),
                 fogwallConfig,
@@ -82,6 +103,9 @@ public class FogwallJettyApplication {
             @Override
             public void lifeCycleStopping(LifeCycle event) {
                 liveConfigLoader.stop();
+                if (finalSshGitServer != null) {
+                    finalSshGitServer.stop();
+                }
             }
         });
 

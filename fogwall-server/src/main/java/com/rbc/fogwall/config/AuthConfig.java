@@ -1,4 +1,4 @@
-package com.rbc.fogwall.jetty.config;
+package com.rbc.fogwall.config;
 
 import java.util.HashMap;
 import java.util.List;

@@ -1,5 +1,7 @@
 package com.rbc.fogwall.dashboard.controller;
 
+import com.rbc.fogwall.config.AttestationQuestion;
+import com.rbc.fogwall.config.FogwallConfig;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.model.Attestation;
 import com.rbc.fogwall.db.model.PushQuery;
@@ -7,8 +9,6 @@ import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
 import com.rbc.fogwall.db.model.PushStep;
 import com.rbc.fogwall.db.model.PushSummary;
-import com.rbc.fogwall.jetty.config.AttestationQuestion;
-import com.rbc.fogwall.jetty.config.FogwallConfig;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.permission.RepoPermissionService;

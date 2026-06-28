@@ -2,7 +2,6 @@ package com.rbc.fogwall.git;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -273,7 +272,7 @@ public class CommitInspectionService {
                         .email(committer.getEmailAddress())
                         .build())
                 .message(fullMessage)
-                .date(Instant.ofEpochSecond(committer.getWhen().getTime() / 1000))
+                .date(committer.getWhenAsInstant())
                 .signature(signature)
                 .signedOffBy(signedOffBy)
                 .build();

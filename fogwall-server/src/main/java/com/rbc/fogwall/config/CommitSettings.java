@@ -1,6 +1,5 @@
-package com.rbc.fogwall.jetty.config;
+package com.rbc.fogwall.config;
 
-import com.rbc.fogwall.config.CommitConfig;
 import lombok.Data;
 
 /**

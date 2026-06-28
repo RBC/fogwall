@@ -4,6 +4,7 @@ import com.rbc.fogwall.approval.ApprovalGateway;
 import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.config.DiffScanConfig;
 import com.rbc.fogwall.config.GpgConfig;
+import com.rbc.fogwall.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.config.SecretScanConfig;
 import com.rbc.fogwall.db.FetchStore;
 import com.rbc.fogwall.db.PushStore;
@@ -12,7 +13,6 @@ import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.git.StoreAndForwardReceivePackFactory;
 import com.rbc.fogwall.git.StoreAndForwardRepositoryResolver;
 import com.rbc.fogwall.git.StoreAndForwardUploadPackFactory;
-import com.rbc.fogwall.jetty.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.BitbucketProvider;
@@ -119,6 +119,32 @@ public final class FogwallServletRegistrar {
                     fogwallContext.fetchStore(),
                     fogwallContext.urlRuleRegistry());
         }
+    }
+
+    /**
+     * Builds a {@link StoreAndForwardReceivePackFactory} for the given provider using the current context and config.
+     * Used by the SSH server to share the same factory the HTTP push servlet uses.
+     */
+    public static StoreAndForwardReceivePackFactory buildReceivePackFactory(
+            FogwallContext fogwallContext, JettyConfigurationBuilder configBuilder, FogwallProvider provider) {
+        ConfigHolder configHolder = configBuilder.buildConfigHolder();
+        var factory = new StoreAndForwardReceivePackFactory(
+                provider,
+                configHolder::getCommitConfig,
+                configHolder::getDiffScanConfig,
+                configHolder::getSecretScanConfig,
+                GpgConfig.defaultConfig(),
+                fogwallContext.repoPermissionService(),
+                fogwallContext.pushIdentityResolver(),
+                fogwallContext.pushStore(),
+                fogwallContext.approvalGateway(),
+                fogwallContext.serviceUrl(),
+                Duration.ofSeconds(fogwallContext.heartbeatIntervalSeconds()),
+                fogwallContext.urlRuleRegistry());
+        factory.setFailFast(configBuilder.isFailFast());
+        factory.setConnectTimeoutSeconds(fogwallContext.upstreamConnectTimeoutSeconds());
+        factory.setCache(fogwallContext.storeForwardCache());
+        return factory;
     }
 
     public static void registerGitServlet(

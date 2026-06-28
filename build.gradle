@@ -56,6 +56,9 @@ ext {
     // BouncyCastle
     bouncyCastleVersion = '1.84'
 
+    // Apache MINA SSHD
+    minaSshdVersion = '2.18.0'
+
     // Lombok
     lombokVersion = '1.18.46'
 
