@@ -1,6 +1,6 @@
 package com.rbc.fogwall.dashboard.e2e;
 
-import com.rbc.fogwall.jetty.config.OidcAuthConfig;
+import com.rbc.fogwall.config.OidcAuthConfig;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 

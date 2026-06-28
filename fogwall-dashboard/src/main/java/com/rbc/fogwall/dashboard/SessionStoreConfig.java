@@ -1,9 +1,9 @@
 package com.rbc.fogwall.dashboard;
 
 import com.mongodb.client.MongoClient;
+import com.rbc.fogwall.config.FogwallConfig;
+import com.rbc.fogwall.config.ServerConfig.RedisConfig;
 import com.rbc.fogwall.dashboard.session.MongoSessionRepository;
-import com.rbc.fogwall.jetty.config.FogwallConfig;
-import com.rbc.fogwall.jetty.config.ServerConfig.RedisConfig;
 import jakarta.servlet.Filter;
 import java.time.Duration;
 import java.util.concurrent.ConcurrentHashMap;

@@ -1,15 +1,15 @@
 package com.rbc.fogwall.dashboard;
 
 import com.rbc.fogwall.approval.UiApprovalGateway;
+import com.rbc.fogwall.config.FogwallConfig;
+import com.rbc.fogwall.config.FogwallConfigLoader;
+import com.rbc.fogwall.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.db.MongoStoreFactory;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.jetty.BlockingContentHandler;
 import com.rbc.fogwall.jetty.FogwallContext;
 import com.rbc.fogwall.jetty.FogwallJettyApplication;
 import com.rbc.fogwall.jetty.FogwallServletRegistrar;
-import com.rbc.fogwall.jetty.config.FogwallConfig;
-import com.rbc.fogwall.jetty.config.FogwallConfigLoader;
-import com.rbc.fogwall.jetty.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.jetty.reload.LiveConfigLoader;
 import com.rbc.fogwall.provider.FogwallProvider;

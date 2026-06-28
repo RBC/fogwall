@@ -1,6 +1,6 @@
 package com.rbc.fogwall.dashboard.controller;
 
-import com.rbc.fogwall.jetty.config.FogwallConfig;
+import com.rbc.fogwall.config.FogwallConfig;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;

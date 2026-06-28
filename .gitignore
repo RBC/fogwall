@@ -77,3 +77,7 @@ perf/.git-proxy-local.json
 perf/tls/*.pem
 perf/tls/*.jks
 fogwall-server/src/main/resources/fogwall-perf.yml
+# SSH test keys and generated host keys
+fogwall_test
+fogwall_test.pub
+fogwall-server/.ssh/
