@@ -1,9 +1,9 @@
 server:
   ssh:
-    enabled: true
-    port: 2222
-    authorized-keys:
-      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAd/AQ8I21Ti6buhYvegV5q+V3Q5VmFljU7XuxNkZLwG tom@duncan
+    enabled: false
+    # port: 2222
+    # authorized-keys:
+    #   - ssh-ed25519 AAAA... your-key-comment
   # Allow the Vite dev server to make cross-origin requests to the backend.
   # Vite defaults to port 5173; adjust if you've changed it.
   allowed-origins:
