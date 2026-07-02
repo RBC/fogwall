@@ -51,7 +51,7 @@ ext {
     snakeyamlVersion = '2.6'
 
     // Gestalt config
-    gestaltVersion = '0.37.2'
+    gestaltVersion = '0.38.0'
 
     // BouncyCastle
     bouncyCastleVersion = '1.84'
@@ -60,7 +60,7 @@ ext {
     lombokVersion = '1.18.46'
 
     // Testing
-    junitVersion = '6.1.0'
+    junitVersion = '6.1.1'
     junitPlatformVersion = '6.1.0'
     mockitoVersion = '5.23.0'
     testContainersVersion = '2.0.5'
@@ -69,8 +69,8 @@ ext {
     gitleaksVersion = '8.30.1'
 
     // OpenAPI spec generation
-    swaggerCoreVersion = '2.2.51'
-    swaggerUiVersion = '5.32.6'
+    swaggerCoreVersion = '2.2.52'
+    swaggerUiVersion = '5.32.8'
 
 }
 
