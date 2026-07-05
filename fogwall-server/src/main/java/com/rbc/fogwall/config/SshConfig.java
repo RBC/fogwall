@@ -1,7 +1,5 @@
 package com.rbc.fogwall.config;
 
-import java.util.ArrayList;
-import java.util.List;
 import lombok.Data;
 
 /** Binds the {@code server.ssh:} block in fogwall.yml. */
@@ -18,11 +16,4 @@ public class SshConfig {
      * relative to the working directory.
      */
     private String hostKeyPath = ".ssh/fogwall_host_key";
-
-    /**
-     * Authorized public keys in OpenSSH {@code authorized_keys} format, one entry per list item.
-     *
-     * <p>Example: {@code ["ssh-ed25519 AAAA... comment"]}
-     */
-    private List<String> authorizedKeys = new ArrayList<>();
 }

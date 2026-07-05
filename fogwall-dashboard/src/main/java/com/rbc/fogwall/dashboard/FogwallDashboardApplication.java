@@ -10,11 +10,13 @@ import com.rbc.fogwall.jetty.BlockingContentHandler;
 import com.rbc.fogwall.jetty.FogwallContext;
 import com.rbc.fogwall.jetty.FogwallJettyApplication;
 import com.rbc.fogwall.jetty.FogwallServletRegistrar;
+import com.rbc.fogwall.jetty.SshServerRegistrar;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.jetty.reload.LiveConfigLoader;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.InMemoryProviderRegistry;
 import com.rbc.fogwall.provider.ProviderRegistry;
+import com.rbc.fogwall.ssh.SshGitServer;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.ServletContextEvent;
 import jakarta.servlet.ServletContextListener;
@@ -95,6 +97,9 @@ public class FogwallDashboardApplication {
         // Register git proxy servlets (store-and-forward + transparent proxy) for each provider
         FogwallServletRegistrar.registerProviders(context, ctx, configBuilder, providers);
 
+        SshGitServer sshGitServer =
+                SshServerRegistrar.startIfEnabled(fogwallConfig.getServer().getSsh(), providers, ctx, configBuilder);
+
         ConfigHolder configHolder = configBuilder.buildConfigHolder();
         var liveConfigLoader = new LiveConfigLoader(
                 configHolder,
@@ -107,6 +112,7 @@ public class FogwallDashboardApplication {
             @Override
             public void lifeCycleStopping(LifeCycle event) {
                 liveConfigLoader.stop();
+                if (sshGitServer != null) sshGitServer.stop();
             }
         });
 

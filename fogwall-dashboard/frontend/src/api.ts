@@ -367,6 +367,27 @@ export async function checkTargetedConnectivity(
   return res.json()
 }
 
+export async function fetchMySshKeys() {
+  const res = await apiFetch('/api/me/ssh-keys')
+  if (!res.ok) throw new Error('Failed to fetch SSH keys')
+  return res.json()
+}
+
+export async function addSshKey(publicKey: string, label: string) {
+  const res = await apiFetch('/api/me/ssh-keys', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ publicKey, label }),
+  })
+  if (!res.ok) await parseErrorResponse(res, 'Failed to add SSH key')
+  return res.json()
+}
+
+export async function removeSshKey(id: string) {
+  const res = await apiFetch(`/api/me/ssh-keys/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  if (!res.ok) await parseErrorResponse(res, 'Failed to remove SSH key')
+}
+
 export async function deleteUserPermission(username: string, id: string) {
   const res = await apiFetch(
     `/api/users/${encodeURIComponent(username)}/permissions/${encodeURIComponent(id)}`,

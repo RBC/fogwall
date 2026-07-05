@@ -1,10 +1,13 @@
 package com.rbc.fogwall.user;
 
 import com.rbc.fogwall.service.ScmTokenCache;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -299,6 +302,83 @@ public class JdbcUserStore implements UserStore {
                     Map.of("u", username, "email", email, "source", authSource));
         }
         log.debug("Upserted locked email '{}' ({}) for user '{}'", email, authSource, username);
+    }
+
+    // ── SSH key management ────────────────────────────────────────────────────────
+
+    @Override
+    public Optional<UserEntry> findBySshFingerprint(String fingerprint) {
+        if (fingerprint == null) return Optional.empty();
+        List<String> rows = jdbc.queryForList(
+                "SELECT username FROM user_ssh_keys WHERE fingerprint = :fp", Map.of("fp", fingerprint), String.class);
+        if (rows.isEmpty()) return Optional.empty();
+        return findByUsername(rows.get(0));
+    }
+
+    @Override
+    public SshKeyEntry addSshKey(String username, String fingerprint, String publicKey, String label) {
+        List<String> existing = jdbc.queryForList(
+                "SELECT username FROM user_ssh_keys WHERE fingerprint = :fp", Map.of("fp", fingerprint), String.class);
+        if (!existing.isEmpty()) {
+            String owner = existing.get(0);
+            if (owner.equals(username)) {
+                return findSshKeys(username).stream()
+                        .filter(k -> k.getFingerprint().equals(fingerprint))
+                        .findFirst()
+                        .orElseThrow();
+            }
+            throw new SshKeyConflictException(fingerprint, owner);
+        }
+
+        String id = UUID.randomUUID().toString();
+        Instant now = Instant.now();
+        jdbc.update(
+                "INSERT INTO user_ssh_keys (id, username, fingerprint, public_key, label, created_at)"
+                        + " VALUES (:id, :u, :fp, :pk, :label, :created)",
+                Map.of(
+                        "id", id,
+                        "u", username,
+                        "fp", fingerprint,
+                        "pk", publicKey,
+                        "label", label != null ? label : "",
+                        "created", Timestamp.from(now)));
+        log.info("Added SSH key {} ({}) for user '{}'", fingerprint, label, username);
+        return SshKeyEntry.builder()
+                .id(id)
+                .username(username)
+                .fingerprint(fingerprint)
+                .publicKey(publicKey)
+                .label(label)
+                .createdAt(now)
+                .build();
+    }
+
+    @Override
+    public void removeSshKey(String username, String keyId) {
+        int deleted = jdbc.update(
+                "DELETE FROM user_ssh_keys WHERE id = :id AND username = :u", Map.of("id", keyId, "u", username));
+        if (deleted > 0) {
+            log.info("Removed SSH key {} for user '{}'", keyId, username);
+        }
+    }
+
+    @Override
+    public List<SshKeyEntry> findSshKeys(String username) {
+        return jdbc
+                .queryForList(
+                        "SELECT id, fingerprint, public_key, label, created_at FROM user_ssh_keys"
+                                + " WHERE username = :u ORDER BY created_at",
+                        Map.of("u", username))
+                .stream()
+                .map(row -> SshKeyEntry.builder()
+                        .id((String) row.get("id"))
+                        .username(username)
+                        .fingerprint((String) row.get("fingerprint"))
+                        .publicKey((String) row.get("public_key"))
+                        .label((String) row.get("label"))
+                        .createdAt(((Timestamp) row.get("created_at")).toInstant())
+                        .build())
+                .toList();
     }
 
     private UserEntry buildEntry(String username, String passwordHash, String rolesStr) {

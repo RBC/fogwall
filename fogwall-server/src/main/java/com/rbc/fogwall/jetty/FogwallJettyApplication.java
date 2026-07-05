@@ -2,7 +2,6 @@ package com.rbc.fogwall.jetty;
 
 import com.rbc.fogwall.config.FogwallConfigLoader;
 import com.rbc.fogwall.config.JettyConfigurationBuilder;
-import com.rbc.fogwall.config.SshConfig;
 import com.rbc.fogwall.config.TlsConfig;
 import com.rbc.fogwall.jetty.reload.LiveConfigLoader;
 import com.rbc.fogwall.provider.FogwallProvider;
@@ -73,23 +72,8 @@ public class FogwallJettyApplication {
 
         FogwallServletRegistrar.registerProviders(context, ctx, configBuilder, providers);
 
-        SshConfig sshConfig = fogwallConfig.getServer().getSsh();
-        SshGitServer sshGitServer = null;
-        if (sshConfig.isEnabled()) {
-            if (providers.isEmpty()) {
-                log.warn("SSH transport enabled but no providers configured — SSH server will not start");
-            } else {
-                if (providers.size() > 1) {
-                    log.warn(
-                            "SSH transport MVP supports only a single provider; using '{}' (others ignored)",
-                            providers.get(0).getName());
-                }
-                FogwallProvider sshProvider = providers.get(0);
-                var sshFactory = FogwallServletRegistrar.buildReceivePackFactory(ctx, configBuilder, sshProvider);
-                sshGitServer = SshGitServer.create(sshConfig, sshProvider, ctx.storeForwardCache(), sshFactory);
-                sshGitServer.start();
-            }
-        }
+        SshGitServer sshGitServer =
+                SshServerRegistrar.startIfEnabled(fogwallConfig.getServer().getSsh(), providers, ctx, configBuilder);
 
         final SshGitServer finalSshGitServer = sshGitServer;
         var liveConfigLoader = new LiveConfigLoader(

@@ -193,4 +193,29 @@ public class CompositeUserStore implements UserStore {
     public void upsertLockedEmail(String username, String email, String authSource) {
         mutableStore.upsertLockedEmail(username, email, authSource);
     }
+
+    // ── SSH key management — delegate entirely to mutable store ──────────────────
+
+    @Override
+    public Optional<UserEntry> findBySshFingerprint(String fingerprint) {
+        return mutableStore.findBySshFingerprint(fingerprint);
+    }
+
+    @Override
+    public SshKeyEntry addSshKey(String username, String fingerprint, String publicKey, String label) {
+        if (configStore.findByUsername(username).isPresent()) {
+            mutableStore.upsertUser(username); // ensure DB row exists for config users
+        }
+        return mutableStore.addSshKey(username, fingerprint, publicKey, label);
+    }
+
+    @Override
+    public void removeSshKey(String username, String keyId) {
+        mutableStore.removeSshKey(username, keyId);
+    }
+
+    @Override
+    public List<SshKeyEntry> findSshKeys(String username) {
+        return mutableStore.findSshKeys(username);
+    }
 }

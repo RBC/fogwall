@@ -174,17 +174,33 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
     }
 
     /**
-     * Builds a {@link ReceivePack} for an SSH push. Accepts credentials and identity directly rather than extracting
-     * them from an HTTP request.
+     * Builds a {@link ReceivePack} for an SSH push. The {@code resolvedUser} is the {@link UserEntry} identified during
+     * public-key authentication; it bypasses token-based identity resolution in the hook chain.
      */
     public ReceivePack createForSsh(
-            Repository db, CredentialsProvider creds, String pushUser, String pushToken, String repoSlug)
+            Repository db,
+            CredentialsProvider creds,
+            String pushUser,
+            String pushToken,
+            String repoSlug,
+            com.rbc.fogwall.user.UserEntry resolvedUser)
             throws ServiceNotEnabledException, ServiceNotAuthorizedException {
-        return buildReceivePack(db, creds, pushUser, pushToken, repoSlug);
+        return buildReceivePack(db, creds, pushUser, pushToken, repoSlug, resolvedUser);
     }
 
     private ReceivePack buildReceivePack(
             Repository db, CredentialsProvider creds, String pushUser, String pushToken, String repoSlug)
+            throws ServiceNotEnabledException, ServiceNotAuthorizedException {
+        return buildReceivePack(db, creds, pushUser, pushToken, repoSlug, null);
+    }
+
+    private ReceivePack buildReceivePack(
+            Repository db,
+            CredentialsProvider creds,
+            String pushUser,
+            String pushToken,
+            String repoSlug,
+            com.rbc.fogwall.user.UserEntry resolvedUser)
             throws ServiceNotEnabledException, ServiceNotAuthorizedException {
 
         ReceivePack rp = new ReceivePack(db);
@@ -197,6 +213,10 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
         pushContext.setPushUser(pushUser);
         pushContext.setPushToken(pushToken);
         pushContext.setRepoSlug(repoSlug);
+        if (resolvedUser != null) {
+            pushContext.setPreResolvedUser(resolvedUser);
+            pushContext.setTransportMethod("SSH");
+        }
 
         // Persistence hook (records push to database)
         var persistenceHook = pushStore != null ? new PushStorePersistenceHook(pushStore, provider) : null;

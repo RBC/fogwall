@@ -4,20 +4,18 @@ import com.rbc.fogwall.config.SshConfig;
 import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.git.StoreAndForwardReceivePackFactory;
 import com.rbc.fogwall.provider.FogwallProvider;
+import com.rbc.fogwall.user.ReadOnlyUserStore;
+import com.rbc.fogwall.user.UserEntry;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.PublicKey;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.sshd.common.config.keys.AuthorizedKeyEntry;
-import org.apache.sshd.common.config.keys.KeyUtils;
-import org.apache.sshd.common.config.keys.PublicKeyEntryResolver;
 import org.apache.sshd.server.SshServer;
 import org.apache.sshd.server.auth.pubkey.PublickeyAuthenticator;
 import org.apache.sshd.server.forward.AcceptAllForwardingFilter;
 import org.apache.sshd.server.keyprovider.SimpleGeneratorHostKeyProvider;
+import org.apache.sshd.server.session.ServerSession;
 
 /**
  * Wraps an Apache MINA SSHD server that accepts {@code git push} connections over SSH. On each push,
@@ -28,16 +26,22 @@ import org.apache.sshd.server.keyprovider.SimpleGeneratorHostKeyProvider;
  * -A}, or {@code ForwardAgent yes} in {@code ~/.ssh/config}). Fogwall relays the forwarded agent to authenticate with
  * the upstream provider — no fogwall-held credentials are required.
  *
+ * <p>Clients authenticate by registering their SSH public key on their fogwall profile page. The key fingerprint is
+ * looked up in the user store at connection time to resolve their {@link UserEntry}, which is then stored on the MINA
+ * session for use by {@link SshGitReceiveCommand}.
+ *
  * <p>MVP constraints:
  *
  * <ul>
  *   <li>Only a single provider is supported per server instance.
- *   <li>Authorized public keys are loaded once at startup from {@code server.ssh.authorized-keys}.
  *   <li>{@code git-upload-pack} (clone/fetch over SSH) is not yet implemented.
  * </ul>
  */
 @Slf4j
 public class SshGitServer {
+
+    /** Session attribute key under which the resolved {@link UserEntry} is stored after public-key auth. */
+    static final String SESSION_USER_ATTR = "fogwall.resolvedUser";
 
     private final SshServer sshd;
 
@@ -49,7 +53,8 @@ public class SshGitServer {
             SshConfig config,
             FogwallProvider provider,
             LocalRepositoryCache cache,
-            StoreAndForwardReceivePackFactory receivePackFactory)
+            StoreAndForwardReceivePackFactory receivePackFactory,
+            ReadOnlyUserStore userStore)
             throws IOException {
 
         SshServer sshd = SshServer.setUpDefaultServer();
@@ -60,12 +65,9 @@ public class SshGitServer {
         sshd.setKeyPairProvider(new SimpleGeneratorHostKeyProvider(hostKeyPath));
         log.info("SSH host key: {}", hostKeyPath.toAbsolutePath());
 
-        List<PublicKey> authorizedKeys = parseAuthorizedKeys(config.getAuthorizedKeys());
-        sshd.setPublickeyAuthenticator(buildAuthenticator(authorizedKeys));
-        log.info("SSH authorized keys loaded: {} entries", authorizedKeys.size());
+        sshd.setPublickeyAuthenticator(buildAuthenticator(userStore));
 
         // Enable inbound SSH agent forwarding — clients must connect with ssh -A.
-        // ForwardingFilter defaults to null which silently rejects; must be set explicitly.
         FogwallProxyAgentFactory agentFactory = new FogwallProxyAgentFactory();
         sshd.setAgentFactory(agentFactory);
         sshd.setForwardingFilter(AcceptAllForwardingFilter.INSTANCE);
@@ -88,42 +90,37 @@ public class SshGitServer {
         }
     }
 
-    private static List<PublicKey> parseAuthorizedKeys(List<String> keyLines) {
-        List<PublicKey> keys = new ArrayList<>();
-        for (String line : keyLines) {
-            String trimmed = line.trim();
-            if (trimmed.isEmpty() || trimmed.startsWith("#")) {
-                continue;
-            }
+    private static PublickeyAuthenticator buildAuthenticator(ReadOnlyUserStore userStore) {
+        return (sshUsername, key, session) -> {
+            String fingerprint;
             try {
-                // Strip optional comment token — MINA SSHD's parser misidentifies the key type as a
-                // hostname pattern when a "user@host" comment is present.
-                String[] parts = trimmed.split("\\s+", 3);
-                String keyLine = parts.length >= 2 ? parts[0] + " " + parts[1] : trimmed;
-                AuthorizedKeyEntry entry = AuthorizedKeyEntry.parseAuthorizedKeyEntry(keyLine);
-                PublicKey key = entry.resolvePublicKey(null, PublicKeyEntryResolver.IGNORING);
-                if (key != null) {
-                    keys.add(key);
-                } else {
-                    log.warn("Could not resolve public key (unsupported type?): {}", trimmed);
-                }
+                fingerprint = SshKeyUtils.fingerprint(key);
             } catch (Exception e) {
-                log.warn("Failed to parse authorized key entry: {}", trimmed, e);
+                log.warn("Could not fingerprint SSH key during auth: {}", e.getMessage());
+                return false;
             }
-        }
-        return keys;
+
+            Optional<UserEntry> user = userStore.findBySshFingerprint(fingerprint);
+            if (user.isEmpty()) {
+                log.warn("SSH auth rejected — no user registered for key fingerprint {}", fingerprint);
+                return false;
+            }
+
+            log.debug(
+                    "SSH auth accepted: fingerprint {} -> user '{}'",
+                    fingerprint,
+                    user.get().getUsername());
+            storeResolvedUser(session, user.get());
+            return true;
+        };
     }
 
-    private static PublickeyAuthenticator buildAuthenticator(List<PublicKey> authorizedKeys) {
-        return (username, key, session) -> {
-            for (PublicKey authorized : authorizedKeys) {
-                if (KeyUtils.compareKeys(authorized, key)) {
-                    log.debug("SSH public key accepted for user '{}'", username);
-                    return true;
-                }
-            }
-            log.warn("SSH public key rejected for user '{}'", username);
-            return false;
-        };
+    static void storeResolvedUser(ServerSession session, UserEntry user) {
+        session.getProperties().put(SESSION_USER_ATTR, user);
+    }
+
+    static Optional<UserEntry> getResolvedUser(ServerSession session) {
+        Object val = session.getProperties().get(SESSION_USER_ATTR);
+        return val instanceof UserEntry u ? Optional.of(u) : Optional.empty();
     }
 }

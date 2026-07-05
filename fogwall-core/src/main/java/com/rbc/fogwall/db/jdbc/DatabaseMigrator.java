@@ -47,7 +47,8 @@ public class DatabaseMigrator {
                     "7",
                     "rename operations to operation",
                     "db/migration/V7__rename_operations_to_operation.sql",
-                    false));
+                    false),
+            new Migration("8", "user ssh keys", "db/migration/V8__ssh_keys.sql", false));
 
     // ---------------------------------------------------------------------------
 

@@ -3,6 +3,7 @@ package com.rbc.fogwall.ssh;
 import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.git.StoreAndForwardReceivePackFactory;
 import com.rbc.fogwall.provider.FogwallProvider;
+import com.rbc.fogwall.user.UserEntry;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -93,10 +94,16 @@ public class SshGitReceiveCommand implements Command {
     @Override
     public void start(ChannelSession channel, Environment env) {
         String sshUser = channel.getSession().getUsername();
+        // Resolved during public-key auth — may be absent if the store returned empty (shouldn't happen
+        // since auth would have been rejected, but guard defensively).
+        UserEntry resolvedUser = SshGitServer.getResolvedUser(
+                        (org.apache.sshd.server.session.ServerSession) channel.getSession())
+                .orElse(null);
         // SSH_AUTH_SOCK is set on the channel env by MINA SSHD when the client's ssh -A forwarding
         // channel is established. Capture it here before handing off to the worker thread.
         String authSocket = env.getEnv().get(SshAgent.SSH_AUTHSOCKET_ENV_NAME);
-        Thread worker = new Thread(() -> runReceivePack(sshUser, authSocket), "ssh-git-receive-" + repoPath);
+        Thread worker =
+                new Thread(() -> runReceivePack(sshUser, resolvedUser, authSocket), "ssh-git-receive-" + repoPath);
         worker.setDaemon(true);
         worker.start();
     }
@@ -132,7 +139,7 @@ public class SshGitReceiveCommand implements Command {
 
     record RepoRoute(String owner, String repo, String upstreamUrl, String repoSlug) {}
 
-    private void runReceivePack(String sshUser, String authSocket) {
+    private void runReceivePack(String sshUser, UserEntry resolvedUser, String authSocket) {
         int exitCode = 0;
         SshAgent agent = null;
         try {
@@ -224,7 +231,8 @@ public class SshGitReceiveCommand implements Command {
                 localRepo.getConfig().setString("fogwall", null, "upstreamUrl", upstreamUrl);
                 localRepo.getConfig().save();
 
-                ReceivePack rp = receivePackFactory.createForSsh(localRepo, null, sshUser, null, repoSlug);
+                ReceivePack rp =
+                        receivePackFactory.createForSsh(localRepo, null, sshUser, null, repoSlug, resolvedUser);
                 rp.setBiDirectionalPipe(true); // factory defaults to false for HTTP; SSH is bidirectional
                 rp.receive(in, out, err);
             } finally {

@@ -70,6 +70,13 @@ public class CheckUserPushPermissionHook implements FogwallHook {
         String pushToken = pushContext.getPushToken();
         String repoSlug = pushContext.getRepoSlug();
 
+        // SSH transport: user already resolved from the connecting key — skip token-based resolution.
+        UserEntry preResolved = pushContext.getPreResolvedUser();
+        if (preResolved != null) {
+            checkRepoPermission(preResolved, repoSlug, commands);
+            return;
+        }
+
         if (identityResolver == null) {
             log.debug("No identity resolver configured (open mode), skipping permission check");
             pushContext.addStep(PushStep.builder()
@@ -109,18 +116,16 @@ public class CheckUserPushPermissionHook implements FogwallHook {
             return;
         }
 
-        UserEntry user = resolved.get();
+        checkRepoPermission(resolved.get(), repoSlug, commands);
+    }
+
+    private void checkRepoPermission(UserEntry user, String repoSlug, Collection<ReceiveCommand> commands) {
         String providerId = provider != null ? provider.getProviderId() : null;
 
         if (providerId == null
                 || repoSlug == null
                 || !repoPermissionService.isAllowedToPush(user.getUsername(), providerId, repoSlug)) {
-            log.warn(
-                    "Push user '{}' (resolved as '{}') is not authorized for {}/{}",
-                    pushUser,
-                    user.getUsername(),
-                    providerId,
-                    repoSlug);
+            log.warn("User '{}' is not authorized for {}/{}", user.getUsername(), providerId, repoSlug);
             String repoRef = provider != null && repoSlug != null
                     ? provider.getUri().toString().replaceAll("/$", "") + repoSlug
                     : repoSlug;
@@ -135,12 +140,7 @@ public class CheckUserPushPermissionHook implements FogwallHook {
             return;
         }
 
-        log.debug(
-                "Push user '{}' resolved as '{}' and authorized for {}/{}",
-                pushUser,
-                user.getUsername(),
-                providerId,
-                repoSlug);
+        log.debug("User '{}' authorized for {}/{}", user.getUsername(), providerId, repoSlug);
         pushContext.setResolvedUser(user.getUsername());
         if (provider != null && user.getScmIdentities() != null) {
             user.getScmIdentities().stream()

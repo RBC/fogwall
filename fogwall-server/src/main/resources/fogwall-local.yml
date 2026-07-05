@@ -1,9 +1,8 @@
 server:
   ssh:
-    enabled: false
+    enabled: true
     # port: 2222
-    # authorized-keys:
-    #   - ssh-ed25519 AAAA... your-key-comment
+    # SSH public keys are registered per-user on the profile page.
   # Allow the Vite dev server to make cross-origin requests to the backend.
   # Vite defaults to port 5173; adjust if you've changed it.
   allowed-origins:
@@ -13,7 +12,7 @@ server:
 
 providers:
   github:
-    enabled: false
+    enabled: true
   gitlab:
     enabled: false
   codeberg:

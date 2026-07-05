@@ -7,10 +7,13 @@ import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Indexes;
 import com.mongodb.client.model.Updates;
 import com.rbc.fogwall.service.ScmTokenCache;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import org.bson.Document;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,6 +59,7 @@ public class MongoUserStore implements UserStore {
         MongoCollection<Document> col = getCollection();
         col.createIndex(Indexes.ascending("emails.email"));
         col.createIndex(Indexes.ascending("scmIdentities.provider", "scmIdentities.username"));
+        col.createIndex(Indexes.ascending("sshKeys.fingerprint"));
         log.info("MongoDB user store initialized");
     }
 
@@ -294,6 +298,81 @@ public class MongoUserStore implements UserStore {
                                 "scmIdentities", new Document("provider", provider).append("username", scmUsername)));
         log.debug("Removed SCM identity '{}/{}' for user '{}'", provider, scmUsername, username);
         if (tokenCache != null) tokenCache.evictByUsername(provider, username);
+    }
+
+    // ── SSH key management ────────────────────────────────────────────────────────
+
+    @Override
+    public Optional<UserEntry> findBySshFingerprint(String fingerprint) {
+        if (fingerprint == null) return Optional.empty();
+        Document doc = getCollection()
+                .find(Filters.elemMatch("sshKeys", Filters.eq("fingerprint", fingerprint)))
+                .first();
+        return Optional.ofNullable(doc).map(MongoUserStore::fromDocument);
+    }
+
+    @Override
+    public SshKeyEntry addSshKey(String username, String fingerprint, String publicKey, String label) {
+        Document existing = getCollection()
+                .find(Filters.elemMatch("sshKeys", Filters.eq("fingerprint", fingerprint)))
+                .first();
+        if (existing != null) {
+            String owner = existing.getString("_id");
+            if (owner.equals(username)) {
+                return findSshKeys(username).stream()
+                        .filter(k -> k.getFingerprint().equals(fingerprint))
+                        .findFirst()
+                        .orElseThrow();
+            }
+            throw new SshKeyConflictException(fingerprint, owner);
+        }
+
+        String id = UUID.randomUUID().toString();
+        Instant now = Instant.now();
+        getCollection()
+                .updateOne(
+                        Filters.eq("_id", username),
+                        Updates.addToSet(
+                                "sshKeys",
+                                new Document("id", id)
+                                        .append("fingerprint", fingerprint)
+                                        .append("publicKey", publicKey)
+                                        .append("label", label != null ? label : "")
+                                        .append("createdAt", Date.from(now))));
+        log.info("Added SSH key {} ({}) for user '{}'", fingerprint, label, username);
+        return SshKeyEntry.builder()
+                .id(id)
+                .username(username)
+                .fingerprint(fingerprint)
+                .publicKey(publicKey)
+                .label(label)
+                .createdAt(now)
+                .build();
+    }
+
+    @Override
+    public void removeSshKey(String username, String keyId) {
+        getCollection().updateOne(Filters.eq("_id", username), Updates.pull("sshKeys", new Document("id", keyId)));
+        log.info("Removed SSH key {} for user '{}'", keyId, username);
+    }
+
+    @Override
+    public List<SshKeyEntry> findSshKeys(String username) {
+        Document doc = getCollection().find(Filters.eq("_id", username)).first();
+        if (doc == null) return List.of();
+        return doc.getList("sshKeys", Document.class, List.of()).stream()
+                .map(k -> SshKeyEntry.builder()
+                        .id(k.getString("id"))
+                        .username(username)
+                        .fingerprint(k.getString("fingerprint"))
+                        .publicKey(k.getString("publicKey"))
+                        .label(k.getString("label"))
+                        .createdAt(
+                                k.getDate("createdAt") != null
+                                        ? k.getDate("createdAt").toInstant()
+                                        : Instant.EPOCH)
+                        .build())
+                .toList();
     }
 
     // ── helpers ────────────────────────────────────────────────────────────────

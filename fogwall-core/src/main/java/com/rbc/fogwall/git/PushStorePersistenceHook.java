@@ -374,7 +374,7 @@ public class PushStorePersistenceHook {
                 .url(providerUri)
                 .project(provider.getUri().getHost());
 
-        // push_user: always the raw HTTP Basic Auth username — audit artefact, never queried as identity.
+        // push_user: always the raw credential username (HTTP Basic or SSH username) — audit artefact.
         // resolved_user: set only when identity resolution succeeded (FK → proxy_users.username).
         String resolvedUser = repo.getConfig().getString("fogwall", null, "resolvedUser");
         String pushUser = repo.getConfig().getString("fogwall", null, "pushUser");
@@ -383,6 +383,9 @@ public class PushStorePersistenceHook {
         }
         if (resolvedUser != null) {
             builder.resolvedUser(resolvedUser);
+        }
+        if (pushContext != null && pushContext.getTransportMethod() != null) {
+            builder.method(pushContext.getTransportMethod());
         }
 
         // Extract upstream URL and repo name from repo config (set by StoreAndForwardRepositoryResolver)
