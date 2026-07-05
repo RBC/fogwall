@@ -54,7 +54,7 @@ public class BitbucketIdentityFilter extends ProviderSpecificFogwallFilter<Bitbu
         String pushEmail = userPass[0];
         String token = userPass[1];
 
-        Optional<ScmUserInfo> identity = provider.fetchScmIdentity(pushEmail, token);
+        Optional<ScmUserInfo> identity = provider.fetchUserFromHttp(pushEmail, token);
         if (identity.isEmpty()) {
             log.debug(
                     "Could not resolve Bitbucket upstream username for '{}' — credentials may be reused as-is",

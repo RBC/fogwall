@@ -29,6 +29,7 @@ import com.rbc.fogwall.service.CachingTokenPushIdentityResolver;
 import com.rbc.fogwall.service.JdbcScmTokenCache;
 import com.rbc.fogwall.service.PushIdentityResolver;
 import com.rbc.fogwall.service.ScmTokenCache;
+import com.rbc.fogwall.service.SshScmIdentityEnricher;
 import com.rbc.fogwall.service.TokenPushIdentityResolver;
 import com.rbc.fogwall.ssh.SshKeyUtils;
 import com.rbc.fogwall.tls.SslUtil;
@@ -420,7 +421,8 @@ public class JettyConfigurationBuilder {
                 storeForwardCache,
                 proxyCache,
                 buildUpstreamTls(),
-                buildProviderRegistry());
+                buildProviderRegistry(),
+                new SshScmIdentityEnricher());
     }
 
     /**
@@ -826,6 +828,14 @@ public class JettyConfigurationBuilder {
         String uri = providerConfig.getUri();
         String pathSuffix = providerConfig.getPathSuffix();
         URI parsedUri = (uri != null && !uri.isBlank()) ? URI.create(uri) : null;
+        URI parsedApiUri = (providerConfig.getApiUri() != null
+                        && !providerConfig.getApiUri().isBlank())
+                ? URI.create(providerConfig.getApiUri())
+                : null;
+        String apiToken = (providerConfig.getApiToken() != null
+                        && !providerConfig.getApiToken().isBlank())
+                ? providerConfig.getApiToken()
+                : null;
 
         switch (resolvedType) {
             case "github" -> {
@@ -840,6 +850,8 @@ public class JettyConfigurationBuilder {
                         .name(name)
                         .uri(parsedUri)
                         .pathSuffix(pathSuffix)
+                        .apiUri(parsedApiUri)
+                        .apiToken(apiToken)
                         .build());
             }
             case "bitbucket" -> {
@@ -854,6 +866,7 @@ public class JettyConfigurationBuilder {
                         .name(name)
                         .uri(ForgejoProvider.CODEBERG)
                         .pathSuffix(pathSuffix)
+                        .apiToken(apiToken)
                         .build());
             }
             case "gitea" -> {
@@ -861,6 +874,8 @@ public class JettyConfigurationBuilder {
                         .name(name)
                         .uri(parsedUri != null ? parsedUri : ForgejoProvider.GITEA)
                         .pathSuffix(pathSuffix)
+                        .apiUri(parsedApiUri)
+                        .apiToken(apiToken)
                         .build());
             }
             case "forgejo" -> {
@@ -874,6 +889,8 @@ public class JettyConfigurationBuilder {
                         .name(name)
                         .uri(parsedUri)
                         .pathSuffix(pathSuffix)
+                        .apiUri(parsedApiUri)
+                        .apiToken(apiToken)
                         .build());
             }
             default -> {

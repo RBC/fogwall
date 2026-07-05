@@ -99,14 +99,16 @@ public class SshGitReceiveCommand implements Command {
         String sshUser = channel.getSession().getUsername();
         // Resolved during public-key auth — may be absent if the store returned empty (shouldn't happen
         // since auth would have been rejected, but guard defensively).
-        UserEntry resolvedUser = SshGitServer.getResolvedUser(
-                        (org.apache.sshd.server.session.ServerSession) channel.getSession())
-                .orElse(null);
+        var serverSession = (org.apache.sshd.server.session.ServerSession) channel.getSession();
+        UserEntry resolvedUser = SshGitServer.getResolvedUser(serverSession).orElse(null);
+        String connectingFingerprint =
+                SshGitServer.getConnectingFingerprint(serverSession).orElse(null);
         // SSH_AUTH_SOCK is set on the channel env by MINA SSHD when the client's ssh -A forwarding
         // channel is established. Capture it here before handing off to the worker thread.
         String authSocket = env.getEnv().get(SshAgent.SSH_AUTHSOCKET_ENV_NAME);
-        Thread worker =
-                new Thread(() -> runReceivePack(sshUser, resolvedUser, authSocket), "ssh-git-receive-" + repoPath);
+        Thread worker = new Thread(
+                () -> runReceivePack(sshUser, resolvedUser, connectingFingerprint, authSocket),
+                "ssh-git-receive-" + repoPath);
         worker.setDaemon(true);
         worker.start();
     }
@@ -142,7 +144,8 @@ public class SshGitReceiveCommand implements Command {
 
     record RepoRoute(String owner, String repo, String upstreamUrl, String repoSlug) {}
 
-    private void runReceivePack(String sshUser, UserEntry resolvedUser, String authSocket) {
+    private void runReceivePack(
+            String sshUser, UserEntry resolvedUser, String connectingFingerprint, String authSocket) {
         int exitCode = 0;
         SshAgent agent = null;
         try {
@@ -239,7 +242,7 @@ public class SshGitReceiveCommand implements Command {
                 }
             };
 
-            var pushTransport = new PushTransport.Ssh(resolvedUser, transportConfig);
+            var pushTransport = new PushTransport.Ssh(resolvedUser, connectingFingerprint, transportConfig);
 
             Repository localRepo = cache.getOrClone(upstreamUrl, null, transportConfig);
             localRepo.getConfig().setString("fogwall", null, "upstreamUrl", upstreamUrl);

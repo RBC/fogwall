@@ -3,7 +3,7 @@ package com.rbc.fogwall.provider;
 import java.util.Optional;
 
 /**
- * Normalised SCM identity returned by {@link TokenIdentityProvider#fetchScmIdentity}.
+ * Normalised SCM identity returned by {@link HttpTokenUserLookup#fetchUserFromHttp}.
  *
  * <p>{@code login} is the provider-assigned username (stable, URL-safe). {@code email} is the primary email address
  * associated with the account — optional because some providers hide it by default (e.g. GitHub when the user has set

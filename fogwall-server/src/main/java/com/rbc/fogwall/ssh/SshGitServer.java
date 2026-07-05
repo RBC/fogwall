@@ -43,6 +43,9 @@ public class SshGitServer {
     /** Session attribute key under which the resolved {@link UserEntry} is stored after public-key auth. */
     static final String SESSION_USER_ATTR = "fogwall.resolvedUser";
 
+    /** Session attribute key under which the connecting key's SHA-256 fingerprint is stored after public-key auth. */
+    static final String SESSION_FINGERPRINT_ATTR = "fogwall.connectingFingerprint";
+
     private final SshServer sshd;
 
     private SshGitServer(SshServer sshd) {
@@ -111,12 +114,18 @@ public class SshGitServer {
                     fingerprint,
                     user.get().getUsername());
             storeResolvedUser(session, user.get());
+            session.getProperties().put(SESSION_FINGERPRINT_ATTR, fingerprint);
             return true;
         };
     }
 
     static void storeResolvedUser(ServerSession session, UserEntry user) {
         session.getProperties().put(SESSION_USER_ATTR, user);
+    }
+
+    static Optional<String> getConnectingFingerprint(ServerSession session) {
+        Object val = session.getProperties().get(SESSION_FINGERPRINT_ATTR);
+        return val instanceof String s ? Optional.of(s) : Optional.empty();
     }
 
     static Optional<UserEntry> getResolvedUser(ServerSession session) {

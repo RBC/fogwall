@@ -4,8 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.rbc.fogwall.provider.FogwallProvider;
+import com.rbc.fogwall.provider.HttpTokenUserLookup;
 import com.rbc.fogwall.provider.ScmUserInfo;
-import com.rbc.fogwall.provider.TokenIdentityProvider;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
 import com.rbc.fogwall.user.ScmIdentity;
 import com.rbc.fogwall.user.UserEntry;
@@ -18,22 +18,22 @@ import org.junit.jupiter.api.Test;
 /**
  * Unit tests for {@link TokenPushIdentityResolver}.
  *
- * <p>The resolver calls the provider's {@link TokenIdentityProvider#fetchScmIdentity} to get the SCM login, then looks
+ * <p>The resolver calls the provider's {@link HttpTokenUserLookup#fetchUserFromHttp} to get the SCM login, then looks
  * up the proxy user via {@code user_scm_identities} or email fallback.
  */
 class TokenPushIdentityResolverTest {
 
     /** Combined interface so Mockito can mock a provider that supports token identity lookup. */
-    interface TokenProvider extends FogwallProvider, TokenIdentityProvider {}
+    interface HttpTokenResolver extends FogwallProvider, HttpTokenUserLookup {}
 
     ReadOnlyUserStore store;
     TokenPushIdentityResolver resolver;
-    TokenProvider provider;
+    HttpTokenResolver provider;
 
     @BeforeEach
     void setUp() {
         store = mock(ReadOnlyUserStore.class);
-        provider = mock(TokenProvider.class);
+        provider = mock(HttpTokenResolver.class);
         when(provider.getName()).thenReturn("github");
         when(provider.getType()).thenReturn("github");
         when(provider.getUri()).thenReturn(URI.create("https://github.com"));
@@ -77,7 +77,7 @@ class TokenPushIdentityResolverTest {
 
     @Test
     void fetchScmIdentityEmpty_returnsEmpty() {
-        when(provider.fetchScmIdentity(anyString(), anyString())).thenReturn(Optional.empty());
+        when(provider.fetchUserFromHttp(anyString(), anyString())).thenReturn(Optional.empty());
 
         var result = resolver.resolve(provider, "me", "bad-token");
 
@@ -90,7 +90,7 @@ class TokenPushIdentityResolverTest {
     @Test
     void scmIdentityMatch_returnsUser() {
         UserEntry alice = entry("alice", "alice@example.com");
-        when(provider.fetchScmIdentity(anyString(), eq("good-token")))
+        when(provider.fetchUserFromHttp(anyString(), eq("good-token")))
                 .thenReturn(Optional.of(new ScmUserInfo("alice-gh", Optional.empty())));
         when(store.findByScmIdentity("github", "alice-gh")).thenReturn(Optional.of(alice));
 
@@ -107,7 +107,7 @@ class TokenPushIdentityResolverTest {
     @Test
     void scmIdentityMiss_emailFallback_returnsUser() {
         UserEntry alice = entry("alice", "alice@example.com");
-        when(provider.fetchScmIdentity(anyString(), anyString()))
+        when(provider.fetchUserFromHttp(anyString(), anyString()))
                 .thenReturn(Optional.of(new ScmUserInfo("alice-gh", Optional.of("alice@example.com"))));
         when(store.findByScmIdentity("github", "alice-gh")).thenReturn(Optional.empty());
         when(store.findByEmail("alice@example.com")).thenReturn(Optional.of(alice));
@@ -124,7 +124,7 @@ class TokenPushIdentityResolverTest {
 
     @Test
     void bothLookupsMiss_returnsEmpty() {
-        when(provider.fetchScmIdentity(anyString(), anyString()))
+        when(provider.fetchUserFromHttp(anyString(), anyString()))
                 .thenReturn(Optional.of(new ScmUserInfo("unknown-gh", Optional.of("unknown@example.com"))));
         when(store.findByScmIdentity("github", "unknown-gh")).thenReturn(Optional.empty());
         when(store.findByEmail("unknown@example.com")).thenReturn(Optional.empty());
@@ -138,7 +138,7 @@ class TokenPushIdentityResolverTest {
 
     @Test
     void noEmailInScmInfo_scmIdentityMiss_returnsEmpty() {
-        when(provider.fetchScmIdentity(anyString(), anyString()))
+        when(provider.fetchUserFromHttp(anyString(), anyString()))
                 .thenReturn(Optional.of(new ScmUserInfo("nobody-gh", Optional.empty())));
         when(store.findByScmIdentity("github", "nobody-gh")).thenReturn(Optional.empty());
 

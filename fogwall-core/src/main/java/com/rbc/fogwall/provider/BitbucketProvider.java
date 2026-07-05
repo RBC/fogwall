@@ -38,7 +38,7 @@ import tools.jackson.databind.json.JsonMapper;
  * (git push).
  */
 @Slf4j
-public class BitbucketProvider extends AbstractFogwallProvider implements TokenIdentityProvider {
+public class BitbucketProvider extends AbstractFogwallProvider implements HttpTokenUserLookup {
 
     public static final URI DEFAULT_URI = URI.create("https://bitbucket.org");
     public static final String NAME = "bitbucket";
@@ -76,7 +76,7 @@ public class BitbucketProvider extends AbstractFogwallProvider implements TokenI
      * <p>Required token scopes: {@code read:user:bitbucket} (Bitbucket Cloud).
      */
     @Override
-    public Optional<ScmUserInfo> fetchScmIdentity(String pushUsername, String token) {
+    public Optional<ScmUserInfo> fetchUserFromHttp(String pushUsername, String token) {
         if (pushUsername == null || pushUsername.isBlank()) {
             log.warn("Bitbucket identity lookup requires an email as the push username — none provided");
             return Optional.empty();

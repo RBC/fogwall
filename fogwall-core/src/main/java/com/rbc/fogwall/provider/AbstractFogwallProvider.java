@@ -14,6 +14,19 @@ public abstract class AbstractFogwallProvider implements FogwallProvider {
     protected final String pathSuffix;
 
     /**
+     * Optional HTTP base URI override for provider REST API calls. {@code null} means the provider derives its API URL
+     * from {@link #uri} — which works for HTTP/HTTPS URIs and for standard-port SSH deployments. Set explicitly only
+     * when both the SSH and HTTP ports are non-standard (e.g. local dev).
+     */
+    protected URI apiUri;
+
+    /**
+     * Optional PAT for provider REST API calls that require authentication (e.g. Forgejo/GitLab SSH key listing on
+     * instances with {@code REQUIRE_SIGNIN_VIEW=true}). {@code null} means unauthenticated requests.
+     */
+    protected String apiToken;
+
+    /**
      * Returns the path that the servlet will be mapped to after the default path (this controls routing to the
      * appropriate servlet or JGit factory). This is based on the host of the target URL along with an optional
      * application-wide base path. To configure a {@link FogwallServlet} for proxying, use {@link #servletMapping()}

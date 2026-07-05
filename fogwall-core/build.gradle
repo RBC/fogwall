@@ -34,6 +34,9 @@ dependencies {
     // Jakarta annotations
     api "jakarta.annotation:jakarta.annotation-api:3.0.0"
     
+    // SSH key parsing and fingerprinting (shared between server SSH transport and provider identity lookups)
+    implementation "org.apache.sshd:sshd-common:${minaSshdVersion}"
+
     // BouncyCastle for GPG signature verification
     implementation "org.bouncycastle:bcprov-jdk18on:${bouncyCastleVersion}"
     implementation "org.bouncycastle:bcpg-jdk18on:${bouncyCastleVersion}"

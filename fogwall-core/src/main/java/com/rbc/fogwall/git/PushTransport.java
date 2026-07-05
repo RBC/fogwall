@@ -61,8 +61,16 @@ public sealed interface PushTransport permits PushTransport.Http, PushTransport.
         }
     }
 
-    /** SSH store-and-forward: user resolved from public-key auth, upstream auth via forwarded agent. */
-    record Ssh(UserEntry user, TransportConfigCallback transportConfig) implements PushTransport {
+    /**
+     * SSH store-and-forward: user resolved from public-key auth, upstream auth via forwarded agent.
+     *
+     * @param user the proxy user resolved from the connecting key at MINA auth time
+     * @param connectingFingerprint SHA-256 fingerprint of the key the client authenticated with — used by
+     *     {@link com.rbc.fogwall.service.SshScmIdentityEnricher} to match against SCM-registered keys
+     * @param transportConfig per-push SSH session factory injected into the upstream JGit transport
+     */
+    record Ssh(UserEntry user, String connectingFingerprint, TransportConfigCallback transportConfig)
+            implements PushTransport {
         @Override
         public String name() {
             return SSH;
@@ -88,7 +96,7 @@ public sealed interface PushTransport permits PushTransport.Http, PushTransport.
         return new Http();
     }
 
-    static PushTransport ssh(UserEntry user, TransportConfigCallback transportConfig) {
-        return new Ssh(user, transportConfig);
+    static PushTransport ssh(UserEntry user, String connectingFingerprint, TransportConfigCallback transportConfig) {
+        return new Ssh(user, connectingFingerprint, transportConfig);
     }
 }

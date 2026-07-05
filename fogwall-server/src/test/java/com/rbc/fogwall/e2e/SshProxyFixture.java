@@ -14,9 +14,11 @@ import com.rbc.fogwall.git.StoreAndForwardReceivePackFactory;
 import com.rbc.fogwall.permission.InMemoryRepoPermissionStore;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.permission.RepoPermissionService;
-import com.rbc.fogwall.provider.GenericProxyProvider;
+import com.rbc.fogwall.provider.ForgejoProvider;
+import com.rbc.fogwall.service.SshScmIdentityEnricher;
 import com.rbc.fogwall.ssh.SshGitServer;
 import com.rbc.fogwall.ssh.SshKeyUtils;
+import com.rbc.fogwall.user.ScmIdentity;
 import com.rbc.fogwall.user.SshKeyEntry;
 import com.rbc.fogwall.user.StaticUserStore;
 import com.rbc.fogwall.user.UserEntry;
@@ -58,7 +60,7 @@ class SshProxyFixture implements AutoCloseable {
      * @param gitea running Gitea container (SSH port must be exposed)
      * @param publicKeyLine OpenSSH authorized_keys line for the test identity
      */
-    SshProxyFixture(GiteaContainer gitea, String publicKeyLine) throws Exception {
+    SshProxyFixture(GiteaContainer gitea, String publicKeyLine, String giteaApiToken) throws Exception {
         String fingerprint = SshKeyUtils.fingerprint(publicKeyLine);
 
         var sshKeyEntry = SshKeyEntry.builder()
@@ -70,21 +72,34 @@ class SshProxyFixture implements AutoCloseable {
                 .locked(true)
                 .build();
 
+        URI giteaSshUri = gitea.getSshUri();
+        this.giteaSshHostPort = giteaSshUri.getHost() + ":" + giteaSshUri.getPort();
+
+        // Provider name is also the providerId used when matching scm_identities in the enricher.
+        String providerId = "gitea-ssh-e2e";
+
+        // The test key is registered in Gitea under ADMIN_USER — link the test user's SCM identity accordingly
+        // so the enricher can verify the connecting fingerprint against ADMIN_USER's Gitea keys.
         var testUser = UserEntry.builder()
                 .username(TEST_USER)
                 .emails(List.of(GiteaContainer.VALID_AUTHOR_EMAIL))
-                .scmIdentities(List.of())
+                .scmIdentities(List.of(ScmIdentity.builder()
+                        .provider(providerId)
+                        .username(GiteaContainer.ADMIN_USER)
+                        .build()))
                 .sshKeys(List.of(sshKeyEntry))
                 .build();
 
         var userStore = new StaticUserStore(List.of(testUser));
 
-        URI giteaSshUri = gitea.getSshUri();
-        this.giteaSshHostPort = giteaSshUri.getHost() + ":" + giteaSshUri.getPort();
-
-        var provider = GenericProxyProvider.builder()
-                .name("gitea-ssh-e2e")
+        // ForgejoProvider implements SshKeyFingerprintLookup — required for SSH identity verification.
+        // apiUri points at Gitea's HTTP API since the transport uri uses the SSH scheme.
+        // apiToken is required because the Gitea container has REQUIRE_SIGNIN_VIEW=true by default.
+        var provider = ForgejoProvider.builder()
+                .name(providerId)
                 .uri(giteaSshUri)
+                .apiUri(URI.create(gitea.getBaseUrl()))
+                .apiToken(giteaApiToken)
                 .build();
 
         pushStore = PushStoreFactory.inMemory();
@@ -124,6 +139,7 @@ class SshProxyFixture implements AutoCloseable {
                 null,
                 Duration.ofSeconds(10),
                 urlRuleRegistry);
+        receivePackFactory.setSshScmIdentityEnricher(new SshScmIdentityEnricher());
 
         sshPort = findFreePort();
         var sshConfig = new SshConfig();

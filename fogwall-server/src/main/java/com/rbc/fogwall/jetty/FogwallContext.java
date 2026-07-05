@@ -11,6 +11,7 @@ import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.ProviderRegistry;
 import com.rbc.fogwall.service.PushIdentityResolver;
+import com.rbc.fogwall.service.SshScmIdentityEnricher;
 import com.rbc.fogwall.tls.SslUtil;
 import com.rbc.fogwall.user.UserStore;
 
@@ -39,4 +40,5 @@ public record FogwallContext(
         LocalRepositoryCache storeForwardCache,
         LocalRepositoryCache proxyCache,
         SslUtil.UpstreamTls upstreamTls,
-        ProviderRegistry providerRegistry) {}
+        ProviderRegistry providerRegistry,
+        SshScmIdentityEnricher sshScmIdentityEnricher) {}

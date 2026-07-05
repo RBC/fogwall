@@ -11,6 +11,7 @@ import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.BitbucketProvider;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.service.PushIdentityResolver;
+import com.rbc.fogwall.service.SshScmIdentityEnricher;
 import com.rbc.fogwall.user.UserEntry;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
@@ -46,6 +47,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
     private final GpgConfig gpgConfig;
     private final RepoPermissionService repoPermissionService;
     private final PushIdentityResolver pushIdentityResolver;
+    private SshScmIdentityEnricher sshScmIdentityEnricher;
     private final PushStore pushStore;
     private final ApprovalGateway approvalGateway;
     private final String serviceUrl;
@@ -72,6 +74,10 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
     /** Set the local repository cache for invalidation on forward failure. */
     public void setCache(LocalRepositoryCache cache) {
         this.cache = cache;
+    }
+
+    public void setSshScmIdentityEnricher(SshScmIdentityEnricher enricher) {
+        this.sshScmIdentityEnricher = enricher;
     }
 
     /** Fixed-config constructors for use in tests and simple setups (no URL rule enforcement). */
@@ -245,7 +251,13 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
         //   PushStorePersistenceHook.postReceive - save FORWARDED/ERROR
 
         var permissionHook = new CheckUserPushPermissionHook(
-                pushIdentityResolver, repoPermissionService, validationContext, pushContext, provider, serviceUrl);
+                pushIdentityResolver,
+                repoPermissionService,
+                validationContext,
+                pushContext,
+                provider,
+                serviceUrl,
+                sshScmIdentityEnricher);
 
         // Snapshot current config for this push — all hooks in one push see the same config even if a reload fires
         // mid-push.

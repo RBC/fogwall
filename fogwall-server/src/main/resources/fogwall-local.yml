@@ -18,6 +18,9 @@ providers:
     enabled: true
     type: forgejo
     uri: ssh://git@localhost:3022
+    api-uri: http://localhost:3000  # needed for SCM identity enrichment — SSH URI can't be used for HTTP API calls
+    # api-token: <PAT>  # required when Gitea is configured with REQUIRE_SIGNIN_VIEW=true
+    #                    # no env var override — set via external config file or FOGWALL_CONFIG_PROFILES
 # Three users for local development:
 #   admin    — full dashboard access, can approve any push
 #   dev      — a developer account; add your SCM identity here to push through the proxy
@@ -44,6 +47,8 @@ users:
     roles: [ADMIN, SELF_CERTIFY]
     scm-identities:
       - provider: gitea
+        username: test-user
+      - provider: gitea-ssh
         username: test-user
     emails:
       - dev@example.com

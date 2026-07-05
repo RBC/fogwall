@@ -159,6 +159,7 @@ public final class FogwallServletRegistrar {
         factory.setFailFast(configBuilder.isFailFast());
         factory.setConnectTimeoutSeconds(fogwallContext.upstreamConnectTimeoutSeconds());
         factory.setCache(fogwallContext.storeForwardCache());
+        factory.setSshScmIdentityEnricher(fogwallContext.sshScmIdentityEnricher());
         return factory;
     }
 

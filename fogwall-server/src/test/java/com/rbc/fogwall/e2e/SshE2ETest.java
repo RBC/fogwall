@@ -50,9 +50,11 @@ class SshE2ETest {
         gitea.createTestRepo();
         // Register the test key with Gitea so the forwarded-agent push authenticates upstream
         gitea.registerSshKey(GiteaContainer.ADMIN_USER, GiteaContainer.ADMIN_PASSWORD, pubKeyLine);
+        // Generate a token for the SSH enricher to call GET /api/v1/users/{login}/keys (auth required by default)
+        String adminToken = gitea.generateAdminToken();
 
         // Start fogwall SSH proxy pre-seeded with the same public key
-        proxy = new SshProxyFixture(gitea, pubKeyLine);
+        proxy = new SshProxyFixture(gitea, pubKeyLine, adminToken);
 
         // Start an ssh-agent and load the test key so agent forwarding works
         Process agentProc =

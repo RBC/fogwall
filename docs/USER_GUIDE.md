@@ -113,6 +113,63 @@ The proxy calls the SCM API to resolve your identity. Your PAT needs at least:
 
 ---
 
+## SSH remotes
+
+If your administrator has configured the proxy with an SSH provider, you can push over SSH instead of HTTPS. SSH pushes
+do not use a PAT — your identity is tied to your SSH key instead.
+
+### Setting up SSH
+
+1. **Register your SSH public key** in the proxy dashboard (profile → SSH keys → add key). This is the key you use to
+   connect to the proxy, not directly to the SCM. If you already have a key at `~/.ssh/id_ed25519.pub`, paste its
+   contents.
+
+2. **Register the same key on the upstream SCM** (e.g. GitHub → Settings → SSH keys; Gitea/Codeberg → Settings → SSH
+   keys). The proxy verifies that the key you connected with is also registered on your SCM account. If it is not, the
+   push is blocked.
+
+3. **Enable agent forwarding.** The proxy needs your SSH agent to authenticate outbound connections to the upstream SCM.
+   Add a `ForwardAgent yes` entry in your `~/.ssh/config`:
+
+   ```
+   Host <proxy-host>
+     ForwardAgent yes
+   ```
+
+   Or pass `-A` on the command line: `GIT_SSH_COMMAND="ssh -A" git push`.
+
+4. **Add an SSH remote.** Your administrator will give you the proxy SSH hostname and port. SSH push URLs look like:
+
+   ```text
+   ssh://proxy-host:2222/<scm-host>:<scm-ssh-port>/<owner>/<repo>.git
+   ```
+
+   For example, pushing to a Gitea instance at `git@gitea.corp.example.com`:
+
+   ```shell
+   git remote add proxy ssh://fogwall.corp.example.com:2222/gitea.corp.example.com:22/myorg/myrepo.git
+   git push proxy main
+   ```
+
+   Your administrator can confirm the exact SCM host and port for each configured SSH provider.
+
+### SSH identity verification
+
+SSH pushes are subject to the same compliance guarantee as HTTP pushes. The proxy:
+
+1. Verifies your SSH key against the fogwall user database (MINA public-key auth).
+2. Calls the upstream SCM API to fetch the SSH public keys registered on your linked SCM identity.
+3. Checks that the connecting key's SHA-256 fingerprint appears in that list.
+
+If step 3 fails — for example because you have a key registered in fogwall but not on your SCM account — the push is
+blocked. Add the key to your SCM account and retry. If the provider or SCM identity is misconfigured, contact your
+administrator.
+
+There is no token to supply for SSH pushes — no `Authorization` header, no credential in the URL. The agent-forwarded
+key is the only credential.
+
+---
+
 ## Choosing a proxy mode: `/push/` vs `/proxy/`
 
 There are two URL prefixes, each with different behaviour:
@@ -375,7 +432,9 @@ After fixing the issue, push again normally — the proxy will re-validate from 
 
 ## Identity verification
 
-The proxy runs two checks to confirm that the person pushing is who they say they are:
+The proxy confirms that the person pushing is who they say they are. The mechanism differs by transport.
+
+### HTTP pushes
 
 1. **Token → SCM username**: your PAT is used to call the SCM API (`GET /user`). The returned username must match the
    SCM identity registered in your proxy user profile. This check is **always enforced** — a push is blocked immediately
@@ -383,6 +442,9 @@ The proxy runs two checks to confirm that the person pushing is who they say the
 2. **Commit emails → proxy user**: every author and committer email in the pushed commits must match an email address
    registered on your proxy account. This check is controlled by `identity-verification` — in `warn` mode mismatches are
    logged but the push proceeds; in `strict` mode the push is blocked.
+
+**The HTTP Basic-auth username in your remote URL is not used for identity.** Use any value — `me`, `git`, your name —
+it makes no difference. Only the password (your PAT) matters.
 
 You can add and remove your own SCM identities and email addresses from your profile page in the dashboard. If your push
 is blocked with "Identity Not Linked" or a commit email mismatch, log in to the dashboard and add the missing identity
@@ -392,8 +454,21 @@ If you cannot resolve it yourself — for example, because the email address or 
 another user — contact an administrator. Duplicate identity conflicts (two users claiming the same email or SCM handle)
 require admin intervention to resolve.
 
-**The HTTP Basic-auth username in your remote URL is not used for identity.** Use any value — `me`, `git`, your name —
-it makes no difference. Only the password (your PAT) matters.
+### SSH pushes
+
+SSH identity verification enforces the same compliance guarantee, but via SSH key fingerprint rather than a PAT:
+
+1. **Public-key auth (connection gate):** your SSH key must be registered in your proxy profile.
+2. **SCM fingerprint check (compliance gate):** the proxy calls the upstream SCM API and fetches the SSH public keys
+   registered on your linked SCM identity. Your connecting key's fingerprint must appear in that list.
+
+Both steps are required and both are always enforced — there is no warn-only mode for SSH identity. If either step fails
+the push is blocked.
+
+**Your SSH key must be registered in two places:** your fogwall profile, and your upstream SCM account. Registering it
+in fogwall alone is not enough — the proxy cross-checks against the SCM to confirm the key actually belongs to you.
+
+If you are blocked with "SSH key not linked to any SCM identity", add the key to your SCM account settings and retry.
 
 ---
 

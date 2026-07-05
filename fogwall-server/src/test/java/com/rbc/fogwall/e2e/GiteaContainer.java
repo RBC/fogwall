@@ -6,11 +6,14 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Base64;
+import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.containers.wait.strategy.WaitAllStrategy;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Testcontainers wrapper for a Gitea instance used as the upstream git server in e2e tests.
@@ -52,6 +55,10 @@ class GiteaContainer extends GenericContainer<GiteaContainer> {
         withEnv("GITEA__database__DB_TYPE", "sqlite3");
         withEnv("GITEA__log__LEVEL", "Warn");
         withEnv("GITEA__repository__DEFAULT_BRANCH", "main");
+        // Allow unauthenticated API access so the SSH fingerprint enricher can call
+        // GET /api/v1/users/{login}/keys without a token — the same call that production
+        // providers make against public GitHub/GitLab/Forgejo instances.
+        withEnv("GITEA__service__REQUIRE_SIGNIN_VIEW", "false");
         withExposedPorts(HTTP_PORT, SSH_PORT);
         waitingFor(new WaitAllStrategy()
                 .withStrategy(Wait.forHttp("/api/healthz").forPort(HTTP_PORT).forStatusCode(200))
@@ -159,14 +166,24 @@ class GiteaContainer extends GenericContainer<GiteaContainer> {
      * Returns the raw token string.
      */
     String generateTestUserToken() throws IOException, InterruptedException {
+        return generateToken(TEST_USER, TEST_USER_PASSWORD, "e2e-test-token", List.of("read:user", "write:repository"));
+    }
+
+    /**
+     * Generates a personal access token for the admin user. Used by the SSH enricher to authenticate against Gitea's
+     * SSH key listing API ({@code GET /api/v1/users/{login}/keys}), which requires a token when
+     * {@code REQUIRE_SIGNIN_VIEW=true}.
+     */
+    String generateAdminToken() throws IOException, InterruptedException {
+        return generateToken(ADMIN_USER, ADMIN_PASSWORD, "e2e-ssh-enricher-token", List.of("read:user"));
+    }
+
+    private String generateToken(String username, String password, String tokenName, List<String> scopes)
+            throws IOException, InterruptedException {
         var client = HttpClient.newHttpClient();
-        // Must authenticate as the user whose token we're creating
-        String userAuth = Base64.getEncoder().encodeToString((TEST_USER + ":" + TEST_USER_PASSWORD).getBytes());
-        var resp = apiPost(
-                client,
-                userAuth,
-                getBaseUrl() + "/api/v1/users/" + TEST_USER + "/tokens",
-                "{\"name\":\"e2e-test-token\"}");
+        String auth = Base64.getEncoder().encodeToString((username + ":" + password).getBytes());
+        String body = new JsonMapper().writeValueAsString(Map.of("name", tokenName, "scopes", scopes));
+        var resp = apiPost(client, auth, getBaseUrl() + "/api/v1/users/" + username + "/tokens", body);
         if (resp.statusCode() >= 400) {
             throw new RuntimeException("Failed to generate token (" + resp.statusCode() + "): " + resp.body());
         }
