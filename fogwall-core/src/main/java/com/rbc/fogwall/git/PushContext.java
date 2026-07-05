@@ -1,7 +1,6 @@
 package com.rbc.fogwall.git;
 
 import com.rbc.fogwall.db.model.PushStep;
-import com.rbc.fogwall.user.UserEntry;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -29,16 +28,10 @@ public class PushContext {
     private String repoSlug;
 
     /**
-     * Transport method for audit records — {@code "SSH"} for SSH pushes, {@code null} for HTTP store-and-forward
-     * (method is derived from the HTTP request in that path).
+     * Transport context for this push — carries pre-authenticated identity (SSH) and upstream transport configuration.
+     * Defaults to {@link PushTransport#http()} so HTTP pushes need not set it explicitly.
      */
-    private String transportMethod;
-
-    /**
-     * User already resolved by the transport layer (SSH key lookup). When set, {@link CheckUserPushPermissionHook}
-     * skips token-based identity resolution and proceeds directly to the repo permission check using this entry.
-     */
-    private UserEntry preResolvedUser;
+    private PushTransport transport = PushTransport.http();
 
     // Resolved upstream username for Bitbucket pushes — written by BitbucketCredentialRewriteHook.
     private String upstreamUser;

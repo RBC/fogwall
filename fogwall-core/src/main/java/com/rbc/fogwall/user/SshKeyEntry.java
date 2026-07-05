@@ -21,4 +21,8 @@ public class SshKeyEntry {
     String label;
 
     Instant createdAt;
+
+    /** True when this key was declared in the config file and cannot be removed via the dashboard. */
+    @Builder.Default
+    boolean locked = false;
 }

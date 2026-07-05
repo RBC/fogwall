@@ -30,11 +30,13 @@ import com.rbc.fogwall.service.JdbcScmTokenCache;
 import com.rbc.fogwall.service.PushIdentityResolver;
 import com.rbc.fogwall.service.ScmTokenCache;
 import com.rbc.fogwall.service.TokenPushIdentityResolver;
+import com.rbc.fogwall.ssh.SshKeyUtils;
 import com.rbc.fogwall.tls.SslUtil;
 import com.rbc.fogwall.user.CompositeUserStore;
 import com.rbc.fogwall.user.JdbcUserStore;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
 import com.rbc.fogwall.user.ScmIdentity;
+import com.rbc.fogwall.user.SshKeyEntry;
 import com.rbc.fogwall.user.StaticUserStore;
 import com.rbc.fogwall.user.UserEntry;
 import com.rbc.fogwall.user.UserStore;
@@ -43,6 +45,7 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -648,11 +651,36 @@ public class JettyConfigurationBuilder {
                                     .build())
                             .forEach(scmIdentities::add);
                     List<String> roles = uc.getRoles().isEmpty() ? List.of("USER") : uc.getRoles();
+                    List<SshKeyEntry> sshKeys = new ArrayList<>();
+                    for (SshKeyConfig keyConf : uc.getSshKeys()) {
+                        try {
+                            String fp = SshKeyUtils.fingerprint(keyConf.getPublicKey());
+                            String normalised = SshKeyUtils.normalise(keyConf.getPublicKey());
+                            String comment = keyConf.getPublicKey().trim().split("\\s+").length > 2
+                                    ? keyConf.getPublicKey().trim().split("\\s+")[2]
+                                    : null;
+                            String label = keyConf.getLabel().isBlank()
+                                    ? (comment != null ? comment : "config")
+                                    : keyConf.getLabel();
+                            sshKeys.add(SshKeyEntry.builder()
+                                    .id("config:" + fp)
+                                    .username(uc.getUsername())
+                                    .fingerprint(fp)
+                                    .publicKey(normalised)
+                                    .label(label)
+                                    .createdAt(Instant.EPOCH)
+                                    .locked(true)
+                                    .build());
+                        } catch (Exception e) {
+                            log.warn("Invalid SSH key for user '{}', skipping: {}", uc.getUsername(), e.getMessage());
+                        }
+                    }
                     return UserEntry.builder()
                             .username(uc.getUsername())
                             .passwordHash(uc.getPasswordHash())
                             .emails(uc.getEmails())
                             .scmIdentities(scmIdentities)
+                            .sshKeys(sshKeys)
                             .roles(roles)
                             .build();
                 })

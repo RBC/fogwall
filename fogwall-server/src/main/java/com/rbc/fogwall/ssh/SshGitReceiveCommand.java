@@ -1,6 +1,7 @@
 package com.rbc.fogwall.ssh;
 
 import com.rbc.fogwall.git.LocalRepositoryCache;
+import com.rbc.fogwall.git.PushTransport;
 import com.rbc.fogwall.git.StoreAndForwardReceivePackFactory;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.user.UserEntry;
@@ -9,6 +10,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.nio.file.Path;
 import java.security.PublicKey;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,10 +26,11 @@ import org.apache.sshd.server.Environment;
 import org.apache.sshd.server.ExitCallback;
 import org.apache.sshd.server.channel.ChannelSession;
 import org.apache.sshd.server.command.Command;
+import org.eclipse.jgit.api.TransportConfigCallback;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.transport.CredentialsProvider;
 import org.eclipse.jgit.transport.ReceivePack;
-import org.eclipse.jgit.transport.SshSessionFactory;
+import org.eclipse.jgit.transport.SshTransport;
 import org.eclipse.jgit.transport.sshd.DefaultProxyDataFactory;
 import org.eclipse.jgit.transport.sshd.JGitKeyCache;
 import org.eclipse.jgit.transport.sshd.ServerKeyDatabase;
@@ -220,24 +223,31 @@ public class SshGitReceiveCommand implements Command {
                         protected String getDefaultPreferredAuthentications() {
                             return "publickey";
                         }
+
+                        @Override
+                        protected List<Path> getDefaultIdentities(File sshDir) {
+                            // Never load identity files from ~/.ssh — agent forwarding is the only auth path.
+                            return List.of();
+                        }
                     };
 
-            // Set per-push factory globally for the duration of this thread.
-            // NOTE: not thread-safe under concurrent pushes — sufficient for MVP.
-            SshSessionFactory previous = SshSessionFactory.getInstance();
-            try {
-                SshSessionFactory.setInstance(perPushFactory);
-                Repository localRepo = cache.getOrClone(upstreamUrl, null);
-                localRepo.getConfig().setString("fogwall", null, "upstreamUrl", upstreamUrl);
-                localRepo.getConfig().save();
+            // Inject the per-push factory via TransportConfigCallback — each push gets its own
+            // isolated SSH session factory scoped to the forwarded agent, avoiding global mutation.
+            TransportConfigCallback transportConfig = transport -> {
+                if (transport instanceof SshTransport sshTransport) {
+                    sshTransport.setSshSessionFactory(perPushFactory);
+                }
+            };
 
-                ReceivePack rp =
-                        receivePackFactory.createForSsh(localRepo, null, sshUser, null, repoSlug, resolvedUser);
-                rp.setBiDirectionalPipe(true); // factory defaults to false for HTTP; SSH is bidirectional
-                rp.receive(in, out, err);
-            } finally {
-                SshSessionFactory.setInstance(previous);
-            }
+            var pushTransport = new PushTransport.Ssh(resolvedUser, transportConfig);
+
+            Repository localRepo = cache.getOrClone(upstreamUrl, null, transportConfig);
+            localRepo.getConfig().setString("fogwall", null, "upstreamUrl", upstreamUrl);
+            localRepo.getConfig().save();
+
+            ReceivePack rp = receivePackFactory.createForSsh(localRepo, sshUser, repoSlug, pushTransport);
+            rp.setBiDirectionalPipe(true); // factory defaults to false for HTTP; SSH is bidirectional
+            rp.receive(in, out, err);
 
         } catch (Exception e) {
             log.error("SSH git-receive-pack failed for {}", repoPath, e);

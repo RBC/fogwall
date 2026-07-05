@@ -41,19 +41,10 @@ server:
 # store-and-forward. Upstream forwarding uses SSH key auth; the upstream provider must therefore
 # have an SSH URI (e.g. ssh://git@github.com or git@gitea-host).
 #
-# Example (fogwall-local.yml):
-#
-#   server:
-#     ssh:
-#       enabled: true
-#       port: 2222
-#       host-key-path: .ssh/fogwall_host_key    # generated on first start if absent
-#       upstream-key-path: ~/.ssh/id_ed25519    # private key for pushing upstream
-#       # SSH public keys are registered per-user on the profile page — no config needed here.
-#
-# Client remote:
-#   git remote add fogwall ssh://me@localhost:2222/github/owner/repo.git
-#   git push fogwall main
+#  ssh:
+#    enabled: true
+#    port: 2222
+#    host-key-path: .ssh/fogwall_host_key    # generated on first start if absent
 
 # Database configuration for push audit storage.
 # Supported types: h2-mem, h2-file, postgres, mongo
@@ -216,18 +207,19 @@ auth:
 users:
   - username: admin
     password-hash: "{noop}admin"
-    roles:
-     - ADMIN           # grants dashboard admin access (user CRUD, password reset, etc.)
-  - username: alice
-    # Below is an example of securing setting static passwords using bcrypt. In production, using external auth
-    # (OIDC, LDAP) offers better security and avoids storing passwords in the config file.
-    # hashed password=SecretPass123! (https://bcrypt-generator.com/)
-    password-hash: "{bcrypt}$2a$12$AYykcU/nc4UnpwP7e9zkeOso/YHXJW0AxMl6u3DFwXJtMdXYsFCc6"
+    roles: [ADMIN]
     emails:
-     - alice@example.com
-    scm-identities:
-     - provider: github
-       username: alice-gh
+      - admin@example.com
+#  - username: alice
+#    # Below is an example of securing setting static passwords using bcrypt. In production, using external auth
+#    # (OIDC, LDAP) offers better security and avoids storing passwords in the config file.
+#    # hashed password=SecretPass123! (https://bcrypt-generator.com/)
+#    password-hash: "{bcrypt}$2a$12$AYykcU/nc4UnpwP7e9zkeOso/YHXJW0AxMl6u3DFwXJtMdXYsFCc6"
+#    emails:
+#     - alice@example.com
+#    scm-identities:
+#     - provider: github
+#       username: alice-gh
 
 # Live config reload. Allows hot-reloading commit rules and auth config without restarting the server.
 # Provider, server, and database changes always require a restart.

@@ -316,23 +316,28 @@ export function Profile() {
               {sshKeys.map((key) => (
                 <li key={key.id} className="px-4 py-3 text-sm space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-gray-800 dark:text-gray-200">
+                    <span className="font-medium text-gray-800 dark:text-gray-200 flex items-center gap-2">
                       {key.label || (
                         <span className="italic text-gray-400 dark:text-gray-500">unlabelled</span>
                       )}
+                      {key.locked && <LockedBadge source="config" />}
                     </span>
-                    <button
-                      onClick={() => handleRemoveSshKey(key)}
-                      className="text-gray-400 hover:text-red-500 transition-colors text-xs dark:text-gray-500 dark:hover:text-red-400"
-                    >
-                      Remove
-                    </button>
+                    {!key.locked && (
+                      <button
+                        onClick={() => handleRemoveSshKey(key)}
+                        className="text-gray-400 hover:text-red-500 transition-colors text-xs dark:text-gray-500 dark:hover:text-red-400"
+                      >
+                        Remove
+                      </button>
+                    )}
                   </div>
                   <p className="font-mono text-xs text-gray-500 dark:text-gray-400 break-all">
                     {key.fingerprint}
                   </p>
                   <p className="text-xs text-gray-400 dark:text-gray-500">
-                    Added {new Date(key.createdAt).toLocaleDateString()}
+                    {key.locked
+                      ? 'Defined in server configuration'
+                      : `Added ${new Date(key.createdAt).toLocaleDateString()}`}
                   </p>
                 </li>
               ))}

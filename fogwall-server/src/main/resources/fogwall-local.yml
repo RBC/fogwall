@@ -11,16 +11,13 @@ server:
   session-store: jdbc
 
 providers:
-  github:
-    enabled: true
-  gitlab:
-    enabled: false
-  codeberg:
-    enabled: false
   gitea:
     enabled: true
     uri: http://localhost:3000
-
+  gitea-ssh:
+    enabled: true
+    type: forgejo
+    uri: ssh://git@localhost:3022
 # Three users for local development:
 #   admin    — full dashboard access, can approve any push
 #   dev      — a developer account; add your SCM identity here to push through the proxy
@@ -45,12 +42,13 @@ users:
   - username: dev
     password-hash: "{noop}password"
     roles: [ADMIN, SELF_CERTIFY]
-    scm-identities: []
-      # Add your SCM identity here, e.g.:
-      # - provider: github
-      #   username: your-github-handle
+    scm-identities:
+      - provider: gitea
+        username: test-user
     emails:
       - dev@example.com
+    ssh-keys:
+        - public-key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILZutQPsqDrByIRlmp6JgAK8DSGzf7+SoKBzjCy+av2J fogwall-test@local"
 
   - username: reviewer
     password-hash: "{noop}password"
@@ -111,6 +109,13 @@ permissions:
       value: .*
       type: REGEX
     grant: PUSH
+  - username: dev
+    provider: gitea-ssh
+    match:
+      target: SLUG
+      value: .*
+      type: REGEX
+    grant: PUSH
   # Add more permissions for your own repos, e.g.:
   # - username: dev
   #   provider: github
@@ -140,6 +145,14 @@ rules:
       order: 100
       operation: BOTH
       provider: gitea
+      match:
+        target: SLUG
+        value: .*
+        type: REGEX
+    - enabled: true
+      order: 101
+      operation: PUSH
+      provider: gitea-ssh
       match:
         target: SLUG
         value: .*

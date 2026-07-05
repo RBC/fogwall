@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * A {@link UserStore} that combines a read-only config store (YAML-defined users) with a mutable backend store
@@ -107,7 +108,7 @@ public class CompositeUserStore implements UserStore {
         Set<String> configKeys = configUser
                 .map(u -> u.getScmIdentities().stream()
                         .map(id -> id.getProvider() + ":" + id.getUsername())
-                        .collect(java.util.stream.Collectors.toSet()))
+                        .collect(Collectors.toSet()))
                 .orElse(Set.of());
         if (mutableStore.findByUsername(username).isPresent()) {
             mutableStore.findScmIdentitiesWithVerified(username).stream()
@@ -194,15 +195,22 @@ public class CompositeUserStore implements UserStore {
         mutableStore.upsertLockedEmail(username, email, authSource);
     }
 
-    // ── SSH key management — delegate entirely to mutable store ──────────────────
+    // ── SSH key management ───────────────────────────────────────────────────────
 
     @Override
     public Optional<UserEntry> findBySshFingerprint(String fingerprint) {
-        return mutableStore.findBySshFingerprint(fingerprint);
+        Optional<UserEntry> fromConfig = configStore.findBySshFingerprint(fingerprint);
+        return fromConfig.isPresent() ? fromConfig : mutableStore.findBySshFingerprint(fingerprint);
     }
 
     @Override
     public SshKeyEntry addSshKey(String username, String fingerprint, String publicKey, String label) {
+        // Config-declared keys cannot be re-added via the dashboard
+        configStore.findByUsername(username).ifPresent(u -> {
+            boolean inConfig =
+                    u.getSshKeys().stream().anyMatch(k -> k.getFingerprint().equals(fingerprint));
+            if (inConfig) throw new SshKeyConflictException(fingerprint, username);
+        });
         if (configStore.findByUsername(username).isPresent()) {
             mutableStore.upsertUser(username); // ensure DB row exists for config users
         }
@@ -211,11 +219,33 @@ public class CompositeUserStore implements UserStore {
 
     @Override
     public void removeSshKey(String username, String keyId) {
+        // Block removal of config-locked keys
+        configStore.findByUsername(username).ifPresent(u -> {
+            boolean inConfig = u.getSshKeys().stream().anyMatch(k -> k.getId().equals(keyId));
+            if (inConfig) throw new IllegalStateException("SSH key is locked by config and cannot be removed");
+        });
         mutableStore.removeSshKey(username, keyId);
     }
 
     @Override
     public List<SshKeyEntry> findSshKeys(String username) {
-        return mutableStore.findSshKeys(username);
+        var configUser = configStore.findByUsername(username);
+        List<SshKeyEntry> result = new ArrayList<>();
+
+        // Config SSH keys are always included as locked
+        configUser.ifPresent(u -> result.addAll(u.getSshKeys()));
+
+        // Supplemental DB keys (skip any whose fingerprint overlaps with config)
+        java.util.Set<String> configFingerprints = configUser
+                .map(u ->
+                        u.getSshKeys().stream().map(SshKeyEntry::getFingerprint).collect(Collectors.toSet()))
+                .orElse(Set.of());
+        if (mutableStore.findByUsername(username).isPresent()) {
+            mutableStore.findSshKeys(username).stream()
+                    .filter(k -> !configFingerprints.contains(k.getFingerprint()))
+                    .forEach(result::add);
+        }
+
+        return result;
     }
 }

@@ -76,6 +76,15 @@ public class IdentityVerificationHook implements FogwallHook {
             return;
         }
 
+        // Transport pre-authenticated the user (SSH public key) — no token available for SCM verification.
+        if (pushContext.getTransport().preAuthenticatedUser().isPresent()) {
+            log.debug(
+                    "Pre-authenticated push ({}) — skipping token identity verification",
+                    pushContext.getTransport().name());
+            recordPass();
+            return;
+        }
+
         String pushUser = pushContext.getPushUser();
         String pushToken = pushContext.getPushToken();
 

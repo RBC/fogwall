@@ -124,6 +124,7 @@ export interface SshKeyEntry {
   publicKey: string
   label: string
   createdAt: string
+  locked: boolean
 }
 
 export interface RepoPermission {

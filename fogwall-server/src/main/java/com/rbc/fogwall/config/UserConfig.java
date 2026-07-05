@@ -19,6 +19,12 @@ public class UserConfig {
     private List<ScmIdentityConfig> scmIdentities = new ArrayList<>();
 
     /**
+     * SSH public keys for this user. Keys defined here appear as locked in the profile UI and cannot be removed through
+     * the dashboard — manage them by editing this config file.
+     */
+    private List<SshKeyConfig> sshKeys = new ArrayList<>();
+
+    /**
      * HTTP Basic-auth usernames that are accepted for this proxy user. Allows a user to push under an alias (e.g.
      * {@code push-usernames: [me, alice]}). The proxy {@code username} is always implicitly valid; entries here are
      * additional aliases only.

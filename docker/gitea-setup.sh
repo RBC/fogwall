@@ -74,7 +74,7 @@ generate_token() {
     out=$($COMPOSE -f "${COMPOSE_FILE}" exec gitea gitea admin user generate-access-token \
         --username "${username}" \
         --token-name "${token_name}" \
-        --scopes "read:user,write:repository" 2>&1) || true
+        --scopes "read:user,write:user,write:repository" 2>&1) || true
     # Output format: "Access token was successfully created: <token>"
     echo "${out}" | grep -oE '[0-9a-f]{40}' | head -1
 }

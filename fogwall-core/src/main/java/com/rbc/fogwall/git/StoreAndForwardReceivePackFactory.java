@@ -11,6 +11,7 @@ import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.BitbucketProvider;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.service.PushIdentityResolver;
+import com.rbc.fogwall.user.UserEntry;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.time.Duration;
@@ -174,24 +175,18 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
     }
 
     /**
-     * Builds a {@link ReceivePack} for an SSH push. The {@code resolvedUser} is the {@link UserEntry} identified during
-     * public-key authentication; it bypasses token-based identity resolution in the hook chain.
+     * Builds a {@link ReceivePack} for an SSH push. The {@code transport} carries the {@link UserEntry} identified
+     * during public-key authentication and the per-push SSH session factory for upstream forwarding.
      */
-    public ReceivePack createForSsh(
-            Repository db,
-            CredentialsProvider creds,
-            String pushUser,
-            String pushToken,
-            String repoSlug,
-            com.rbc.fogwall.user.UserEntry resolvedUser)
+    public ReceivePack createForSsh(Repository db, String pushUser, String repoSlug, PushTransport.Ssh transport)
             throws ServiceNotEnabledException, ServiceNotAuthorizedException {
-        return buildReceivePack(db, creds, pushUser, pushToken, repoSlug, resolvedUser);
+        return buildReceivePack(db, null, pushUser, null, repoSlug, transport);
     }
 
     private ReceivePack buildReceivePack(
             Repository db, CredentialsProvider creds, String pushUser, String pushToken, String repoSlug)
             throws ServiceNotEnabledException, ServiceNotAuthorizedException {
-        return buildReceivePack(db, creds, pushUser, pushToken, repoSlug, null);
+        return buildReceivePack(db, creds, pushUser, pushToken, repoSlug, PushTransport.http());
     }
 
     private ReceivePack buildReceivePack(
@@ -200,7 +195,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
             String pushUser,
             String pushToken,
             String repoSlug,
-            com.rbc.fogwall.user.UserEntry resolvedUser)
+            PushTransport transport)
             throws ServiceNotEnabledException, ServiceNotAuthorizedException {
 
         ReceivePack rp = new ReceivePack(db);
@@ -213,10 +208,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
         pushContext.setPushUser(pushUser);
         pushContext.setPushToken(pushToken);
         pushContext.setRepoSlug(repoSlug);
-        if (resolvedUser != null) {
-            pushContext.setPreResolvedUser(resolvedUser);
-            pushContext.setTransportMethod("SSH");
-        }
+        pushContext.setTransport(transport);
 
         // Persistence hook (records push to database)
         var persistenceHook = pushStore != null ? new PushStorePersistenceHook(pushStore, provider) : null;

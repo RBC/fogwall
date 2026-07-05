@@ -384,8 +384,8 @@ public class PushStorePersistenceHook {
         if (resolvedUser != null) {
             builder.resolvedUser(resolvedUser);
         }
-        if (pushContext != null && pushContext.getTransportMethod() != null) {
-            builder.method(pushContext.getTransportMethod());
+        if (pushContext != null) {
+            pushContext.getTransport().auditMethod().ifPresent(builder::method);
         }
 
         // Extract upstream URL and repo name from repo config (set by StoreAndForwardRepositoryResolver)
@@ -397,8 +397,8 @@ public class PushStorePersistenceHook {
             int lastSlash = path.lastIndexOf('/');
             if (lastSlash >= 0) {
                 builder.repoName(path.substring(lastSlash + 1));
-                // Try to extract owner/slug
-                String withoutScheme = path.replaceFirst("https?://[^/]+/", "");
+                // Try to extract owner/slug — strip any scheme + authority (handles http, https, ssh)
+                String withoutScheme = path.replaceFirst("\\w+://[^/]+/", "");
                 if (withoutScheme.contains("/")) {
                     builder.project(withoutScheme.substring(0, withoutScheme.indexOf('/')));
                     builder.url("/" + withoutScheme);
