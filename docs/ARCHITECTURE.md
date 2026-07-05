@@ -62,8 +62,12 @@ The developer's git client is talking to a forwarding proxy, not a JGit endpoint
 cycle. A temporary local clone is still used to unpack the pack data and walk the commit range for validation, but the
 push is forwarded via HTTP proxy rather than a JGit `push` command.
 
-This mode cannot stream incremental feedback, but it does still clone the upstream repo locally for pack inspection —
-see below.
+This mode cannot stream incremental feedback. The reason is structural: an HTTP response is a single buffered reply.
+The filter chain runs to completion inside one request/response cycle — there is no mechanism to flush partial output to
+the git client mid-chain. Validation filters accumulate their results; `ValidationSummaryFilter` and
+`PushFinalizerFilter` collect everything and write one response at the end. Store-and-forward avoids this constraint
+entirely because JGit's `ReceivePack` owns the connection and can call `sendMessage()` at any point, streaming sideband
+packets to the client as each hook completes.
 
 ### Choosing a mode
 
@@ -328,9 +332,12 @@ The transparent proxy mode replicates what finos/git-proxy does today: intercept
 store-and-forward mode — where the proxy owns the full pack lifecycle via JGit — opens up use cases that are not
 possible with a pass-through HTTP proxy:
 
-- **Deferred forwarding** — the developer's push is received and acknowledged immediately. The pack and credentials are
-  parked locally while an approval process runs (hours, days). Forwarding happens asynchronously once approved. This
-  eliminates the problem of holding a git client session open during a long review window.
+- **Deferred forwarding** — the developer's push is received and acknowledged immediately. The pack is stored locally
+  while an approval process runs (hours, days); forwarding happens asynchronously once approved. This eliminates the
+  problem of holding a git client session open during a long review window. Note: the current implementation forwards
+  within the same session using the client's in-memory credentials (see
+  [Credential flow](internals/JGIT_INFRASTRUCTURE.md#credential-flow)); true async deferred forwarding would require a
+  separate credential design and is tracked as a backlog item.
 
 - **Multi-upstream push** — a single received pack can be forwarded to more than one upstream remote, keeping shared
   repositories (CI workflows, shared libraries) in sync across separate Git hosts without requiring the developer to
