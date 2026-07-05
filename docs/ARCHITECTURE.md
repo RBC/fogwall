@@ -328,9 +328,12 @@ The transparent proxy mode replicates what finos/git-proxy does today: intercept
 store-and-forward mode — where the proxy owns the full pack lifecycle via JGit — opens up use cases that are not
 possible with a pass-through HTTP proxy:
 
-- **Deferred forwarding** — the developer's push is received and acknowledged immediately. The pack and credentials are
-  parked locally while an approval process runs (hours, days). Forwarding happens asynchronously once approved. This
-  eliminates the problem of holding a git client session open during a long review window.
+- **Deferred forwarding** — the developer's push is received and acknowledged immediately. The pack is stored locally
+  while an approval process runs (hours, days); forwarding happens asynchronously once approved. This eliminates the
+  problem of holding a git client session open during a long review window. Note: the current implementation forwards
+  within the same session using the client's in-memory credentials (see
+  [Credential flow](internals/JGIT_INFRASTRUCTURE.md#credential-flow)); true async deferred forwarding would require a
+  separate credential design and is tracked as a backlog item.
 
 - **Multi-upstream push** — a single received pack can be forwarded to more than one upstream remote, keeping shared
   repositories (CI workflows, shared libraries) in sync across separate Git hosts without requiring the developer to
