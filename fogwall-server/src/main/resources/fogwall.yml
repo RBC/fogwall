@@ -55,25 +55,37 @@ database:
 providers:
   github:
     enabled: true
-  # Additional providers that may host FOSS projects.
   gitlab:
     enabled: true
   codeberg:
     enabled: true
   gitea:
     enabled: true
-  # bitbucket.org support is limited due to lack of free (non-commercial) access. Disabled by default.
-  # Bitbucket Server/Data Center instances can be added as custom providers
+  # bitbucket.org support is added here for completeness. Access to bitbucket.org for FOSS is less common than other
+  # providers. Signup is not free or guaranteed and is reviewed by Atlassian via https://www.atlassian.com/software/views/open-source-license-request#/
+  # Therefore, it is disabled by default. Bitbucket (self-hosted or cloud for enterprise use) is supported.
   bitbucket:
     enabled: false
-#  internal-gitlab:
-#    enabled: true
-#    type: gitlab
-#    uri: https://gitlab.internal.example.com
-#  debian-gitlab:
-#    enabled: true
-#    servlet-path: /debian
-#    uri: https://salsa.debian.org/
+  # Generic git repository provider
+  sourcehut:
+    enabled: true
+    type: generic
+    uri: https://git.sr.ht/
+# Custom GitLab example
+  debian-gitlab:
+    enabled: true
+    type: gitlab
+    # Custom servlet path. By default, the servlet path is /{push,proxy}/{hostname}/{repo-url}.git.
+    # Note that /push & /proxy are always prepended to the path. This is only useful if you wish to obscure or otherwise
+    # customize the path for Fogwall to proxy requests to.
+    path-suffix: /debian
+    uri: https://salsa.debian.org/
+# Custom self-hosted GitHub Enterprise example
+  internal-github:
+    enabled: true
+    type: github
+    uri: https://github.internal.example.com
+
 
 # Global attestation questions shown to reviewers in the dashboard approval form before they can
 # approve a push. Applies to all providers — per-provider variants are a future enhancement.

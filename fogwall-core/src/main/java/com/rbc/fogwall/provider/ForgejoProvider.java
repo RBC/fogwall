@@ -1,7 +1,6 @@
 package com.rbc.fogwall.provider;
 
 import java.net.URI;
-import java.util.Map;
 import java.util.Optional;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
@@ -21,16 +20,17 @@ import tools.jackson.databind.json.JsonMapper;
 @Slf4j
 public class ForgejoProvider extends AbstractFogwallProvider implements TokenIdentityProvider {
 
-    /** Well-known public Forgejo/Gitea hosts, keyed by the reserved config name. */
-    public static final Map<String, URI> WELL_KNOWN = Map.of(
-            "codeberg", URI.create("https://codeberg.org"),
-            "gitea", URI.create("https://gitea.com"));
-
     public static final String TYPE = "forgejo";
 
+    // Codeberg is a FOSS friendly Forgejo provider and is the default that ships with the app
+    // https://gitea.com is also compatible (but is not as FOSS friendly given that it is commercial backed)
+    // Both are equivalent in terms of proxying and API compatibility
+    public static final URI CODEBERG = URI.create("https://codeberg.org");
+    public static final URI GITEA = URI.create("https://gitea.com");
+
     @Builder
-    public ForgejoProvider(String name, URI uri, String basePath) {
-        super(name, TYPE, uri, basePath);
+    public ForgejoProvider(String name, URI uri, String pathSuffix) {
+        super(name, TYPE, uri, pathSuffix);
     }
 
     public String getApiUrl() {

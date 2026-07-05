@@ -42,6 +42,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -164,8 +165,7 @@ public class SecurityConfig {
                         .hasRole("ADMIN")
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/config/reload")
                         .hasRole("ADMIN")
-                        .requestMatchers(
-                                org.springframework.http.HttpMethod.POST, "/api/push/*/authorise", "/api/push/*/reject")
+                        .requestMatchers(HttpMethod.POST, "/api/push/*/authorise", "/api/push/*/reject")
                         .authenticated()
                         .anyRequest()
                         .authenticated())

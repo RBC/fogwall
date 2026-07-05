@@ -71,7 +71,6 @@ class HotReloadJettyFixture implements AutoCloseable {
         var provider = GenericProxyProvider.builder()
                 .name("gitea-e2e-hotreload")
                 .uri(giteaUri)
-                .basePath("")
                 .build();
         this.providerId = provider.getProviderId();
         this.giteaHostPort = giteaUri.getHost() + ":" + giteaUri.getPort();

@@ -2,6 +2,7 @@ package com.rbc.fogwall.git;
 
 import com.rbc.fogwall.provider.FogwallProvider;
 import jakarta.servlet.http.HttpServletRequest;
+import java.net.URI;
 import java.util.Base64;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -90,7 +91,7 @@ public class StoreAndForwardRepositoryResolver implements RepositoryResolver<Htt
         // Fall back to URL userinfo - git embeds user:pass in the request URL
         String requestUrl = req.getRequestURL().toString();
         try {
-            java.net.URI uri = java.net.URI.create(requestUrl);
+            URI uri = java.net.URI.create(requestUrl);
             String userInfo = uri.getUserInfo();
             if (userInfo != null) {
                 int colon = userInfo.indexOf(':');

@@ -8,16 +8,22 @@ public class ProviderConfig {
 
     private boolean enabled = true;
 
-    /** Additional URL prefix for this provider's servlet path. */
-    private String servletPath = "";
+    /**
+     * Custom URL suffix (appended after {@link com.rbc.fogwall.jetty.FogwallServletRegistrar#PROXY_PATH_PREFIX} and
+     * {@link com.rbc.fogwall.jetty.FogwallServletRegistrar#PUSH_PATH_PREFIX}) for this provider's servlet path. Allows
+     * operators to set a specific path to listen for git requests. By default, this is computed from the provider's
+     * hostname & optional port (80/443 are implied for http/https respectively)
+     */
+    private String pathSuffix = "";
 
     /** Upstream base URI. Required for custom providers; omit for built-ins (github, gitlab, bitbucket). */
     private String uri = "";
 
     /**
-     * Provider type. Required for custom-named providers; omit only for the built-in default names ({@code github},
-     * {@code gitlab}, {@code bitbucket}, {@code codeberg}, {@code forgejo}). Supported values: {@code github},
-     * {@code gitlab}, {@code bitbucket}, {@code codeberg}, {@code forgejo}, {@code gitea}.
+     * Provider type. Required for providers configured with custom names or providers with no canonical URI (Forgejo,
+     * generic); this field can only be unset for the built-in default names when a canonical hostname is known (i.e.
+     * {@code name=github}, implies {@code type=github,uri=https://github.com}). Supported values: {@code github},
+     * {@code gitlab}, {@code bitbucket}, {@code codeberg}, {@code gitea}.
      */
     private String type = "";
 

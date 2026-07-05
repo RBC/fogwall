@@ -9,9 +9,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
 import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.lib.ObjectId;
-import org.eclipse.jgit.lib.PersonIdent;
-import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.lib.*;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.transport.ReceiveCommand;
 import org.eclipse.jgit.transport.ReceivePack;
@@ -143,8 +141,8 @@ class CheckHiddenCommitsHookTest {
         RevCommit tagged = createCommit("tagged");
 
         // Create the annotated tag object in the repo
-        org.eclipse.jgit.lib.ObjectInserter inserter = repo.newObjectInserter();
-        org.eclipse.jgit.lib.TagBuilder tb = new org.eclipse.jgit.lib.TagBuilder();
+        ObjectInserter inserter = repo.newObjectInserter();
+        TagBuilder tb = new TagBuilder();
         tb.setTag("v2.0");
         tb.setObjectId(tagged);
         tb.setTagger(new PersonIdent("Dev", "dev@example.com"));

@@ -1,5 +1,7 @@
 package com.rbc.fogwall.jetty;
 
+import static org.eclipse.jgit.transport.HttpTransport.setConnectionFactory;
+
 import com.rbc.fogwall.approval.ApprovalGateway;
 import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.config.DiffScanConfig;
@@ -59,7 +61,7 @@ public final class FogwallServletRegistrar {
             List<FogwallProvider> providers) {
         // Wire up JGit's HTTP transport factory once for all store-and-forward connections
         if (fogwallContext.upstreamTls() != null) {
-            org.eclipse.jgit.transport.HttpTransport.setConnectionFactory(new SslAwareHttpConnectionFactory(
+            setConnectionFactory(new SslAwareHttpConnectionFactory(
                     fogwallContext.upstreamTls().trustManagers()));
             log.info("Custom upstream SSL trust applied to JGit HTTP transport");
         }

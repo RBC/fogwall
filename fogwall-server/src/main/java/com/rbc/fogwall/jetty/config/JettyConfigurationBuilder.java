@@ -47,6 +47,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -143,19 +144,17 @@ public class JettyConfigurationBuilder {
     /** Creates the list of enabled providers from configuration. Result is cached. */
     public List<FogwallProvider> buildProviders() {
         if (cachedProviders != null) return cachedProviders;
-        List<FogwallProvider> providers = new ArrayList<>();
-
-        config.getProviders().forEach((name, providerConfig) -> {
-            if (!providerConfig.isEnabled()) {
-                log.info("Provider '{}' is disabled, skipping", name);
-                return;
-            }
-            FogwallProvider provider = createProvider(name, providerConfig);
-            if (provider != null) {
-                providers.add(provider);
-                log.info("Configured provider: {} -> {}", provider.getName(), provider.getUri());
-            }
-        });
+        var providers = config.getProviders().entrySet().stream()
+                .peek(entry -> {
+                    if (!entry.getValue().isEnabled()) {
+                        log.info("Provider '{}' is disabled, skipping", entry.getKey());
+                    }
+                })
+                .filter(entry -> entry.getValue().isEnabled())
+                .map(e -> createProvider(e.getKey(), e.getValue()))
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .toList();
 
         if (providers.isEmpty()) {
             log.warn("No providers configured. Add providers to fogwall.yml to enable proxying.");
@@ -186,6 +185,27 @@ public class JettyConfigurationBuilder {
      */
     public void validateProviderReferences() {
         buildProviderRegistry(); // warm the cache
+
+        // Detect duplicate servlet paths among HTTP providers — two providers with the same
+        // host:port would map to the same /push/<host>:<port>/* and /proxy/<host>:<port>/* paths,
+        // causing Jetty to throw IllegalStateException at startup.
+        var httpProviders = buildProviders().stream()
+                .filter(p -> {
+                    String scheme = p.getUri().getScheme();
+                    return scheme != null && (scheme.equals("http") || scheme.equals("https"));
+                })
+                .toList();
+        var seenPaths = new HashSet<String>();
+        for (var provider : httpProviders) {
+            String path = provider.servletPath();
+            if (!seenPaths.add(path)) {
+                throw new IllegalStateException(
+                        "Multiple HTTP providers share the same upstream host:port or path-suffix '"
+                                + path
+                                + "'. Each HTTP provider must have a unique URI. "
+                                + "SSH providers sharing a host:port are allowed since they use separate transport.");
+            }
+        }
 
         config.getUsers()
                 .forEach(uc -> uc.getScmIdentities().forEach(s -> {
@@ -771,7 +791,7 @@ public class JettyConfigurationBuilder {
         return "fogwall";
     }
 
-    private FogwallProvider createProvider(String name, ProviderConfig providerConfig) {
+    private Optional<FogwallProvider> createProvider(String name, ProviderConfig providerConfig) {
         String explicitType = providerConfig.getType();
         // Use explicit type if set; otherwise accept only exact built-in names, not fuzzy name inference.
         String resolvedType = (explicitType != null && !explicitType.isBlank())
@@ -779,65 +799,71 @@ public class JettyConfigurationBuilder {
                 : name.toLowerCase();
 
         String uri = providerConfig.getUri();
-        String path = providerConfig.getServletPath();
+        String pathSuffix = providerConfig.getPathSuffix();
         URI parsedUri = (uri != null && !uri.isBlank()) ? URI.create(uri) : null;
 
         switch (resolvedType) {
             case "github" -> {
-                return GitHubProvider.builder()
+                return Optional.of(GitHubProvider.builder()
                         .name(name)
                         .uri(parsedUri)
-                        .basePath(path)
-                        .build();
+                        .pathSuffix(pathSuffix)
+                        .build());
             }
             case "gitlab" -> {
-                return GitLabProvider.builder()
+                return Optional.of(GitLabProvider.builder()
                         .name(name)
                         .uri(parsedUri)
-                        .basePath(path)
-                        .build();
+                        .pathSuffix(pathSuffix)
+                        .build());
             }
             case "bitbucket" -> {
-                return BitbucketProvider.builder()
+                return Optional.of(BitbucketProvider.builder()
                         .name(name)
                         .uri(parsedUri)
-                        .basePath(path)
-                        .build();
+                        .pathSuffix(pathSuffix)
+                        .build());
             }
-            case "codeberg", "gitea" -> {
-                URI defaultUri = ForgejoProvider.WELL_KNOWN.get(resolvedType);
-                return ForgejoProvider.builder()
+            case "codeberg" -> {
+                return Optional.of(ForgejoProvider.builder()
                         .name(name)
-                        .uri(parsedUri != null ? parsedUri : defaultUri)
-                        .basePath(path)
-                        .build();
+                        .uri(ForgejoProvider.CODEBERG)
+                        .pathSuffix(pathSuffix)
+                        .build());
+            }
+            case "gitea" -> {
+                return Optional.of(ForgejoProvider.builder()
+                        .name(name)
+                        .uri(parsedUri != null ? parsedUri : ForgejoProvider.GITEA)
+                        .pathSuffix(pathSuffix)
+                        .build());
             }
             case "forgejo" -> {
                 if (parsedUri == null) {
                     log.warn(
                             "Provider '{}' has type 'forgejo' but no URI — Forgejo has no canonical public host. Add 'uri'. Skipping.",
                             name);
-                    return null;
+                    return Optional.empty();
                 }
-                return ForgejoProvider.builder()
+                return Optional.of(ForgejoProvider.builder()
                         .name(name)
                         .uri(parsedUri)
-                        .basePath(path)
-                        .build();
+                        .pathSuffix(pathSuffix)
+                        .build());
             }
             default -> {
                 if (parsedUri != null) {
-                    return GenericProxyProvider.builder()
+                    return Optional.of(GenericProxyProvider.builder()
                             .name(name)
                             .uri(parsedUri)
-                            .basePath(path)
+                            .pathSuffix(pathSuffix)
                             .blockedInfoRefsStatus(providerConfig.getBlockedInfoRefsStatus())
-                            .build();
+                            .build());
                 }
                 log.warn(
-                        "Provider '{}' has no URI and is not a known built-in name (github/gitlab/bitbucket/codeberg/forgejo/gitea). Set 'type' and 'uri' for custom providers. Skipping.",
+                        "Provider '{}' has no URI and is not a known built-in name (github/gitlab/bitbucket/forgejo/gitea). Set 'type' and 'uri' for custom providers. Skipping.",
                         name);
-                return null;
+                return Optional.empty();
             }
         }
     }

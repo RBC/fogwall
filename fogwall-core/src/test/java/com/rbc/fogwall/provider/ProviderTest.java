@@ -13,14 +13,21 @@ class ProviderTest {
 
     @Test
     void gitHub_defaultUri_servletPath() {
-        var p = new GitHubProvider("/proxy");
-        assertEquals("/proxy/github.com", p.servletPath());
-        assertEquals("/proxy/github.com/*", p.servletMapping());
+        var p = new GitHubProvider(null);
+        assertEquals("/github.com", p.servletPath());
+        assertEquals("/github.com/*", p.servletMapping());
+    }
+
+    @Test
+    void gitHub_pathSuffix_overridesHostname() {
+        var p = new GitHubProvider("/mypath");
+        assertEquals("/mypath", p.servletPath());
+        assertEquals("/mypath/*", p.servletMapping());
     }
 
     @Test
     void gitHub_defaultUri_apiUrls() {
-        var p = new GitHubProvider("/proxy");
+        var p = new GitHubProvider(null);
         assertEquals("https://api.github.com", p.getApiUrl());
         assertEquals("https://api.github.com/graphql", p.getGraphqlUrl());
     }
@@ -29,7 +36,7 @@ class ProviderTest {
     void gitHub_enterpriseUri_apiUrls() {
         var p = GitHubProvider.builder()
                 .uri(URI.create("https://github.example.com"))
-                .basePath("/proxy")
+                .pathSuffix("/proxy")
                 .build();
         assertEquals("https://github.example.com/api/v3", p.getApiUrl());
         assertEquals("https://github.example.com/api/graphql", p.getGraphqlUrl());
@@ -44,9 +51,9 @@ class ProviderTest {
 
     @Test
     void gitLab_defaultUri_servletPath() {
-        var p = new GitLabProvider("/proxy");
-        assertEquals("/proxy/gitlab.com", p.servletPath());
-        assertEquals("/proxy/gitlab.com/*", p.servletMapping());
+        var p = new GitLabProvider(null);
+        assertEquals("/gitlab.com", p.servletPath());
+        assertEquals("/gitlab.com/*", p.servletMapping());
     }
 
     @Test
@@ -76,8 +83,8 @@ class ProviderTest {
 
     @Test
     void bitbucket_defaultUri_servletPath() {
-        var p = new BitbucketProvider("/proxy");
-        assertEquals("/proxy/bitbucket.org", p.servletPath());
+        var p = new BitbucketProvider(null);
+        assertEquals("/bitbucket.org", p.servletPath());
     }
 
     @Test
@@ -90,7 +97,7 @@ class ProviderTest {
     void bitbucket_hostedUri_apiUrl() {
         var p = BitbucketProvider.builder()
                 .uri(URI.create("https://bitbucket.example.com"))
-                .basePath("/proxy")
+                .pathSuffix("/proxy")
                 .build();
         assertEquals("https://bitbucket.example.com/rest/api/1.0", p.getApiUrl());
     }
@@ -113,9 +120,18 @@ class ProviderTest {
         var p = GenericProxyProvider.builder()
                 .name("my-git")
                 .uri(URI.create("https://git.corp.com"))
-                .basePath("/proxy")
                 .build();
-        assertEquals("/proxy/git.corp.com", p.servletPath());
+        assertEquals("/git.corp.com", p.servletPath());
+    }
+
+    @Test
+    void generic_pathSuffix_overridesHostname() {
+        var p = GenericProxyProvider.builder()
+                .name("my-git")
+                .uri(URI.create("https://git.corp.com"))
+                .pathSuffix("/custom")
+                .build();
+        assertEquals("/custom", p.servletPath());
     }
 
     // --- InMemoryProviderRegistry ---

@@ -5,9 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.model.PushRecord;
@@ -420,7 +418,7 @@ class PushControllerTest {
 
             assertEquals(HttpStatus.OK, controller.approve("p1", approveBody()).getStatusCode());
             // isAllowedToReview must never have been called
-            org.mockito.Mockito.verifyNoInteractions(repoPermissionService);
+            verifyNoInteractions(repoPermissionService);
         }
     }
 

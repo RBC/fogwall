@@ -458,7 +458,7 @@ class UrlRuleFilterTest {
                 .name("custom")
                 .type("github")
                 .uri(java.net.URI.create("https://github.com"))
-                .basePath("/proxy")
+                .pathSuffix("/proxy")
                 .blockedInfoRefsStatus(404)
                 .build();
         var aggregate = new UrlRuleAggregateFilter(50, provider, new InMemoryUrlRuleRegistry());
