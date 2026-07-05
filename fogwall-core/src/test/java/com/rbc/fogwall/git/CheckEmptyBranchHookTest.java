@@ -8,9 +8,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
 import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.lib.ObjectId;
-import org.eclipse.jgit.lib.PersonIdent;
-import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.lib.*;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.transport.ReceiveCommand;
 import org.eclipse.jgit.transport.ReceivePack;
@@ -163,8 +161,8 @@ class CheckEmptyBranchHookTest {
         // Annotated tags point to a tag object, not a commit directly
         ObjectId c1 = createCommit("Tagged commit");
         // Create an annotated tag via JGit
-        org.eclipse.jgit.lib.ObjectInserter inserter = repo.newObjectInserter();
-        org.eclipse.jgit.lib.TagBuilder tb = new org.eclipse.jgit.lib.TagBuilder();
+        ObjectInserter inserter = repo.newObjectInserter();
+        TagBuilder tb = new TagBuilder();
         tb.setTag("v2.0");
         tb.setObjectId(repo.parseCommit(c1));
         tb.setTagger(new PersonIdent("Dev", "dev@example.com"));

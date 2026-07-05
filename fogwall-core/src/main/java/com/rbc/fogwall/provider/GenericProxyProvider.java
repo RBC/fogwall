@@ -8,8 +8,8 @@ public class GenericProxyProvider extends AbstractFogwallProvider {
     private final int blockedInfoRefsStatus;
 
     @Builder
-    GenericProxyProvider(String name, String type, URI uri, String basePath, Integer blockedInfoRefsStatus) {
-        super(name, type != null ? type : name, uri, basePath);
+    GenericProxyProvider(String name, String type, URI uri, String pathSuffix, Integer blockedInfoRefsStatus) {
+        super(name, type != null ? type : name, uri, pathSuffix);
         this.blockedInfoRefsStatus = blockedInfoRefsStatus != null ? blockedInfoRefsStatus : 403;
     }
 

@@ -139,11 +139,8 @@ class JettyProxyFixture implements AutoCloseable {
         var storeForwardCache = new LocalRepositoryCache(Files.createTempDirectory("fogwall-e2e-sf-"), 0, true);
         var proxyCache = new LocalRepositoryCache();
 
-        var provider = GenericProxyProvider.builder()
-                .name("gitea-e2e")
-                .uri(giteaUri)
-                .basePath("")
-                .build();
+        var provider =
+                GenericProxyProvider.builder().name("gitea-e2e").uri(giteaUri).build();
         this.providerId = provider.getProviderId();
         this.giteaHostPort = giteaUri.getHost() + ":" + giteaUri.getPort();
 

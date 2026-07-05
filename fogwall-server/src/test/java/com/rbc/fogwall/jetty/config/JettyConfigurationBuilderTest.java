@@ -8,8 +8,12 @@ import com.rbc.fogwall.db.PushStoreFactory;
 import com.rbc.fogwall.db.model.AccessRule;
 import com.rbc.fogwall.db.model.MatchType;
 import com.rbc.fogwall.permission.RepoPermission;
+import com.rbc.fogwall.provider.BitbucketProvider;
 import com.rbc.fogwall.provider.FogwallProvider;
+import com.rbc.fogwall.provider.ForgejoProvider;
 import com.rbc.fogwall.provider.GitHubProvider;
+import com.rbc.fogwall.provider.GitLabProvider;
+import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -244,6 +248,118 @@ class JettyConfigurationBuilderTest {
         assertEquals(MatchType.GLOB, rules.get(0).getMatchType());
     }
 
+    // ---- provider type inference from config key ----
+
+    @Test
+    void createProvider_githubKey_inferredAsGitHubProvider() {
+        var providers = new JettyConfigurationBuilder(configWithSingleProvider("github", new ProviderConfig()))
+                .buildProviders();
+        assertEquals(1, providers.size());
+        assertInstanceOf(GitHubProvider.class, providers.get(0));
+        assertEquals("github", providers.get(0).getName());
+        assertEquals(GitHubProvider.DEFAULT_URI, providers.get(0).getUri());
+    }
+
+    @Test
+    void createProvider_gitlabKey_inferredAsGitLabProvider() {
+        var providers = new JettyConfigurationBuilder(configWithSingleProvider("gitlab", new ProviderConfig()))
+                .buildProviders();
+        assertEquals(1, providers.size());
+        assertInstanceOf(GitLabProvider.class, providers.get(0));
+        assertEquals(GitLabProvider.DEFAULT_URI, providers.get(0).getUri());
+    }
+
+    @Test
+    void createProvider_bitbucketKey_inferredAsBitbucketProvider() {
+        var providers = new JettyConfigurationBuilder(configWithSingleProvider("bitbucket", new ProviderConfig()))
+                .buildProviders();
+        assertEquals(1, providers.size());
+        assertInstanceOf(BitbucketProvider.class, providers.get(0));
+        assertEquals(BitbucketProvider.DEFAULT_URI, providers.get(0).getUri());
+    }
+
+    @Test
+    void createProvider_codebergKey_inferredAsForgejoProviderWithCodebergUri() {
+        var providers = new JettyConfigurationBuilder(configWithSingleProvider("codeberg", new ProviderConfig()))
+                .buildProviders();
+        assertEquals(1, providers.size());
+        assertInstanceOf(ForgejoProvider.class, providers.get(0));
+        assertEquals(ForgejoProvider.CODEBERG, providers.get(0).getUri());
+    }
+
+    @Test
+    void createProvider_giteaKey_noUri_defaultsToGiteaCom() {
+        var providers =
+                new JettyConfigurationBuilder(configWithSingleProvider("gitea", new ProviderConfig())).buildProviders();
+        assertEquals(1, providers.size());
+        assertInstanceOf(ForgejoProvider.class, providers.get(0));
+        assertEquals(ForgejoProvider.GITEA, providers.get(0).getUri());
+    }
+
+    @Test
+    void createProvider_giteaKey_withUri_usesCustomUri() {
+        var pc = new ProviderConfig();
+        pc.setUri("https://gitea.corp.com");
+        var providers = new JettyConfigurationBuilder(configWithSingleProvider("gitea", pc)).buildProviders();
+        assertEquals(1, providers.size());
+        assertInstanceOf(ForgejoProvider.class, providers.get(0));
+        assertEquals(URI.create("https://gitea.corp.com"), providers.get(0).getUri());
+    }
+
+    @Test
+    void createProvider_forgejoKey_withUri_usesCustomUri() {
+        var pc = new ProviderConfig();
+        pc.setUri("https://forge.example.com");
+        var providers = new JettyConfigurationBuilder(configWithSingleProvider("my-forge", pc)).buildProviders();
+        // no known type and no known key — falls back to generic
+        assertEquals(1, providers.size());
+        assertEquals(URI.create("https://forge.example.com"), providers.get(0).getUri());
+    }
+
+    @Test
+    void createProvider_forgejoType_withUri_isForgejoProvider() {
+        var pc = new ProviderConfig();
+        pc.setType("forgejo");
+        pc.setUri("https://forge.example.com");
+        var providers = new JettyConfigurationBuilder(configWithSingleProvider("my-forge", pc)).buildProviders();
+        assertEquals(1, providers.size());
+        assertInstanceOf(ForgejoProvider.class, providers.get(0));
+        assertEquals(URI.create("https://forge.example.com"), providers.get(0).getUri());
+    }
+
+    @Test
+    void createProvider_forgejoType_noUri_skipped() {
+        var pc = new ProviderConfig();
+        pc.setType("forgejo");
+        var providers = new JettyConfigurationBuilder(configWithSingleProvider("my-forge", pc)).buildProviders();
+        assertTrue(providers.isEmpty(), "forgejo provider without URI must be skipped");
+    }
+
+    @Test
+    void createProvider_customNameWithGithubType_isGitHubProvider() {
+        var pc = new ProviderConfig();
+        pc.setType("github");
+        pc.setUri("https://github.internal.example.com");
+        var providers = new JettyConfigurationBuilder(configWithSingleProvider("internal-github", pc)).buildProviders();
+        assertEquals(1, providers.size());
+        assertInstanceOf(GitHubProvider.class, providers.get(0));
+        assertEquals("internal-github", providers.get(0).getName());
+        assertEquals(
+                URI.create("https://github.internal.example.com"),
+                providers.get(0).getUri());
+    }
+
+    @Test
+    void createProvider_customNameWithGiteaType_isForgejoProvider() {
+        var pc = new ProviderConfig();
+        pc.setType("gitea");
+        pc.setUri("https://gitea.corp.com");
+        var providers = new JettyConfigurationBuilder(configWithSingleProvider("corp-gitea", pc)).buildProviders();
+        assertEquals(1, providers.size());
+        assertInstanceOf(ForgejoProvider.class, providers.get(0));
+        assertEquals("corp-gitea", providers.get(0).getName());
+    }
+
     // ---- helpers ----
 
     private static PermissionConfig slugPerm(String username, String provider, String value) {
@@ -273,6 +389,13 @@ class JettyConfigurationBuilderTest {
     private static FogwallConfig configWithApprovalMode(String mode) {
         var config = new FogwallConfig();
         config.getServer().setApprovalMode(mode);
+        return config;
+    }
+
+    private static FogwallConfig configWithSingleProvider(String key, ProviderConfig pc) {
+        var config = new FogwallConfig();
+        pc.setEnabled(true);
+        config.setProviders(Map.of(key, pc));
         return config;
     }
 

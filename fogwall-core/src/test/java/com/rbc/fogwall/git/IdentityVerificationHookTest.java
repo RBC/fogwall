@@ -1,5 +1,6 @@
 package com.rbc.fogwall.git;
 
+import static java.nio.file.Files.writeString;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -10,7 +11,6 @@ import com.rbc.fogwall.provider.GitHubProvider;
 import com.rbc.fogwall.service.PushIdentityResolver;
 import com.rbc.fogwall.user.UserEntry;
 import java.io.File;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
@@ -47,7 +47,7 @@ class IdentityVerificationHookTest {
 
     private RevCommit createCommit(String message, String authorEmail) throws Exception {
         File f = new File(tempDir.toFile(), UUID.randomUUID() + ".txt");
-        Files.writeString(f.toPath(), message);
+        writeString(f.toPath(), message);
         git.add().addFilepattern(".").call();
         return git.commit()
                 .setAuthor(new PersonIdent("Dev", authorEmail))
@@ -249,7 +249,7 @@ class IdentityVerificationHookTest {
         // createCommit sets author=committer; we need a commit where committer=alice but author=external.
         // Use the lower-level JGit API to set them independently.
         File f = new File(tempDir.toFile(), java.util.UUID.randomUUID() + ".txt");
-        java.nio.file.Files.writeString(f.toPath(), "content");
+        writeString(f.toPath(), "content");
         git.add().addFilepattern(".").call();
         RevCommit base = git.commit()
                 .setAuthor(new PersonIdent("Dev", "alice@example.com"))
@@ -284,7 +284,7 @@ class IdentityVerificationHookTest {
                 .thenReturn(Optional.of(alice()));
 
         File f = new File(tempDir.toFile(), java.util.UUID.randomUUID() + ".txt");
-        java.nio.file.Files.writeString(f.toPath(), "content");
+        writeString(f.toPath(), "content");
         git.add().addFilepattern(".").call();
         RevCommit base = git.commit()
                 .setAuthor(new PersonIdent("Dev", "alice@example.com"))

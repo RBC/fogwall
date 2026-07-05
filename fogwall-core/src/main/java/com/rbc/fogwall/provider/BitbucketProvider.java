@@ -44,12 +44,12 @@ public class BitbucketProvider extends AbstractFogwallProvider implements TokenI
     public static final String NAME = "bitbucket";
 
     @Builder
-    public BitbucketProvider(String name, URI uri, String basePath) {
-        super(name != null ? name : NAME, NAME, uri != null ? uri : DEFAULT_URI, basePath);
+    public BitbucketProvider(String name, URI uri, String pathSuffix) {
+        super(name != null ? name : NAME, NAME, uri != null ? uri : DEFAULT_URI, pathSuffix);
     }
 
-    public BitbucketProvider(String basePath) {
-        this(NAME, DEFAULT_URI, basePath);
+    public BitbucketProvider(String pathSuffix) {
+        this(NAME, DEFAULT_URI, pathSuffix);
     }
 
     /**

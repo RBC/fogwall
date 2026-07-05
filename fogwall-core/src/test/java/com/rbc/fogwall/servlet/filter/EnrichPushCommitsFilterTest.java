@@ -1,6 +1,7 @@
 package com.rbc.fogwall.servlet.filter;
 
 import static com.rbc.fogwall.servlet.FogwallServlet.GIT_REQUEST_ATTR;
+import static java.nio.file.Files.writeString;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -17,7 +18,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.Enumeration;
@@ -184,7 +184,7 @@ class EnrichPushCommitsFilterTest {
         Git sourceGit = Git.init().setDirectory(sourceDir.toFile()).call();
         sourceGit.getRepository().getConfig().setBoolean("commit", null, "gpgsign", false);
         sourceGit.getRepository().getConfig().save();
-        java.nio.file.Files.writeString(sourceDir.resolve("hello.txt"), "hello world");
+        writeString(sourceDir.resolve("hello.txt"), "hello world");
         sourceGit.add().addFilepattern("hello.txt").call();
         var revCommit = sourceGit
                 .commit()
@@ -261,7 +261,7 @@ class EnrichPushCommitsFilterTest {
         Git sourceGit = Git.init().setDirectory(sourceDir.toFile()).call();
         sourceGit.getRepository().getConfig().setBoolean("commit", null, "gpgsign", false);
         sourceGit.getRepository().getConfig().save();
-        java.nio.file.Files.writeString(sourceDir.resolve("hello.txt"), "hello world");
+        writeString(sourceDir.resolve("hello.txt"), "hello world");
         sourceGit.add().addFilepattern("hello.txt").call();
         var revCommit = sourceGit
                 .commit()
@@ -390,7 +390,7 @@ class EnrichPushCommitsFilterTest {
         Git sourceGit = Git.init().setDirectory(sourceDir2.toFile()).call();
         sourceGit.getRepository().getConfig().setBoolean("commit", null, "gpgsign", false);
         sourceGit.getRepository().getConfig().save();
-        Files.writeString(sourceDir2.resolve("secret.txt"), "new content");
+        writeString(sourceDir2.resolve("secret.txt"), "new content");
         sourceGit.add().addFilepattern("secret.txt").call();
         var revCommit = sourceGit
                 .commit()

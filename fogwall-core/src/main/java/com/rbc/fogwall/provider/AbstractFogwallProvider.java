@@ -11,22 +11,27 @@ public abstract class AbstractFogwallProvider implements FogwallProvider {
     protected final String name;
     protected final String type;
     protected final URI uri;
-    protected final String basePath;
+    protected final String pathSuffix;
 
     /**
-     * Returns the path that the servlet will be mapped to. This is based on the host of the target URL along with an
-     * optional application-wide base path. To configure a {@link FogwallServlet} for proxying, use
-     * {@link #servletMapping()} instead.
+     * Returns the path that the servlet will be mapped to after the default path (this controls routing to the
+     * appropriate servlet or JGit factory). This is based on the host of the target URL along with an optional
+     * application-wide base path. To configure a {@link FogwallServlet} for proxying, use {@link #servletMapping()}
+     * instead.
      *
      * @return The base path that this provider will be mapped to.
      */
     @Override
     public String servletPath() {
         int port = uri.getPort();
+        if (pathSuffix != null && !pathSuffix.isBlank()) {
+            return pathSuffix;
+        }
         boolean defaultPort = port < 0
                 || ("https".equals(uri.getScheme()) && port == 443)
                 || ("http".equals(uri.getScheme()) && port == 80);
-        return defaultPort ? basePath + "/" + uri.getHost() : basePath + "/" + uri.getHost() + ":" + port;
+
+        return defaultPort ? "/" + uri.getHost() : "/" + uri.getHost() + ":" + port;
     }
 
     /**
@@ -64,6 +69,6 @@ public abstract class AbstractFogwallProvider implements FogwallProvider {
                 + name + '\'' + ", type='"
                 + type + '\'' + ", uri="
                 + uri + ", basePath='"
-                + basePath + '\'' + '}';
+                + pathSuffix + '\'' + '}';
     }
 }

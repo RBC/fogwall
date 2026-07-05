@@ -14,12 +14,12 @@ public class GitLabProvider extends AbstractFogwallProvider implements TokenIden
     public static final String NAME = "gitlab";
 
     @Builder
-    public GitLabProvider(String name, URI uri, String basePath) {
-        super(name != null ? name : NAME, NAME, uri != null ? uri : DEFAULT_URI, basePath);
+    public GitLabProvider(String name, URI uri, String pathSuffix) {
+        super(name != null ? name : NAME, NAME, uri != null ? uri : DEFAULT_URI, pathSuffix);
     }
 
-    public GitLabProvider(String basePath) {
-        this(NAME, DEFAULT_URI, basePath);
+    public GitLabProvider(String pathSuffix) {
+        this(NAME, DEFAULT_URI, pathSuffix);
     }
 
     public String getApiUrl() {
