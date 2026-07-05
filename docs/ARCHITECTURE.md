@@ -62,8 +62,12 @@ The developer's git client is talking to a forwarding proxy, not a JGit endpoint
 cycle. A temporary local clone is still used to unpack the pack data and walk the commit range for validation, but the
 push is forwarded via HTTP proxy rather than a JGit `push` command.
 
-This mode cannot stream incremental feedback, but it does still clone the upstream repo locally for pack inspection —
-see below.
+This mode cannot stream incremental feedback. The reason is structural: an HTTP response is a single buffered reply.
+The filter chain runs to completion inside one request/response cycle — there is no mechanism to flush partial output to
+the git client mid-chain. Validation filters accumulate their results; `ValidationSummaryFilter` and
+`PushFinalizerFilter` collect everything and write one response at the end. Store-and-forward avoids this constraint
+entirely because JGit's `ReceivePack` owns the connection and can call `sendMessage()` at any point, streaming sideband
+packets to the client as each hook completes.
 
 ### Choosing a mode
 
