@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1@sha256:2780b5c3bab67f1f76c781860de469442999ed1a0d7992a5efdf2cffc0e3d769
 
 # ── Build stage ──────────────────────────────────────────────────────────────
-FROM docker.io/eclipse-temurin:25-jdk-noble@sha256:02aba7518e48cfed96403ac9634e357a40329d6ec9418feb0b32636e43b245a1 AS builder
+FROM docker.io/eclipse-temurin:25-jdk-noble@sha256:3eb81ed94d8c1a34422f19f8188548bdf02cae69c91d0328afdbb7abed90f617 AS builder
 
 # Install Node.js directly from the official distribution with SHA256 verification.
 # To update: download the new tarball, verify against nodejs.org/dist/vX.Y.Z/SHASUMS256.txt,
@@ -56,7 +56,7 @@ RUN sed -i \
     fogwall-dashboard/build/install/fogwall-dashboard/bin/fogwall-dashboard
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
-FROM docker.io/eclipse-temurin:25-jre-noble@sha256:f9bd8815e73632c22985ebb133ec49b9fc4ad5ffe0657594ac02748ad0431ab7
+FROM docker.io/eclipse-temurin:25-jre-noble@sha256:2f1da100788559b397bcf48c736169ea5b070bde84e55f203bbee8e83d87a175
 
 # Packages to upgrade beyond what the base image ships, space-separated.
 # Used to patch CVEs that are fixed in Ubuntu's repos but not yet picked up by
