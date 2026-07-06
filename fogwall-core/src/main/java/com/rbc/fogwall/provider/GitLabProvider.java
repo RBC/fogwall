@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hc.client5.http.fluent.Request;
+import org.apache.hc.core5.util.Timeout;
 import tools.jackson.databind.json.JsonMapper;
 
 @Slf4j
@@ -83,7 +84,9 @@ public class GitLabProvider extends AbstractFogwallProvider implements HttpToken
     public Set<String> fetchSshFingerprints(String login) {
         try {
             // Step 1: resolve user ID from username
-            var userReq = Request.get(getApiUrl() + "/users?username=" + login);
+            var userReq = Request.get(getApiUrl() + "/users?username=" + login)
+                    .connectTimeout(Timeout.ofSeconds(10))
+                    .responseTimeout(Timeout.ofSeconds(10));
             if (apiToken != null && !apiToken.isBlank()) {
                 userReq = userReq.addHeader("Authorization", "Bearer " + apiToken);
             }
@@ -96,7 +99,9 @@ public class GitLabProvider extends AbstractFogwallProvider implements HttpToken
             long userId = users[0].id();
 
             // Step 2: fetch SSH keys for that user ID
-            var keysReq = Request.get(getApiUrl() + "/users/" + userId + "/keys");
+            var keysReq = Request.get(getApiUrl() + "/users/" + userId + "/keys")
+                    .connectTimeout(Timeout.ofSeconds(10))
+                    .responseTimeout(Timeout.ofSeconds(10));
             if (apiToken != null && !apiToken.isBlank()) {
                 keysReq = keysReq.addHeader("Authorization", "Bearer " + apiToken);
             }

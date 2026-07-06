@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
 
@@ -35,6 +36,10 @@ import lombok.extern.slf4j.Slf4j;
  * (default: 7 days) to avoid hammering provider APIs. In corporate environments with shared egress IPs, unauthenticated
  * API rate limits apply to the whole enterprise — a long TTL is the primary mitigation.
  *
+ * <p>When a {@link SshFingerprintCache} is provided, it is used as the primary cache (survives restarts and is shared
+ * across nodes). A secondary in-memory cache avoids hitting the DB on every push for the same user within a JVM
+ * lifetime. When no persistent cache is provided, only the in-memory cache is used.
+ *
  * <p>Only non-empty results are cached. An empty set (user not found, API error) is never stored, so transient failures
  * do not block future lookups.
  */
@@ -51,15 +56,17 @@ public class SshScmIdentityEnricher {
         }
     }
 
-    private final Map<CacheKey, CacheEntry> cache = new ConcurrentHashMap<>();
+    private final Map<CacheKey, CacheEntry> memCache = new ConcurrentHashMap<>();
+    private final SshFingerprintCache persistentCache;
     private final long ttlMs;
 
     public SshScmIdentityEnricher() {
-        this(DEFAULT_TTL);
+        this(DEFAULT_TTL, null);
     }
 
-    public SshScmIdentityEnricher(Duration ttl) {
+    public SshScmIdentityEnricher(Duration ttl, SshFingerprintCache persistentCache) {
         this.ttlMs = ttl.toMillis();
+        this.persistentCache = persistentCache;
     }
 
     /**
@@ -100,24 +107,46 @@ public class SshScmIdentityEnricher {
     }
 
     /**
-     * Evicts the cached fingerprint set for {@code (providerId, login)}. Call when a user adds or removes an SSH key so
-     * the next lookup re-fetches immediately rather than waiting for TTL expiry.
+     * Evicts the cached fingerprint set for {@code (providerId, login)} from both caches. Call when a user adds or
+     * removes an SSH key so the next lookup re-fetches immediately rather than waiting for TTL expiry.
      */
     public void evict(String providerId, String login) {
-        cache.remove(new CacheKey(providerId, login));
+        memCache.remove(new CacheKey(providerId, login));
+        if (persistentCache != null) {
+            persistentCache.evict(providerId, login);
+        }
     }
 
     private Set<String> fingerprints(String providerId, String login, SshKeyFingerprintLookup lookup) {
         var key = new CacheKey(providerId, login);
-        var entry = cache.get(key);
-        if (entry != null && !entry.isExpired(ttlMs)) {
-            log.debug("SSH fingerprint cache hit for {}/{}", providerId, login);
-            return entry.fingerprints();
+
+        // Check in-memory cache first
+        var memEntry = memCache.get(key);
+        if (memEntry != null && !memEntry.isExpired(ttlMs)) {
+            log.debug("SSH fingerprint memory cache hit for {}/{}", providerId, login);
+            return memEntry.fingerprints();
         }
+
+        // Check persistent cache
+        if (persistentCache != null) {
+            Set<String> persisted = persistentCache.lookup(providerId, login);
+            if (!persisted.isEmpty()) {
+                log.debug("SSH fingerprint persistent cache hit for {}/{}", providerId, login);
+                memCache.put(key, new CacheEntry(persisted, System.currentTimeMillis()));
+                return persisted;
+            }
+        }
+
         log.debug("SSH fingerprint cache miss for {}/{} — fetching from provider", providerId, login);
         Set<String> result = lookup.fetchSshFingerprints(login);
         if (!result.isEmpty()) {
-            cache.put(key, new CacheEntry(result, System.currentTimeMillis()));
+            // Normalise to a sorted set so storage order from the SCM API doesn't affect equality
+            Set<String> normalised = Set.copyOf(new TreeSet<>(result));
+            memCache.put(key, new CacheEntry(normalised, System.currentTimeMillis()));
+            if (persistentCache != null) {
+                persistentCache.store(providerId, login, normalised);
+            }
+            return normalised;
         }
         return result;
     }

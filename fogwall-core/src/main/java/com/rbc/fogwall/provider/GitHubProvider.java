@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hc.client5.http.fluent.Request;
+import org.apache.hc.core5.util.Timeout;
 import tools.jackson.databind.json.JsonMapper;
 
 @Slf4j
@@ -86,6 +87,8 @@ public class GitHubProvider extends AbstractFogwallProvider implements HttpToken
     public Set<String> fetchSshFingerprints(String login) {
         try {
             var response = Request.get(getApiUrl() + "/users/" + login + "/keys")
+                    .connectTimeout(Timeout.ofSeconds(10))
+                    .responseTimeout(Timeout.ofSeconds(10))
                     .execute()
                     .returnContent()
                     .asString();

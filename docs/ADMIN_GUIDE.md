@@ -954,6 +954,15 @@ One or more commit author/committer emails are not registered to the authenticat
 - In `warn` mode the push goes through but the mismatch is logged and visible in the push record. Switch to `strict`
   once you are confident emails are populated for all users.
 
+### SSH push still blocked after adding a key to the SCM account
+
+The SSH fingerprint enricher caches results per `(provider, scm-login)` with a 7-day TTL. If a user registers a new SSH
+key on their SCM account after the cache was last populated, the new fingerprint will not be visible until the entry
+expires or the server restarts. To force an immediate re-fetch without a restart, the operator can reload config (if
+live reload is configured) or restart the server. Future pushes from that user will populate a fresh cache entry.
+
+The same applies when a key is removed from the SCM account — the old fingerprint remains cached until TTL expiry.
+
 ### OIDC login fails / redirect loop
 
 1. Enable the Spring Security debug profile (`docker/log4j2-debug.xml`) — see

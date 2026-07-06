@@ -27,8 +27,10 @@ import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.*;
 import com.rbc.fogwall.service.CachingTokenPushIdentityResolver;
 import com.rbc.fogwall.service.JdbcScmTokenCache;
+import com.rbc.fogwall.service.JdbcSshFingerprintCache;
 import com.rbc.fogwall.service.PushIdentityResolver;
 import com.rbc.fogwall.service.ScmTokenCache;
+import com.rbc.fogwall.service.SshFingerprintCache;
 import com.rbc.fogwall.service.SshScmIdentityEnricher;
 import com.rbc.fogwall.service.TokenPushIdentityResolver;
 import com.rbc.fogwall.ssh.SshKeyUtils;
@@ -422,7 +424,7 @@ public class JettyConfigurationBuilder {
                 proxyCache,
                 buildUpstreamTls(),
                 buildProviderRegistry(),
-                new SshScmIdentityEnricher());
+                new SshScmIdentityEnricher(SshScmIdentityEnricher.DEFAULT_TTL, buildSshFingerprintCache()));
     }
 
     /**
@@ -729,6 +731,15 @@ public class JettyConfigurationBuilder {
         return tokenResolver;
     }
 
+    private SshFingerprintCache buildSshFingerprintCache() {
+        Duration ttl = SshScmIdentityEnricher.DEFAULT_TTL;
+        log.info("SSH fingerprint cache enabled (TTL {} days)", ttl.toDays());
+        if ("mongo".equals(config.getDatabase().getType())) {
+            return requireMongoStoreFactory().sshFingerprintCache(ttl);
+        }
+        return new JdbcSshFingerprintCache(requireJdbcDataSource(), ttl);
+    }
+
     private ScmTokenCache buildTokenCache() {
         long maxAgeDays = Optional.ofNullable(System.getenv("FOGWALL_SCM_CACHE_MAX_AGE_DAYS"))
                 .map(Long::parseLong)
@@ -828,10 +839,15 @@ public class JettyConfigurationBuilder {
         String uri = providerConfig.getUri();
         String pathSuffix = providerConfig.getPathSuffix();
         URI parsedUri = (uri != null && !uri.isBlank()) ? URI.create(uri) : null;
-        URI parsedApiUri = (providerConfig.getApiUri() != null
-                        && !providerConfig.getApiUri().isBlank())
-                ? URI.create(providerConfig.getApiUri())
-                : null;
+        URI parsedApiUri = null;
+        if (providerConfig.getApiUri() != null && !providerConfig.getApiUri().isBlank()) {
+            parsedApiUri = URI.create(providerConfig.getApiUri());
+            String scheme = parsedApiUri.getScheme();
+            if (!"http".equals(scheme) && !"https".equals(scheme)) {
+                throw new IllegalArgumentException("Provider '" + name
+                        + "': api-uri must use http or https scheme, got: " + providerConfig.getApiUri());
+            }
+        }
         String apiToken = (providerConfig.getApiToken() != null
                         && !providerConfig.getApiToken().isBlank())
                 ? providerConfig.getApiToken()

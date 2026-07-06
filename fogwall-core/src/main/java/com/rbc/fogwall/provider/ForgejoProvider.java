@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hc.client5.http.fluent.Request;
+import org.apache.hc.core5.util.Timeout;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -84,7 +85,9 @@ public class ForgejoProvider extends AbstractFogwallProvider implements HttpToke
     @Override
     public Set<String> fetchSshFingerprints(String login) {
         try {
-            var request = Request.get(getApiUrl() + "/users/" + login + "/keys");
+            var request = Request.get(getApiUrl() + "/users/" + login + "/keys")
+                    .connectTimeout(Timeout.ofSeconds(10))
+                    .responseTimeout(Timeout.ofSeconds(10));
             if (apiToken != null && !apiToken.isBlank()) {
                 request = request.addHeader("Authorization", "token " + apiToken);
             }
