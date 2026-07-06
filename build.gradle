@@ -35,7 +35,7 @@ ext {
     // Database
     hikariVersion = '7.1.0'
     h2Version = '2.4.240'
-    postgresVersion = '42.7.12'
+    postgresVersion = '42.7.13'
     mongoVersion = '5.8.0'
 
     // Jackson
