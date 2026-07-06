@@ -6,7 +6,16 @@ updates:
       interval: "weekly"
       day: "monday"
     labels:
-      - "dependencies"
+      - "dependencies:actions"
+    groups:
+      codeql-actions:
+        patterns:
+          - "github/codeql-action*"
+      github-actions:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "github/codeql-action*"
 
   - package-ecosystem: "gradle"
     directory: "/"
@@ -14,8 +23,7 @@ updates:
       interval: "weekly"
       day: "monday"
     labels:
-      - "dependencies"
-      - "java"
+      - "dependencies:java"
     groups:
       java-dependencies:
         patterns:
@@ -27,8 +35,7 @@ updates:
       interval: "weekly"
       day: "monday"
     labels:
-      - "dependencies"
-      - "frontend"
+      - "dependencies:frontend"
     groups:
       frontend-npm-dependencies:
         patterns:
@@ -40,5 +47,4 @@ updates:
       interval: "weekly"
       day: "monday"
     labels:
-      - "dependencies"
-      - "docker"
+      - "dependencies:docker"
