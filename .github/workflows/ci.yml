@@ -9,9 +9,12 @@ on:
   pull_request:
     branches: ["main"]
 
+# On main, give every commit its own concurrency group (via SHA) so runs never cancel
+# each other — each landed commit goes through the full CI in parallel. On PR/other refs,
+# superseded runs are cancelled on new pushes to save resources.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   build-and-test:

@@ -13,7 +13,7 @@ fi
 
 echo "[pre-commit] Running spotlessApply..."
 ./gradlew spotlessApply --quiet
-git diff --name-only | xargs -r git add
+git diff --name-only -- '*.java' | xargs -r git add
 echo "[pre-commit] Spotless: OK"
 
 echo "[pre-commit] Running Prettier..."
