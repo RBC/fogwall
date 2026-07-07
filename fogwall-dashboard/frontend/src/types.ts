@@ -1,11 +1,5 @@
 export type PushStatus =
-  | 'PENDING'
-  | 'APPROVED'
-  | 'FORWARDED'
-  | 'REJECTED'
-  | 'CANCELED'
-  | 'RECEIVED'
-  | 'ERROR'
+  'PENDING' | 'APPROVED' | 'FORWARDED' | 'REJECTED' | 'CANCELED' | 'RECEIVED' | 'ERROR'
 
 export interface Step {
   id: string
