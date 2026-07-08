@@ -270,6 +270,39 @@ class FogwallConfigLoaderTest {
         assertFalse(config.getSecretScan().isEnabled());
     }
 
+    // --- envVarToConfigPath ---
+
+    @Test
+    void envVarToConfigPath_legacySimplePath() {
+        assertEquals("server.port", FogwallConfigLoader.envVarToConfigPath("FOGWALL_SERVER_PORT"));
+    }
+
+    @Test
+    void envVarToConfigPath_legacyThreeSegments() {
+        assertEquals(
+                "providers.github.enabled", FogwallConfigLoader.envVarToConfigPath("FOGWALL_PROVIDERS_GITHUB_ENABLED"));
+    }
+
+    @Test
+    void envVarToConfigPath_doubleUnderscore_hyphenatedKey() {
+        assertEquals(
+                "providers.gitea-ssh.api-token",
+                FogwallConfigLoader.envVarToConfigPath("FOGWALL_PROVIDERS__GITEA_SSH__API_TOKEN"));
+    }
+
+    @Test
+    void envVarToConfigPath_doubleUnderscore_noHyphensInSegments() {
+        assertEquals(
+                "providers.github.enabled",
+                FogwallConfigLoader.envVarToConfigPath("FOGWALL_PROVIDERS__GITHUB__ENABLED"));
+    }
+
+    @Test
+    void envVarToConfigPath_doubleUnderscore_hyphenatedTopLevelKey() {
+        // FOGWALL_SECRET_SCAN__ENABLED → secret-scan.enabled
+        assertEquals("secret-scan.enabled", FogwallConfigLoader.envVarToConfigPath("FOGWALL_SECRET_SCAN__ENABLED"));
+    }
+
     private Path writeYaml(String yaml) throws IOException {
         Path f = Files.createTempFile(tempDir, "override-", ".yml");
         Files.writeString(f, yaml);
