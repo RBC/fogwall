@@ -59,6 +59,10 @@ dependencies {
     // Core module
     implementation project(':fogwall-core')
 
+    // SSH transport (server listener + JGit SSH client for upstream forwarding)
+    implementation "org.apache.sshd:sshd-core:${minaSshdVersion}"
+    implementation "org.eclipse.jgit:org.eclipse.jgit.ssh.apache:${jgitVersion}"
+
     // Gestalt config (YAML source brings SnakeYAML transitively)
     implementation "com.github.gestalt-config:gestalt-core:${gestaltVersion}"
     implementation "com.github.gestalt-config:gestalt-yaml:${gestaltVersion}"

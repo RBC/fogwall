@@ -3,14 +3,15 @@ package com.rbc.fogwall.jetty;
 import com.rbc.fogwall.approval.ApprovalGateway;
 import com.rbc.fogwall.approval.UiApprovalGateway;
 import com.rbc.fogwall.config.CommitConfig;
+import com.rbc.fogwall.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.db.FetchStore;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.git.LocalRepositoryCache;
-import com.rbc.fogwall.jetty.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.ProviderRegistry;
 import com.rbc.fogwall.service.PushIdentityResolver;
+import com.rbc.fogwall.service.SshScmIdentityEnricher;
 import com.rbc.fogwall.tls.SslUtil;
 import com.rbc.fogwall.user.UserStore;
 
@@ -39,4 +40,5 @@ public record FogwallContext(
         LocalRepositoryCache storeForwardCache,
         LocalRepositoryCache proxyCache,
         SslUtil.UpstreamTls upstreamTls,
-        ProviderRegistry providerRegistry) {}
+        ProviderRegistry providerRegistry,
+        SshScmIdentityEnricher sshScmIdentityEnricher) {}

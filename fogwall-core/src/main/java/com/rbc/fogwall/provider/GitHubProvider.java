@@ -2,15 +2,21 @@ package com.rbc.fogwall.provider;
 
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.annotation.Nulls;
+import com.rbc.fogwall.ssh.SshKeyUtils;
 import java.net.URI;
+import java.util.Arrays;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hc.client5.http.fluent.Request;
+import org.apache.hc.core5.util.Timeout;
 import tools.jackson.databind.json.JsonMapper;
 
 @Slf4j
-public class GitHubProvider extends AbstractFogwallProvider implements TokenIdentityProvider {
+public class GitHubProvider extends AbstractFogwallProvider implements HttpTokenUserLookup, SshKeyFingerprintLookup {
 
     public static final String NAME = "github";
     public static final URI DEFAULT_URI = URI.create("https://github.com");
@@ -55,7 +61,7 @@ public class GitHubProvider extends AbstractFogwallProvider implements TokenIden
      * <p>Required token scope: {@code read:user} (or {@code user} for classic PATs).
      */
     @Override
-    public Optional<ScmUserInfo> fetchScmIdentity(String pushUsername, String token) {
+    public Optional<ScmUserInfo> fetchUserFromHttp(String pushUsername, String token) {
         try {
             var response = Request.get(getApiUrl() + "/user")
                     .addHeader("Authorization", "token " + token)
@@ -71,6 +77,40 @@ public class GitHubProvider extends AbstractFogwallProvider implements TokenIden
     }
 
     /**
+     * {@inheritDoc}
+     *
+     * <p>Calls the unauthenticated {@code GET /users/{login}/keys} endpoint. GitHub does not include a fingerprint
+     * field in the response, so fingerprints are computed from the raw public key string using
+     * {@link SshKeyUtils#fingerprint}.
+     */
+    @Override
+    public Set<String> fetchSshFingerprints(String login) {
+        try {
+            var response = Request.get(getApiUrl() + "/users/" + login + "/keys")
+                    .connectTimeout(Timeout.ofSeconds(10))
+                    .responseTimeout(Timeout.ofSeconds(10))
+                    .execute()
+                    .returnContent()
+                    .asString();
+            var keys = new JsonMapper().readValue(response, GitHubPublicKey[].class);
+            return Arrays.stream(keys)
+                    .map(k -> {
+                        try {
+                            return SshKeyUtils.fingerprint(k.key());
+                        } catch (Exception e) {
+                            log.warn("Could not fingerprint GitHub key for '{}': {}", login, e.getMessage());
+                            return null;
+                        }
+                    })
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+        } catch (Exception e) {
+            log.warn("Failed to fetch SSH keys for GitHub user '{}': {}", login, e.getMessage());
+            return Set.of();
+        }
+    }
+
+    /**
      * Determines if the provider is a GitHub Enterprise Cloud with data residency. These instances have a custom domain
      * (e.g. mycompany.ghe.com) and use a different API path from GHEC or self-hosted GHES.
      *
@@ -82,6 +122,9 @@ public class GitHubProvider extends AbstractFogwallProvider implements TokenIden
         return uri.getHost().endsWith(".ghe.com");
     }
 }
+
+/** Jackson deserialization target for the GitHub {@code GET /users/{login}/keys} response. */
+record GitHubPublicKey(long id, String key) {}
 
 /** Jackson deserialization target for the GitHub {@code GET /user} response. */
 record GitHubUserInfo(

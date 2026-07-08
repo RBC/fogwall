@@ -1,4 +1,8 @@
 server:
+  ssh:
+    enabled: true
+    # port: 2222
+    # SSH public keys are registered per-user on the profile page.
   # Allow the Vite dev server to make cross-origin requests to the backend.
   # Vite defaults to port 5173; adjust if you've changed it.
   allowed-origins:
@@ -6,6 +10,17 @@ server:
   # Use default h2 database for local development - save the sessions there as well
   session-store: jdbc
 
+providers:
+  gitea:
+    enabled: true
+    uri: http://localhost:3000
+  gitea-ssh:
+    enabled: true
+    type: forgejo
+    uri: ssh://git@localhost:3022
+    api-uri: http://localhost:3000  # needed for SCM identity enrichment — SSH URI can't be used for HTTP API calls
+    # api-token: <PAT>  # required when Gitea is configured with REQUIRE_SIGNIN_VIEW=true
+    #                    # no env var override — set via external config file or FOGWALL_CONFIG_PROFILES
 # Three users for local development:
 #   admin    — full dashboard access, can approve any push
 #   dev      — a developer account; add your SCM identity here to push through the proxy
@@ -30,12 +45,15 @@ users:
   - username: dev
     password-hash: "{noop}password"
     roles: [ADMIN, SELF_CERTIFY]
-    scm-identities: []
-      # Add your SCM identity here, e.g.:
-      # - provider: github
-      #   username: your-github-handle
+    scm-identities:
+      - provider: gitea
+        username: test-user
+      - provider: gitea-ssh
+        username: test-user
     emails:
       - dev@example.com
+    ssh-keys:
+        - public-key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILZutQPsqDrByIRlmp6JgAK8DSGzf7+SoKBzjCy+av2J fogwall-test@local"
 
   - username: reviewer
     password-hash: "{noop}password"
@@ -90,11 +108,18 @@ attestations:
 # admin:    can also approve via the dashboard by virtue of its ADMIN role
 permissions:
   - username: dev
-    provider: github
+    provider: gitea
     match:
       target: SLUG
-      value: /RBC/fogwall
-      type: LITERAL
+      value: .*
+      type: REGEX
+    grant: PUSH
+  - username: dev
+    provider: gitea-ssh
+    match:
+      target: SLUG
+      value: .*
+      type: REGEX
     grant: PUSH
   # Add more permissions for your own repos, e.g.:
   # - username: dev
@@ -113,7 +138,7 @@ rules:
     - enabled: true
       order: 20
       operation: PUSH
-      provider: github
+      provider: gitea
       match:
         target: NAME
         value: "*.github.io"
@@ -124,11 +149,19 @@ rules:
     - enabled: true
       order: 100
       operation: BOTH
-      provider: github
+      provider: gitea
       match:
         target: SLUG
-        value: /RBC/fogwall
-        type: LITERAL
+        value: .*
+        type: REGEX
+    - enabled: true
+      order: 101
+      operation: PUSH
+      provider: gitea-ssh
+      match:
+        target: SLUG
+        value: .*
+        type: REGEX
 
     # Add more allow rules for your own repos, e.g.:
     # - enabled: true

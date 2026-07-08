@@ -602,13 +602,15 @@ developer machines.
 
 | Path                                       | Library                  | Destination               |
 | ------------------------------------------ | ------------------------ | ------------------------- |
-| Store-and-forward upstream push            | JGit Transport (HTTPS)   | SCM provider git endpoint |
+| Store-and-forward upstream push (HTTPS)    | JGit Transport (HTTPS)   | SCM provider git endpoint |
+| Store-and-forward upstream push (SSH)      | JGit Transport (SSH)     | SCM provider SSH endpoint |
 | Transparent proxy forwarding               | Jetty HttpClient (HTTPS) | SCM provider git endpoint |
 | SCM identity resolution (PAT verification) | Apache HttpClient 5      | SCM provider REST API     |
+| SSH fingerprint lookup                     | Apache HttpClient 5      | SCM provider REST API     |
 
-All three paths must be able to reach the upstream SCM provider. A common operational mistake is opening the firewall
-for one path but not the others — pushes appear to succeed locally but fail when the proxy tries to verify the
-committer's identity via the API.
+All paths must be able to reach the upstream SCM provider. A common operational mistake is opening the firewall for one
+path but not the others — pushes appear to succeed locally but fail when the proxy tries to verify the committer's
+identity via the API.
 
 ### Corporate HTTP proxy
 
@@ -768,6 +770,134 @@ that needs an audit trail.
 
 ---
 
+## SSH transport
+
+fogwall can accept pushes over SSH on port 2222 (default). This is an alternative to the HTTP push path — not a
+replacement. SSH transport and HTTP transport run side-by-side; a provider can be reached via either or both.
+
+### How SSH identity verification works
+
+The SSH push path enforces the **same compliance guarantee** as the HTTP path — every push is tied to a verified SCM
+user — but the mechanism is different because there is no token available:
+
+1. **Inbound MINA auth (connection gate):** the client's public key must be registered in the pusher's fogwall profile
+   (`ssh-keys`). This is equivalent to HTTP Basic auth — it authenticates the proxy user.
+2. **SCM identity verification (compliance gate):** fogwall calls the provider REST API to fetch the SSH public keys
+   registered by each SCM identity linked to the proxy user, then checks whether the connecting key's SHA-256
+   fingerprint is among them. If it is, the push record's `scmUsername` is set to the matching SCM login. If it is not,
+   **the push is blocked** — the same outcome as a failed token verification on the HTTP path.
+
+Both steps are required. Step 1 alone is not sufficient — a key registered only in fogwall (but not on the SCM) will
+clear MINA auth but fail step 2.
+
+**Provider support:** fingerprint lookup is implemented for GitHub, GitLab, Forgejo, and Gitea. Providers that do not
+implement this lookup (Bitbucket, generic proxy) will block all SSH pushes fail-closed. SSH is intentionally not
+supported for those providers until a compliant identity verification path exists.
+
+### Configuring an SSH provider
+
+An SSH provider is a standard provider entry with an SSH-scheme URI. For a self-hosted Gitea instance:
+
+```yaml
+providers:
+  gitea-ssh:
+    type: forgejo
+    uri: ssh://git@gitea.corp.example.com # SSH transport URI — routes inbound git-receive-pack
+    api-uri: http://gitea.corp.example.com:3000 # only needed when HTTP API port differs from standard
+    api-token: <service-account-PAT> # see below
+```
+
+The `uri` field controls SSH push routing — the path clients use is
+`ssh://fogwall-host:2222/<provider-host>/<org>/<repo>.git`. The `api-uri` is only required when the HTTP API port cannot
+be derived from the `uri` (see below).
+
+Permissions and access rules for SSH providers work identically to HTTP providers:
+
+```yaml
+permissions:
+  - username: alice
+    provider: gitea-ssh
+    match:
+      target: SLUG
+      value: /myorg/.*
+      type: REGEX
+    grant: PUSH
+```
+
+### SCM identity link for SSH
+
+Users must have an `scm-identities` entry for the SSH provider (in addition to any HTTP provider entry). The provider ID
+is the provider's name in the `providers:` block:
+
+```yaml
+users:
+  - username: alice
+    scm-identities:
+      - provider: gitea-ssh # must match the provider name exactly
+        username: alice-gitea
+```
+
+This is separate from any HTTP provider identity because the provider IDs are different. A user pushing via both HTTP
+and SSH will have two identity entries — one for the HTTP provider, one for the SSH provider.
+
+### The `api-token` requirement
+
+The provider REST API is called to fetch SSH public keys for registered SCM identities. GitHub's endpoint
+(`GET /users/{login}/keys`) is public — no token is needed. Forgejo and GitLab require authentication when the instance
+is configured with `REQUIRE_SIGNIN_VIEW=true` (common in corporate deployments where the git server is not publicly
+accessible).
+
+Create a service account on the upstream SCM and generate a PAT with `read:user` scope (Forgejo) or `read_user` scope
+(GitLab). This account does not need repository access — it only needs to list user SSH public keys. Set the token in
+the provider config:
+
+```yaml
+providers:
+  gitea-ssh:
+    type: forgejo
+    uri: ssh://git@gitea.corp.example.com
+    api-token: <service-account-PAT>
+```
+
+There is no environment variable override for `api-token` (the env var mechanism does not support hyphenated config
+keys). Use a profile config file to supply the token outside of the checked-in base config:
+
+```yaml
+# /app/conf/fogwall-local.yml  (mounted into the container, not committed)
+providers:
+  gitea-ssh:
+    api-token: gta_xxxxx
+```
+
+### `api-uri` — when it is needed
+
+For production deployments where SSH and HTTPS share the same hostname (the normal case), the HTTP API URL is derived
+automatically from the SSH URI: `ssh://git@host` → `https://host/api/v1`. No `api-uri` is needed.
+
+`api-uri` is only required when the HTTP API runs on a non-standard port that cannot be inferred from the SSH URI — for
+example, a local development Gitea where SSH is on 3022 and HTTP is on 3000:
+
+```yaml
+gitea-ssh:
+  type: forgejo
+  uri: ssh://git@localhost:3022
+  api-uri: http://localhost:3000
+```
+
+### Requiring agent forwarding
+
+Fogwall uses the client's forwarded SSH agent to authenticate outbound SSH connections to the upstream SCM. The client
+**must** connect with `ssh -A` (or `ForwardAgent yes` in `~/.ssh/config`). If agent forwarding is absent, the push is
+blocked with a clear error:
+
+```text
+error: SSH agent forwarding required — connect with 'ssh -A' or set 'ForwardAgent yes' in ~/.ssh/config
+```
+
+There is no configuration to disable this requirement — fogwall never reads local identity files for upstream auth.
+
+---
+
 ## Common operational problems
 
 ### Push is rejected with "repository not permitted"
@@ -795,6 +925,25 @@ mode does not affect it. Check:
 1. Does the user's profile have an `scm-identities` entry for the correct provider?
 2. Does the token have the required API scope to call `GET /user`?
 
+### SSH push rejected: SSH key not linked to any SCM identity
+
+The fingerprint of the connecting SSH key was not found among the keys registered on the upstream SCM for the linked SCM
+identity. Possible causes:
+
+1. The key is in fogwall (`ssh-keys`) but not on the upstream SCM account. Have the user add it in their SCM account
+   settings.
+2. The linked `scm-identities` entry refers to the wrong provider or username. The provider must be the SSH provider
+   name (e.g. `gitea-ssh`), not the HTTP provider name (`gitea`).
+3. The `api-token` is missing or has expired, causing the key lookup to return an empty list. Check the server log for
+   `Failed to fetch SSH keys for ... user '...'` and renew the token.
+
+### SSH push rejected: SSH identity verification not supported by provider
+
+The provider used for this push does not implement SSH fingerprint lookup (e.g. `type: generic`). The SSH path is
+fail-closed — pushes are blocked unless the provider can verify the connecting key against the SCM user's registered
+keys. Switch to a supported provider type (`forgejo`, `gitlab`, or `github`). Opt-in fail-open behaviour for unsupported
+providers is planned as a follow-up feature.
+
 ### Push blocked or warned: commit email mismatch
 
 One or more commit author/committer emails are not registered to the authenticated user. This is controlled by
@@ -804,6 +953,15 @@ One or more commit author/committer emails are not registered to the authenticat
   (`git config user.email`), and that the commits were not authored by someone else.
 - In `warn` mode the push goes through but the mismatch is logged and visible in the push record. Switch to `strict`
   once you are confident emails are populated for all users.
+
+### SSH push still blocked after adding a key to the SCM account
+
+The SSH fingerprint enricher caches results per `(provider, scm-login)` with a 7-day TTL. If a user registers a new SSH
+key on their SCM account after the cache was last populated, the new fingerprint will not be visible until the entry
+expires or the server restarts. To force an immediate re-fetch without a restart, the operator can reload config (if
+live reload is configured) or restart the server. Future pushes from that user will populate a fresh cache entry.
+
+The same applies when a key is removed from the SCM account — the old fingerprint remains cached until TTL expiry.
 
 ### OIDC login fails / redirect loop
 

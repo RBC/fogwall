@@ -7,11 +7,11 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
+import com.rbc.fogwall.config.FogwallConfig;
+import com.rbc.fogwall.config.ServerConfig;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
-import com.rbc.fogwall.jetty.config.FogwallConfig;
-import com.rbc.fogwall.jetty.config.ServerConfig;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import java.util.List;

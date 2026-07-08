@@ -52,7 +52,7 @@ public class BitbucketCredentialRewriteHook implements FogwallHook {
             return;
         }
 
-        Optional<ScmUserInfo> identity = provider.fetchScmIdentity(pushEmail, pushToken);
+        Optional<ScmUserInfo> identity = provider.fetchUserFromHttp(pushEmail, pushToken);
         if (identity.isEmpty()) {
             log.debug(
                     "Could not resolve Bitbucket upstream username for '{}' — credentials will be forwarded as-is",

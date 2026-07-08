@@ -14,6 +14,8 @@ public class StaticUserStore implements ReadOnlyUserStore {
     private final Map<String, String> emailIndex;
     // key: "provider:scmUsername" → proxy username
     private final Map<String, String> scmIdentityIndex;
+    // key: SSH fingerprint → proxy username
+    private final Map<String, String> sshFingerprintIndex;
 
     public StaticUserStore(List<UserEntry> users) {
         this.byUsername = users.stream().collect(Collectors.toMap(UserEntry::getUsername, Function.identity()));
@@ -23,6 +25,9 @@ public class StaticUserStore implements ReadOnlyUserStore {
         this.scmIdentityIndex = users.stream()
                 .flatMap(u -> u.getScmIdentities().stream()
                         .map(id -> Map.entry(scmKey(id.getProvider(), id.getUsername()), u.getUsername())))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> a));
+        this.sshFingerprintIndex = users.stream()
+                .flatMap(u -> u.getSshKeys().stream().map(k -> Map.entry(k.getFingerprint(), u.getUsername())))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> a));
     }
 
@@ -42,6 +47,13 @@ public class StaticUserStore implements ReadOnlyUserStore {
     public Optional<UserEntry> findByScmIdentity(String provider, String scmUsername) {
         if (provider == null || scmUsername == null) return Optional.empty();
         String username = scmIdentityIndex.get(scmKey(provider, scmUsername));
+        return username != null ? findByUsername(username) : Optional.empty();
+    }
+
+    @Override
+    public Optional<UserEntry> findBySshFingerprint(String fingerprint) {
+        if (fingerprint == null) return Optional.empty();
+        String username = sshFingerprintIndex.get(fingerprint);
         return username != null ? findByUsername(username) : Optional.empty();
     }
 

@@ -5,11 +5,13 @@ import com.mongodb.client.MongoClients;
 import com.rbc.fogwall.db.mongo.MongoFetchStore;
 import com.rbc.fogwall.db.mongo.MongoPushStore;
 import com.rbc.fogwall.db.mongo.MongoScmTokenCache;
+import com.rbc.fogwall.db.mongo.MongoSshFingerprintCache;
 import com.rbc.fogwall.db.mongo.MongoUrlRuleRegistry;
 import com.rbc.fogwall.permission.MongoRepoPermissionStore;
 import com.rbc.fogwall.permission.PermissionStore;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.service.ScmTokenCache;
+import com.rbc.fogwall.service.SshFingerprintCache;
 import com.rbc.fogwall.user.MongoUserStore;
 import com.rbc.fogwall.user.UserStore;
 import java.time.Duration;
@@ -79,6 +81,13 @@ public final class MongoStoreFactory implements AutoCloseable {
         MongoUserStore store = new MongoUserStore(client, databaseName, tokenCache);
         store.initialize();
         return store;
+    }
+
+    /** Create and initialize a {@link SshFingerprintCache} backed by this factory's client. */
+    public SshFingerprintCache sshFingerprintCache(Duration ttl) {
+        MongoSshFingerprintCache cache = new MongoSshFingerprintCache(client, databaseName, ttl);
+        cache.initialize();
+        return cache;
     }
 
     /** Create and initialize a {@link ScmTokenCache} backed by this factory's client. */

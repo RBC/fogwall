@@ -1,13 +1,17 @@
 package com.rbc.fogwall.dashboard.controller;
 
+import com.rbc.fogwall.ssh.SshKeyUtils;
 import com.rbc.fogwall.user.EmailConflictException;
 import com.rbc.fogwall.user.LockedByConfigException;
 import com.rbc.fogwall.user.LockedEmailException;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
 import com.rbc.fogwall.user.ScmIdentityConflictException;
+import com.rbc.fogwall.user.SshKeyConflictException;
+import com.rbc.fogwall.user.SshKeyEntry;
 import com.rbc.fogwall.user.UserStore;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -15,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -117,6 +122,62 @@ public class ProfileController {
         } catch (LockedByConfigException e) {
             return LOCKED_BY_CONFIG;
         }
+        return ResponseEntity.noContent().build();
+    }
+
+    // ---- SSH key management ----
+
+    @Operation(operationId = "listSshKeys", summary = "List the current user's registered SSH public keys")
+    @GetMapping("/ssh-keys")
+    public ResponseEntity<?> listSshKeys() {
+        if (!(userStore instanceof UserStore mutable)) return NOT_MUTABLE;
+        List<SshKeyEntry> keys = mutable.findSshKeys(currentUsername());
+        return ResponseEntity.ok(keys.stream()
+                .map(k -> Map.of(
+                        "id", k.getId(),
+                        "fingerprint", k.getFingerprint(),
+                        "publicKey", k.getPublicKey(),
+                        "label", k.getLabel() != null ? k.getLabel() : "",
+                        "createdAt", k.getCreatedAt().toString()))
+                .toList());
+    }
+
+    @Operation(operationId = "addSshKey", summary = "Register an SSH public key for the current user")
+    @PostMapping("/ssh-keys")
+    public ResponseEntity<?> addSshKey(@RequestBody Map<String, String> body) {
+        if (!(userStore instanceof UserStore mutable)) return NOT_MUTABLE;
+        String publicKey = body.get("publicKey");
+        String label = body.getOrDefault("label", "");
+        if (publicKey == null || publicKey.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "publicKey is required"));
+        }
+        String normalised;
+        String fingerprint;
+        try {
+            normalised = SshKeyUtils.normalise(publicKey.strip());
+            fingerprint = SshKeyUtils.fingerprint(normalised);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Invalid SSH public key: " + e.getMessage()));
+        }
+        try {
+            SshKeyEntry entry = mutable.addSshKey(currentUsername(), fingerprint, normalised, label);
+            return ResponseEntity.ok(Map.of(
+                    "id", entry.getId(),
+                    "fingerprint", entry.getFingerprint(),
+                    "publicKey", entry.getPublicKey(),
+                    "label", entry.getLabel() != null ? entry.getLabel() : "",
+                    "createdAt", entry.getCreatedAt().toString()));
+        } catch (SshKeyConflictException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", "SSH key is already registered to another user"));
+        }
+    }
+
+    @Operation(operationId = "removeSshKey", summary = "Remove a registered SSH public key")
+    @DeleteMapping("/ssh-keys/{id}")
+    public ResponseEntity<?> removeSshKey(@PathVariable String id) {
+        if (!(userStore instanceof UserStore mutable)) return NOT_MUTABLE;
+        mutable.removeSshKey(currentUsername(), id);
         return ResponseEntity.noContent().build();
     }
 

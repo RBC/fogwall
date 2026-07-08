@@ -17,10 +17,21 @@ class GitHelper {
     private final Path workDir;
     private String authorName;
     private String authorEmail;
+    private String sshAuthSock;
+    private String gitSshCommand;
 
     /** Creates a helper rooted at an existing directory. */
     GitHelper(Path workDir) {
         this.workDir = workDir;
+    }
+
+    /**
+     * Configures SSH transport environment for this helper. When set, {@code SSH_AUTH_SOCK} and {@code GIT_SSH_COMMAND}
+     * are propagated to every git subprocess so that SSH pushes use the specified agent socket and SSH wrapper command.
+     */
+    void setSshEnv(String sshAuthSock, String gitSshCommand) {
+        this.sshAuthSock = sshAuthSock;
+        this.gitSshCommand = gitSshCommand;
     }
 
     /** Clones {@code remoteUrl} into a subdirectory named {@code dirName} under {@link #workDir}. */
@@ -209,6 +220,8 @@ class GitHelper {
         pb.directory(dir.toFile());
         pb.environment().put("GIT_TERMINAL_PROMPT", "0");
         pb.environment().put("GIT_SSL_NO_VERIFY", "1");
+        if (sshAuthSock != null) pb.environment().put("SSH_AUTH_SOCK", sshAuthSock);
+        if (gitSshCommand != null) pb.environment().put("GIT_SSH_COMMAND", gitSshCommand);
         // Propagate author identity when set
         if (authorName != null) {
             pb.environment().put("GIT_AUTHOR_NAME", authorName);

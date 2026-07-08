@@ -6,6 +6,7 @@ import com.rbc.fogwall.approval.ApprovalGateway;
 import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.config.DiffScanConfig;
 import com.rbc.fogwall.config.GpgConfig;
+import com.rbc.fogwall.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.config.SecretScanConfig;
 import com.rbc.fogwall.db.FetchStore;
 import com.rbc.fogwall.db.PushStore;
@@ -14,7 +15,6 @@ import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.git.StoreAndForwardReceivePackFactory;
 import com.rbc.fogwall.git.StoreAndForwardRepositoryResolver;
 import com.rbc.fogwall.git.StoreAndForwardUploadPackFactory;
-import com.rbc.fogwall.jetty.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.BitbucketProvider;
@@ -82,45 +82,85 @@ public final class FogwallServletRegistrar {
 
         for (FogwallProvider provider : providers) {
             log.info("Registering provider: {}", provider.getName());
-            registerGitServlet(
-                    context,
-                    provider,
-                    fogwallContext.storeForwardCache(),
-                    commitConfigSupplier,
-                    diffScanConfigSupplier,
-                    secretScanConfigSupplier,
-                    fogwallContext.pushStore(),
-                    fogwallContext.serviceUrl(),
-                    fogwallContext.approvalGateway(),
-                    fogwallContext.pushIdentityResolver(),
-                    fogwallContext.repoPermissionService(),
-                    fogwallContext.heartbeatIntervalSeconds(),
-                    fogwallContext.failFast(),
-                    fogwallContext.upstreamConnectTimeoutSeconds(),
-                    fogwallContext.urlRuleRegistry(),
-                    fogwallContext.fetchStore());
-            registerProxyServlet(
-                    context,
-                    provider,
-                    fogwallContext.pushStore(),
-                    fogwallContext.proxyConnectTimeoutSeconds(),
-                    fogwallContext.upstreamTls());
-            registerCoreFilters(
-                    context,
-                    provider,
-                    fogwallContext.proxyCache(),
-                    configBuilder,
-                    commitConfigSupplier,
-                    diffScanConfigSupplier,
-                    secretScanConfigSupplier,
-                    fogwallContext.pushStore(),
-                    fogwallContext.serviceUrl(),
-                    fogwallContext.approvalGateway(),
-                    fogwallContext.pushIdentityResolver(),
-                    fogwallContext.repoPermissionService(),
-                    fogwallContext.fetchStore(),
-                    fogwallContext.urlRuleRegistry());
+            if (isHttpProvider(provider)) {
+                registerGitServlet(
+                        context,
+                        provider,
+                        fogwallContext.storeForwardCache(),
+                        commitConfigSupplier,
+                        diffScanConfigSupplier,
+                        secretScanConfigSupplier,
+                        fogwallContext.pushStore(),
+                        fogwallContext.serviceUrl(),
+                        fogwallContext.approvalGateway(),
+                        fogwallContext.pushIdentityResolver(),
+                        fogwallContext.repoPermissionService(),
+                        fogwallContext.heartbeatIntervalSeconds(),
+                        fogwallContext.failFast(),
+                        fogwallContext.upstreamConnectTimeoutSeconds(),
+                        fogwallContext.urlRuleRegistry(),
+                        fogwallContext.fetchStore());
+                registerProxyServlet(
+                        context,
+                        provider,
+                        fogwallContext.pushStore(),
+                        fogwallContext.proxyConnectTimeoutSeconds(),
+                        fogwallContext.upstreamTls());
+                registerCoreFilters(
+                        context,
+                        provider,
+                        fogwallContext.proxyCache(),
+                        configBuilder,
+                        commitConfigSupplier,
+                        diffScanConfigSupplier,
+                        secretScanConfigSupplier,
+                        fogwallContext.pushStore(),
+                        fogwallContext.serviceUrl(),
+                        fogwallContext.approvalGateway(),
+                        fogwallContext.pushIdentityResolver(),
+                        fogwallContext.repoPermissionService(),
+                        fogwallContext.fetchStore(),
+                        fogwallContext.urlRuleRegistry());
+            } else {
+                log.info(
+                        "Skipping HTTP servlet registration for {} — SSH provider (scheme={})",
+                        provider.getName(),
+                        provider.getUri().getScheme());
+            }
         }
+    }
+
+    /** Returns {@code true} when the provider URI uses an HTTP/HTTPS scheme and HTTP servlets should be registered. */
+    static boolean isHttpProvider(FogwallProvider provider) {
+        String scheme = provider.getUri().getScheme();
+        return scheme != null && (scheme.equals("http") || scheme.equals("https"));
+    }
+
+    /**
+     * Builds a {@link StoreAndForwardReceivePackFactory} for the given provider using the current context and config.
+     * Used by the SSH server to share the same factory the HTTP push servlet uses.
+     */
+    public static StoreAndForwardReceivePackFactory buildReceivePackFactory(
+            FogwallContext fogwallContext, JettyConfigurationBuilder configBuilder, FogwallProvider provider) {
+        ConfigHolder configHolder = configBuilder.buildConfigHolder();
+        var factory = new StoreAndForwardReceivePackFactory(
+                provider,
+                configHolder::getCommitConfig,
+                configHolder::getDiffScanConfig,
+                configHolder::getSecretScanConfig,
+                GpgConfig.defaultConfig(),
+                fogwallContext.repoPermissionService(),
+                fogwallContext.pushIdentityResolver(),
+                fogwallContext.pushStore(),
+                fogwallContext.approvalGateway(),
+                fogwallContext.serviceUrl(),
+                Duration.ofSeconds(fogwallContext.heartbeatIntervalSeconds()),
+                fogwallContext.urlRuleRegistry());
+        factory.setFailFast(configBuilder.isFailFast());
+        factory.setConnectTimeoutSeconds(fogwallContext.upstreamConnectTimeoutSeconds());
+        factory.setCache(fogwallContext.storeForwardCache());
+        factory.setSshScmIdentityEnricher(fogwallContext.sshScmIdentityEnricher());
+        return factory;
     }
 
     public static void registerGitServlet(

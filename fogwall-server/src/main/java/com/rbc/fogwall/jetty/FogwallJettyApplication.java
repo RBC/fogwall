@@ -1,10 +1,11 @@
 package com.rbc.fogwall.jetty;
 
-import com.rbc.fogwall.jetty.config.FogwallConfigLoader;
-import com.rbc.fogwall.jetty.config.JettyConfigurationBuilder;
-import com.rbc.fogwall.jetty.config.TlsConfig;
+import com.rbc.fogwall.config.FogwallConfigLoader;
+import com.rbc.fogwall.config.JettyConfigurationBuilder;
+import com.rbc.fogwall.config.TlsConfig;
 import com.rbc.fogwall.jetty.reload.LiveConfigLoader;
 import com.rbc.fogwall.provider.FogwallProvider;
+import com.rbc.fogwall.ssh.SshGitServer;
 import com.rbc.fogwall.tls.SslUtil;
 import java.nio.file.Path;
 import java.util.List;
@@ -71,6 +72,10 @@ public class FogwallJettyApplication {
 
         FogwallServletRegistrar.registerProviders(context, ctx, configBuilder, providers);
 
+        SshGitServer sshGitServer =
+                SshServerRegistrar.startIfEnabled(fogwallConfig.getServer().getSsh(), providers, ctx, configBuilder);
+
+        final SshGitServer finalSshGitServer = sshGitServer;
         var liveConfigLoader = new LiveConfigLoader(
                 configBuilder.buildConfigHolder(),
                 fogwallConfig,
@@ -82,6 +87,9 @@ public class FogwallJettyApplication {
             @Override
             public void lifeCycleStopping(LifeCycle event) {
                 liveConfigLoader.stop();
+                if (finalSshGitServer != null) {
+                    finalSshGitServer.stop();
+                }
             }
         });
 

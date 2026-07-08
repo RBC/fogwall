@@ -2,13 +2,16 @@ import { useEffect, useState } from 'react'
 import {
   addEmail,
   addScmIdentity,
+  addSshKey,
   fetchMe,
+  fetchMySshKeys,
   fetchProviders,
   removeEmail,
   removeScmIdentity,
+  removeSshKey,
 } from '../api'
 import { OperationsBadge, PathTypeBadge } from '../components/PermissionBadges'
-import type { CurrentUser, EmailEntry, RepoPermission, ScmIdentity } from '../types'
+import type { CurrentUser, EmailEntry, RepoPermission, ScmIdentity, SshKeyEntry } from '../types'
 
 function LockedBadge({ source }: { source: string }) {
   const title =
@@ -30,8 +33,15 @@ export function Profile() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const [tab, setTab] = useState<'emails' | 'identities' | 'permissions'>('emails')
+  const [tab, setTab] = useState<'emails' | 'identities' | 'sshkeys' | 'permissions'>('emails')
   const [permissions, setPermissions] = useState<RepoPermission[]>([])
+
+  const [sshKeys, setSshKeys] = useState<SshKeyEntry[]>([])
+  const [newSshKey, setNewSshKey] = useState('')
+  const [newSshLabel, setNewSshLabel] = useState('')
+  const [sshLabelTouched, setSshLabelTouched] = useState(false)
+  const [sshError, setSshError] = useState<string | null>(null)
+  const [sshBusy, setSshBusy] = useState(false)
 
   const [newEmail, setNewEmail] = useState('')
   const [emailError, setEmailError] = useState<string | null>(null)
@@ -56,6 +66,9 @@ export function Profile() {
         setProviders(list)
         if (list.length > 0) setNewProvider(list[0].id)
       })
+      .catch(() => {})
+    fetchMySshKeys()
+      .then((keys: SshKeyEntry[]) => setSshKeys(keys))
       .catch(() => {})
   }, [])
 
@@ -121,6 +134,34 @@ export function Profile() {
     }
   }
 
+  async function handleAddSshKey(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newSshKey.trim()) return
+    setSshBusy(true)
+    setSshError(null)
+    try {
+      const entry = await addSshKey(newSshKey.trim(), newSshLabel.trim())
+      setSshKeys((prev) => [...prev, entry])
+      setNewSshKey('')
+      setNewSshLabel('')
+      setSshLabelTouched(false)
+    } catch (err: unknown) {
+      setSshError(err instanceof Error ? err.message : 'Failed to add SSH key')
+    } finally {
+      setSshBusy(false)
+    }
+  }
+
+  async function handleRemoveSshKey(key: SshKeyEntry) {
+    setSshError(null)
+    try {
+      await removeSshKey(key.id)
+      setSshKeys((prev) => prev.filter((k) => k.id !== key.id))
+    } catch (err: unknown) {
+      setSshError(err instanceof Error ? err.message : 'Failed to remove SSH key')
+    }
+  }
+
   if (loading)
     return (
       <div className="max-w-2xl mx-auto px-4 py-16 text-center text-gray-400 dark:text-gray-500">
@@ -177,7 +218,7 @@ export function Profile() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200 dark:border-slate-700">
-        {(['emails', 'identities', 'permissions'] as const).map((t) => (
+        {(['emails', 'identities', 'sshkeys', 'permissions'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -192,7 +233,9 @@ export function Profile() {
               ? 'Email Addresses'
               : t === 'identities'
                 ? 'SCM Identities'
-                : 'Permissions'}
+                : t === 'sshkeys'
+                  ? 'SSH Keys'
+                  : 'Permissions'}
           </button>
         ))}
       </div>
@@ -251,6 +294,92 @@ export function Profile() {
             >
               Add
             </button>
+          </form>
+        </div>
+      )}
+
+      {/* SSH Keys tab */}
+      {tab === 'sshkeys' && (
+        <div className="space-y-4">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            SSH public keys used to authenticate git push over SSH. Register the same key you use
+            with <code className="text-xs bg-gray-100 dark:bg-slate-700 px-1 rounded">ssh -A</code>.
+            Your key fingerprint is looked up on push to identify you.
+          </p>
+
+          {sshKeys.length === 0 ? (
+            <p className="text-sm text-gray-400 italic dark:text-gray-500">
+              No SSH keys registered.
+            </p>
+          ) : (
+            <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white dark:bg-slate-800 dark:border-slate-700 dark:divide-gray-700">
+              {sshKeys.map((key) => (
+                <li key={key.id} className="px-4 py-3 text-sm space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                      {key.label || (
+                        <span className="italic text-gray-400 dark:text-gray-500">unlabelled</span>
+                      )}
+                      {key.locked && <LockedBadge source="config" />}
+                    </span>
+                    {!key.locked && (
+                      <button
+                        onClick={() => handleRemoveSshKey(key)}
+                        className="text-gray-400 hover:text-red-500 transition-colors text-xs dark:text-gray-500 dark:hover:text-red-400"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <p className="font-mono text-xs text-gray-500 dark:text-gray-400 break-all">
+                    {key.fingerprint}
+                  </p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">
+                    {key.locked
+                      ? 'Defined in server configuration'
+                      : `Added ${new Date(key.createdAt).toLocaleDateString()}`}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {sshError && <p className="text-sm text-red-600 dark:text-red-400">{sshError}</p>}
+
+          <form onSubmit={handleAddSshKey} className="space-y-2">
+            <textarea
+              value={newSshKey}
+              onChange={(e) => {
+                const val = e.target.value
+                setNewSshKey(val)
+                if (!sshLabelTouched) {
+                  const comment = val.trim().split(/\s+/)[2] ?? ''
+                  setNewSshLabel(comment)
+                }
+              }}
+              placeholder="ssh-ed25519 AAAA... or ssh-rsa AAAA..."
+              rows={3}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm font-mono focus:border-slate-500 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400"
+            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newSshLabel}
+                onChange={(e) => {
+                  setNewSshLabel(e.target.value)
+                  setSshLabelTouched(true)
+                }}
+                placeholder="Label (optional)"
+                className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400"
+              />
+              <button
+                type="submit"
+                disabled={sshBusy || !newSshKey.trim()}
+                className="px-4 py-2 rounded bg-slate-700 text-white text-sm hover:bg-slate-600 disabled:opacity-50 transition-colors"
+              >
+                Add
+              </button>
+            </div>
           </form>
         </div>
       )}

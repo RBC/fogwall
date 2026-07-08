@@ -4,15 +4,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.rbc.fogwall.approval.AutoApprovalGateway;
 import com.rbc.fogwall.approval.UiApprovalGateway;
+import com.rbc.fogwall.config.*;
 import com.rbc.fogwall.db.PushStoreFactory;
 import com.rbc.fogwall.db.model.AccessRule;
 import com.rbc.fogwall.db.model.MatchType;
 import com.rbc.fogwall.permission.RepoPermission;
-import com.rbc.fogwall.provider.BitbucketProvider;
-import com.rbc.fogwall.provider.FogwallProvider;
-import com.rbc.fogwall.provider.ForgejoProvider;
-import com.rbc.fogwall.provider.GitHubProvider;
-import com.rbc.fogwall.provider.GitLabProvider;
+import com.rbc.fogwall.provider.*;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;

@@ -2,6 +2,9 @@ package com.rbc.fogwall.jetty.config;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.rbc.fogwall.config.FogwallConfig;
+import com.rbc.fogwall.config.FogwallConfigLoader;
+import com.rbc.fogwall.config.ProviderConfig;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

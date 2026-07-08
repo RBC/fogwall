@@ -1,7 +1,9 @@
 package com.rbc.fogwall.e2e;
 
 import com.rbc.fogwall.approval.AutoApprovalGateway;
+import com.rbc.fogwall.config.FogwallConfigLoader;
 import com.rbc.fogwall.config.GpgConfig;
+import com.rbc.fogwall.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.PushStoreFactory;
 import com.rbc.fogwall.db.memory.InMemoryUrlRuleRegistry;
@@ -9,8 +11,6 @@ import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.git.StoreAndForwardReceivePackFactory;
 import com.rbc.fogwall.git.StoreAndForwardRepositoryResolver;
 import com.rbc.fogwall.git.StoreAndForwardUploadPackFactory;
-import com.rbc.fogwall.jetty.config.FogwallConfigLoader;
-import com.rbc.fogwall.jetty.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.jetty.reload.LiveConfigLoader;
 import com.rbc.fogwall.jetty.reload.LiveConfigLoader.Section;

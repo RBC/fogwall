@@ -27,6 +27,12 @@ public class PushContext {
     private String pushToken;
     private String repoSlug;
 
+    /**
+     * Transport context for this push — carries pre-authenticated identity (SSH) and upstream transport configuration.
+     * Defaults to {@link PushTransport#http()} so HTTP pushes need not set it explicitly.
+     */
+    private PushTransport transport = PushTransport.http();
+
     // Resolved upstream username for Bitbucket pushes — written by BitbucketCredentialRewriteHook.
     private String upstreamUser;
 

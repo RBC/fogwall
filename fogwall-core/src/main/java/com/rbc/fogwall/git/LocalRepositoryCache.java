@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.TransportConfigCallback;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.transport.CredentialsProvider;
@@ -117,18 +118,29 @@ public class LocalRepositoryCache {
      */
     public Repository getOrClone(String remoteUrl, CredentialsProvider credentials)
             throws GitAPIException, IOException {
+        return getOrClone(remoteUrl, credentials, null);
+    }
+
+    /**
+     * Get or create a local clone of a remote repository, with an optional {@link TransportConfigCallback} applied to
+     * every clone and fetch operation. Use this overload when per-request transport configuration is needed (e.g. SSH
+     * agent forwarding) — the callback is scoped to this call and never stored globally.
+     */
+    public Repository getOrClone(
+            String remoteUrl, CredentialsProvider credentials, TransportConfigCallback transportConfig)
+            throws GitAPIException, IOException {
         String cacheKey = getCacheKey(remoteUrl);
 
         CachedRepository cached = cache.get(cacheKey);
         if (cached != null && cached.isValid()) {
             log.debug("Using cached repository for: {}", remoteUrl);
-            refreshIfStale(cached, cacheKey, credentials);
+            refreshIfStale(cached, cacheKey, credentials, transportConfig);
             cached.repository.incrementOpen();
             return cached.repository;
         }
 
         log.info("Cloning repository from: {}", remoteUrl);
-        return cloneOrFetch(remoteUrl, cacheKey, credentials);
+        return cloneOrFetch(remoteUrl, cacheKey, credentials, transportConfig);
     }
 
     /**
@@ -139,7 +151,11 @@ public class LocalRepositoryCache {
      * prevents two simultaneous JGit fetch operations against the same bare repository directory, which can corrupt
      * ref/pack state under concurrent access.
      */
-    private void refreshIfStale(CachedRepository cached, String cacheKey, CredentialsProvider credentials)
+    private void refreshIfStale(
+            CachedRepository cached,
+            String cacheKey,
+            CredentialsProvider credentials,
+            TransportConfigCallback transportConfig)
             throws GitAPIException, IOException {
         cached.fetchLock.lock();
         try {
@@ -152,10 +168,12 @@ public class LocalRepositoryCache {
             }
             log.debug("Re-fetching upstream for cached repository: {}", cacheKey);
             try (Git git = Git.open(new File(cacheDirectory.toFile(), cacheKey))) {
-                git.fetch()
+                var fetch = git.fetch()
                         .setRemote("origin")
-                        .setCredentialsProvider(credentials)
-                        .call();
+                        .setRemoveDeletedRefs(true)
+                        .setCredentialsProvider(credentials);
+                if (transportConfig != null) fetch.setTransportConfigCallback(transportConfig);
+                fetch.call();
             }
             cached.lastFetchedAt = System.currentTimeMillis();
         } finally {
@@ -167,7 +185,8 @@ public class LocalRepositoryCache {
      * Clone or fetch a repository. Synchronized at the instance level to prevent duplicate parallel clones when
      * multiple threads race on first access for the same URL.
      */
-    private synchronized Repository cloneOrFetch(String remoteUrl, String cacheKey, CredentialsProvider credentials)
+    private synchronized Repository cloneOrFetch(
+            String remoteUrl, String cacheKey, CredentialsProvider credentials, TransportConfigCallback transportConfig)
             throws GitAPIException, IOException {
         // Double-check after acquiring lock — another thread may have cloned while we waited
         CachedRepository cached = cache.get(cacheKey);
@@ -184,6 +203,7 @@ public class LocalRepositoryCache {
             Git git = Git.open(repoDir);
             var fetchCmd = git.fetch().setRemote("origin");
             if (credentials != null) fetchCmd.setCredentialsProvider(credentials);
+            if (transportConfig != null) fetchCmd.setTransportConfigCallback(transportConfig);
             if (cloneDepth > 0) fetchCmd.setDepth(cloneDepth);
             fetchCmd.call();
             repository = git.getRepository();
@@ -194,6 +214,7 @@ public class LocalRepositoryCache {
                     .setDirectory(repoDir)
                     .setBare(true);
             if (credentials != null) cloneCommand.setCredentialsProvider(credentials);
+            if (transportConfig != null) cloneCommand.setTransportConfigCallback(transportConfig);
             if (cloneDepth > 0) cloneCommand.setDepth(cloneDepth);
 
             Git git = cloneCommand.call();

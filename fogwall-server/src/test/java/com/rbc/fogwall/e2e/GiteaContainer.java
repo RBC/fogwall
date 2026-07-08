@@ -6,10 +6,14 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Base64;
+import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
+import org.testcontainers.containers.wait.strategy.WaitAllStrategy;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Testcontainers wrapper for a Gitea instance used as the upstream git server in e2e tests.
@@ -38,17 +42,27 @@ class GiteaContainer extends GenericContainer<GiteaContainer> {
     static final String TEST_USER_EMAIL = "testdev@example.com";
 
     private static final int HTTP_PORT = 3000;
+    private static final int SSH_PORT = 2222;
 
     GiteaContainer() {
         super("gitea/gitea:1.22");
         withEnv("GITEA__security__INSTALL_LOCK", "true");
         withEnv("GITEA__security__SECRET_KEY", "e2e-test-secret-key-not-for-production");
         withEnv("GITEA__server__HTTP_PORT", String.valueOf(HTTP_PORT));
+        withEnv("GITEA__server__START_SSH_SERVER", "true");
+        withEnv("GITEA__server__SSH_LISTEN_PORT", String.valueOf(SSH_PORT));
+        withEnv("GITEA__server__SSH_DOMAIN", "localhost");
         withEnv("GITEA__database__DB_TYPE", "sqlite3");
         withEnv("GITEA__log__LEVEL", "Warn");
         withEnv("GITEA__repository__DEFAULT_BRANCH", "main");
-        withExposedPorts(HTTP_PORT);
-        waitingFor(Wait.forHttp("/api/healthz").forPort(HTTP_PORT).forStatusCode(200));
+        // Allow unauthenticated API access so the SSH fingerprint enricher can call
+        // GET /api/v1/users/{login}/keys without a token — the same call that production
+        // providers make against public GitHub/GitLab/Forgejo instances.
+        withEnv("GITEA__service__REQUIRE_SIGNIN_VIEW", "false");
+        withExposedPorts(HTTP_PORT, SSH_PORT);
+        waitingFor(new WaitAllStrategy()
+                .withStrategy(Wait.forHttp("/api/healthz").forPort(HTTP_PORT).forStatusCode(200))
+                .withStrategy(Wait.forListeningPort()));
     }
 
     /** Base URL of the Gitea instance as seen from the host (e.g. {@code http://localhost:32768}). */
@@ -58,6 +72,16 @@ class GiteaContainer extends GenericContainer<GiteaContainer> {
 
     URI getBaseUri() {
         return URI.create(getBaseUrl());
+    }
+
+    /** Mapped host port for Gitea's SSH server (internal port 2222). */
+    int getSshPort() {
+        return getMappedPort(SSH_PORT);
+    }
+
+    /** SSH URI for the Gitea instance as seen from the host (e.g. {@code ssh://git@localhost:32769}). */
+    URI getSshUri() {
+        return URI.create("ssh://git@" + getHost() + ":" + getSshPort());
     }
 
     /**
@@ -142,14 +166,24 @@ class GiteaContainer extends GenericContainer<GiteaContainer> {
      * Returns the raw token string.
      */
     String generateTestUserToken() throws IOException, InterruptedException {
+        return generateToken(TEST_USER, TEST_USER_PASSWORD, "e2e-test-token", List.of("read:user", "write:repository"));
+    }
+
+    /**
+     * Generates a personal access token for the admin user. Used by the SSH enricher to authenticate against Gitea's
+     * SSH key listing API ({@code GET /api/v1/users/{login}/keys}), which requires a token when
+     * {@code REQUIRE_SIGNIN_VIEW=true}.
+     */
+    String generateAdminToken() throws IOException, InterruptedException {
+        return generateToken(ADMIN_USER, ADMIN_PASSWORD, "e2e-ssh-enricher-token", List.of("read:user"));
+    }
+
+    private String generateToken(String username, String password, String tokenName, List<String> scopes)
+            throws IOException, InterruptedException {
         var client = HttpClient.newHttpClient();
-        // Must authenticate as the user whose token we're creating
-        String userAuth = Base64.getEncoder().encodeToString((TEST_USER + ":" + TEST_USER_PASSWORD).getBytes());
-        var resp = apiPost(
-                client,
-                userAuth,
-                getBaseUrl() + "/api/v1/users/" + TEST_USER + "/tokens",
-                "{\"name\":\"e2e-test-token\"}");
+        String auth = Base64.getEncoder().encodeToString((username + ":" + password).getBytes());
+        String body = new JsonMapper().writeValueAsString(Map.of("name", tokenName, "scopes", scopes));
+        var resp = apiPost(client, auth, getBaseUrl() + "/api/v1/users/" + username + "/tokens", body);
         if (resp.statusCode() >= 400) {
             throw new RuntimeException("Failed to generate token (" + resp.statusCode() + "): " + resp.body());
         }
@@ -202,6 +236,26 @@ class GiteaContainer extends GenericContainer<GiteaContainer> {
             throw new RuntimeException(
                     "Failed to create repo " + org + "/" + repoName + " (" + resp.statusCode() + "): " + resp.body());
         }
+    }
+
+    /**
+     * Registers an SSH public key for the given Gitea user. The {@code publicKeyLine} is the full OpenSSH authorized
+     * keys line (e.g. {@code ssh-ed25519 AAAA... comment}). Ignores 422 (key already registered).
+     */
+    void registerSshKey(String username, String password, String publicKeyLine)
+            throws IOException, InterruptedException {
+        var client = HttpClient.newHttpClient();
+        String auth = Base64.getEncoder().encodeToString((username + ":" + password).getBytes());
+        String body = "{\"key\": " + jsonString(publicKeyLine) + ", \"title\": \"e2e-test\", \"read_only\": false}";
+        var resp = apiPost(client, auth, getBaseUrl() + "/api/v1/user/keys", body);
+        if (resp.statusCode() >= 400 && resp.statusCode() != 422) {
+            throw new RuntimeException(
+                    "Failed to register SSH key for " + username + " (" + resp.statusCode() + "): " + resp.body());
+        }
+    }
+
+    private static String jsonString(String s) {
+        return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 
     private HttpResponse<String> apiPost(HttpClient client, String auth, String url, String body)

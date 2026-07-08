@@ -118,6 +118,15 @@ export interface UserDetail {
   pushCounts: Partial<Record<PushStatus, number>>
 }
 
+export interface SshKeyEntry {
+  id: string
+  fingerprint: string
+  publicKey: string
+  label: string
+  createdAt: string
+  locked: boolean
+}
+
 export interface RepoPermission {
   id: string
   username: string

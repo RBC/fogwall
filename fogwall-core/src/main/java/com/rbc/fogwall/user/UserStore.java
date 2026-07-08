@@ -80,4 +80,29 @@ public interface UserStore extends ReadOnlyUserStore {
 
     /** Returns all SCM identity entries for a user with their verified status. */
     List<Map<String, Object>> findScmIdentitiesWithVerified(String username);
+
+    // ── SSH key management ────────────────────────────────────────────────────────
+
+    /**
+     * Register an SSH public key for the given user.
+     *
+     * @param username the proxy username
+     * @param fingerprint SHA-256 fingerprint in OpenSSH format ({@code SHA256:...}), pre-computed by the caller
+     * @param publicKey normalised public key body (algorithm + base64, no comment)
+     * @param label optional display label; may be null
+     * @return the created {@link SshKeyEntry}
+     * @throws IllegalArgumentException if the fingerprint is already registered to another user
+     */
+    SshKeyEntry addSshKey(String username, String fingerprint, String publicKey, String label);
+
+    /**
+     * Remove an SSH key by its ID. No-op if the key does not exist or does not belong to the user.
+     *
+     * @param username the proxy username (ownership check)
+     * @param keyId the key UUID
+     */
+    void removeSshKey(String username, String keyId);
+
+    /** Return all SSH keys registered for the given user. */
+    List<SshKeyEntry> findSshKeys(String username);
 }

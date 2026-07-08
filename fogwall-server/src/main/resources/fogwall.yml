@@ -33,6 +33,19 @@ server:
   # allowed-origins:
   #   - https://dashboard.example.com
 
+# SSH transport (store-and-forward push over SSH).
+# Disabled by default. Enable with server.ssh.enabled: true.
+#
+# When enabled, fogwall listens on an SSH port and accepts `git push` connections authenticated by
+# public key. The push is processed through the same validation and approval hook chain as HTTP
+# store-and-forward. Upstream forwarding uses SSH key auth; the upstream provider must therefore
+# have an SSH URI (e.g. ssh://git@github.com or git@gitea-host).
+#
+#  ssh:
+#    enabled: true
+#    port: 2222
+#    host-key-path: .ssh/fogwall_host_key    # generated on first start if absent
+
 # Database configuration for push audit storage.
 # Supported types: h2-mem, h2-file, postgres, mongo
 # h2-file persists to ./.data/fogwall.mv.db relative to the working directory.
@@ -59,8 +72,10 @@ providers:
     enabled: true
   codeberg:
     enabled: true
+  # default ForgejoProvider with https://gitea.com uri - disabled because there are more projects hosted on Codeberg
+  # than on gitea.com which is fine for demonstrative purposes. Enable if you want to allow pushes to gitea.com.
   gitea:
-    enabled: true
+    enabled: false
   # bitbucket.org support is added here for completeness. Access to bitbucket.org for FOSS is less common than other
   # providers. Signup is not free or guaranteed and is reviewed by Atlassian via https://www.atlassian.com/software/views/open-source-license-request#/
   # Therefore, it is disabled by default. Bitbucket (self-hosted or cloud for enterprise use) is supported.
@@ -82,7 +97,7 @@ providers:
     uri: https://salsa.debian.org/
 # Custom self-hosted GitHub Enterprise example
   internal-github:
-    enabled: true
+    enabled: false
     type: github
     uri: https://github.internal.example.com
 
@@ -190,19 +205,21 @@ auth:
   provider: local
 
 users:
- - username: admin
-   password-hash: "{noop}admin"
-   roles:
-     - ADMIN           # grants dashboard admin access (user CRUD, password reset, etc.)
-#   - username: alice
-#     password-hash: "{bcrypt}$2a$12$..."
-#     emails:
-#       - alice@example.com
-#     push-usernames:
-#       - alice           # HTTP Basic-auth username used when pushing via git
-#     scm-identities:
-#       - provider: github          # use the friendly name from providers: config
-#         username: alice-gh        # (or the type/host ID "github/github.com" also works)
+  - username: admin
+    password-hash: "{noop}admin"
+    roles: [ADMIN]
+    emails:
+      - admin@example.com
+#  - username: alice
+#    # Below is an example of securing setting static passwords using bcrypt. In production, using external auth
+#    # (OIDC, LDAP) offers better security and avoids storing passwords in the config file.
+#    # hashed password=SecretPass123! (https://bcrypt-generator.com/)
+#    password-hash: "{bcrypt}$2a$12$AYykcU/nc4UnpwP7e9zkeOso/YHXJW0AxMl6u3DFwXJtMdXYsFCc6"
+#    emails:
+#     - alice@example.com
+#    scm-identities:
+#     - provider: github
+#       username: alice-gh
 
 # Live config reload. Allows hot-reloading commit rules and auth config without restarting the server.
 # Provider, server, and database changes always require a restart.

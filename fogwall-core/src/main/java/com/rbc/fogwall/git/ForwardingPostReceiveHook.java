@@ -156,6 +156,10 @@ public class ForwardingPostReceiveHook implements PostReceiveHook {
             if (connectTimeoutSeconds > 0) {
                 transport.setTimeout(connectTimeoutSeconds);
             }
+            var transportConfig = pushContext.getTransport().transportConfigCallback();
+            if (transportConfig != null) {
+                transportConfig.configure(transport);
+            }
 
             List<RemoteRefUpdate> updates = buildRefUpdates(repo, commands);
 
