@@ -84,3 +84,4 @@ fogwall-server/src/main/resources/fogwall-perf.yml
 fogwall_test
 fogwall_test.pub
 fogwall-server/.ssh/
+fogwall-dashboard/.ssh/
