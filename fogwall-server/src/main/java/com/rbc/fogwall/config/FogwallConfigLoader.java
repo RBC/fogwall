@@ -33,13 +33,24 @@ import org.github.gestalt.config.source.MapConfigSourceBuilder;
  *   <li>{@code FOGWALL_CONFIG_PROFILES=docker-default,ldap} — Docker + LDAP auth
  * </ul>
  *
- * <p>Environment variable naming: strip the {@code FOGWALL_} prefix, lowercase, replace {@code _} with {@code .} to get
- * the config path. Examples:
+ * <p>Environment variable naming: two conventions are supported.
+ *
+ * <p><b>Legacy (single-underscore) convention</b> — strip the {@code FOGWALL_} prefix, lowercase, replace {@code _}
+ * with {@code .}. Works for paths that contain no hyphens:
  *
  * <ul>
  *   <li>{@code FOGWALL_SERVER_PORT=9090} → {@code server.port}
  *   <li>{@code FOGWALL_DATABASE_TYPE=postgres} → {@code database.type}
  *   <li>{@code FOGWALL_PROVIDERS_GITHUB_ENABLED=false} → {@code providers.github.enabled}
+ * </ul>
+ *
+ * <p><b>Double-underscore convention</b> — activated when the variable name contains {@code __}. {@code __} maps to
+ * {@code .} (path separator) and {@code _} maps to {@code -} (hyphen within a segment). Use this for hyphenated keys or
+ * hyphenated provider IDs:
+ *
+ * <ul>
+ *   <li>{@code FOGWALL_PROVIDERS__GITEA_SSH__API_TOKEN} → {@code providers.gitea-ssh.api-token}
+ *   <li>{@code FOGWALL_PROVIDERS__GITHUB__ENABLED=false} → {@code providers.github.enabled}
  * </ul>
  */
 @Slf4j
@@ -158,12 +169,21 @@ public final class FogwallConfigLoader {
         Map<String, String> overrides = new HashMap<>();
         System.getenv().forEach((varName, varValue) -> {
             if (varName.startsWith(ENV_PREFIX) && !varName.equals(PROFILES_ENV_VAR)) {
-                String configPath =
-                        varName.substring(ENV_PREFIX.length()).toLowerCase().replace('_', '.');
+                String configPath = envVarToConfigPath(varName);
                 overrides.put(configPath, varValue);
                 log.debug("Env override: {} → {}", varName, configPath);
             }
         });
         return overrides;
+    }
+
+    static String envVarToConfigPath(String varName) {
+        String stripped = varName.substring(ENV_PREFIX.length()).toLowerCase();
+        if (stripped.contains("__")) {
+            // double-underscore convention: __ = path separator, _ = hyphen
+            return String.join(".", stripped.split("__")).replace('_', '-');
+        }
+        // legacy single-underscore convention: _ = path separator
+        return stripped.replace('_', '.');
     }
 }
