@@ -22,13 +22,18 @@ export interface Commit {
   signedOffBy?: string[]
 }
 
+export interface AttestationLink {
+  text: string
+  url: string
+}
+
 export interface AttestationQuestion {
   id: string
   type: 'checkbox' | 'text' | 'dropdown'
   label: string
   required: boolean
   options?: string[]
-  tooltip?: string
+  links?: AttestationLink[]
 }
 
 export interface Attestation {

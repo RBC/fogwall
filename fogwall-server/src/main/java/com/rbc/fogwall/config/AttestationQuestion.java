@@ -23,6 +23,13 @@ public class AttestationQuestion {
     /** Options for {@code dropdown} type questions. Ignored for other types. */
     private List<String> options = new ArrayList<>();
 
-    /** Optional tooltip / help text shown alongside the question. */
-    private String tooltip;
+    /** Optional policy or reference links rendered below the question label. */
+    private List<AttestationLink> links = new ArrayList<>();
+
+    /** A labelled URL rendered as an anchor below an attestation question. */
+    @Data
+    public static class AttestationLink {
+        private String text;
+        private String url;
+    }
 }
