@@ -5,7 +5,14 @@ import { ColorSchemeType } from 'diff2html/lib/types'
 import 'diff2html/bundles/css/diff2html.min.css'
 import { approvePush, cancelPush, fetchDiff, fetchProviders, fetchPush, rejectPush } from '../api'
 import { StatusBadge } from '../components/StatusBadge'
-import type { AttestationQuestion, CurrentUser, Provider, PushRecord, Step } from '../types'
+import type {
+  AttestationLink,
+  AttestationQuestion,
+  CurrentUser,
+  Provider,
+  PushRecord,
+  Step,
+} from '../types'
 
 // Steps that are infrastructure/pre-processing, not user-visible validation checks
 const NON_VALIDATION_STEPS = new Set([
@@ -271,18 +278,37 @@ function AttestationQuestionField({
     </span>
   )
 
+  const linksEl = question.links && question.links.length > 0 && (
+    <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5 ml-6">
+      {question.links.map((link: AttestationLink) => (
+        <a
+          key={link.url}
+          href={link.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-blue-500 hover:underline dark:text-blue-400"
+        >
+          {link.text} ↗
+        </a>
+      ))}
+    </div>
+  )
+
   if (question.type === 'checkbox') {
     return (
-      <label className="flex items-start gap-2 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={value === 'true'}
-          disabled={disabled}
-          onChange={(e) => onChange(e.target.checked ? 'true' : 'false')}
-          className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50 dark:border-slate-600"
-        />
-        {labelEl}
-      </label>
+      <div>
+        <label className="flex items-start gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={value === 'true'}
+            disabled={disabled}
+            onChange={(e) => onChange(e.target.checked ? 'true' : 'false')}
+            className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50 dark:border-slate-600"
+          />
+          {labelEl}
+        </label>
+        {linksEl}
+      </div>
     )
   }
 
@@ -303,6 +329,7 @@ function AttestationQuestionField({
             </option>
           ))}
         </select>
+        {linksEl}
       </div>
     )
   }
@@ -315,9 +342,10 @@ function AttestationQuestionField({
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={question.tooltip ?? ''}
+        placeholder=""
         className="border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-gray-50 disabled:text-gray-400 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:disabled:bg-gray-800 dark:disabled:text-gray-500"
       />
+      {linksEl}
     </div>
   )
 }
