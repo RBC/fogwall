@@ -1,10 +1,7 @@
-package com.rbc.fogwall.jetty.config;
+package com.rbc.fogwall.config;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.rbc.fogwall.config.FogwallConfig;
-import com.rbc.fogwall.config.FogwallConfigLoader;
-import com.rbc.fogwall.config.ProviderConfig;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -271,6 +268,39 @@ class FogwallConfigLoaderTest {
         var config = FogwallConfigLoader.loadWithOverride(override);
         assertEquals(9090, config.getServer().getPort());
         assertFalse(config.getSecretScan().isEnabled());
+    }
+
+    // --- envVarToConfigPath ---
+
+    @Test
+    void envVarToConfigPath_legacySimplePath() {
+        assertEquals("server.port", FogwallConfigLoader.envVarToConfigPath("FOGWALL_SERVER_PORT"));
+    }
+
+    @Test
+    void envVarToConfigPath_legacyThreeSegments() {
+        assertEquals(
+                "providers.github.enabled", FogwallConfigLoader.envVarToConfigPath("FOGWALL_PROVIDERS_GITHUB_ENABLED"));
+    }
+
+    @Test
+    void envVarToConfigPath_doubleUnderscore_hyphenatedKey() {
+        assertEquals(
+                "providers.gitea-ssh.api-token",
+                FogwallConfigLoader.envVarToConfigPath("FOGWALL_PROVIDERS__GITEA_SSH__API_TOKEN"));
+    }
+
+    @Test
+    void envVarToConfigPath_doubleUnderscore_noHyphensInSegments() {
+        assertEquals(
+                "providers.github.enabled",
+                FogwallConfigLoader.envVarToConfigPath("FOGWALL_PROVIDERS__GITHUB__ENABLED"));
+    }
+
+    @Test
+    void envVarToConfigPath_doubleUnderscore_hyphenatedTopLevelKey() {
+        // FOGWALL_SECRET_SCAN__ENABLED → secret-scan.enabled
+        assertEquals("secret-scan.enabled", FogwallConfigLoader.envVarToConfigPath("FOGWALL_SECRET_SCAN__ENABLED"));
     }
 
     private Path writeYaml(String yaml) throws IOException {
