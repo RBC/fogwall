@@ -578,10 +578,12 @@ function AddPermissionModal({
   const [provider, setProvider] = useState('')
   const [path, setPath] = useState('')
   const [pathType, setPathType] = useState<'LITERAL' | 'GLOB' | 'REGEX'>('GLOB')
-  const [grant, setGrant] = useState<RepoPermission['grant']>('PUSH_AND_REVIEW')
+  const [grant, setGrant] = useState<RepoPermission['grant']>('PUSH')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [regexError, setRegexError] = useState<string | null>(null)
+
+  const requireReviewPermission = providers.length > 0 && providers[0].requireReviewPermission
 
   function handlePathChange(value: string) {
     setPath(value)
@@ -698,9 +700,9 @@ function AddPermissionModal({
               onChange={(e) => setGrant(e.target.value as typeof grant)}
               className={inputClass}
             >
-              <option value="PUSH_AND_REVIEW">Push and review</option>
+              {requireReviewPermission && <option value="PUSH_AND_REVIEW">Push and review</option>}
               <option value="PUSH">Push only</option>
-              <option value="REVIEW">Review only</option>
+              {requireReviewPermission && <option value="REVIEW">Review only</option>}
               <option value="SELF_CERTIFY">Self-certify</option>
             </select>
           </div>

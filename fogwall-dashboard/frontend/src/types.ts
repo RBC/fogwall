@@ -86,6 +86,7 @@ export interface Provider {
   pushPath: string
   proxyPath: string
   attestationQuestions: AttestationQuestion[]
+  requireReviewPermission: boolean
 }
 
 export interface EmailEntry {
