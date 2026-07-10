@@ -1,11 +1,13 @@
 package com.rbc.fogwall.permission;
 
+import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
 import java.nio.file.FileSystems;
 import java.nio.file.PathMatcher;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -36,10 +38,16 @@ import lombok.extern.slf4j.Slf4j;
 public class RepoPermissionService {
 
     private final PermissionStore<RepoPermission> store;
+    private final GroupPermissionStore groupStore;
     private final ConcurrentHashMap<String, Pattern> patternCache = new ConcurrentHashMap<>();
 
     public RepoPermissionService(PermissionStore<RepoPermission> store) {
+        this(store, null);
+    }
+
+    public RepoPermissionService(PermissionStore<RepoPermission> store, GroupPermissionStore groupStore) {
         this.store = store;
+        this.groupStore = groupStore;
     }
 
     /**
@@ -64,9 +72,9 @@ public class RepoPermissionService {
      * <em>not</em> imply self-certify — the grant must be explicit.
      */
     public boolean isBypassReviewAllowed(String username, String provider, String path) {
-        List<RepoPermission> forProvider = store.findByProvider(provider);
-        List<RepoPermission> forPath =
-                forProvider.stream().filter(p -> matchesPath(p, path)).toList();
+        List<RepoPermission> forPath = store.findByProvider(provider).stream()
+                .filter(p -> matchesPath(p, path))
+                .toList();
 
         if (forPath.isEmpty()) {
             return false;
@@ -130,6 +138,10 @@ public class RepoPermissionService {
         return store.findByProvider(provider);
     }
 
+    public GroupPermissionStore getGroupStore() {
+        return groupStore;
+    }
+
     /**
      * Seeds permissions from config on startup. Clears all CONFIG-sourced rows and re-inserts to keep YAML
      * authoritative; DB-sourced rows are left untouched.
@@ -185,20 +197,32 @@ public class RepoPermissionService {
     }
 
     private boolean isAllowed(String username, String provider, String path, RepoPermission.Grant op) {
-        List<RepoPermission> forProvider = store.findByProvider(provider);
+        List<RepoPermission> forPath = store.findByProvider(provider).stream()
+                .filter(p -> matchesPath(p, path))
+                .toList();
 
-        List<RepoPermission> forPath =
-                forProvider.stream().filter(p -> matchesPath(p, path)).toList();
+        List<GroupPermissionRule> groupRulesForPath = List.of();
+        if (groupStore != null) {
+            Set<String> userGroupIds = Set.copyOf(groupStore.findGroupIdsForUser(username));
+            groupRulesForPath = groupStore.findRulesByProvider(provider).stream()
+                    .filter(r -> userGroupIds.contains(r.getGroupId()))
+                    .filter(r -> matchesPathRule(r, path))
+                    .toList();
+        }
 
-        if (forPath.isEmpty()) {
+        if (forPath.isEmpty() && groupRulesForPath.isEmpty()) {
             log.debug("No permission grants for {}/{} — DENY (fail-closed)", provider, path);
             return false;
         }
 
-        boolean allowed = forPath.stream()
+        boolean allowedDirect = forPath.stream()
                 .filter(p -> p.getGrant() == op || p.getGrant() == RepoPermission.Grant.PUSH_AND_REVIEW)
                 .anyMatch(p -> username.equals(p.getUsername()));
 
+        boolean allowedViaGroup = groupRulesForPath.stream()
+                .anyMatch(r -> r.getGrant() == op || r.getGrant() == RepoPermission.Grant.PUSH_AND_REVIEW);
+
+        boolean allowed = allowedDirect || allowedViaGroup;
         log.debug(
                 "Permission check: user={} provider={} path={} op={} → {}",
                 username,
@@ -210,10 +234,18 @@ public class RepoPermissionService {
     }
 
     private boolean matchesPath(RepoPermission perm, String path) {
-        return switch (perm.getMatchType()) {
-            case LITERAL -> perm.getValue().equals(path);
-            case GLOB -> matchesGlob(perm.getValue(), path);
-            case REGEX -> matchesRegex(perm.getValue(), path);
+        return matchesPattern(perm.getTarget(), perm.getValue(), perm.getMatchType(), path);
+    }
+
+    private boolean matchesPathRule(GroupPermissionRule rule, String path) {
+        return matchesPattern(rule.getTarget(), rule.getValue(), rule.getMatchType(), path);
+    }
+
+    private boolean matchesPattern(MatchTarget target, String value, MatchType matchType, String path) {
+        return switch (matchType) {
+            case LITERAL -> value.equals(path);
+            case GLOB -> matchesGlob(value, path);
+            case REGEX -> matchesRegex(value, path);
         };
     }
 

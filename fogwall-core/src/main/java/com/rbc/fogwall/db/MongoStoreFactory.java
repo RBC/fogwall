@@ -7,6 +7,8 @@ import com.rbc.fogwall.db.mongo.MongoPushStore;
 import com.rbc.fogwall.db.mongo.MongoScmTokenCache;
 import com.rbc.fogwall.db.mongo.MongoSshFingerprintCache;
 import com.rbc.fogwall.db.mongo.MongoUrlRuleRegistry;
+import com.rbc.fogwall.permission.GroupPermissionStore;
+import com.rbc.fogwall.permission.MongoGroupPermissionStore;
 import com.rbc.fogwall.permission.MongoRepoPermissionStore;
 import com.rbc.fogwall.permission.PermissionStore;
 import com.rbc.fogwall.permission.RepoPermission;
@@ -65,6 +67,13 @@ public final class MongoStoreFactory implements AutoCloseable {
     /** Create and initialize a {@link PermissionStore} backed by this factory's client. */
     public PermissionStore<RepoPermission> repoPermissionStore() {
         MongoRepoPermissionStore store = new MongoRepoPermissionStore(client, databaseName);
+        store.initialize();
+        return store;
+    }
+
+    /** Create and initialize a {@link GroupPermissionStore} backed by this factory's client. */
+    public GroupPermissionStore groupPermissionStore() {
+        MongoGroupPermissionStore store = new MongoGroupPermissionStore(client, databaseName);
         store.initialize();
         return store;
     }

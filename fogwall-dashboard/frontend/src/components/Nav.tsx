@@ -123,6 +123,17 @@ export function Nav({ currentUser, dark, toggleDark }: NavProps) {
               Users
             </NavLink>
             <NavLink
+              to="/groups"
+              className={({ isActive }) =>
+                'px-3 py-1 rounded text-sm transition-colors ' +
+                (isActive
+                  ? 'bg-slate-600 text-white'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700')
+              }
+            >
+              Groups
+            </NavLink>
+            <NavLink
               to="/admin"
               className={({ isActive }) =>
                 'px-3 py-1 rounded text-sm transition-colors ' +

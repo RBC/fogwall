@@ -10,6 +10,7 @@ import { PushDiff } from './pages/PushDiff'
 import { PushList } from './pages/PushList'
 import { Profile } from './pages/Profile'
 import { Repos } from './pages/Repos'
+import { Groups } from './pages/Groups'
 import { Users } from './pages/Users'
 import { UserDetail } from './pages/UserDetail'
 import type { CurrentUser } from './types'
@@ -53,6 +54,7 @@ export default function App() {
               path="/users/:username"
               element={<UserDetail authProvider={authProvider} currentUser={currentUser} />}
             />
+            <Route path="/groups" element={<Groups />} />
             <Route path="/admin" element={<Admin />} />
           </Routes>
         </main>
