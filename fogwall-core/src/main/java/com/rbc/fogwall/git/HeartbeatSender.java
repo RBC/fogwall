@@ -39,6 +39,7 @@ public class HeartbeatSender implements AutoCloseable {
     private final Duration interval;
     private final Runnable onDisconnect;
     private ScheduledExecutorService executor;
+    private volatile boolean paused = false;
 
     public HeartbeatSender(ReceivePack rp, Duration interval) {
         this(rp, interval, null);
@@ -65,7 +66,20 @@ public class HeartbeatSender implements AutoCloseable {
         log.debug("Heartbeat started (interval: {}s)", seconds);
     }
 
+    /** Suppresses heartbeat dots without stopping the background thread. Call {@link #resume()} to re-enable. */
+    public void pause() {
+        paused = true;
+    }
+
+    /** Re-enables heartbeat dots after a {@link #pause()}. */
+    public void resume() {
+        paused = false;
+    }
+
     private void sendDot() {
+        if (paused) {
+            return;
+        }
         try {
             rp.sendMessage(".");
             rp.getMessageOutputStream().flush();

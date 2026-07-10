@@ -352,7 +352,19 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
                     if (skipValidationHooks && hook instanceof FogwallHook) {
                         continue;
                     }
-                    hook.onPreReceive(rp, commands);
+                    // Pause heartbeat dots while the approval hook streams its own progress messages to
+                    // the client; dots interleave with gateway messages without this guard.
+                    boolean isApprovalHook = hook instanceof ApprovalPreReceiveHook;
+                    if (isApprovalHook) {
+                        heartbeat.pause();
+                    }
+                    try {
+                        hook.onPreReceive(rp, commands);
+                    } finally {
+                        if (isApprovalHook) {
+                            heartbeat.resume();
+                        }
+                    }
                     // Flush sideband after each hook so messages stream to the client in real time
                     // (JGit's sendMessage() doesn't flush - without this, all output batches up)
                     try {

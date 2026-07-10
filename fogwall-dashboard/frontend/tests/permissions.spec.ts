@@ -19,7 +19,7 @@ test('add and remove a permission from the user detail page', async ({ page }) =
   const row = page.locator('tbody tr').filter({ hasText: testPath })
   await expect(row).toBeVisible()
   await expect(row.getByText('glob')).toBeVisible()
-  await expect(row.getByText('push_and_review')).toBeVisible()
+  await expect(row.getByText('push', { exact: true })).toBeVisible()
 
   // Remove the permission and verify it disappears
   await row.getByRole('button', { name: 'Remove' }).click()

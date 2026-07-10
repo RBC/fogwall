@@ -1,6 +1,7 @@
 package com.rbc.fogwall.dashboard.controller;
 
 import com.rbc.fogwall.config.AttestationQuestion;
+import com.rbc.fogwall.config.FogwallConfig;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.provider.ProviderRegistry;
 import io.swagger.v3.oas.annotations.Operation;
@@ -21,12 +22,16 @@ public class ProviderController {
     @Autowired
     private ConfigHolder configHolder;
 
+    @Resource(name = "fogwallConfig")
+    private FogwallConfig fogwallConfig;
+
     @Operation(operationId = "listProviders", summary = "List configured providers")
     @GetMapping("/api/providers")
     public List<ProviderInfo> list() {
         // Attestation questions are global — every provider in the response carries the same list.
         // The per-provider API shape is preserved to avoid churning the frontend if we add per-provider variants later.
         List<AttestationQuestion> attestations = configHolder.getAttestations();
+        boolean requireReviewPermission = fogwallConfig.getServer().isRequireReviewPermission();
         return providers.getProviders().stream()
                 .map(p -> new ProviderInfo(
                         p.getName(),
@@ -35,7 +40,8 @@ public class ProviderController {
                         p.getUri().getHost(),
                         "/push" + p.servletPath(),
                         "/proxy" + p.servletPath(),
-                        attestations))
+                        attestations,
+                        requireReviewPermission))
                 .toList();
     }
 
@@ -46,5 +52,6 @@ public class ProviderController {
             String host,
             String pushPath,
             String proxyPath,
-            List<AttestationQuestion> attestationQuestions) {}
+            List<AttestationQuestion> attestationQuestions,
+            boolean requireReviewPermission) {}
 }
