@@ -2,7 +2,7 @@ buildscript {
     configurations.configureEach {
         resolutionStrategy {
             force 'org.codehaus.plexus:plexus-utils:3.6.1'
-            force 'org.bouncycastle:bcpg-jdk18on:1.84'
+            force 'org.bouncycastle:bcpg-jdk18on:1.85'
         }
     }
 }
@@ -25,7 +25,7 @@ ext {
     apacheHttpClientVersion = '5.6.2'
 
     // Jetty / Servlet
-    jettyVersion = '12.1.10'
+    jettyVersion = '12.1.11'
     jakartaServletVersion = '6.1.0'
 
     // Logging
@@ -36,10 +36,10 @@ ext {
     hikariVersion = '7.1.0'
     h2Version = '2.4.240'
     postgresVersion = '42.7.13'
-    mongoVersion = '5.8.0'
+    mongoVersion = '5.9.0'
 
     // Jackson
-    jacksonBomVersion = '3.2.0'
+    jacksonBomVersion = '3.2.1'
 
     // Spring
     springVersion = '7.0.8'
@@ -54,16 +54,16 @@ ext {
     gestaltVersion = '0.38.0'
 
     // BouncyCastle
-    bouncyCastleVersion = '1.84'
+    bouncyCastleVersion = '1.85'
 
     // Apache MINA SSHD
-    minaSshdVersion = '2.18.0'
+    minaSshdVersion = '2.19.0'
 
     // Lombok
     lombokVersion = '1.18.46'
 
     // Testing
-    junitVersion = '6.1.1'
+    junitVersion = '6.1.2'
     junitPlatformVersion = '6.1.0'
     mockitoVersion = '5.23.0'
     testContainersVersion = '2.0.5'
