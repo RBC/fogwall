@@ -380,6 +380,60 @@ class RepoPermissionServiceTest {
         assertThrows(IllegalStateException.class, () -> svc.seedFromConfig(permissions));
     }
 
+    // ---- isBypassReviewAllowed ----
+
+    @Test
+    void bypassReview_noPermissionsForPath_denied() {
+        assertFalse(svc.isBypassReviewAllowed("alice", "github", "/acme/repo"));
+    }
+
+    @Test
+    void bypassReview_pushAndReview_doesNotImplySelfCertify() {
+        svc.save(grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Grant.PUSH_AND_REVIEW));
+        assertFalse(svc.isBypassReviewAllowed("alice", "github", "/acme/repo"));
+    }
+
+    @Test
+    void bypassReview_explicitSelfCertify_allowed() {
+        svc.save(grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Grant.SELF_CERTIFY));
+        assertTrue(svc.isBypassReviewAllowed("alice", "github", "/acme/repo"));
+    }
+
+    @Test
+    void bypassReview_pathCoveredBySelfCertify_otherUser_denied() {
+        svc.save(grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Grant.SELF_CERTIFY));
+        assertFalse(svc.isBypassReviewAllowed("bob", "github", "/acme/repo"));
+    }
+
+    @Test
+    void bypassReview_globSelfCertify_matchedPath_allowed() {
+        svc.save(grant("alice", "github", "/acme/*", MatchType.GLOB, RepoPermission.Grant.SELF_CERTIFY));
+        assertTrue(svc.isBypassReviewAllowed("alice", "github", "/acme/repo"));
+        assertFalse(svc.isBypassReviewAllowed("alice", "github", "/other/repo"));
+    }
+
+    // ---- matchesGlob: invalid pattern ----
+
+    @Test
+    void glob_invalidPattern_treatedAsNoMatch() {
+        svc.save(grant("alice", "github", "{{invalid", MatchType.GLOB, RepoPermission.Grant.PUSH));
+        assertFalse(svc.isAllowedToPush("alice", "github", "/acme/repo"));
+    }
+
+    // ---- findAll / getGroupStore ----
+
+    @Test
+    void findAll_returnsAllSavedPermissions() {
+        svc.save(grant("alice", "github", "/acme/a"));
+        svc.save(grant("bob", "github", "/acme/b"));
+        assertEquals(2, svc.findAll().size());
+    }
+
+    @Test
+    void getGroupStore_returnsNullWhenNotConfigured() {
+        assertNull(svc.getGroupStore());
+    }
+
     @Test
     void seedFromConfig_configConflictsWithExistingDb_throwsIllegalStateException() {
         svc.save(grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Grant.PUSH));

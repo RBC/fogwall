@@ -72,6 +72,13 @@ class JdbcRepoPermissionStoreIntegrationTest {
         assertTrue(store.findById("does-not-exist").isEmpty());
     }
 
+    @Test
+    void save_unseededUser_autoCreatesUserRow() {
+        RepoPermission p = perm("newuser", "github", "/owner/repo");
+        store.save(p);
+        assertTrue(store.findById(p.getId()).isPresent());
+    }
+
     // ---- delete ----
 
     @Test

@@ -19,7 +19,8 @@ import org.testcontainers.utility.DockerImageName;
 class MongoPushStoreIntegrationTest {
 
     @Container
-    static final MongoDBContainer MONGO = new MongoDBContainer(DockerImageName.parse("mongo:7.0"));
+    static final MongoDBContainer MONGO =
+            new MongoDBContainer(DockerImageName.parse("docker.io/mongo:7.0").asCompatibleSubstituteFor("mongo"));
 
     MongoPushStore store;
 

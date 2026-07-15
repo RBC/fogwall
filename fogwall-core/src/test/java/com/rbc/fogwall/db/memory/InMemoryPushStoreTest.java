@@ -184,6 +184,94 @@ class InMemoryPushStoreTest {
         assertThrows(Exception.class, () -> store.approve("not-a-real-id", approvalFor("not-a-real-id")));
     }
 
+    // ---- find by project / user / authorEmail ----
+
+    @Test
+    void find_byProject_returnsMatchingRecords() {
+        PushRecord a = PushRecord.builder()
+                .project("acme")
+                .repoName("repo")
+                .user("dev")
+                .build();
+        PushRecord b = PushRecord.builder()
+                .project("other")
+                .repoName("repo")
+                .user("dev")
+                .build();
+        store.save(a);
+        store.save(b);
+
+        List<PushRecord> results =
+                store.find(PushQuery.builder().project("acme").build());
+        assertEquals(1, results.size());
+        assertEquals("acme", results.get(0).getProject());
+    }
+
+    @Test
+    void find_byUser_returnsMatchingRecords() {
+        store.save(record("a", "refs/heads/main", "repo"));
+        PushRecord other = PushRecord.builder()
+                .commitTo("b")
+                .branch("refs/heads/main")
+                .repoName("repo")
+                .user("alice")
+                .build();
+        store.save(other);
+
+        List<PushRecord> results = store.find(PushQuery.builder().user("alice").build());
+        assertEquals(1, results.size());
+        assertEquals("alice", results.get(0).getUser());
+    }
+
+    @Test
+    void find_byAuthorEmail_returnsMatchingRecords() {
+        store.save(record("a", "refs/heads/main", "repo")); // authorEmail=dev@example.com
+        PushRecord other = PushRecord.builder()
+                .commitTo("b")
+                .branch("refs/heads/main")
+                .repoName("repo")
+                .user("bob")
+                .authorEmail("bob@example.com")
+                .build();
+        store.save(other);
+
+        List<PushRecord> results =
+                store.find(PushQuery.builder().authorEmail("bob@example.com").build());
+        assertEquals(1, results.size());
+        assertEquals("bob@example.com", results.get(0).getAuthorEmail());
+    }
+
+    // ---- updateForwardStatus ----
+
+    @Test
+    void updateForwardStatus_setsStatusAndErrorMessage() {
+        PushRecord r = record("abc", "refs/heads/main", "repo");
+        store.save(r);
+
+        store.updateForwardStatus(r.getId(), PushStatus.REJECTED, "upstream error");
+
+        PushRecord updated = store.findById(r.getId()).orElseThrow();
+        assertEquals(PushStatus.REJECTED, updated.getStatus());
+        assertEquals("upstream error", updated.getErrorMessage());
+        assertNotNull(updated.getForwardedAt());
+    }
+
+    @Test
+    void updateForwardStatus_nullErrorMessage_doesNotOverwrite() {
+        PushRecord r = record("abc", "refs/heads/main", "repo");
+        store.save(r);
+
+        store.updateForwardStatus(r.getId(), PushStatus.APPROVED, null);
+
+        assertEquals(
+                PushStatus.APPROVED, store.findById(r.getId()).orElseThrow().getStatus());
+    }
+
+    @Test
+    void updateForwardStatus_unknownId_noOp() {
+        assertDoesNotThrow(() -> store.updateForwardStatus("no-such-id", PushStatus.REJECTED, "err"));
+    }
+
     // ---- initialize (no-op for in-memory) ----
 
     @Test
