@@ -20,7 +20,11 @@ import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.jetty.FogwallContext;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.jetty.reload.LiveConfigLoader;
+import com.rbc.fogwall.permission.GroupPermissionRule;
+import com.rbc.fogwall.permission.GroupPermissionStore;
+import com.rbc.fogwall.permission.JdbcGroupPermissionStore;
 import com.rbc.fogwall.permission.JdbcRepoPermissionStore;
+import com.rbc.fogwall.permission.PermissionGroup;
 import com.rbc.fogwall.permission.PermissionStore;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.permission.RepoPermissionService;
@@ -78,6 +82,7 @@ public class JettyConfigurationBuilder {
     private UserStore cachedUserStore;
     private ScmTokenCache cachedTokenCache;
     private RepoPermissionService cachedRepoPermissionService;
+    private GroupPermissionStore cachedGroupPermissionStore;
     private UrlRuleRegistry cachedUrlRuleRegistry;
     private ConfigHolder cachedConfigHolder;
 
@@ -468,14 +473,27 @@ public class JettyConfigurationBuilder {
         if (cachedRepoPermissionService != null) return cachedRepoPermissionService;
         PermissionStore<RepoPermission> store = buildRepoPermissionStore();
         store.initialize();
-        cachedRepoPermissionService = new RepoPermissionService(store);
+        cachedGroupPermissionStore = buildGroupPermissionStore();
+        cachedGroupPermissionStore.initialize();
+        cachedRepoPermissionService = new RepoPermissionService(store, cachedGroupPermissionStore);
 
         List<RepoPermission> configPerms = buildConfigPermissions(config);
         ensurePermissionUsersExist(configPerms);
         cachedRepoPermissionService.seedFromConfig(configPerms);
 
+        seedConfigGroups(config, cachedGroupPermissionStore);
+
         log.info("RepoPermissionService initialized with {} config permission(s)", configPerms.size());
         return cachedRepoPermissionService;
+    }
+
+    public GroupPermissionStore buildGroupPermissionStore() {
+        if (cachedGroupPermissionStore != null) return cachedGroupPermissionStore;
+        DatabaseConfig db = config.getDatabase();
+        if ("mongo".equals(db.getType())) {
+            return requireMongoStoreFactory().groupPermissionStore();
+        }
+        return new JdbcGroupPermissionStore(requireJdbcDataSource());
     }
 
     private void ensurePermissionUsersExist(List<RepoPermission> permissions) {
@@ -557,6 +575,43 @@ public class JettyConfigurationBuilder {
                             .build();
                 })
                 .toList();
+    }
+
+    private void seedConfigGroups(FogwallConfig cfg, GroupPermissionStore groupStore) {
+        // Clear existing CONFIG-sourced groups and re-seed from YAML.
+        groupStore.findAllGroups().stream()
+                .filter(g -> g.getSource() == PermissionGroup.Source.CONFIG)
+                .forEach(g -> groupStore.deleteGroup(g.getId()));
+
+        UserStore us = buildUserStore();
+        for (GroupConfig gc : cfg.getGroups()) {
+            PermissionGroup group = PermissionGroup.builder()
+                    .name(gc.getName())
+                    .description(gc.getDescription())
+                    .source(PermissionGroup.Source.CONFIG)
+                    .build();
+            groupStore.saveGroup(group);
+
+            for (String member : gc.getMembers()) {
+                us.upsertUser(member);
+                groupStore.addMember(group.getId(), member);
+            }
+
+            for (GroupConfig.GroupGrantConfig grant : gc.getGrants()) {
+                String resolvedProvider = resolveProviderName("Group '" + gc.getName() + "'", grant.getProvider());
+                MatchConfig m = grant.getMatch();
+                GroupPermissionRule rule = GroupPermissionRule.builder()
+                        .groupId(group.getId())
+                        .provider(resolvedProvider)
+                        .target(MatchTarget.valueOf(m.getTarget().toUpperCase()))
+                        .value(m.getValue())
+                        .matchType(MatchType.valueOf((m.getType() != null ? m.getType() : "GLOB").toUpperCase()))
+                        .grant(RepoPermission.Grant.valueOf(grant.getGrant().toUpperCase()))
+                        .build();
+                groupStore.saveRule(rule);
+            }
+        }
+        log.info("Seeded {} permission group(s) from config", cfg.getGroups().size());
     }
 
     public UrlRuleRegistry buildUrlRuleRegistry() {

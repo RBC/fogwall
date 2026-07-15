@@ -1,3 +1,5 @@
+import type { GroupPermissionRule, RepoPermission } from './types'
+
 /** Reads the XSRF-TOKEN cookie set by Spring Security's CookieCsrfTokenRepository. */
 function getCsrfToken(): string | null {
   const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/)
@@ -245,6 +247,29 @@ export async function fetchUserPermissions(username: string) {
   return res.json()
 }
 
+export async function fetchUserGroups(username: string) {
+  const res = await apiFetch(`/api/users/${encodeURIComponent(username)}/permissions/groups`)
+  if (!res.ok) throw new Error('Failed to fetch user groups')
+  return res.json()
+}
+
+export async function fetchMyPermissions(): Promise<{
+  direct: RepoPermission[]
+  groups: UserGroupView[]
+}> {
+  const res = await apiFetch('/api/me/permissions')
+  if (!res.ok) throw new Error('Failed to fetch permissions')
+  return res.json()
+}
+
+export interface UserGroupView {
+  id: string
+  name: string
+  description: string | null
+  source: string
+  rules: GroupPermissionRule[]
+}
+
 export async function addUserPermission(
   username: string,
   data: { provider: string; value: string; matchType: string; grant: string },
@@ -280,6 +305,81 @@ export async function createUrlRule(rule: {
 export async function deleteUrlRule(id: string) {
   const res = await apiFetch(`/api/repos/rules/${encodeURIComponent(id)}`, { method: 'DELETE' })
   if (!res.ok) await parseErrorResponse(res, 'Failed to delete URL rule')
+}
+
+export async function fetchGroups() {
+  const res = await apiFetch('/api/groups')
+  if (!res.ok) throw new Error('Failed to fetch groups')
+  return res.json()
+}
+
+export async function fetchGroup(id: string) {
+  const res = await apiFetch(`/api/groups/${encodeURIComponent(id)}`)
+  if (!res.ok) throw new Error('Failed to fetch group')
+  return res.json()
+}
+
+export async function createGroup(data: { name: string; description?: string }) {
+  const res = await apiFetch('/api/groups', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) await parseErrorResponse(res, 'Failed to create group')
+  return res.json()
+}
+
+export async function updateGroup(id: string, data: { name: string; description?: string }) {
+  const res = await apiFetch(`/api/groups/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) await parseErrorResponse(res, 'Failed to update group')
+  return res.json()
+}
+
+export async function deleteGroup(id: string) {
+  const res = await apiFetch(`/api/groups/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  if (!res.ok) await parseErrorResponse(res, 'Failed to delete group')
+}
+
+export async function addGroupMember(groupId: string, username: string) {
+  const res = await apiFetch(`/api/groups/${encodeURIComponent(groupId)}/members`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username }),
+  })
+  if (!res.ok) await parseErrorResponse(res, 'Failed to add member')
+}
+
+export async function removeGroupMember(groupId: string, username: string) {
+  const res = await apiFetch(
+    `/api/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(username)}`,
+    { method: 'DELETE' },
+  )
+  if (!res.ok) await parseErrorResponse(res, 'Failed to remove member')
+}
+
+export async function addGroupPermission(
+  groupId: string,
+  data: { provider: string; value: string; matchType: string; grant: string },
+) {
+  const res = await apiFetch(`/api/groups/${encodeURIComponent(groupId)}/permissions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) await parseErrorResponse(res, 'Failed to add group permission')
+  return res.json()
+}
+
+export async function deleteGroupPermission(groupId: string, ruleId: string) {
+  const res = await apiFetch(
+    `/api/groups/${encodeURIComponent(groupId)}/permissions/${encodeURIComponent(ruleId)}`,
+    { method: 'DELETE' },
+  )
+  if (!res.ok) await parseErrorResponse(res, 'Failed to delete group permission')
 }
 
 export interface TcpResult {

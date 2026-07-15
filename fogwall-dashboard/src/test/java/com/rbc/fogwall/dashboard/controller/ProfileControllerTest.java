@@ -8,12 +8,18 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.rbc.fogwall.permission.GroupPermissionStore;
+import com.rbc.fogwall.permission.PermissionGroup;
+import com.rbc.fogwall.permission.RepoPermission;
+import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.user.EmailConflictException;
 import com.rbc.fogwall.user.LockedByConfigException;
 import com.rbc.fogwall.user.LockedEmailException;
 import com.rbc.fogwall.user.ScmIdentityConflictException;
 import com.rbc.fogwall.user.UserStore;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,6 +40,9 @@ class ProfileControllerTest {
 
     @Mock
     UserStore userStore;
+
+    @Mock
+    RepoPermissionService permissionService;
 
     @BeforeEach
     void setupSecurityContext() {
@@ -154,5 +163,50 @@ class ProfileControllerTest {
     void removeScmIdentity_success_returns204() {
         var resp = controller.removeScmIdentity("github", "alice-gh");
         assertEquals(HttpStatus.NO_CONTENT, resp.getStatusCode());
+    }
+
+    // ── GET /api/me/permissions ──────────────────────────────────────────────────
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void getPermissions_noGroupStore_returnsDirectAndEmptyGroups() {
+        RepoPermission direct = RepoPermission.builder()
+                .username("alice")
+                .provider("github")
+                .value("/acme/repo")
+                .grant(RepoPermission.Grant.PUSH)
+                .source(RepoPermission.Source.DB)
+                .build();
+        when(permissionService.findByUsername("alice")).thenReturn(List.of(direct));
+        when(permissionService.getGroupStore()).thenReturn(null);
+
+        var resp = controller.getPermissions();
+
+        assertEquals(HttpStatus.OK, resp.getStatusCode());
+        var body = (Map<String, Object>) resp.getBody();
+        assertEquals(List.of(direct), body.get("direct"));
+        assertEquals(List.of(), body.get("groups"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void getPermissions_withGroupStore_returnsMergedResult() {
+        GroupPermissionStore groupStore = mock(GroupPermissionStore.class);
+        PermissionGroup g = PermissionGroup.builder()
+                .name("devs")
+                .source(PermissionGroup.Source.DB)
+                .build();
+        when(permissionService.findByUsername("alice")).thenReturn(List.of());
+        when(permissionService.getGroupStore()).thenReturn(groupStore);
+        when(groupStore.findGroupIdsForUser("alice")).thenReturn(List.of(g.getId()));
+        when(groupStore.findGroupById(g.getId())).thenReturn(Optional.of(g));
+        when(groupStore.findRulesForGroup(g.getId())).thenReturn(List.of());
+
+        var resp = controller.getPermissions();
+
+        assertEquals(HttpStatus.OK, resp.getStatusCode());
+        var body = (Map<String, Object>) resp.getBody();
+        assertEquals(List.of(), body.get("direct"));
+        assertEquals(1, ((List<?>) body.get("groups")).size());
     }
 }

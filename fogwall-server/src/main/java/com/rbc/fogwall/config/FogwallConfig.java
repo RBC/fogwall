@@ -62,6 +62,12 @@ public class FogwallConfig {
     private List<PermissionConfig> permissions = new ArrayList<>();
 
     /**
+     * CONFIG-sourced permission groups seeded on startup. Each group has a name, optional description, a list of member
+     * usernames, and a list of repository permission rules that all members inherit.
+     */
+    private List<GroupConfig> groups = new ArrayList<>();
+
+    /**
      * Live config reload settings. Controls hot-reloading of commit rules and auth config without restarting the
      * server. Provider, server, and database changes always require a restart.
      */

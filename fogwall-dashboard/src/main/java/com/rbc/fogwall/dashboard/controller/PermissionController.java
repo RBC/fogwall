@@ -2,11 +2,13 @@ package com.rbc.fogwall.dashboard.controller;
 
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
+import com.rbc.fogwall.permission.GroupPermissionStore;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -119,5 +121,30 @@ public class PermissionController {
         return ResponseEntity.noContent().build();
     }
 
+    @Operation(operationId = "listUserGroups", summary = "List permission groups the user belongs to")
+    @GetMapping("/groups")
+    public ResponseEntity<?> listGroups(@PathVariable String username) {
+        if (userStore.findByUsername(username).isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        GroupPermissionStore groupStore = permissionService.getGroupStore();
+        if (groupStore == null) {
+            return ResponseEntity.ok(List.of());
+        }
+        List<UserGroupView> result = groupStore.findGroupIdsForUser(username).stream()
+                .map(groupStore::findGroupById)
+                .flatMap(java.util.Optional::stream)
+                .map(g -> new UserGroupView(
+                        g.getId(),
+                        g.getName(),
+                        g.getDescription(),
+                        g.getSource().name(),
+                        groupStore.findRulesForGroup(g.getId())))
+                .toList();
+        return ResponseEntity.ok(result);
+    }
+
     public record AddPermissionRequest(String provider, String target, String value, String matchType, String grant) {}
+
+    public record UserGroupView(String id, String name, String description, String source, List<?> rules) {}
 }

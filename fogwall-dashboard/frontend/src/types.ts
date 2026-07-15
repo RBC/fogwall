@@ -142,3 +142,31 @@ export interface RepoPermission {
   grant: 'PUSH' | 'REVIEW' | 'PUSH_AND_REVIEW' | 'SELF_CERTIFY'
   source: 'CONFIG' | 'DB'
 }
+
+export interface GroupPermissionRule {
+  id: string
+  groupId: string
+  provider: string
+  target: string
+  value: string
+  matchType: 'LITERAL' | 'GLOB' | 'REGEX'
+  grant: 'PUSH' | 'REVIEW' | 'PUSH_AND_REVIEW' | 'SELF_CERTIFY'
+}
+
+export interface GroupSummary {
+  id: string
+  name: string
+  description: string | null
+  source: 'CONFIG' | 'DB'
+  memberCount: number
+  ruleCount: number
+}
+
+export interface GroupDetail {
+  id: string
+  name: string
+  description: string | null
+  source: 'CONFIG' | 'DB'
+  members: string[]
+  rules: GroupPermissionRule[]
+}

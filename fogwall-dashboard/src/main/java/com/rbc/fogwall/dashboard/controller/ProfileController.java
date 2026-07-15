@@ -1,5 +1,6 @@
 package com.rbc.fogwall.dashboard.controller;
 
+import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.ssh.SshKeyUtils;
 import com.rbc.fogwall.user.EmailConflictException;
 import com.rbc.fogwall.user.LockedByConfigException;
@@ -48,6 +49,9 @@ public class ProfileController {
 
     @Autowired
     private ReadOnlyUserStore userStore;
+
+    @Autowired
+    private RepoPermissionService permissionService;
 
     // ---- email claims ----
 
@@ -179,6 +183,28 @@ public class ProfileController {
         if (!(userStore instanceof UserStore mutable)) return NOT_MUTABLE;
         mutable.removeSshKey(currentUsername(), id);
         return ResponseEntity.noContent().build();
+    }
+
+    @Operation(operationId = "getMyPermissions", summary = "Get current user's direct and group-inherited permissions")
+    @GetMapping("/permissions")
+    public ResponseEntity<?> getPermissions() {
+        String username = currentUsername();
+        var direct = permissionService.findByUsername(username);
+        var groupStore = permissionService.getGroupStore();
+        List<PermissionController.UserGroupView> groups = List.of();
+        if (groupStore != null) {
+            groups = groupStore.findGroupIdsForUser(username).stream()
+                    .map(groupStore::findGroupById)
+                    .flatMap(java.util.Optional::stream)
+                    .map(g -> new PermissionController.UserGroupView(
+                            g.getId(),
+                            g.getName(),
+                            g.getDescription(),
+                            g.getSource().name(),
+                            groupStore.findRulesForGroup(g.getId())))
+                    .toList();
+        }
+        return ResponseEntity.ok(Map.of("direct", direct, "groups", groups));
     }
 
     private String currentUsername() {

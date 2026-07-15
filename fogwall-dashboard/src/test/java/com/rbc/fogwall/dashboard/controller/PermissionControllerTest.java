@@ -8,6 +8,8 @@ import static org.mockito.Mockito.when;
 
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
+import com.rbc.fogwall.permission.GroupPermissionStore;
+import com.rbc.fogwall.permission.PermissionGroup;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
@@ -252,5 +254,45 @@ class PermissionControllerTest {
 
         assertEquals(HttpStatus.NO_CONTENT, resp.getStatusCode());
         verify(permissionService).delete(DB_PERM.getId());
+    }
+
+    // ── GET /api/users/{username}/permissions/groups ─────────────────────────────
+
+    @Test
+    void listGroups_unknownUser_returns404() {
+        when(userStore.findByUsername("nobody")).thenReturn(Optional.empty());
+
+        var resp = controller.listGroups("nobody");
+
+        assertEquals(HttpStatus.NOT_FOUND, resp.getStatusCode());
+    }
+
+    @Test
+    void listGroups_noGroupStore_returnsEmptyList() {
+        when(userStore.findByUsername("alice")).thenReturn(Optional.of(ALICE));
+        when(permissionService.getGroupStore()).thenReturn(null);
+
+        var resp = controller.listGroups("alice");
+
+        assertEquals(HttpStatus.OK, resp.getStatusCode());
+        assertEquals(List.of(), resp.getBody());
+    }
+
+    @Test
+    void listGroups_returnsMemberships() {
+        GroupPermissionStore groupStore = org.mockito.Mockito.mock(GroupPermissionStore.class);
+        PermissionGroup g = PermissionGroup.builder()
+                .name("devs")
+                .source(PermissionGroup.Source.DB)
+                .build();
+        when(userStore.findByUsername("alice")).thenReturn(Optional.of(ALICE));
+        when(permissionService.getGroupStore()).thenReturn(groupStore);
+        when(groupStore.findGroupIdsForUser("alice")).thenReturn(List.of(g.getId()));
+        when(groupStore.findGroupById(g.getId())).thenReturn(Optional.of(g));
+        when(groupStore.findRulesForGroup(g.getId())).thenReturn(List.of());
+
+        var resp = controller.listGroups("alice");
+
+        assertEquals(HttpStatus.OK, resp.getStatusCode());
     }
 }

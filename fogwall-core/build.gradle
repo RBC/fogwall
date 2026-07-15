@@ -109,40 +109,61 @@ tasks.named('check') {
 // ---------------------------------------------------------------------------
 // JaCoCo coverage thresholds
 //
-// Strategy: 80% line coverage for all packages where unit tests are the right
-// tool. Packages that legitimately can't hit 80% with unit tests (integration-
-// heavy stores and validation context) get a reduced 65% floor. No threshold
-// for JGit hook wiring, real-HTTP provider code, async servlet plumbing, and
-// MongoDB/JDBC DML boilerplate — those are covered by e2e and smoke tests.
+// Tiered by testability:
+//   95% — security-critical pure logic (permission engine)
+//   90% — pure business logic with no I/O or framework glue
+//   75% — logic packages with some servlet/JGit lifecycle coupling
+//   70% — user store (SSH key methods live in integration/e2e)
+//   60% — validation filter chain (Jetty lifecycle coupling)
+//   no threshold — JGit hook wiring, real-HTTP provider calls, async servlet
+//                  plumbing, and JDBC/MongoDB DML (all covered by e2e)
 // ---------------------------------------------------------------------------
 jacocoTestCoverageVerification {
     violationRules {
 
-        // Most packages: pure logic, fully unit-testable — hold at 80%.
+        // Security-critical: permission engine — held to highest standard.
+        rule {
+            element = 'PACKAGE'
+            includes = [
+                'com.rbc.fogwall.permission',
+            ]
+            limit { counter = 'LINE'; minimum = 0.95 }
+        }
+
+        // Pure business logic — no I/O, no framework lifecycle.
         rule {
             element = 'PACKAGE'
             includes = [
                 'com.rbc.fogwall.service',
                 'com.rbc.fogwall.approval',
                 'com.rbc.fogwall.config',
-                'com.rbc.fogwall.permission',
                 'com.rbc.fogwall.db.model',
                 'com.rbc.fogwall.db.jdbc.mapper',
+                'com.rbc.fogwall.db.memory',
+            ]
+            limit { counter = 'LINE'; minimum = 0.90 }
+        }
+
+        // Logic packages with some servlet/JGit lifecycle coupling.
+        rule {
+            element = 'PACKAGE'
+            includes = [
                 'com.rbc.fogwall.servlet.filter',
                 'com.rbc.fogwall.ssh',
             ]
             limit { counter = 'LINE'; minimum = 0.75 }
         }
 
-        // Reduced floor for packages with more integration complexity.
+        // User store: SSH key methods are covered by integration/e2e tests.
         rule {
             element = 'PACKAGE'
             includes = [
                 'com.rbc.fogwall.user',
             ]
-            limit { counter = 'LINE'; minimum = 0.65 }
+            limit { counter = 'LINE'; minimum = 0.70 }
         }
 
+        // Validation filter chain: some Jetty lifecycle coupling.
         rule {
             element = 'PACKAGE'
             includes = [

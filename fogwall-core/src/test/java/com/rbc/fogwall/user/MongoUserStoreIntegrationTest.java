@@ -20,7 +20,8 @@ import org.testcontainers.utility.DockerImageName;
 class MongoUserStoreIntegrationTest {
 
     @Container
-    static final MongoDBContainer MONGO = new MongoDBContainer(DockerImageName.parse("mongo:7.0"));
+    static final MongoDBContainer MONGO =
+            new MongoDBContainer(DockerImageName.parse("docker.io/mongo:7.0").asCompatibleSubstituteFor("mongo"));
 
     MongoUserStore store;
     MongoRepoPermissionStore permissionStore;
