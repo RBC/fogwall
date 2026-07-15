@@ -4,12 +4,14 @@ import {
   addScmIdentity,
   addSshKey,
   fetchMe,
+  fetchMyPermissions,
   fetchMySshKeys,
   fetchProviders,
   removeEmail,
   removeScmIdentity,
   removeSshKey,
 } from '../api'
+import type { UserGroupView } from '../api'
 import { OperationsBadge, PathTypeBadge } from '../components/PermissionBadges'
 import type { CurrentUser, EmailEntry, RepoPermission, ScmIdentity, SshKeyEntry } from '../types'
 
@@ -35,6 +37,7 @@ export function Profile() {
 
   const [tab, setTab] = useState<'emails' | 'identities' | 'sshkeys' | 'permissions'>('emails')
   const [permissions, setPermissions] = useState<RepoPermission[]>([])
+  const [groups, setGroups] = useState<UserGroupView[]>([])
 
   const [sshKeys, setSshKeys] = useState<SshKeyEntry[]>([])
   const [newSshKey, setNewSshKey] = useState('')
@@ -55,12 +58,15 @@ export function Profile() {
 
   useEffect(() => {
     fetchMe()
-      .then((data) => {
-        setProfile(data)
-        setPermissions(data.permissions ?? [])
-      })
+      .then((data) => setProfile(data))
       .catch(() => setError('Failed to load profile'))
       .finally(() => setLoading(false))
+    fetchMyPermissions()
+      .then((data) => {
+        setPermissions(data.direct)
+        setGroups(data.groups)
+      })
+      .catch(() => {})
     fetchProviders()
       .then((list: { name: string; id: string; host: string }[]) => {
         setProviders(list)
@@ -439,6 +445,67 @@ export function Profile() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+          {groups.length > 0 && (
+            <div className="space-y-3 mt-6">
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                Group memberships
+              </h3>
+              {groups.map((g) => (
+                <div
+                  key={g.id}
+                  className="rounded-lg border border-gray-200 bg-white dark:bg-slate-800 dark:border-slate-700 overflow-hidden"
+                >
+                  <div className="px-4 py-3 flex items-center gap-2 border-b border-gray-100 dark:border-slate-700">
+                    <span className="text-sm font-medium text-gray-800 dark:text-gray-100">
+                      {g.name}
+                    </span>
+                    <span className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded px-1.5 py-0.5">
+                      {g.source.toLowerCase()}
+                    </span>
+                    {g.description && (
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        — {g.description}
+                      </span>
+                    )}
+                  </div>
+                  {g.rules.length === 0 ? (
+                    <p className="px-4 py-3 text-xs text-gray-400 italic">
+                      No rules in this group.
+                    </p>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-slate-700/50">
+                          <th className="px-4 py-2">Provider</th>
+                          <th className="px-4 py-2">Type</th>
+                          <th className="px-4 py-2">Path</th>
+                          <th className="px-4 py-2">Grant</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                        {g.rules.map((r) => (
+                          <tr key={r.id} className="text-gray-700 dark:text-gray-300">
+                            <td className="px-4 py-2">
+                              <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                                {r.provider}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2">
+                              <PathTypeBadge matchType={r.matchType} />
+                            </td>
+                            <td className="px-4 py-2 font-mono text-xs">{r.value}</td>
+                            <td className="px-4 py-2">
+                              <OperationsBadge operations={r.grant} />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>

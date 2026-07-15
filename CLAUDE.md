@@ -31,8 +31,8 @@ progress lines are sent live.
 
 **Transparent proxy** uses servlet filters. The HTTP response is a single buffered reply — there is no mechanism to
 stream partial output mid-filter-chain. Validation filters must _accumulate_ their result and return;
-`ValidationSummaryFilter` (order 4999) and `PushFinalizerFilter` (order 5000) collect everything and write one response
-at the end using `sendGitError`.
+`ValidationSummaryFilter` (order `Integer.MAX_VALUE - 3`) and `PushFinalizerFilter` (order `Integer.MAX_VALUE - 1`)
+collect everything and write one response at the end using `sendGitError`.
 
 ## Reference implementation
 
@@ -57,8 +57,9 @@ bypass the cache and verify the jacoco threshold:
 
 Always verify the threshold passes locally before pushing — CI runs without cache and will catch it.
 
-Unit tests live under each module's `src/test/`. E2e tests are in `fogwall-server/src/test/java/com/rbc/fogwall/e2e/`
-and tagged `@Tag("e2e")`.
+Unit tests live under each module's `src/test/`. E2e tests are tagged `@Tag("e2e")` and live in
+`fogwall-server/src/test/java/com/rbc/fogwall/e2e/` (proxy modes, identity resolution, SSH, config reload) and
+`fogwall-dashboard/src/test/java/com/rbc/fogwall/dashboard/e2e/` (LDAP/OIDC auth and role mapping).
 
 ## Running the server locally
 
@@ -77,16 +78,23 @@ and tagged `@Tag("e2e")`.
 
 ## Docker Compose
 
-```bash
-docker compose up -d          # fogwall + Gitea (h2-mem database)
-bash docker/gitea-setup.sh          # one-time: create admin user + test repo in Gitea
+Always use the `compose.sh` wrapper — never bare `docker compose`/`podman compose` — it assembles the right `-f` overlay
+flags and auto-detects docker vs podman:
 
-# Optional database backends:
-docker compose --profile postgres up -d   # swap fogwall-local.yml for fogwall-postgres.yml
-docker compose --profile mongo up -d      # swap fogwall-local.yml for fogwall-mongo.yml
+```bash
+bash compose.sh -- up -d                        # fogwall + Gitea (h2-file database)
+bash docker/gitea-setup.sh                      # one-time: create admin user + test repo in Gitea
+
+# Optional overlays, composable:
+bash compose.sh --auth ldap -- up -d            # LDAP auth backend
+bash compose.sh --auth oidc -- up -d            # OIDC auth backend
+bash compose.sh --db postgres -- up -d          # Postgres instead of default h2-file
+bash compose.sh --db mongo -- up -d             # MongoDB instead of default h2-file
+bash compose.sh --auth ldap --db postgres -- down -v
 ```
 
-Config override file mounted at `/app/conf/fogwall-local.yml` inside the container. Templates in `docker/`.
+Default config mounted at `/app/conf/fogwall-docker-default.yml` inside the container. Templates (including
+`fogwall-local.yml` for custom overrides) live in `docker/`.
 
 ## Configuration
 

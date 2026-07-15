@@ -1,3 +1,5 @@
+import type { GroupPermissionRule, RepoPermission } from './types'
+
 /** Reads the XSRF-TOKEN cookie set by Spring Security's CookieCsrfTokenRepository. */
 function getCsrfToken(): string | null {
   const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/)
@@ -249,6 +251,23 @@ export async function fetchUserGroups(username: string) {
   const res = await apiFetch(`/api/users/${encodeURIComponent(username)}/permissions/groups`)
   if (!res.ok) throw new Error('Failed to fetch user groups')
   return res.json()
+}
+
+export async function fetchMyPermissions(): Promise<{
+  direct: RepoPermission[]
+  groups: UserGroupView[]
+}> {
+  const res = await apiFetch('/api/me/permissions')
+  if (!res.ok) throw new Error('Failed to fetch permissions')
+  return res.json()
+}
+
+export interface UserGroupView {
+  id: string
+  name: string
+  description: string | null
+  source: string
+  rules: GroupPermissionRule[]
 }
 
 export async function addUserPermission(
