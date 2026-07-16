@@ -52,6 +52,17 @@ public class AuthConfig {
     private Map<String, List<String>> roleMappings = new HashMap<>();
 
     /**
+     * When {@code role-mappings} is non-empty, controls whether a user whose IdP groups match none of the mappings is
+     * denied access. Defaults to {@code true} — deny-by-default, the correct posture for regulated environments.
+     *
+     * <p>Set to {@code false} to restore open-access behaviour: any user who authenticates successfully against the IdP
+     * is granted {@code ROLE_USER} unconditionally, and {@code role-mappings} (if present) only grant additional roles
+     * on top. This is a no-op when {@code role-mappings} is empty, since open mode is already the behaviour in that
+     * case.
+     */
+    private boolean requireRoleMapping = true;
+
+    /**
      * OIDC claim name that contains the user's group memberships. Defaults to {@code groups}, which is standard for
      * Keycloak, Okta, and most Entra ID configurations. Override if your IdP uses a different claim (e.g.
      * {@code roles}, {@code memberOf}).

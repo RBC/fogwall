@@ -82,7 +82,9 @@ be edited from the profile UI, since the directory is the source of truth. Roles
 (LDAP group CNs → role names). When `role-mappings` is configured, a user who does not match any mapped group is
 **denied access entirely** — they authenticate successfully against the directory but are refused by the proxy. This is
 intentional: the proxy is not open to all directory users by default. To grant baseline access, map a broad group (e.g.
-all-staff) to `USER`.
+all-staff) to `USER`, or set `auth.require-role-mapping: false` to treat the directory purely as an authentication
+mechanism and grant `ROLE_USER` to anyone who authenticates. See
+[CONFIGURATION.md — Role mappings](CONFIGURATION.md#role-mappings).
 
 SCM identities and permissions still need to be set up after first login — either by the user themselves from their
 profile page, by an admin via the dashboard, or via a supplemental `users:` YAML entry (which can carry `scm-identities`

@@ -529,12 +529,30 @@ auth:
 ### Role mappings
 
 `auth.role-mappings` applies to LDAP, AD, and OIDC. Keys are role names (without the `ROLE_` prefix); values are lists
-of group names or claim values from the IdP. `ROLE_USER` is always granted to every authenticated user.
+of group names or claim values from the IdP.
 
 | Role    | Dashboard access                                                               |
 | ------- | ------------------------------------------------------------------------------ |
 | `USER`  | View and act on pushes awaiting approval                                       |
 | `ADMIN` | All USER permissions + create/delete users, reset passwords, manage identities |
+
+When `role-mappings` is empty, the operator has not configured group-based access control: `ROLE_USER` is granted to
+every authenticated user (open mode). When `role-mappings` is non-empty, access is **deny-by-default** — a user whose
+IdP groups don't match any mapping authenticates successfully against the directory/IdP but is refused access by
+fogwall.
+
+```yaml
+auth:
+  role-mappings:
+    ADMIN:
+      - git-admins
+  # Deny-by-default is the correct posture for regulated environments and is the default.
+  # Set to false to treat the IdP purely as an authentication mechanism (SSO convenience): any
+  # user who authenticates successfully is granted ROLE_USER even if no group mapping matches.
+  # role-mappings (if present) then only grant additional roles on top. No-op when role-mappings
+  # is empty, since open mode is already the behaviour in that case.
+  require-role-mapping: true
+```
 
 ## Providers
 
