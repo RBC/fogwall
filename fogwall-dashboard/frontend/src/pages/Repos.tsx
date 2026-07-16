@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { createUrlRule, deleteUrlRule, fetchProviders } from '../api'
+import { createUrlRule, deleteUrlRule, fetchProviders, testUrlRules } from '../api'
+import type { RuleTestResponse } from '../api'
 import type { Provider } from '../types'
 
 interface ActiveRepo {
@@ -394,12 +395,223 @@ function AddRuleModal({
   )
 }
 
+function TestRuleModal({ onClose }: { onClose: () => void }) {
+  const [provider, setProvider] = useState('')
+  const [owner, setOwner] = useState('')
+  const [name, setName] = useState('')
+  const [operation, setOperation] = useState<'PUSH' | 'FETCH'>('PUSH')
+  const [providers, setProviders] = useState<Provider[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [result, setResult] = useState<RuleTestResponse | null>(null)
+
+  useEffect(() => {
+    fetchProviders()
+      .then((data: Provider[]) => {
+        setProviders(data)
+        if (data.length > 0) setProvider(data[0].id)
+      })
+      .catch(() => {})
+  }, [])
+
+  const handleTest = async () => {
+    if (!provider || !owner.trim() || !name.trim()) {
+      setError('Provider, owner, and repo name are required')
+      return
+    }
+    setSubmitting(true)
+    setError(null)
+    setResult(null)
+    try {
+      const res = await testUrlRules({
+        provider,
+        owner: owner.trim(),
+        name: name.trim(),
+        operation,
+      })
+      setResult(res)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleReset = () => {
+    setOwner('')
+    setName('')
+    setOperation('PUSH')
+    setError(null)
+    setResult(null)
+  }
+
+  const inputClass =
+    'w-full border border-gray-300 rounded px-3 py-1.5 text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200'
+  const labelClass = 'block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300'
+
+  const decisionClass =
+    result?.decision === 'ALLOW'
+      ? 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700'
+      : result?.decision === 'DENY'
+        ? 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700'
+        : 'bg-gray-100 text-gray-700 border-gray-300 dark:bg-slate-700 dark:text-gray-300 dark:border-slate-600'
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 dark:bg-black/60">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4 dark:bg-slate-800">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Test a rule</h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-xl leading-none dark:text-gray-500 dark:hover:text-gray-300"
+          >
+            ×
+          </button>
+        </div>
+
+        <p className="text-xs text-gray-400 dark:text-gray-500">
+          Read-only evaluation against the live ruleset. Shows which rule matches first and the full
+          ordered trail of rules considered.
+        </p>
+
+        <div className="space-y-3">
+          <div>
+            <label className={labelClass}>Provider</label>
+            <select
+              value={provider}
+              onChange={(e) => setProvider(e.target.value)}
+              className={inputClass}
+            >
+              {providers.length === 0 && <option value="">— No providers configured —</option>}
+              {providers.map((p) => (
+                <option key={p.name} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelClass}>Owner / org</label>
+              <input
+                type="text"
+                value={owner}
+                onChange={(e) => setOwner(e.target.value)}
+                placeholder="myorg"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Repo name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="myrepo"
+                className={inputClass}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className={labelClass}>Operation</label>
+            <select
+              value={operation}
+              onChange={(e) => setOperation(e.target.value as 'PUSH' | 'FETCH')}
+              className={inputClass}
+            >
+              <option value="PUSH">Push</option>
+              <option value="FETCH">Fetch</option>
+            </select>
+          </div>
+        </div>
+
+        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+
+        {result && (
+          <div className="space-y-2">
+            <div
+              className={`flex items-center gap-2 rounded border px-3 py-2 text-sm font-medium ${decisionClass}`}
+            >
+              <span>{result.decision}</span>
+              {result.matchedRuleId && (
+                <span className="text-xs font-normal opacity-75">
+                  matched rule {result.matchedRuleId.slice(0, 8)}
+                </span>
+              )}
+            </div>
+            {result.steps.length === 0 ? (
+              <p className="text-xs text-gray-400 dark:text-gray-500">No rules considered.</p>
+            ) : (
+              <div className="border border-gray-200 rounded divide-y divide-gray-100 dark:border-slate-700 dark:divide-slate-700">
+                {result.steps.map((step, i) => (
+                  <div
+                    key={step.ruleId}
+                    className={`flex items-center gap-2 px-3 py-1.5 text-xs ${
+                      step.matched ? 'bg-gray-50 dark:bg-slate-700/50' : ''
+                    }`}
+                  >
+                    <span className="w-4 text-center">{step.matched ? '✓' : '·'}</span>
+                    <span className="w-8 text-gray-400 font-mono dark:text-gray-500">#{i + 1}</span>
+                    <span
+                      className={`px-1.5 py-0.5 rounded font-medium ${
+                        step.access === 'ALLOW'
+                          ? 'text-green-700 dark:text-green-400'
+                          : 'text-red-700 dark:text-red-400'
+                      }`}
+                    >
+                      {step.access}
+                    </span>
+                    <span className="text-gray-400 dark:text-gray-500">order {step.order}</span>
+                    {step.description && (
+                      <span className="text-gray-500 truncate dark:text-gray-400">
+                        — {step.description}
+                      </span>
+                    )}
+                    <span className="ml-auto text-gray-400 dark:text-gray-500">
+                      {step.matched ? 'matched' : 'no match'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            Close
+          </button>
+          <button
+            onClick={handleReset}
+            className="px-4 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            Reset
+          </button>
+          <button
+            onClick={handleTest}
+            disabled={submitting}
+            className="px-4 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white rounded transition-colors"
+          >
+            {submitting ? 'Testing…' : 'Run test'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function Repos() {
   const [tab, setTab] = useState<Tab>('active')
   const [activeRepos, setActiveRepos] = useState<ActiveRepo[]>([])
   const [rules, setRules] = useState<Rule[]>([])
   const [loadedTab, setLoadedTab] = useState<Tab | null>(null)
   const [showAddRule, setShowAddRule] = useState(false)
+  const [showTestRule, setShowTestRule] = useState(false)
   const [providers, setProviders] = useState<Provider[]>([])
 
   useEffect(() => {
@@ -433,6 +645,7 @@ export function Repos() {
           onCreated={(rule) => setRules((prev) => [...prev, rule])}
         />
       )}
+      {showTestRule && <TestRuleModal onClose={() => setShowTestRule(false)} />}
 
       <div className="flex items-baseline gap-3">
         <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Repositories</h2>
@@ -456,12 +669,20 @@ export function Repos() {
           ))}
         </div>
         {tab === 'rules' && (
-          <button
-            onClick={() => setShowAddRule(true)}
-            className="mb-px px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors"
-          >
-            + Add rule
-          </button>
+          <div className="flex gap-2 mb-px">
+            <button
+              onClick={() => setShowTestRule(true)}
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors"
+            >
+              Test a rule
+            </button>
+            <button
+              onClick={() => setShowAddRule(true)}
+              className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors"
+            >
+              + Add rule
+            </button>
+          </div>
         )}
       </div>
 

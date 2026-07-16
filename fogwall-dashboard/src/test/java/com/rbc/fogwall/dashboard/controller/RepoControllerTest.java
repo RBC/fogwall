@@ -11,6 +11,8 @@ import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.PushStore.RepoPushSummary;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.db.model.AccessRule;
+import com.rbc.fogwall.db.model.MatchTarget;
+import com.rbc.fogwall.db.model.MatchType;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.ProviderRegistry;
 import java.util.List;
@@ -150,6 +152,99 @@ class RepoControllerTest {
         when(urlRuleRegistry.findById("missing")).thenReturn(Optional.empty());
 
         assertEquals(HttpStatus.NOT_FOUND, controller.deleteRule("missing").getStatusCode());
+    }
+
+    // ── POST /api/repos/rules/test ────────────────────────────────────────────────
+
+    @Test
+    void testRules_missingProvider_returns400() {
+        var resp = controller.testRules(new RepoController.RuleTestRequest("", "acme", "repo", "PUSH"));
+        assertEquals(HttpStatus.BAD_REQUEST, resp.getStatusCode());
+    }
+
+    @Test
+    void testRules_missingOwnerOrName_returns400() {
+        var resp = controller.testRules(new RepoController.RuleTestRequest("github", "", "repo", "PUSH"));
+        assertEquals(HttpStatus.BAD_REQUEST, resp.getStatusCode());
+    }
+
+    @Test
+    void testRules_unknownProvider_returns400() {
+        var p = mock(FogwallProvider.class);
+        when(p.getProviderId()).thenReturn("github");
+        when(providerSource.getProviders()).thenReturn(List.of(p));
+
+        var resp = controller.testRules(new RepoController.RuleTestRequest("nonexistent", "acme", "repo", "PUSH"));
+
+        assertEquals(HttpStatus.BAD_REQUEST, resp.getStatusCode());
+    }
+
+    @Test
+    void testRules_invalidOperation_returns400() {
+        var p = mock(FogwallProvider.class);
+        when(p.getProviderId()).thenReturn("github");
+        when(providerSource.getProviders()).thenReturn(List.of(p));
+
+        var resp = controller.testRules(new RepoController.RuleTestRequest("github", "acme", "repo", "MERGE"));
+
+        assertEquals(HttpStatus.BAD_REQUEST, resp.getStatusCode());
+    }
+
+    @Test
+    void testRules_allowMatch_returnsAllowDecisionWithTrail() {
+        var p = mock(FogwallProvider.class);
+        when(p.getProviderId()).thenReturn("github");
+        when(providerSource.getProviders()).thenReturn(List.of(p));
+        when(providerSource.getProvider("github")).thenReturn(Optional.of(p));
+
+        var rule = AccessRule.builder()
+                .ruleOrder(100)
+                .provider("github")
+                .access(AccessRule.Access.ALLOW)
+                .operation(AccessRule.Operation.BOTH)
+                .target(MatchTarget.OWNER)
+                .value("acme")
+                .matchType(MatchType.GLOB)
+                .build();
+        when(urlRuleRegistry.findEnabledForProvider("github")).thenReturn(List.of(rule));
+
+        var resp = controller.testRules(new RepoController.RuleTestRequest("github", "acme", "repo", "PUSH"));
+
+        assertEquals(HttpStatus.OK, resp.getStatusCode());
+        var body = (RepoController.RuleTestResponse) resp.getBody();
+        assertEquals("ALLOW", body.decision());
+        assertEquals(rule.getId(), body.matchedRuleId());
+        assertEquals(1, body.steps().size());
+        assertEquals(true, body.steps().get(0).matched());
+    }
+
+    @Test
+    void testRules_noMatch_returnsNotAllowed() {
+        var p = mock(FogwallProvider.class);
+        when(p.getProviderId()).thenReturn("github");
+        when(providerSource.getProviders()).thenReturn(List.of(p));
+        when(providerSource.getProvider("github")).thenReturn(Optional.of(p));
+        when(urlRuleRegistry.findEnabledForProvider("github")).thenReturn(List.of());
+
+        var resp = controller.testRules(new RepoController.RuleTestRequest("github", "acme", "repo", "PUSH"));
+
+        assertEquals(HttpStatus.OK, resp.getStatusCode());
+        var body = (RepoController.RuleTestResponse) resp.getBody();
+        assertEquals("NOT_ALLOWED", body.decision());
+        assertEquals(null, body.matchedRuleId());
+    }
+
+    @Test
+    void testRules_defaultsOperationToPush() {
+        var p = mock(FogwallProvider.class);
+        when(p.getProviderId()).thenReturn("github");
+        when(providerSource.getProviders()).thenReturn(List.of(p));
+        when(providerSource.getProvider("github")).thenReturn(Optional.of(p));
+        when(urlRuleRegistry.findEnabledForProvider("github")).thenReturn(List.of());
+
+        var resp = controller.testRules(new RepoController.RuleTestRequest("github", "acme", "repo", null));
+
+        assertEquals(HttpStatus.OK, resp.getStatusCode());
     }
 
     // ── GET /api/repos/active ─────────────────────────────────────────────────────

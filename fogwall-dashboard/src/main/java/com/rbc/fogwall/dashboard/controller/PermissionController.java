@@ -144,7 +144,60 @@ public class PermissionController {
         return ResponseEntity.ok(result);
     }
 
+    @Operation(
+            operationId = "testUserPermission",
+            summary = "Test whether a user has a permission grant for a path",
+            description =
+                    "Read-only evaluation. Returns whether the grant is allowed and, if so, whether it came from a "
+                            + "direct per-user permission or an inherited group rule.")
+    @PostMapping("/test")
+    public ResponseEntity<?> test(@PathVariable String username, @RequestBody PermissionTestRequest req) {
+        if (userStore.findByUsername(username).isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        if (req.provider() == null || req.provider().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "provider is required"));
+        }
+        if (req.path() == null || req.path().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "path is required"));
+        }
+
+        RepoPermission.Grant grant;
+        try {
+            grant = req.grant() != null
+                    ? RepoPermission.Grant.valueOf(req.grant().toUpperCase())
+                    : RepoPermission.Grant.PUSH;
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "invalid grant: " + req.grant()));
+        }
+
+        var result = permissionService.evaluateGrant(
+                username, req.provider().trim(), req.path().trim(), grant);
+        PermissionTestResponse response =
+                switch (result) {
+                    case RepoPermissionService.GrantResult.GrantedDirect d ->
+                        new PermissionTestResponse(
+                                true, "DIRECT", d.permission().getId(), null);
+                    case RepoPermissionService.GrantResult.GrantedByGroup g -> {
+                        String groupId = g.rule().getGroupId();
+                        String groupName = permissionService
+                                .getGroupStore()
+                                .findGroupById(groupId)
+                                .map(gr -> gr.getName())
+                                .orElse(groupId);
+                        yield new PermissionTestResponse(true, "GROUP", g.rule().getId(), groupName);
+                    }
+                    case RepoPermissionService.GrantResult.NotGranted n ->
+                        new PermissionTestResponse(false, "NONE", null, null);
+                };
+        return ResponseEntity.ok(response);
+    }
+
     public record AddPermissionRequest(String provider, String target, String value, String matchType, String grant) {}
 
     public record UserGroupView(String id, String name, String description, String source, List<?> rules) {}
+
+    public record PermissionTestRequest(String provider, String path, String grant) {}
+
+    public record PermissionTestResponse(boolean allowed, String source, String entryId, String groupName) {}
 }

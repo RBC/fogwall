@@ -1,5 +1,42 @@
 # fogwall — Claude context
 
+## Positioning
+
+fogwall is not "a Java rewrite of git-proxy that solves an OSPO-approval problem." Think of it as a general-purpose
+**gateway/integration layer for an enterprise's software estate**, with git push validation as the first fully-built use
+case, not the ceiling. Design decisions should keep the door open for:
+
+- **SDLC/SCM control plane** — a single policy-enforcement chokepoint sitting in front of heterogeneous SCM platforms
+  (GitHub, GitLab, Bitbucket, Forgejo/Gitea, and eventually non-git systems), so a regulated org doesn't need bespoke
+  compliance tooling bolted onto each one individually.
+- **M&A / subsidiary integration gateway** — a way to bridge two orgs' disparate SCM estates during an acquisition or
+  integration without granting direct cross-boundary network access, while still enforcing each side's policy.
+- **Inner-source enablement** — the trust/approval/audit layer that lets a regulated org run an internal
+  open-source-style contribution model without each app team reinventing review and provenance controls.
+
+When evaluating a new feature, prefer the more general abstraction (provider-agnostic, protocol-agnostic where
+reasonable) over one that only serves the git-push case, even if git push is what's shipping today.
+
+## Design principles
+
+fogwall sits at a security boundary. When a design choice pits security against convenience, security wins — but treat
+that as a rare, real tradeoff to name explicitly, not a reflex; a control developers route around because it's unusable
+isn't actually providing security.
+
+- **Security is non-negotiable.** Never weaken the correctness of a validation or approval control for the sake of
+  ergonomics. Where a feature must pick between "safe by default" and "convenient by default," default to safe and make
+  the convenient path an explicit, visible opt-in (self-certify grants, admin override, auto-approve mode) — never a
+  silent default.
+- **Auditability and transparency are part of the security model, not a nice-to-have.** Every decision fogwall makes
+  (blocked, approved, forwarded, overridden) should be explainable after the fact — who, which rule, what evidence — not
+  just enforced in the moment. A feature that can't produce an audit trail for its own decisions isn't done.
+- **Don't let roadmap ambition become shipped-system complexity.** The gateway/integration-layer vision above is a north
+  star, not a mandate to wire every backlog item into one interdependent system. Prefer features that are individually
+  optional and composable — an org should be able to run only the pieces it needs — over a design where understanding or
+  operating one feature requires understanding all of them. If a new capability would raise the baseline complexity for
+  someone not using it, that's a signal to make it opt-in or a separate module rather than folding it into the core
+  path.
+
 ## Repository layout
 
 | Module              | Purpose                                                                                                     |
@@ -34,72 +71,25 @@ stream partial output mid-filter-chain. Validation filters must _accumulate_ the
 `ValidationSummaryFilter` (order `Integer.MAX_VALUE - 3`) and `PushFinalizerFilter` (order `Integer.MAX_VALUE - 1`)
 collect everything and write one response at the end using `sendGitError`.
 
-## Reference implementation
+## Lineage
 
-The Node.js original lives at [finos/git-proxy](https://github.com/finos/git-proxy). Refer to it for the Action/Step
-model, Sink interface, and filter chain patterns when porting features.
+fogwall's push-validation core traces back to [finos/git-proxy](https://github.com/finos/git-proxy) — the Node.js
+original designed the Action/Step model, Sink interface, approval lifecycle, and multi-provider architecture that
+fogwall's own abstractions are informed by. Refer to it for prior art when porting or extending that specific piece of
+the system. It is a reference point, not a spec fogwall is obligated to mirror going forward — fogwall's roadmap
+(gateway/integration-layer use cases above) extends past what git-proxy set out to do.
 
-## Build & test
+## Development
 
-```bash
-./gradlew spotlessApply      # fix formatting (palantir-java-format) — run this before build
-./gradlew build              # compile + unit tests (no containers)
-./gradlew test               # unit tests only (e2e excluded)
-./gradlew e2eTest            # e2e tests — requires Docker/Podman
-```
+Detailed build, test, run, and Docker Compose instructions live in [CONTRIBUTING.md](CONTRIBUTING.md) — treat it as the
+source of truth for exact commands, since it's written for human contributors and kept current. In short:
 
-**Important:** Gradle caches test results. If you add new tests or change coverage-relevant code, run with `--rerun` to
-bypass the cache and verify the jacoco threshold:
-
-```bash
-./gradlew :fogwall-core:test :fogwall-core:jacocoTestCoverageVerification --rerun
-```
-
-Always verify the threshold passes locally before pushing — CI runs without cache and will catch it.
-
-Unit tests live under each module's `src/test/`. E2e tests are tagged `@Tag("e2e")` and live in
-`fogwall-server/src/test/java/com/rbc/fogwall/e2e/` (proxy modes, identity resolution, SSH, config reload) and
-`fogwall-dashboard/src/test/java/com/rbc/fogwall/dashboard/e2e/` (LDAP/OIDC auth and role mapping).
-
-## Running the server locally
-
-```bash
-# Proxy only (no dashboard, no API):
-./gradlew :fogwall-server:run &
-./gradlew :fogwall-server:stop
-
-# Proxy + dashboard + REST API (http://localhost:8080/):
-./gradlew :fogwall-dashboard:run &
-./gradlew :fogwall-dashboard:stop
-
-# Logs: fogwall-server/logs/application.log  (DEBUG for com.rbc.fogwall)
-# Default DB: h2-file — persisted to fogwall-server/.data/fogwall.mv.db
-```
-
-## Docker Compose
-
-Always use the `compose.sh` wrapper — never bare `docker compose`/`podman compose` — it assembles the right `-f` overlay
-flags and auto-detects docker vs podman:
-
-```bash
-bash compose.sh -- up -d                        # fogwall + Gitea (h2-file database)
-bash docker/gitea-setup.sh                      # one-time: create admin user + test repo in Gitea
-
-# Optional overlays, composable:
-bash compose.sh --auth ldap -- up -d            # LDAP auth backend
-bash compose.sh --auth oidc -- up -d            # OIDC auth backend
-bash compose.sh --db postgres -- up -d          # Postgres instead of default h2-file
-bash compose.sh --db mongo -- up -d             # MongoDB instead of default h2-file
-bash compose.sh --auth ldap --db postgres -- down -v
-```
-
-Default config mounted at `/app/conf/fogwall-docker-default.yml` inside the container. Templates (including
-`fogwall-local.yml` for custom overrides) live in `docker/`.
-
-## Configuration
-
-Refer to [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for detailed docs on YAML config structure, environment variable
-overrides, and provider-specific settings.
+- `./gradlew spotlessApply && ./gradlew build` — format then compile + unit test
+- `./gradlew e2eTest` — e2e tests (requires Docker/Podman)
+- `bash compose.sh -- up -d` — local stack (fogwall + Gitea); see CONTRIBUTING.md for auth/db overlay flags
+- Gradle caches test results — pass `--rerun` when adding tests or touching coverage-relevant code, e.g.:
+  `./gradlew :fogwall-core:test :fogwall-core:jacocoTestCoverageVerification --rerun`. Always verify the jacoco
+  threshold locally before pushing — CI runs without cache and will catch it.
 
 ## Commit conventions
 
@@ -110,12 +100,32 @@ overrides, and provider-specific settings.
 - Always include `closes #N` / `resolves #N` in commit messages when addressing a GitHub issue.
 - Never add `[ci skip]` to commits unless explicitly asked.
 
+## Backwards compatibility
+
+Past the 1.0.0 line (current version well past it — see `build.gradle`) — respect backcompat, don't break freely:
+
+- **Config keys** — don't rename/remove without a deprecation path; accept old and new for at least one minor release.
+- **SQL schema** — changes go through `DatabaseMigrator` (new migration file + registry entry); never edit an applied
+  migration.
+- **Mongo collections** — don't rename once shipped; a rename needs a migration step (copy + drop), documented.
+- **REST API shapes** — additive only, no breaking field removals.
+- Java APIs inside `fogwall-core` are still internal and can break between minors until a stable embedding story is
+  declared.
+
+Before renaming a config key, table, column, or collection: pause and ask — the answer is almost always "ship a
+migration instead."
+
 ## Testing conventions
 
 - Always use JUnit assertions (`org.junit.jupiter.api.Assertions.*`) — not manual `if`/`throw` checks.
 - E2e tests use Testcontainers (Gitea) + `JettyProxyFixture`. Credentials in the clone URL are forwarded to upstream
   Gitea, so they must be valid Gitea credentials. Use `GiteaContainer.ADMIN_USER`/`ADMIN_PASSWORD` or create test users
   via `createTestUser()` / `addTestUserAsCollaborator()` — never invent fake usernames that won't authenticate upstream.
+
+## Configuration
+
+Refer to [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for detailed docs on YAML config structure, environment variable
+overrides, and provider-specific settings.
 
 ## Roadmap & architecture
 

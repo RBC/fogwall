@@ -14,7 +14,9 @@ import {
   removeUserEmail,
   removeUserIdentity,
   resetUserPassword,
+  testUserPermission,
 } from '../api'
+import type { PermissionTestResponse } from '../api'
 import { OperationsBadge, PathTypeBadge } from '../components/PermissionBadges'
 import { StatusBadge } from '../components/StatusBadge'
 import type {
@@ -731,11 +733,147 @@ function AddPermissionModal({
   )
 }
 
+function TestPermissionModal({ username, onClose }: { username: string; onClose: () => void }) {
+  const [providers, setProviders] = useState<Provider[]>([])
+  const [provider, setProvider] = useState('')
+  const [path, setPath] = useState('')
+  const [grant, setGrant] = useState<RepoPermission['grant']>('PUSH')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [result, setResult] = useState<PermissionTestResponse | null>(null)
+
+  useEffect(() => {
+    fetchProviders()
+      .then((list: Provider[]) => {
+        setProviders(list)
+        if (list.length > 0) setProvider(list[0].id)
+      })
+      .catch(console.error)
+  }, [])
+
+  async function handleTest() {
+    if (!provider || !path.trim()) {
+      setError('Provider and path are required')
+      return
+    }
+    setSubmitting(true)
+    setError(null)
+    setResult(null)
+    try {
+      const res = await testUserPermission(username, { provider, path: path.trim(), grant })
+      setResult(res)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Permission test failed')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  function handleReset() {
+    setPath('')
+    setGrant('PUSH')
+    setError(null)
+    setResult(null)
+  }
+
+  return (
+    <div className={modalClass}>
+      <div className={modalPanelClass}>
+        <h3 className={modalTitleClass}>Test Permission</h3>
+        <p className="text-xs text-gray-400 mb-3 dark:text-gray-500">
+          Read-only evaluation of whether <span className="font-mono">{username}</span> has this
+          grant, and whether it comes from a direct permission or an inherited group rule.
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label className={labelClass}>Provider</label>
+            <select
+              value={provider}
+              onChange={(e) => setProvider(e.target.value)}
+              disabled={providers.length === 0}
+              className={`${inputClass} disabled:opacity-50`}
+            >
+              {providers.length === 0 && <option value="">Loading…</option>}
+              {providers.map((p) => (
+                <option key={p.name} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={labelClass}>Path</label>
+            <input
+              value={path}
+              onChange={(e) => setPath(e.target.value)}
+              placeholder="/owner/repo"
+              className={`${inputClass} font-mono`}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Grant</label>
+            <select
+              value={grant}
+              onChange={(e) => setGrant(e.target.value as typeof grant)}
+              className={inputClass}
+            >
+              <option value="PUSH">Push</option>
+              <option value="REVIEW">Review</option>
+            </select>
+          </div>
+        </div>
+
+        {error && <p className="mt-3 text-xs text-red-500 dark:text-red-400">{error}</p>}
+
+        {result && (
+          <div
+            className={`mt-3 rounded border px-3 py-2 text-sm ${
+              result.allowed
+                ? 'border-green-300 bg-green-50 text-green-800 dark:border-green-700 dark:bg-green-900/30 dark:text-green-300'
+                : 'border-red-300 bg-red-50 text-red-800 dark:border-red-700 dark:bg-red-900/30 dark:text-red-300'
+            }`}
+          >
+            <div className="font-medium">{result.allowed ? 'ALLOWED' : 'DENIED'}</div>
+            {result.allowed && result.source === 'DIRECT' && (
+              <div className="mt-1 text-xs opacity-80">
+                Granted by direct permission {result.entryId?.slice(0, 8)}
+              </div>
+            )}
+            {result.allowed && result.source === 'GROUP' && (
+              <div className="mt-1 text-xs opacity-80">
+                Granted via group membership: {result.groupName}
+              </div>
+            )}
+            {!result.allowed && (
+              <div className="mt-1 text-xs opacity-80">
+                No direct or group permission grants this user access.
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 mt-4">
+          <button type="button" onClick={onClose} className={cancelBtnClass}>
+            Close
+          </button>
+          <button type="button" onClick={handleReset} className={cancelBtnClass}>
+            Reset
+          </button>
+          <button onClick={handleTest} disabled={submitting} className={submitBtnClass}>
+            {submitting ? 'Testing…' : 'Run test'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function PermissionsTab({ username, isAdmin }: { username: string; isAdmin: boolean }) {
   const [permissions, setPermissions] = useState<RepoPermission[]>([])
   const [groups, setGroups] = useState<UserGroupView[]>([])
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
+  const [showTest, setShowTest] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
@@ -779,6 +917,7 @@ function PermissionsTab({ username, isAdmin }: { username: string; isAdmin: bool
           onAdded={loadPermissions}
         />
       )}
+      {showTest && <TestPermissionModal username={username} onClose={() => setShowTest(false)} />}
 
       {permissions.length === 0 ? (
         <p className="text-sm text-gray-400 italic py-4 dark:text-gray-500">
@@ -847,12 +986,20 @@ function PermissionsTab({ username, isAdmin }: { username: string; isAdmin: bool
       {actionError && <p className="text-xs text-red-500 dark:text-red-400">{actionError}</p>}
 
       {isAdmin && (
-        <button
-          onClick={() => setShowAdd(true)}
-          className="px-3 py-1.5 rounded bg-slate-700 text-white text-xs hover:bg-slate-800"
-        >
-          + Add Permission
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowAdd(true)}
+            className="px-3 py-1.5 rounded bg-slate-700 text-white text-xs hover:bg-slate-800"
+          >
+            + Add Permission
+          </button>
+          <button
+            onClick={() => setShowTest(true)}
+            className="px-3 py-1.5 rounded border border-gray-300 text-xs text-gray-600 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            Test Permission
+          </button>
+        </div>
       )}
 
       {/* group memberships */}

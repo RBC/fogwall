@@ -265,6 +265,88 @@ class UrlRuleEvaluatorTest {
                 "PUSH-only deny rule must not block a fetch");
     }
 
+    // ── evaluateTrail ─────────────────────────────────────────────────────────
+
+    @Test
+    void evaluateTrail_recordsAllRulesInOrderWithMatchFlag() {
+        var denyRule = AccessRule.builder()
+                .ruleOrder(100)
+                .access(AccessRule.Access.DENY)
+                .operation(AccessRule.Operation.BOTH)
+                .target(MatchTarget.OWNER)
+                .value("blocked")
+                .matchType(MatchType.GLOB)
+                .build();
+        var allowRule = AccessRule.builder()
+                .ruleOrder(200)
+                .access(AccessRule.Access.ALLOW)
+                .operation(AccessRule.Operation.BOTH)
+                .target(MatchTarget.OWNER)
+                .value("myorg")
+                .matchType(MatchType.GLOB)
+                .build();
+        var evaluator = evaluatorWith(denyRule, allowRule);
+
+        var trail = evaluator.evaluateTrail("myorg/repo", "myorg", "repo", HttpOperation.PUSH);
+
+        assertEquals(2, trail.steps().size());
+        assertEquals(denyRule.getId(), trail.steps().get(0).rule().getId());
+        assertFalse(trail.steps().get(0).matched(), "deny rule for 'blocked' must not match 'myorg'");
+        assertEquals(allowRule.getId(), trail.steps().get(1).rule().getId());
+        assertTrue(trail.steps().get(1).matched());
+        assertInstanceOf(UrlRuleEvaluator.Result.Allowed.class, trail.result());
+    }
+
+    @Test
+    void evaluateTrail_firstMatchWinsButLaterRulesStillRecorded() {
+        var denyRule = AccessRule.builder()
+                .ruleOrder(100)
+                .access(AccessRule.Access.DENY)
+                .operation(AccessRule.Operation.BOTH)
+                .target(MatchTarget.OWNER)
+                .value("myorg")
+                .matchType(MatchType.GLOB)
+                .build();
+        var allowRule = AccessRule.builder()
+                .ruleOrder(200)
+                .access(AccessRule.Access.ALLOW)
+                .operation(AccessRule.Operation.BOTH)
+                .target(MatchTarget.OWNER)
+                .value("myorg")
+                .matchType(MatchType.GLOB)
+                .build();
+        var evaluator = evaluatorWith(denyRule, allowRule);
+
+        var trail = evaluator.evaluateTrail("myorg/repo", "myorg", "repo", HttpOperation.PUSH);
+
+        assertEquals(2, trail.steps().size(), "later rules are still recorded even though the first match decides");
+        assertTrue(trail.steps().get(0).matched());
+        assertTrue(trail.steps().get(1).matched());
+        assertInstanceOf(UrlRuleEvaluator.Result.Denied.class, trail.result());
+        assertEquals(denyRule.getId(), ((UrlRuleEvaluator.Result.Denied) trail.result()).ruleId());
+    }
+
+    @Test
+    void evaluateTrail_noRulesMatch_notAllowedWithFullTrail() {
+        var evaluator = evaluatorWith(allow(MatchTarget.OWNER, "myorg"));
+
+        var trail = evaluator.evaluateTrail("otherorg/repo", "otherorg", "repo", HttpOperation.PUSH);
+
+        assertEquals(1, trail.steps().size());
+        assertFalse(trail.steps().get(0).matched());
+        assertInstanceOf(UrlRuleEvaluator.Result.NotAllowed.class, trail.result());
+    }
+
+    @Test
+    void evaluateTrail_emptyRegistry_emptyTrail() {
+        var evaluator = new UrlRuleEvaluator(new InMemoryUrlRuleRegistry(), GITHUB);
+
+        var trail = evaluator.evaluateTrail("org/repo", "org", "repo", HttpOperation.PUSH);
+
+        assertTrue(trail.steps().isEmpty());
+        assertInstanceOf(UrlRuleEvaluator.Result.NotAllowed.class, trail.result());
+    }
+
     // ── Registry query ────────────────────────────────────────────────────────
 
     @Test

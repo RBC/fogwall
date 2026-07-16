@@ -2,12 +2,14 @@ package com.rbc.fogwall.dashboard.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
+import com.rbc.fogwall.permission.GroupPermissionRule;
 import com.rbc.fogwall.permission.GroupPermissionStore;
 import com.rbc.fogwall.permission.PermissionGroup;
 import com.rbc.fogwall.permission.RepoPermission;
@@ -294,5 +296,118 @@ class PermissionControllerTest {
         var resp = controller.listGroups("alice");
 
         assertEquals(HttpStatus.OK, resp.getStatusCode());
+    }
+
+    // ── POST /api/users/{username}/permissions/test ──────────────────────────────
+
+    private static PermissionController.PermissionTestRequest testReq(String provider, String path, String grant) {
+        return new PermissionController.PermissionTestRequest(provider, path, grant);
+    }
+
+    @Test
+    void test_unknownUser_returns404() {
+        when(userStore.findByUsername("nobody")).thenReturn(Optional.empty());
+
+        var resp = controller.test("nobody", testReq("github", "/acme/repo", null));
+
+        assertEquals(HttpStatus.NOT_FOUND, resp.getStatusCode());
+    }
+
+    @Test
+    void test_missingProvider_returns400() {
+        when(userStore.findByUsername("alice")).thenReturn(Optional.of(ALICE));
+
+        var resp = controller.test("alice", testReq("", "/acme/repo", null));
+
+        assertEquals(HttpStatus.BAD_REQUEST, resp.getStatusCode());
+    }
+
+    @Test
+    void test_missingPath_returns400() {
+        when(userStore.findByUsername("alice")).thenReturn(Optional.of(ALICE));
+
+        var resp = controller.test("alice", testReq("github", " ", null));
+
+        assertEquals(HttpStatus.BAD_REQUEST, resp.getStatusCode());
+    }
+
+    @Test
+    void test_invalidGrant_returns400() {
+        when(userStore.findByUsername("alice")).thenReturn(Optional.of(ALICE));
+
+        var resp = controller.test("alice", testReq("github", "/acme/repo", "READ"));
+
+        assertEquals(HttpStatus.BAD_REQUEST, resp.getStatusCode());
+    }
+
+    @Test
+    void test_directGrant_returnsAllowedWithDirectSource() {
+        when(userStore.findByUsername("alice")).thenReturn(Optional.of(ALICE));
+        when(permissionService.evaluateGrant("alice", "github", "/acme/repo", RepoPermission.Grant.PUSH))
+                .thenReturn(new RepoPermissionService.GrantResult.GrantedDirect(DB_PERM));
+
+        var resp = controller.test("alice", testReq("github", "/acme/repo", "PUSH"));
+
+        assertEquals(HttpStatus.OK, resp.getStatusCode());
+        var body = (PermissionController.PermissionTestResponse) resp.getBody();
+        assertEquals(true, body.allowed());
+        assertEquals("DIRECT", body.source());
+        assertEquals(DB_PERM.getId(), body.entryId());
+    }
+
+    @Test
+    void test_groupGrant_returnsAllowedWithGroupSourceAndName() {
+        var groupStore = mock(GroupPermissionStore.class);
+        var group = PermissionGroup.builder()
+                .name("devs")
+                .source(PermissionGroup.Source.DB)
+                .build();
+        var rule = GroupPermissionRule.builder()
+                .groupId(group.getId())
+                .provider("github")
+                .value("/acme/repo")
+                .matchType(MatchType.LITERAL)
+                .grant(RepoPermission.Grant.PUSH)
+                .build();
+        when(userStore.findByUsername("alice")).thenReturn(Optional.of(ALICE));
+        when(permissionService.evaluateGrant("alice", "github", "/acme/repo", RepoPermission.Grant.PUSH))
+                .thenReturn(new RepoPermissionService.GrantResult.GrantedByGroup(rule));
+        when(permissionService.getGroupStore()).thenReturn(groupStore);
+        when(groupStore.findGroupById(group.getId())).thenReturn(Optional.of(group));
+
+        var resp = controller.test("alice", testReq("github", "/acme/repo", "PUSH"));
+
+        assertEquals(HttpStatus.OK, resp.getStatusCode());
+        var body = (PermissionController.PermissionTestResponse) resp.getBody();
+        assertEquals(true, body.allowed());
+        assertEquals("GROUP", body.source());
+        assertEquals(rule.getId(), body.entryId());
+        assertEquals("devs", body.groupName());
+    }
+
+    @Test
+    void test_notGranted_returnsDeniedWithNoneSource() {
+        when(userStore.findByUsername("alice")).thenReturn(Optional.of(ALICE));
+        when(permissionService.evaluateGrant("alice", "github", "/acme/repo", RepoPermission.Grant.PUSH))
+                .thenReturn(new RepoPermissionService.GrantResult.NotGranted());
+
+        var resp = controller.test("alice", testReq("github", "/acme/repo", "PUSH"));
+
+        assertEquals(HttpStatus.OK, resp.getStatusCode());
+        var body = (PermissionController.PermissionTestResponse) resp.getBody();
+        assertEquals(false, body.allowed());
+        assertEquals("NONE", body.source());
+    }
+
+    @Test
+    void test_defaultGrant_isPush() {
+        when(userStore.findByUsername("alice")).thenReturn(Optional.of(ALICE));
+        when(permissionService.evaluateGrant("alice", "github", "/acme/repo", RepoPermission.Grant.PUSH))
+                .thenReturn(new RepoPermissionService.GrantResult.NotGranted());
+
+        var resp = controller.test("alice", testReq("github", "/acme/repo", null));
+
+        assertEquals(HttpStatus.OK, resp.getStatusCode());
+        verify(permissionService).evaluateGrant("alice", "github", "/acme/repo", RepoPermission.Grant.PUSH);
     }
 }
