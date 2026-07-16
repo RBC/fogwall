@@ -672,6 +672,39 @@ after TCP and TLS both pass.
 provider's git endpoint. A transparent HTTPS inspection proxy (MITM) will also break JGit's certificate pinning — the
 proxy host's egress IP should bypass SSL inspection, not just be allowlisted at the IP layer.
 
+### Large pushes failing behind a reverse proxy (chunked transfer-encoding)
+
+When fogwall is deployed behind a reverse proxy (HAProxy, nginx, a cloud load balancer), pushes with large packs (> 1
+MiB) can fail with:
+
+```
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+```
+
+Server-side logs show `ParseGitRequestFilter` errors such as `EOFException: Short read of block` or
+`Invalid packet line header`.
+
+**Root cause:** git uses `Transfer-Encoding: chunked` for pushes exceeding `http.postBuffer` (default 1 MiB). Many
+reverse proxies don't fully support chunked request forwarding — they may terminate the chunked stream early, dechunk
+and rebuffer it, or split the body across multiple backend requests, so fogwall receives a truncated or malformed
+request. Small pushes (< 1 MiB) use `Content-Length` instead and are unaffected, which is why this often shows up only
+once a repo or commit grows past that size.
+
+**Client-side workaround** — force git to send the pack as a single `Content-Length` request instead of chunked:
+
+```bash
+git config --global http.postBuffer 524288000
+```
+
+**Server-side workaround (nginx)** — ensure the proxy buffers the full request body before forwarding and allows a large
+enough body size:
+
+```
+proxy_request_buffering on;
+client_max_body_size 500m;
+```
+
 ---
 
 ## Production checklist
