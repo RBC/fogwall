@@ -245,6 +245,51 @@ class JettyConfigurationBuilderTest {
         assertEquals(MatchType.GLOB, rules.get(0).getMatchType());
     }
 
+    // ---- buildConfigRules — order optional, inferred from array position ----
+
+    @Test
+    void buildConfigRules_omittedOrder_infersFromArrayPosition() {
+        var config = configWithGithub();
+        config.getRules()
+                .setAllow(List.of(
+                        slugRuleNoOrder("github", "/org/repo-a"),
+                        slugRuleNoOrder("github", "/org/repo-b"),
+                        slugRuleNoOrder("github", "/org/repo-c")));
+
+        List<AccessRule> rules = new JettyConfigurationBuilder(config).buildConfigRules(config);
+
+        assertEquals(3, rules.size());
+        assertEquals(0, rules.get(0).getRuleOrder());
+        assertEquals(100, rules.get(1).getRuleOrder());
+        assertEquals(200, rules.get(2).getRuleOrder());
+    }
+
+    @Test
+    void buildConfigRules_explicitOrder_takesPrecedenceOverPosition() {
+        var config = configWithGithub();
+        var rule = slugRuleNoOrder("github", "/org/repo");
+        rule.setOrder(5000);
+        config.getRules().setAllow(List.of(rule));
+
+        List<AccessRule> rules = new JettyConfigurationBuilder(config).buildConfigRules(config);
+
+        assertEquals(5000, rules.get(0).getRuleOrder());
+    }
+
+    @Test
+    void buildConfigRules_omittedOrder_disabledRulesDoNotConsumePosition() {
+        var config = configWithGithub();
+        var disabled = slugRuleNoOrder("github", "/org/repo-disabled");
+        disabled.setEnabled(false);
+        var enabled = slugRuleNoOrder("github", "/org/repo-enabled");
+        config.getRules().setAllow(List.of(disabled, enabled));
+
+        List<AccessRule> rules = new JettyConfigurationBuilder(config).buildConfigRules(config);
+
+        assertEquals(1, rules.size());
+        assertEquals(0, rules.get(0).getRuleOrder());
+    }
+
     // ---- provider type inference from config key ----
 
     @Test
@@ -372,9 +417,14 @@ class JettyConfigurationBuilderTest {
     }
 
     private static RuleConfig slugRule(String provider, String value, int order) {
+        var rule = slugRuleNoOrder(provider, value);
+        rule.setOrder(order);
+        return rule;
+    }
+
+    private static RuleConfig slugRuleNoOrder(String provider, String value) {
         var rule = new RuleConfig();
         rule.setProvider(provider);
-        rule.setOrder(order);
         var m = new MatchConfig();
         m.setTarget("SLUG");
         m.setValue(value);

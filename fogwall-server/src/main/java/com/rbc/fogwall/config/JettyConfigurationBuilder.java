@@ -653,12 +653,14 @@ public class JettyConfigurationBuilder {
     }
 
     private void appendAccessRules(List<AccessRule> result, List<RuleConfig> rules, AccessRule.Access access) {
+        int position = 0;
         for (RuleConfig rule : rules) {
             if (!rule.isEnabled()) continue;
+            int resolvedOrder = rule.getOrder() != null ? rule.getOrder() : position * 100;
+            position++;
             AccessRule.Operation ops = toOperations(rule.getOperation());
             String rawProvider = rule.getProvider().isBlank() ? null : rule.getProvider();
-            String resolvedId =
-                    resolveProviderName(access.name() + " rule (order=" + rule.getOrder() + ")", rawProvider);
+            String resolvedId = resolveProviderName(access.name() + " rule (order=" + resolvedOrder + ")", rawProvider);
             MatchConfig m = rule.getMatch();
             result.add(AccessRule.builder()
                     .provider(resolvedId)
@@ -668,7 +670,7 @@ public class JettyConfigurationBuilder {
                     .access(access)
                     .operation(ops)
                     .source(AccessRule.Source.CONFIG)
-                    .ruleOrder(rule.getOrder())
+                    .ruleOrder(resolvedOrder)
                     .build());
         }
     }

@@ -850,6 +850,11 @@ for a request to proceed.
 Rules use a unified `match` block that specifies what to match against (`target`), the pattern string (`value`), and how
 to interpret it (`type`). Evaluation is first-match-wins by `order` — identical to iptables/firewall rule semantics.
 
+`order` is optional for YAML-configured rules. When omitted, it's inferred from the entry's position within its
+`allow[]`/`deny[]` array — the first entry gets `0`, the second `100`, and so on, leaving gaps for later insertion. An
+explicit `order` always takes precedence over the inferred position. Rules created via the dashboard or REST API have no
+array position to infer from, so they use a fixed default (`100`) unless an explicit `order` is set.
+
 ```yaml
 rules:
   allow:
@@ -899,16 +904,16 @@ rules:
 
 ### URL rule properties
 
-| Property       | Type    | Default | Description                                                         |
-| -------------- | ------- | ------- | ------------------------------------------------------------------- |
-| `enabled`      | boolean | `true`  | Whether this entry is active                                        |
-| `order`        | int     | `1100`  | Evaluation order (lower = earlier; first match wins)                |
-| `operation`    | string  | `BOTH`  | `FETCH`, `PUSH`, or `BOTH` — which git operation this entry matches |
-| `provider`     | string  | _(all)_ | Provider name to scope this entry to; omit or leave blank for all   |
-| `match`        | object  | —       | Repository match criteria — see below                               |
-| `match.target` | enum    | `SLUG`  | What to match: `SLUG` (`/owner/repo`), `OWNER`, or `NAME`           |
-| `match.value`  | string  | —       | The pattern to match against the chosen target                      |
-| `match.type`   | enum    | `GLOB`  | How to interpret the pattern: `LITERAL`, `GLOB`, or `REGEX`         |
+| Property       | Type    | Default      | Description                                                                |
+| -------------- | ------- | ------------ | -------------------------------------------------------------------------- |
+| `enabled`      | boolean | `true`       | Whether this entry is active                                               |
+| `order`        | int     | _(position)_ | Evaluation order (lower = earlier; first match wins). Optional — see below |
+| `operation`    | string  | `BOTH`       | `FETCH`, `PUSH`, or `BOTH` — which git operation this entry matches        |
+| `provider`     | string  | _(all)_      | Provider name to scope this entry to; omit or leave blank for all          |
+| `match`        | object  | —            | Repository match criteria — see below                                      |
+| `match.target` | enum    | `SLUG`       | What to match: `SLUG` (`/owner/repo`), `OWNER`, or `NAME`                  |
+| `match.value`  | string  | —            | The pattern to match against the chosen target                             |
+| `match.type`   | enum    | `GLOB`       | How to interpret the pattern: `LITERAL`, `GLOB`, or `REGEX`                |
 
 ### Pattern matching
 
