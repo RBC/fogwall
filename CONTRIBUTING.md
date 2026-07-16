@@ -275,14 +275,11 @@ provider, one for the database backend. They can be combined freely.
 | `docker-compose.postgres.yml` | PostgreSQL   | `--profile postgres` | Adminer at :8082       |
 | `docker-compose.mongo.yml`    | MongoDB      | `--profile mongo`    | Mongo Express at :8081 |
 
-Any auth overlay can be combined with any database overlay (or none, to keep H2). The pattern is:
+Any auth overlay can be combined with any database overlay (or none, to keep H2). Use the `compose.sh` wrapper rather
+than bare `docker compose` — it assembles the right `-f`/`--profile` flags and auto-detects docker vs podman:
 
 ```bash
-docker compose [--profile <db>] \
-  -f docker-compose.yml \
-  [-f docker-compose.<auth>.yml] \
-  [-f docker-compose.<db>.yml] \
-  up -d
+bash compose.sh [--auth ldap|oidc] [--db postgres|mongo] -- up -d
 ```
 
 ### First-time setup
@@ -298,43 +295,31 @@ bash docker/gitea-setup.sh
 **Static auth + H2** (simplest — no external dependencies):
 
 ```shell
-docker compose up -d
+bash compose.sh -- up -d
 ```
 
 **LDAP + H2**:
 
 ```shell
-docker compose -f docker-compose.yml -f docker-compose.ldap.yml up -d
+bash compose.sh --auth ldap -- up -d
 ```
 
 **LDAP + PostgreSQL** (recommended for verifying IdP email locking and auto-provisioning):
 
 ```shell
-docker compose --profile postgres \
-  -f docker-compose.yml \
-  -f docker-compose.ldap.yml \
-  -f docker-compose.postgres.yml \
-  up -d
+bash compose.sh --auth ldap --db postgres -- up -d
 ```
 
 **OIDC + PostgreSQL**:
 
 ```shell
-docker compose --profile postgres \
-  -f docker-compose.yml \
-  -f docker-compose.oidc.yml \
-  -f docker-compose.postgres.yml \
-  up -d
+bash compose.sh --auth oidc --db postgres -- up -d
 ```
 
 **LDAP + MongoDB**:
 
 ```shell
-docker compose --profile mongo \
-  -f docker-compose.yml \
-  -f docker-compose.ldap.yml \
-  -f docker-compose.mongo.yml \
-  up -d
+bash compose.sh --auth ldap --db mongo -- up -d
 ```
 
 ### Auth provider details
@@ -358,8 +343,8 @@ from the profile UI). Inspect the `user_emails` table in Adminer or Mongo Expres
 To add more users, edit `docker/ldap-bootstrap.ldif` and recreate the container:
 
 ```shell
-docker compose -f docker-compose.yml -f docker-compose.ldap.yml rm -sf openldap
-docker compose -f docker-compose.yml -f docker-compose.ldap.yml up -d openldap
+bash compose.sh --auth ldap -- rm -sf openldap
+bash compose.sh --auth ldap -- up -d openldap
 ```
 
 #### OIDC auth
@@ -394,7 +379,7 @@ git clone http://fogwalladmin:Admin1234!@localhost:8080/push/gitea:3000/test-own
 ### Teardown
 
 ```bash
-docker compose [same -f flags as start] down -v
+bash compose.sh [same --auth/--db flags as start] -- down -v
 ```
 
 ## Code style
