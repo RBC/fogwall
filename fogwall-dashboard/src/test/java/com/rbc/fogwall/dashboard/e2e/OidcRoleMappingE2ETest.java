@@ -164,7 +164,84 @@ class OidcRoleMappingE2ETest {
         assertNotEquals(200, meResp.statusCode(), "Unmapped OIDC user must not access /api/me");
     }
 
+    /**
+     * Verifies {@code auth.require-role-mapping: false}: a user whose OIDC groups claim matches none of the configured
+     * mappings is still granted a session with {@code ROLE_USER}, instead of being denied.
+     */
+    @Test
+    void userNotInMappedGroup_requireRoleMappingFalse_loginGrantsRoleUser() throws Exception {
+        var config = new FogwallConfig();
+        config.getAuth().setProvider("oidc");
+        config.getAuth().getOidc().setIssuerUri(mockOAuth2.getIssuerUri());
+        config.getAuth().getOidc().setClientId(MockOAuth2Container.CLIENT_ID);
+        config.getAuth().getOidc().setClientSecret(MockOAuth2Container.CLIENT_SECRET);
+        config.getAuth().setGroupsClaim("groups");
+        config.getAuth().setRoleMappings(Map.of("ADMIN", List.of(ADMIN_GROUP)));
+        config.getAuth().setRequireRoleMapping(false);
+
+        try (var openDashboard = new DashboardFixture(config)) {
+            String openBaseUrl = openDashboard.getBaseUrl();
+            var cookieManager = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
+            var client = HttpClient.newBuilder()
+                    .cookieHandler(cookieManager)
+                    .followRedirects(HttpClient.Redirect.NEVER)
+                    .build();
+
+            var authorizePageResponse =
+                    followUntil200(client, openBaseUrl + "/oauth2/authorization/fogwall", openBaseUrl);
+            assertEquals(200, authorizePageResponse.statusCode());
+
+            // Groups claim does NOT match "ADMIN" → ["git-admins"]
+            URI authorizeUri = authorizePageResponse.uri();
+            String loginBody = "username=" + MockOAuth2Container.TEST_USER
+                    + "&claims=%7B%22groups%22%3A%5B%22unrelated-group%22%5D%7D";
+
+            var loginResp = client.send(
+                    HttpRequest.newBuilder()
+                            .uri(authorizeUri)
+                            .header("Content-Type", "application/x-www-form-urlencoded")
+                            .POST(HttpRequest.BodyPublishers.ofString(loginBody, StandardCharsets.UTF_8))
+                            .build(),
+                    HttpResponse.BodyHandlers.ofString());
+
+            assertEquals(302, loginResp.statusCode());
+            String callbackUrl = loginResp.headers().firstValue("Location").orElseThrow();
+
+            var callbackResp = client.send(
+                    HttpRequest.newBuilder().uri(URI.create(callbackUrl)).GET().build(),
+                    HttpResponse.BodyHandlers.ofString());
+            String callbackLocation =
+                    callbackResp.headers().firstValue("Location").orElse("(none)");
+            assertEquals(302, callbackResp.statusCode(), "Expected 302 from callback; location=" + callbackLocation);
+            assertFalse(callbackLocation.contains("error"), "Callback redirected to error: " + callbackLocation);
+
+            String successUrl = callbackLocation.startsWith("http") ? callbackLocation : openBaseUrl + callbackLocation;
+            client.send(
+                    HttpRequest.newBuilder().uri(URI.create(successUrl)).GET().build(),
+                    HttpResponse.BodyHandlers.ofString());
+
+            var meResp = client.send(
+                    HttpRequest.newBuilder()
+                            .uri(URI.create(openBaseUrl + "/api/me"))
+                            .GET()
+                            .build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertEquals(
+                    200,
+                    meResp.statusCode(),
+                    "User not matching any group mapping must still log in when require-role-mapping=false");
+            assertTrue(
+                    meResp.body().contains("ROLE_USER"),
+                    "Expected ROLE_USER to be granted unconditionally; got: " + meResp.body());
+        }
+    }
+
     private static HttpResponse<String> followUntil200(HttpClient client, String startUrl) throws Exception {
+        return followUntil200(client, startUrl, baseUrl);
+    }
+
+    private static HttpResponse<String> followUntil200(HttpClient client, String startUrl, String base)
+            throws Exception {
         String url = startUrl;
         for (int i = 0; i < 10; i++) {
             var resp = client.send(
@@ -173,7 +250,7 @@ class OidcRoleMappingE2ETest {
             String location = resp.headers()
                     .firstValue("Location")
                     .orElseThrow(() -> new AssertionError("3xx without Location: " + resp.uri()));
-            if (!location.startsWith("http")) location = baseUrl + location;
+            if (!location.startsWith("http")) location = base + location;
             url = location;
         }
         throw new AssertionError("Too many redirects starting from " + startUrl);

@@ -136,4 +136,56 @@ class LdapRoleMappingE2ETest {
             assertNotEquals(200, meResp.statusCode(), "User not in mapped group must not access /api/me");
         }
     }
+
+    /**
+     * Verifies {@code auth.require-role-mapping: false}: a user whose LDAP groups match none of the configured mappings
+     * is still granted {@code ROLE_USER} instead of being denied.
+     */
+    @Test
+    @Order(4)
+    void userNotInMappedGroup_requireRoleMappingFalse_loginGrantsRoleUser() throws Exception {
+        var config = new FogwallConfig();
+        config.getAuth().setProvider("ldap");
+        config.getAuth().getLdap().setUrl(ldap.getLdapUrl());
+        config.getAuth().getLdap().setUserDnPatterns(OpenLdapContainer.USER_DN_PATTERN);
+        config.getAuth().getLdap().setBindDn(OpenLdapContainer.MANAGER_DN);
+        config.getAuth().getLdap().setBindPassword(OpenLdapContainer.ADMIN_PASSWORD);
+        config.getAuth().getLdap().setGroupSearchBase(OpenLdapContainer.GROUP_SEARCH_BASE);
+        // Map a group the test user is NOT a member of, but disable deny-by-default.
+        config.getAuth().setRoleMappings(Map.of("ADMIN", List.of("no-such-group")));
+        config.getAuth().setRequireRoleMapping(false);
+
+        try (var openDashboard = new DashboardFixture(config)) {
+            var openBaseUrl = openDashboard.getBaseUrl();
+            var cookieManager = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
+            var openClient = HttpClient.newBuilder()
+                    .cookieHandler(cookieManager)
+                    .followRedirects(HttpClient.Redirect.NORMAL)
+                    .build();
+
+            String formBody =
+                    "username=" + OpenLdapContainer.TEST_USER + "&password=" + OpenLdapContainer.TEST_PASSWORD;
+            openClient.send(
+                    HttpRequest.newBuilder()
+                            .uri(URI.create(openBaseUrl + "/login"))
+                            .header("Content-Type", "application/x-www-form-urlencoded")
+                            .POST(HttpRequest.BodyPublishers.ofString(formBody, StandardCharsets.UTF_8))
+                            .build(),
+                    HttpResponse.BodyHandlers.ofString());
+
+            var meResp = openClient.send(
+                    HttpRequest.newBuilder()
+                            .uri(URI.create(openBaseUrl + "/api/me"))
+                            .GET()
+                            .build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertEquals(
+                    200,
+                    meResp.statusCode(),
+                    "User not in mapped group must still log in when require-role-mapping=false");
+            assertTrue(
+                    meResp.body().contains("ROLE_USER"),
+                    "Expected ROLE_USER to be granted unconditionally; got: " + meResp.body());
+        }
+    }
 }
