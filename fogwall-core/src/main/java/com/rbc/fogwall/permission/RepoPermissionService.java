@@ -37,6 +37,20 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class RepoPermissionService {
 
+    /** Outcome of evaluating whether a user has a given grant for a path, and what granted it. */
+    public sealed interface GrantResult
+            permits GrantResult.GrantedDirect, GrantResult.GrantedByGroup, GrantResult.NotGranted {
+
+        /** A direct, per-user permission entry granted access. */
+        record GrantedDirect(RepoPermission permission) implements GrantResult {}
+
+        /** A group-inherited permission rule granted access. */
+        record GrantedByGroup(GroupPermissionRule rule) implements GrantResult {}
+
+        /** No direct or group permission granted access. */
+        record NotGranted() implements GrantResult {}
+    }
+
     private final PermissionStore<RepoPermission> store;
     private final GroupPermissionStore groupStore;
     private final ConcurrentHashMap<String, Pattern> patternCache = new ConcurrentHashMap<>();
@@ -197,32 +211,7 @@ public class RepoPermissionService {
     }
 
     private boolean isAllowed(String username, String provider, String path, RepoPermission.Grant op) {
-        List<RepoPermission> forPath = store.findByProvider(provider).stream()
-                .filter(p -> matchesPath(p, path))
-                .toList();
-
-        List<GroupPermissionRule> groupRulesForPath = List.of();
-        if (groupStore != null) {
-            Set<String> userGroupIds = Set.copyOf(groupStore.findGroupIdsForUser(username));
-            groupRulesForPath = groupStore.findRulesByProvider(provider).stream()
-                    .filter(r -> userGroupIds.contains(r.getGroupId()))
-                    .filter(r -> matchesPathRule(r, path))
-                    .toList();
-        }
-
-        if (forPath.isEmpty() && groupRulesForPath.isEmpty()) {
-            log.debug("No permission grants for {}/{} — DENY (fail-closed)", provider, path);
-            return false;
-        }
-
-        boolean allowedDirect = forPath.stream()
-                .filter(p -> p.getGrant() == op || p.getGrant() == RepoPermission.Grant.PUSH_AND_REVIEW)
-                .anyMatch(p -> username.equals(p.getUsername()));
-
-        boolean allowedViaGroup = groupRulesForPath.stream()
-                .anyMatch(r -> r.getGrant() == op || r.getGrant() == RepoPermission.Grant.PUSH_AND_REVIEW);
-
-        boolean allowed = allowedDirect || allowedViaGroup;
+        boolean allowed = !(evaluateGrant(username, provider, path, op) instanceof GrantResult.NotGranted);
         log.debug(
                 "Permission check: user={} provider={} path={} op={} → {}",
                 username,
@@ -231,6 +220,36 @@ public class RepoPermissionService {
                 op,
                 allowed ? "ALLOW" : "DENY");
         return allowed;
+    }
+
+    /**
+     * Evaluates whether {@code username} has {@code op} (or the combined {@code PUSH_AND_REVIEW} grant) for
+     * {@code path} at {@code provider}, and returns which permission entry granted it — a direct per-user permission, a
+     * group-inherited rule, or neither. Direct permissions are preferred over group rules when both exist.
+     */
+    public GrantResult evaluateGrant(String username, String provider, String path, RepoPermission.Grant op) {
+        Optional<RepoPermission> direct = store.findByProvider(provider).stream()
+                .filter(p -> matchesPath(p, path))
+                .filter(p -> p.getGrant() == op || p.getGrant() == RepoPermission.Grant.PUSH_AND_REVIEW)
+                .filter(p -> username.equals(p.getUsername()))
+                .findFirst();
+        if (direct.isPresent()) {
+            return new GrantResult.GrantedDirect(direct.get());
+        }
+
+        if (groupStore != null) {
+            Set<String> userGroupIds = Set.copyOf(groupStore.findGroupIdsForUser(username));
+            Optional<GroupPermissionRule> viaGroup = groupStore.findRulesByProvider(provider).stream()
+                    .filter(r -> userGroupIds.contains(r.getGroupId()))
+                    .filter(r -> matchesPathRule(r, path))
+                    .filter(r -> r.getGrant() == op || r.getGrant() == RepoPermission.Grant.PUSH_AND_REVIEW)
+                    .findFirst();
+            if (viaGroup.isPresent()) {
+                return new GrantResult.GrantedByGroup(viaGroup.get());
+            }
+        }
+
+        return new GrantResult.NotGranted();
     }
 
     private boolean matchesPath(RepoPermission perm, String path) {

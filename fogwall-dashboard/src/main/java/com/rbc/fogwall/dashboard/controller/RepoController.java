@@ -6,7 +6,10 @@ import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.PushStore.RepoPushSummary;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.db.model.AccessRule;
+import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.ProviderRegistry;
+import com.rbc.fogwall.servlet.filter.UrlRuleEvaluator;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
@@ -88,6 +91,65 @@ public class RepoController {
         return ResponseEntity.ok(rule);
     }
 
+    @Operation(
+            operationId = "testRules",
+            summary = "Test which access control rule matches a repository reference",
+            description =
+                    "Read-only evaluation against the live ruleset. Returns the full ordered trail of enabled rules "
+                            + "considered, which one (if any) matched first, and the resulting decision.")
+    @PostMapping("/rules/test")
+    public ResponseEntity<?> testRules(@RequestBody RuleTestRequest req) {
+        if (req.provider() == null || req.provider().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "provider is required"));
+        }
+        if (req.owner() == null
+                || req.owner().isBlank()
+                || req.name() == null
+                || req.name().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "owner and name are required"));
+        }
+        ResponseEntity<?> err = validateProviderId(req.provider());
+        if (err != null) return err;
+
+        HttpOperation operation;
+        try {
+            operation = req.operation() != null
+                    ? HttpOperation.valueOf(req.operation().toUpperCase())
+                    : HttpOperation.PUSH;
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "invalid operation: " + req.operation()));
+        }
+
+        FogwallProvider provider = providerSource.getProvider(req.provider()).orElseThrow();
+        UrlRuleEvaluator evaluator = new UrlRuleEvaluator(urlRuleRegistry, provider);
+        String slug = req.owner() + "/" + req.name();
+        UrlRuleEvaluator.Trail trail = evaluator.evaluateTrail(slug, req.owner(), req.name(), operation);
+
+        List<RuleTestStep> steps = trail.steps().stream()
+                .map(s -> new RuleTestStep(
+                        s.rule().getId(),
+                        s.rule().getRuleOrder(),
+                        s.rule().getAccess().name(),
+                        s.rule().getDescription(),
+                        s.matched()))
+                .toList();
+
+        String decision =
+                switch (trail.result()) {
+                    case UrlRuleEvaluator.Result.Allowed a -> "ALLOW";
+                    case UrlRuleEvaluator.Result.Denied d -> "DENY";
+                    case UrlRuleEvaluator.Result.NotAllowed n -> "NOT_ALLOWED";
+                };
+        String matchedRuleId =
+                switch (trail.result()) {
+                    case UrlRuleEvaluator.Result.Allowed a -> a.ruleId();
+                    case UrlRuleEvaluator.Result.Denied d -> d.ruleId();
+                    case UrlRuleEvaluator.Result.NotAllowed n -> null;
+                };
+
+        return ResponseEntity.ok(new RuleTestResponse(decision, matchedRuleId, steps));
+    }
+
     /**
      * Returns a 400 response if {@code providerId} is not a configured provider name, or {@code null} if it is valid.
      */
@@ -167,4 +229,10 @@ public class RepoController {
                                 .reversed())
                         .collect(Collectors.toList());
     }
+
+    public record RuleTestRequest(String provider, String owner, String name, String operation) {}
+
+    public record RuleTestStep(String ruleId, int order, String access, String description, boolean matched) {}
+
+    public record RuleTestResponse(String decision, String matchedRuleId, List<RuleTestStep> steps) {}
 }

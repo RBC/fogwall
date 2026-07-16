@@ -9,6 +9,7 @@ import com.rbc.fogwall.provider.FogwallProvider;
 import java.nio.file.FileSystems;
 import java.nio.file.PathMatcher;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -41,6 +42,12 @@ public class UrlRuleEvaluator {
         /** No rule matched — request must be rejected (fail-closed). */
         record NotAllowed() implements Result {}
     }
+
+    /** One rule considered during evaluation, in order, and whether it matched the repository reference. */
+    public record RuleEvaluation(AccessRule rule, boolean matched) {}
+
+    /** The full ordered evaluation trail plus the resulting decision. */
+    public record Trail(List<RuleEvaluation> steps, Result result) {}
 
     private static final ConcurrentHashMap<String, Pattern> REGEX_CACHE = new ConcurrentHashMap<>();
 
@@ -84,6 +91,39 @@ public class UrlRuleEvaluator {
         }
 
         return new Result.NotAllowed();
+    }
+
+    /**
+     * Evaluates all configured rules like {@link #evaluate}, but instead of stopping at the first match, continues
+     * through every enabled rule (in order) and records whether each one matched. Used by the admin-facing rule test
+     * endpoint to show a firewall-log style trail; the live push/proxy path uses {@link #evaluate} since it only needs
+     * the final decision.
+     */
+    public Trail evaluateTrail(String slug, String owner, String name, HttpOperation operation) {
+        List<AccessRule> rules = (urlRuleRegistry != null && provider != null)
+                ? urlRuleRegistry.findEnabledForProvider(provider.getProviderId())
+                : List.of();
+
+        List<AccessRule> sortedAll = rules.stream()
+                .filter(r -> operationMatches(r, operation))
+                .sorted(Comparator.comparingInt(AccessRule::getRuleOrder))
+                .toList();
+
+        List<RuleEvaluation> steps = new ArrayList<>();
+        Result result = null;
+        for (AccessRule r : sortedAll) {
+            boolean matched = matchesRepo(r, slug, owner, name);
+            steps.add(new RuleEvaluation(r, matched));
+            if (matched && result == null) {
+                result = r.getAccess() == AccessRule.Access.DENY
+                        ? new Result.Denied(r.getId())
+                        : new Result.Allowed(r.getId());
+            }
+        }
+        if (result == null) {
+            result = new Result.NotAllowed();
+        }
+        return new Trail(List.copyOf(steps), result);
     }
 
     /**

@@ -184,4 +184,82 @@ class GroupPermissionServiceTest {
         RepoPermissionService noGroupSvc = new RepoPermissionService(new InMemoryRepoPermissionStore());
         assertFalse(noGroupSvc.isAllowedToPush("alice", "github", "/acme/repo"));
     }
+
+    // ---- evaluateGrant: attributes which entry granted access ----
+
+    @Test
+    void evaluateGrant_directPermission_returnsGrantedDirect() {
+        RepoPermission direct = RepoPermission.builder()
+                .username("alice")
+                .provider("github")
+                .value("/acme/repo")
+                .matchType(MatchType.LITERAL)
+                .grant(RepoPermission.Grant.PUSH)
+                .source(RepoPermission.Source.DB)
+                .build();
+        svc.save(direct);
+
+        var result = svc.evaluateGrant("alice", "github", "/acme/repo", RepoPermission.Grant.PUSH);
+
+        assertInstanceOf(RepoPermissionService.GrantResult.GrantedDirect.class, result);
+        assertEquals(
+                direct.getId(),
+                ((RepoPermissionService.GrantResult.GrantedDirect) result)
+                        .permission()
+                        .getId());
+    }
+
+    @Test
+    void evaluateGrant_groupRule_returnsGrantedByGroup() {
+        PermissionGroup g = group("devs");
+        GroupPermissionRule r = rule(g.getId(), "github", "/acme/repo", RepoPermission.Grant.PUSH);
+        groupStore.addMember(g.getId(), "alice");
+
+        var result = svc.evaluateGrant("alice", "github", "/acme/repo", RepoPermission.Grant.PUSH);
+
+        assertInstanceOf(RepoPermissionService.GrantResult.GrantedByGroup.class, result);
+        assertEquals(
+                r.getId(),
+                ((RepoPermissionService.GrantResult.GrantedByGroup) result)
+                        .rule()
+                        .getId());
+    }
+
+    @Test
+    void evaluateGrant_directPreferredOverGroup() {
+        PermissionGroup g = group("devs");
+        rule(g.getId(), "github", "/acme/repo", RepoPermission.Grant.PUSH);
+        groupStore.addMember(g.getId(), "alice");
+
+        RepoPermission direct = RepoPermission.builder()
+                .username("alice")
+                .provider("github")
+                .value("/acme/repo")
+                .matchType(MatchType.LITERAL)
+                .grant(RepoPermission.Grant.PUSH)
+                .source(RepoPermission.Source.DB)
+                .build();
+        svc.save(direct);
+
+        var result = svc.evaluateGrant("alice", "github", "/acme/repo", RepoPermission.Grant.PUSH);
+
+        assertInstanceOf(RepoPermissionService.GrantResult.GrantedDirect.class, result);
+    }
+
+    @Test
+    void evaluateGrant_noMatch_returnsNotGranted() {
+        var result = svc.evaluateGrant("alice", "github", "/acme/repo", RepoPermission.Grant.PUSH);
+        assertInstanceOf(RepoPermissionService.GrantResult.NotGranted.class, result);
+    }
+
+    @Test
+    void evaluateGrant_nonMember_returnsNotGranted() {
+        PermissionGroup g = group("devs");
+        rule(g.getId(), "github", "/acme/repo", RepoPermission.Grant.PUSH);
+        groupStore.addMember(g.getId(), "alice");
+
+        var result = svc.evaluateGrant("bob", "github", "/acme/repo", RepoPermission.Grant.PUSH);
+
+        assertInstanceOf(RepoPermissionService.GrantResult.NotGranted.class, result);
+    }
 }

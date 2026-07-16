@@ -307,6 +307,55 @@ export async function deleteUrlRule(id: string) {
   if (!res.ok) await parseErrorResponse(res, 'Failed to delete URL rule')
 }
 
+export interface RuleTestStep {
+  ruleId: string
+  order: number
+  access: 'ALLOW' | 'DENY'
+  description: string | null
+  matched: boolean
+}
+
+export interface RuleTestResponse {
+  decision: 'ALLOW' | 'DENY' | 'NOT_ALLOWED'
+  matchedRuleId: string | null
+  steps: RuleTestStep[]
+}
+
+export async function testUrlRules(data: {
+  provider: string
+  owner: string
+  name: string
+  operation?: 'PUSH' | 'FETCH'
+}): Promise<RuleTestResponse> {
+  const res = await apiFetch('/api/repos/rules/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) await parseErrorResponse(res, 'Rule test failed')
+  return res.json()
+}
+
+export interface PermissionTestResponse {
+  allowed: boolean
+  source: 'DIRECT' | 'GROUP' | 'NONE'
+  entryId: string | null
+  groupName: string | null
+}
+
+export async function testUserPermission(
+  username: string,
+  data: { provider: string; path: string; grant?: string },
+): Promise<PermissionTestResponse> {
+  const res = await apiFetch(`/api/users/${encodeURIComponent(username)}/permissions/test`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) await parseErrorResponse(res, 'Permission test failed')
+  return res.json()
+}
+
 export async function fetchGroups() {
   const res = await apiFetch('/api/groups')
   if (!res.ok) throw new Error('Failed to fetch groups')
