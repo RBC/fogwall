@@ -7,7 +7,13 @@ import lombok.Data;
 public class RuleConfig {
 
     private boolean enabled = true;
-    private int order = 1100;
+
+    /**
+     * Explicit evaluation order. Optional — when omitted, order is inferred from this entry's position within its
+     * {@code allow[]}/{@code deny[]} array (0, 100, 200, ... leaving gaps for later insertion). When set, the explicit
+     * value always takes precedence over the inferred position.
+     */
+    private Integer order;
 
     /** Git operation this entry matches: {@code FETCH}, {@code PUSH}, or {@code BOTH} (default). */
     private String operation = "BOTH";
