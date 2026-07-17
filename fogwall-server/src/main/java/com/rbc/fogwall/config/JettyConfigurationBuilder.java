@@ -534,11 +534,12 @@ public class JettyConfigurationBuilder {
         DatabaseConfig db = config.getDatabase();
         log.info("Initializing push store: type={}", db.getType());
         cachedPushStore = switch (db.getType()) {
-            case "h2-mem", "h2-file", "postgres" -> PushStoreFactory.fromDataSource(requireJdbcDataSource());
+            case "h2-mem", "h2-file", "postgres", "mysql", "mariadb" ->
+                PushStoreFactory.fromDataSource(requireJdbcDataSource());
             case "mongo" -> requireMongoStoreFactory().pushStore();
             default ->
-                throw new IllegalArgumentException(
-                        "Unknown database type: " + db.getType() + ". Supported: h2-mem, h2-file, postgres, mongo");
+                throw new IllegalArgumentException("Unknown database type: " + db.getType()
+                        + ". Supported: h2-mem, h2-file, postgres, mysql, mariadb, mongo");
         };
         return cachedPushStore;
     }
@@ -860,10 +861,42 @@ public class JettyConfigurationBuilder {
                     yield DataSourceFactory.postgres(
                             db.getHost(), db.getPort(), db.getName(), db.getUsername(), db.getPassword(), pool);
                 }
+                case "mysql" -> {
+                    if (!db.getUrl().isBlank()) {
+                        log.info("MySQL: using connection URL (individual host/port/name fields ignored)");
+                        yield DataSourceFactory.fromUrl(db.getUrl(), db.getUsername(), db.getPassword(), pool);
+                    }
+                    warnIfDefaultPostgresPort(db, "mysql");
+                    yield DataSourceFactory.mysql(
+                            db.getHost(), db.getPort(), db.getName(), db.getUsername(), db.getPassword(), pool);
+                }
+                case "mariadb" -> {
+                    if (!db.getUrl().isBlank()) {
+                        log.info("MariaDB: using connection URL (individual host/port/name fields ignored)");
+                        yield DataSourceFactory.fromUrl(db.getUrl(), db.getUsername(), db.getPassword(), pool);
+                    }
+                    warnIfDefaultPostgresPort(db, "mariadb");
+                    yield DataSourceFactory.mariadb(
+                            db.getHost(), db.getPort(), db.getName(), db.getUsername(), db.getPassword(), pool);
+                }
                 default -> throw new IllegalStateException("No JDBC DataSource for db type: " + db.getType());
             };
         }
         return cachedDataSource;
+    }
+
+    /**
+     * {@code database.port} defaults to PostgreSQL's port (5432). Warn when that untouched default is about to be used
+     * for MySQL/MariaDB, which normally listen on 3306 — likely an operator oversight, not intent.
+     */
+    private static void warnIfDefaultPostgresPort(DatabaseConfig db, String type) {
+        if (db.getPort() == 5432) {
+            log.warn(
+                    "database.port is left at the PostgreSQL default (5432) for database.type={}; set it explicitly"
+                            + " (typically 3306) unless {} is actually listening on 5432.",
+                    type,
+                    type);
+        }
     }
 
     /**

@@ -2,12 +2,13 @@
 # Wrapper around docker/podman compose that assembles the right overlay flags.
 #
 # Usage:
-#   bash compose.sh [--auth ldap|oidc] [--db postgres|mongo] -- <compose subcommand> [args...]
+#   bash compose.sh [--auth ldap|oidc] [--db postgres|mysql|mariadb|mongo] -- <compose subcommand> [args...]
 #
 # Examples:
 #   bash compose.sh -- up -d
 #   bash compose.sh --auth ldap -- up -d
 #   bash compose.sh --db postgres -- up -d
+#   bash compose.sh --db mysql -- up -d
 #   bash compose.sh --auth ldap --db postgres -- up -d
 #   bash compose.sh --auth ldap --db postgres -- down -v
 
@@ -32,7 +33,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       echo "Unknown option: $1" >&2
-      echo "Usage: bash compose.sh [--auth ldap|oidc] [--db postgres|mongo] -- <compose subcommand> [args...]" >&2
+      echo "Usage: bash compose.sh [--auth ldap|oidc] [--db postgres|mysql|mariadb|mongo] -- <compose subcommand> [args...]" >&2
       exit 1
       ;;
   esac
@@ -43,8 +44,8 @@ if [[ -n "$AUTH" && "$AUTH" != "ldap" && "$AUTH" != "oidc" ]]; then
   exit 1
 fi
 
-if [[ -n "$DB" && "$DB" != "postgres" && "$DB" != "mongo" ]]; then
-  echo "Invalid --db value: $DB (must be postgres or mongo)" >&2
+if [[ -n "$DB" && "$DB" != "postgres" && "$DB" != "mysql" && "$DB" != "mariadb" && "$DB" != "mongo" ]]; then
+  echo "Invalid --db value: $DB (must be postgres, mysql, mariadb, or mongo)" >&2
   exit 1
 fi
 

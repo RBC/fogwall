@@ -54,6 +54,40 @@ public final class DataSourceFactory {
         return new HikariDataSource(config);
     }
 
+    /** MySQL database with default pool settings. */
+    public static DataSource mysql(String host, int port, String database, String username, String password) {
+        return mysql(host, port, database, username, password, new PoolConfig());
+    }
+
+    /** MySQL database. */
+    public static DataSource mysql(
+            String host, int port, String database, String username, String password, PoolConfig pool) {
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl("jdbc:mysql://" + host + ":" + port + "/" + database);
+        config.setUsername(username);
+        config.setPassword(password);
+        config.setDriverClassName("com.mysql.cj.jdbc.Driver");
+        applyPool(config, pool);
+        return new HikariDataSource(config);
+    }
+
+    /** MariaDB database with default pool settings. */
+    public static DataSource mariadb(String host, int port, String database, String username, String password) {
+        return mariadb(host, port, database, username, password, new PoolConfig());
+    }
+
+    /** MariaDB database. */
+    public static DataSource mariadb(
+            String host, int port, String database, String username, String password, PoolConfig pool) {
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl("jdbc:mariadb://" + host + ":" + port + "/" + database);
+        config.setUsername(username);
+        config.setPassword(password);
+        config.setDriverClassName("org.mariadb.jdbc.Driver");
+        applyPool(config, pool);
+        return new HikariDataSource(config);
+    }
+
     /** Generic datasource from a JDBC URL, with default pool settings. */
     public static DataSource fromUrl(String jdbcUrl, String username, String password) {
         return fromUrl(jdbcUrl, username, password, new PoolConfig());

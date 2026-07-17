@@ -19,9 +19,13 @@ import org.slf4j.LoggerFactory;
  * Minimal SQL migration runner — no external dependencies.
  *
  * <p>Migrations are applied in version order and tracked in a {@code schema_migrations} table. Vendor-specific
- * migrations (e.g. PostgreSQL-only column widening) are included only when the connected database matches. On first run
- * against an existing database that was previously managed by Flyway, the {@code flyway_schema_history} table is read
- * to seed {@code schema_migrations} so already-applied scripts are not re-run.
+ * migrations (e.g. PostgreSQL-only column widening, or MySQL/MariaDB rewrites of syntax Postgres/H2 accept but MySQL
+ * does not — {@code BYTEA}, {@code ALTER COLUMN ... SET NOT NULL}, {@code CREATE INDEX IF NOT EXISTS}) are included
+ * only when the connected database matches. Some shared migrations are consequently marked {@link Vendor#EXCEPT_MYSQL}
+ * — a MySQL/MariaDB-specific replacement of the same version exists under {@code db/migration-mysql/} and is selected
+ * instead via {@link Vendor#MYSQL_ONLY}. On first run against an existing database that was previously managed by
+ * Flyway, the {@code flyway_schema_history} table is read to seed {@code schema_migrations} so already-applied scripts
+ * are not re-run.
  */
 public class DatabaseMigrator {
 
@@ -29,27 +33,68 @@ public class DatabaseMigrator {
 
     // ---------------------------------------------------------------------------
     // Migration registry — add new entries here when adding migration files.
-    // Vendor-specific migrations are applied only when isPostgres is true.
     // ---------------------------------------------------------------------------
 
-    private record Migration(String version, String description, String resource, boolean postgresOnly) {}
+    /** Which database family a migration applies to. */
+    private enum Vendor {
+        /** Applies to every supported database. */
+        ANY,
+        /** PostgreSQL only. */
+        POSTGRES_ONLY,
+        /** MySQL or MariaDB only. */
+        MYSQL_ONLY,
+        /** Every database except MySQL/MariaDB — a MySQL-specific replacement of this version exists. */
+        EXCEPT_MYSQL
+    }
+
+    private record Migration(String version, String description, String resource, Vendor vendor) {}
 
     private static final List<Migration> MIGRATIONS = List.of(
-            new Migration("1", "initial schema", "db/migration/V1__initial_schema.sql", false),
-            new Migration("2", "provider id format", "db/migration/V2__provider_id_format.sql", false),
+            new Migration("1", "initial schema", "db/migration/V1__initial_schema.sql", Vendor.EXCEPT_MYSQL),
             new Migration(
-                    "2.1", "widen provider columns", "db/migration-postgresql/V2_1__widen_provider_columns.sql", true),
-            new Migration("3", "email unique constraint", "db/migration/V3__email_unique.sql", false),
-            new Migration("4", "spring session tables", "db/migration/V4__spring_session.sql", false),
-            new Migration("5", "unified rule shape", "db/migration/V5__unified_rule_shape.sql", false),
-            new Migration("6", "repo permissions FK", "db/migration/V6__repo_permissions_fk.sql", false),
+                    "1",
+                    "initial schema (mysql/mariadb)",
+                    "db/migration-mysql/V1__initial_schema.sql",
+                    Vendor.MYSQL_ONLY),
+            new Migration("2", "provider id format", "db/migration/V2__provider_id_format.sql", Vendor.ANY),
+            new Migration(
+                    "2.1",
+                    "widen provider columns",
+                    "db/migration-postgresql/V2_1__widen_provider_columns.sql",
+                    Vendor.POSTGRES_ONLY),
+            new Migration(
+                    "2.1",
+                    "widen provider columns (mysql/mariadb)",
+                    "db/migration-mysql/V2_1__widen_provider_columns.sql",
+                    Vendor.MYSQL_ONLY),
+            new Migration("3", "email unique constraint", "db/migration/V3__email_unique.sql", Vendor.ANY),
+            new Migration("4", "spring session tables", "db/migration/V4__spring_session.sql", Vendor.EXCEPT_MYSQL),
+            new Migration(
+                    "4",
+                    "spring session tables (mysql/mariadb)",
+                    "db/migration-mysql/V4__spring_session.sql",
+                    Vendor.MYSQL_ONLY),
+            new Migration("5", "unified rule shape", "db/migration/V5__unified_rule_shape.sql", Vendor.EXCEPT_MYSQL),
+            new Migration(
+                    "5",
+                    "unified rule shape (mysql/mariadb)",
+                    "db/migration-mysql/V5__unified_rule_shape.sql",
+                    Vendor.MYSQL_ONLY),
+            new Migration("6", "repo permissions FK", "db/migration/V6__repo_permissions_fk.sql", Vendor.ANY),
             new Migration(
                     "7",
                     "rename operations to operation",
                     "db/migration/V7__rename_operations_to_operation.sql",
-                    false),
-            new Migration("8", "user ssh keys", "db/migration/V8__ssh_keys.sql", false),
-            new Migration("9", "permission groups", "db/migration/V9__permission_groups.sql", false));
+                    Vendor.ANY),
+            new Migration("8", "user ssh keys", "db/migration/V8__ssh_keys.sql", Vendor.EXCEPT_MYSQL),
+            new Migration(
+                    "8", "user ssh keys (mysql/mariadb)", "db/migration-mysql/V8__ssh_keys.sql", Vendor.MYSQL_ONLY),
+            new Migration("9", "permission groups", "db/migration/V9__permission_groups.sql", Vendor.EXCEPT_MYSQL),
+            new Migration(
+                    "9",
+                    "permission groups (mysql/mariadb)",
+                    "db/migration-mysql/V9__permission_groups.sql",
+                    Vendor.MYSQL_ONLY));
 
     // ---------------------------------------------------------------------------
 
@@ -60,9 +105,10 @@ public class DatabaseMigrator {
         try (var conn = dataSource.getConnection()) {
             conn.setAutoCommit(false);
             boolean isPostgres = isPostgres(conn);
+            boolean isMysql = isMysqlFamily(conn);
             ensureMigrationsTable(conn);
             bootstrapFromFlyway(conn);
-            applyPending(conn, isPostgres);
+            applyPending(conn, isPostgres, isMysql);
             conn.commit();
         } catch (SQLException | IOException e) {
             throw new IllegalStateException("Database migration failed", e);
@@ -123,12 +169,13 @@ public class DatabaseMigrator {
     // Apply
     // ---------------------------------------------------------------------------
 
-    private static void applyPending(Connection conn, boolean isPostgres) throws SQLException, IOException {
+    private static void applyPending(Connection conn, boolean isPostgres, boolean isMysql)
+            throws SQLException, IOException {
         List<String> applied = appliedVersions(conn);
 
         List<Migration> pending = new ArrayList<>();
         for (Migration m : MIGRATIONS) {
-            if (m.postgresOnly() && !isPostgres) continue;
+            if (!applies(m.vendor(), isPostgres, isMysql)) continue;
             if (!applied.contains(m.version())) pending.add(m);
         }
         pending.sort((a, b) -> compareVersions(a.version(), b.version()));
@@ -170,9 +217,24 @@ public class DatabaseMigrator {
     // Utilities
     // ---------------------------------------------------------------------------
 
+    private static boolean applies(Vendor vendor, boolean isPostgres, boolean isMysql) {
+        return switch (vendor) {
+            case ANY -> true;
+            case POSTGRES_ONLY -> isPostgres;
+            case MYSQL_ONLY -> isMysql;
+            case EXCEPT_MYSQL -> !isMysql;
+        };
+    }
+
     private static boolean isPostgres(Connection conn) throws SQLException {
         String product = conn.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT);
         return product.contains("postgresql");
+    }
+
+    /** MySQL and MariaDB are treated as one family for migration purposes — same schema, same DDL dialect. */
+    private static boolean isMysqlFamily(Connection conn) throws SQLException {
+        String product = conn.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT);
+        return product.contains("mysql") || product.contains("mariadb");
     }
 
     private static boolean tableExists(Connection conn, String tableName) throws SQLException {

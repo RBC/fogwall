@@ -262,27 +262,38 @@ This applies to both proxy modes:
 
 ```yaml
 database:
-  type: h2-mem # h2-mem | h2-file | postgres | mongo
+  type: h2-mem # h2-mem | h2-file | postgres | mysql | mariadb | mongo
 ```
 
 ### Database backends
 
-| Type       | Description            | Extra keys                                                           |
-| ---------- | ---------------------- | -------------------------------------------------------------------- |
-| `h2-mem`   | H2 in-memory (default) | `name` (default: `fogwall`)                                          |
-| `h2-file`  | H2 persisted to disk   | `path` (default: `./.data/fogwall`)                                  |
-| `sqlite`   | SQLite file            | `path` (default: `./.data/fogwall.db`)                               |
-| `postgres` | PostgreSQL             | `url` **or** `host`, `port`, `name`, `username`, `password`          |
-| `mongo`    | MongoDB                | `url` (required); `name` optional if the database is in the URI path |
+| Type       | Description            | Extra keys                                                                 |
+| ---------- | ---------------------- | -------------------------------------------------------------------------- |
+| `h2-mem`   | H2 in-memory (default) | `name` (default: `fogwall`)                                                |
+| `h2-file`  | H2 persisted to disk   | `path` (default: `./.data/fogwall`)                                        |
+| `postgres` | PostgreSQL             | `url` **or** `host`, `port`, `name`, `username`, `password`                |
+| `mysql`    | MySQL 8.0+             | `url` **or** `host`, `port` (default 3306), `name`, `username`, `password` |
+| `mariadb`  | MariaDB 10.5+          | `url` **or** `host`, `port` (default 3306), `name`, `username`, `password` |
+| `mongo`    | MongoDB                | `url` (required); `name` optional if the database is in the URI path       |
 
-For both `postgres` and `mongo`, setting `url` to a full connection string is the recommended approach when you need
-driver-specific options (TLS, SSL certificates, connection parameters) that are not exposed as individual config fields.
+SQLite is intentionally not supported — its single-writer file locking is unsuitable for a proxy that may run more than
+one instance against the same database.
+
+For `postgres`, `mysql`, `mariadb`, and `mongo`, setting `url` to a full connection string is the recommended approach
+when you need driver-specific options (TLS, SSL certificates, connection parameters) that are not exposed as individual
+config fields.
+
+MySQL and MariaDB use **separate JDBC drivers** (`mysql-connector-j` and `mariadb-java-client`, not one shared driver) —
+pick the `type` matching the actual engine you're running, even though the two are largely wire-compatible.
+`database.port` defaults to PostgreSQL's port (5432); for `mysql`/`mariadb` set it explicitly (typically `3306`) unless
+the server actually listens on 5432 — fogwall logs a startup warning if it detects the untouched default being used with
+either type.
 
 ### Connection pool tuning
 
-Applies to all JDBC backends (`h2-mem`, `h2-file`, `postgres`). The default pool size is deliberately small — git push
-workloads are sequential per user, so a large pool buys nothing and drives up aggregate connection counts when multiple
-instances share a database. The
+Applies to all JDBC backends (`h2-mem`, `h2-file`, `postgres`, `mysql`, `mariadb`). The default pool size is
+deliberately small — git push workloads are sequential per user, so a large pool buys nothing and drives up aggregate
+connection counts when multiple instances share a database. The
 [HikariCP pool sizing guide](https://github.com/brettwooldridge/HikariCP/wiki/About-Pool-Sizing) covers this in depth.
 
 ```yaml
@@ -315,6 +326,38 @@ database:
 database:
   type: postgres
   url: jdbc:postgresql://db.internal:5432/fogwall?sslmode=verify-full&sslrootcert=/certs/ca.crt
+  username: fogwall
+  password: secret
+
+# MySQL — individual fields
+database:
+  type: mysql
+  host: db.internal
+  port: 3306
+  name: fogwall
+  username: fogwall
+  password: secret
+
+# MySQL — connection string
+database:
+  type: mysql
+  url: jdbc:mysql://db.internal:3306/fogwall?useSSL=true&requireSSL=true
+  username: fogwall
+  password: secret
+
+# MariaDB — individual fields
+database:
+  type: mariadb
+  host: db.internal
+  port: 3306
+  name: fogwall
+  username: fogwall
+  password: secret
+
+# MariaDB — connection string
+database:
+  type: mariadb
+  url: jdbc:mariadb://db.internal:3306/fogwall?useSsl=true
   username: fogwall
   password: secret
 

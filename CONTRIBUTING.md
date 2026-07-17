@@ -273,13 +273,15 @@ provider, one for the database backend. They can be combined freely.
 | ----------------------------- | ------------ | -------------------- | ---------------------- |
 | _(none)_                      | H2 in-memory | —                    | —                      |
 | `docker-compose.postgres.yml` | PostgreSQL   | `--profile postgres` | Adminer at :8082       |
+| `docker-compose.mysql.yml`    | MySQL        | `--profile mysql`    | Adminer at :8082       |
+| `docker-compose.mariadb.yml`  | MariaDB      | `--profile mariadb`  | Adminer at :8082       |
 | `docker-compose.mongo.yml`    | MongoDB      | `--profile mongo`    | Mongo Express at :8081 |
 
 Any auth overlay can be combined with any database overlay (or none, to keep H2). Use the `compose.sh` wrapper rather
 than bare `docker compose` — it assembles the right `-f`/`--profile` flags and auto-detects docker vs podman:
 
 ```bash
-bash compose.sh [--auth ldap|oidc] [--db postgres|mongo] -- up -d
+bash compose.sh [--auth ldap|oidc] [--db postgres|mysql|mariadb|mongo] -- up -d
 ```
 
 ### First-time setup

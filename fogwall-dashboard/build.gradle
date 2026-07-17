@@ -181,6 +181,8 @@ dependencies {
     // Database drivers at runtime (whichever store is configured)
     runtimeOnly "com.h2database:h2:${h2Version}"
     runtimeOnly "org.postgresql:postgresql:${postgresVersion}"
+    runtimeOnly "com.mysql:mysql-connector-j:${mysqlVersion}"
+    runtimeOnly "org.mariadb.jdbc:mariadb-java-client:${mariadbVersion}"
     // MongoDB driver — compile-scoped because MongoSessionRepository uses the sync client directly.
     implementation "org.mongodb:mongodb-driver-sync:${mongoVersion}"
 
