@@ -174,3 +174,21 @@ export interface GroupDetail {
   members: string[]
   rules: GroupPermissionRule[]
 }
+
+export interface ThirdPartyNoticeModule {
+  ecosystem: 'maven' | 'npm'
+  name: string
+  version: string
+  url?: string
+  declaredLicense?: string
+  declaredLicenseUrl?: string
+  licenseText?: string
+  noticeText?: string
+  licenseTextSource: 'embedded' | 'declared-only'
+}
+
+export interface ThirdPartyNotices {
+  generatedAt: string | null
+  variant: string | null
+  modules: ThirdPartyNoticeModule[]
+}

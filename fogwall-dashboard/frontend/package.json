@@ -15,7 +15,8 @@
     "format:check": "prettier --check src",
     "preview": "vite preview",
     "test:e2e": "playwright test",
-    "license-check": "license-checker-rseidelsohn --production --excludePrivatePackages --summary --onlyAllow \"MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;0BSD;Unlicense;CC0-1.0;MPL-2.0;EPL-1.0;EPL-2.0;WTFPL;BlueOak-1.0.0;Python-2.0;Artistic-2.0;Zlib;W3C;Unicode-DFS-2017;OFL-1.1\""
+    "license-check": "license-checker-rseidelsohn --production --excludePrivatePackages --summary --onlyAllow \"MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;0BSD;Unlicense;CC0-1.0;MPL-2.0;EPL-1.0;EPL-2.0;WTFPL;BlueOak-1.0.0;Python-2.0;Artistic-2.0;Zlib;W3C;Unicode-DFS-2017;OFL-1.1\"",
+    "license-report": "license-checker-rseidelsohn --production --excludePrivatePackages --json --out notices/npm-licenses.json --files notices/npm-license-files"
   },
   "dependencies": {
     "diff2html": "^3.4.56",
