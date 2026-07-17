@@ -71,6 +71,7 @@ test/gitea/test_ed25519.pub
 fogwall-dashboard/src/main/resources/static/assets/
 fogwall-dashboard/src/main/resources/static/index.html
 fogwall-dashboard/src/main/resources/static/logo.png
+fogwall-dashboard/src/main/resources/static/THIRD-PARTY-NOTICES.json
 break-glass.token
 
 ### Performance benchmark outputs ###

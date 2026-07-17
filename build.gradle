@@ -140,5 +140,243 @@ subprojects {
         test {
             finalizedBy jacocoTestReport
         }
+
+        // Best-effort extraction of embedded META-INF/LICENSE, META-INF/NOTICE, and root
+        // LICENSE/NOTICE file contents from this module's runtime dependency jars, keyed by
+        // module coordinates. Maven POM metadata only gives a license *name* + a generic URL —
+        // it doesn't reproduce a package's actual copyright line the way most licenses (MIT, BSD,
+        // ISC) require. Many jars (especially Apache-licensed ones, which are required to
+        // propagate their own NOTICE file) bundle the real text inside the jar itself; this task
+        // extracts it where present. Feeds :generateThirdPartyNotices in the root project.
+        tasks.register('extractEmbeddedLicenseTexts') {
+            group = 'verification'
+            description = 'Extracts embedded LICENSE/NOTICE file text from runtime dependency jars'
+            def outputFile = layout.buildDirectory.file('reports/dependency-license/embedded-license-text.json')
+            inputs.files(configurations.runtimeClasspath)
+            outputs.file(outputFile)
+
+            doLast {
+                def candidateNames = [
+                        'META-INF/LICENSE', 'META-INF/LICENSE.TXT', 'META-INF/LICENSE.MD',
+                        'META-INF/NOTICE', 'META-INF/NOTICE.TXT', 'META-INF/NOTICE.MD',
+                        'LICENSE', 'LICENSE.TXT', 'LICENSE.MD',
+                        'NOTICE', 'NOTICE.TXT', 'NOTICE.MD'
+                ] as Set
+
+                def result = [:]
+                configurations.runtimeClasspath.resolvedConfiguration.resolvedArtifacts.each { artifact ->
+                    def id = artifact.moduleVersion.id
+                    def coords = "${id.group}:${id.name}:${id.version}".toString()
+                    def file = artifact.file
+                    if (!file.name.endsWith('.jar')) return
+                    try {
+                        new java.util.zip.ZipFile(file).withCloseable { zip ->
+                            def found = [:]
+                            zip.entries().each { entry ->
+                                if (entry.directory) return
+                                def normalized = entry.name.replaceAll(/\/$/, '').toUpperCase()
+                                if (!candidateNames.contains(normalized)) return
+                                def kind = normalized.contains('NOTICE') ? 'notice' : 'license'
+                                // Keep the first match of each kind — jars occasionally ship both a
+                                // top-level and a META-INF copy of the same file.
+                                if (!found.containsKey(kind)) {
+                                    def text = zip.getInputStream(entry).getText('UTF-8')
+                                    found[kind] = [sourceEntry: entry.name, text: text]
+                                }
+                            }
+                            if (found) result[coords] = found
+                        }
+                    } catch (Exception e) {
+                        logger.warn("extractEmbeddedLicenseTexts: could not read {} for {}: {}", file, coords, e.message)
+                    }
+                }
+                def out = outputFile.get().asFile
+                out.parentFile.mkdirs()
+                out.text = groovy.json.JsonOutput.toJson(result)
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Third-party notices aggregation
+//
+// Combines each module's Gradle license-report output (declared license name/URL from Maven
+// POM metadata) with best-effort extracted embedded LICENSE/NOTICE text
+// (extractEmbeddedLicenseTexts) and the frontend's npm license report, into one attribution file
+// per distributable Docker image variant. The `server` image only ships fogwall-core +
+// fogwall-server dependencies (no dashboard, no frontend bundle); `dashboard` is a superset that
+// also includes fogwall-dashboard's dependencies and the npm/React bundle.
+//
+// Declared license name/URL alone doesn't satisfy every license's requirements — MIT/BSD/ISC in
+// particular expect the package's actual copyright line to be reproduced, not just the license
+// name. Embedded text is preferred wherever a jar/npm package actually bundles it; entries with
+// no embedded text are marked declared-only rather than silently presented as equally complete.
+// ---------------------------------------------------------------------------
+
+def noticesOutputDir = layout.buildDirectory.dir('notices')
+
+// Keyed by "group:artifact" (no version) — the pinned version in the overrides file is only a
+// snapshot from whenever malformed-POM handling was last verified and drifts as Dependabot bumps
+// the dependency. licenseReport.excludes (which this file backs) also excludes by group:artifact
+// only, so matching on version here would silently drop the entry the next time it's bumped.
+def parseOverrides = {
+    def overridesFile = rootProject.file('gradle-license-overrides.txt')
+    def result = [:]
+    overridesFile.eachLine { line ->
+        line = line.trim()
+        if (!line || line.startsWith('#')) return
+        def parts = line.split(/\|/)
+        if (parts.length < 3) return
+        def (group, artifact, ignoredPinnedVersion) = parts[0].split(':')
+        result["${group}:${artifact}".toString()] = [
+                url               : parts.length > 1 ? parts[1] : null,
+                declaredLicense   : parts.length > 2 ? parts[2] : null,
+                declaredLicenseUrl: parts.length > 3 ? parts[3] : null
+        ]
+    }
+    result
+}
+
+def projectRuntimeCoords = { Project proj ->
+    proj.configurations.runtimeClasspath.resolvedConfiguration.resolvedArtifacts.collect {
+        "${it.moduleVersion.id.group}:${it.moduleVersion.id.name}:${it.moduleVersion.id.version}".toString()
+    } as Set
+}
+
+def mergeMavenModules = { List<Project> projects, Map overrides ->
+    def modules = [:]
+    projects.each { proj ->
+        def licensesFile = proj.layout.buildDirectory.file('reports/dependency-license/licenses.json').get().asFile
+        def embeddedFile = proj.layout.buildDirectory.file('reports/dependency-license/embedded-license-text.json').get().asFile
+        def embedded = embeddedFile.exists() ? new groovy.json.JsonSlurper().parse(embeddedFile) : [:]
+
+        if (licensesFile.exists()) {
+            new groovy.json.JsonSlurper().parse(licensesFile).dependencies.each { dep ->
+                def key = "${dep.moduleName}:${dep.moduleVersion}".toString()
+                if (modules.containsKey(key)) return
+                def emb = embedded[key]
+                modules[key] = [
+                        ecosystem         : 'maven',
+                        name              : dep.moduleName,
+                        version           : dep.moduleVersion,
+                        url               : dep.moduleUrl,
+                        declaredLicense   : dep.moduleLicense,
+                        declaredLicenseUrl: dep.moduleLicenseUrl,
+                        licenseText       : emb?.license?.text,
+                        noticeText        : emb?.notice?.text,
+                        licenseTextSource : emb ? 'embedded' : 'declared-only'
+                ]
+            }
+        }
+
+        // Modules excluded from the license-report JSON itself (malformed POM license
+        // declarations — see licenseReport.excludes in the subprojects block) but genuinely
+        // present on this project's runtime classpath. Their correct license info comes from
+        // gradle-license-overrides.txt instead. Matched by group:artifact against the actually
+        // resolved version on this classpath, not the version pinned in the overrides file.
+        projectRuntimeCoords(proj).each { coords ->
+            def parts = coords.split(':')
+            def ga = "${parts[0]}:${parts[1]}".toString()
+            def info = overrides[ga]
+            if (!info) return
+            if (modules.containsKey(coords)) return
+            def emb = embedded[coords]
+            modules[coords] = [
+                    ecosystem         : 'maven',
+                    name              : ga,
+                    version           : parts[2],
+                    url               : info.url,
+                    declaredLicense   : info.declaredLicense,
+                    declaredLicenseUrl: info.declaredLicenseUrl,
+                    licenseText       : emb?.license?.text,
+                    noticeText        : emb?.notice?.text,
+                    licenseTextSource : emb ? 'embedded' : 'declared-only'
+            ]
+        }
+    }
+    modules.values().sort { it.name }
+}
+
+def mergeNpmModules = { File npmJsonFile ->
+    if (!npmJsonFile.exists()) return []
+    def data = new groovy.json.JsonSlurper().parse(npmJsonFile)
+    data.collect { nameAtVersion, info ->
+        def idx = nameAtVersion.lastIndexOf('@')
+        def name = nameAtVersion.substring(0, idx)
+        def version = nameAtVersion.substring(idx + 1)
+        def licenseText = null
+        if (info.licenseFile) {
+            def f = new File(info.licenseFile as String)
+            if (f.exists()) licenseText = f.text
+        }
+        [
+                ecosystem         : 'npm',
+                name              : name,
+                version           : version,
+                url               : info.repository,
+                declaredLicense   : info.licenses,
+                declaredLicenseUrl: null,
+                licenseText       : licenseText,
+                noticeText        : null,
+                licenseTextSource : licenseText ? 'embedded' : 'declared-only'
+        ]
+    }.sort { it.name }
+}
+
+def writeNotices = { String variant, List modules ->
+    def dir = new File(noticesOutputDir.get().asFile, variant)
+    dir.mkdirs()
+
+    new File(dir, 'THIRD-PARTY-NOTICES.json').text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson([
+            generatedAt: java.time.Instant.now().toString(),
+            variant    : variant,
+            modules    : modules
+    ]))
+
+    def sb = new StringBuilder()
+    sb << "fogwall (${variant} image) — third-party software notices\n"
+    sb << ('=' * 70) << '\n\n'
+    sb << "fogwall itself is licensed under the Apache License, Version 2.0 — see LICENSE.\n"
+    sb << "Generated from build metadata. Entries marked [declared license only] have no\n"
+    sb << "license/notice file embedded in the resolved package; only the declared license\n"
+    sb << "name/URL is shown, not that package's specific copyright text.\n\n"
+    modules.each { m ->
+        sb << ('-' * 70) << '\n'
+        sb << "${m.name} ${m.version} (${m.ecosystem})\n"
+        sb << "License: ${m.declaredLicense ?: 'UNKNOWN'}\n"
+        if (m.url) sb << "URL: ${m.url}\n"
+        if (m.licenseTextSource == 'declared-only') {
+            sb << "[declared license only — no embedded license/notice text found]\n"
+        }
+        if (m.noticeText) sb << "\n--- NOTICE ---\n${m.noticeText}\n"
+        if (m.licenseText) sb << "\n--- LICENSE ---\n${m.licenseText}\n"
+        sb << '\n'
+    }
+    new File(dir, 'THIRD-PARTY-NOTICES.txt').text = sb.toString()
+}
+
+def coreProject = project(':fogwall-core')
+def serverProject = project(':fogwall-server')
+def dashboardProject = project(':fogwall-dashboard')
+
+tasks.register('generateThirdPartyNotices') {
+    group = 'build'
+    description = 'Generates THIRD-PARTY-NOTICES files for the server and dashboard Docker image variants'
+    dependsOn ':fogwall-core:generateLicenseReport', ':fogwall-core:extractEmbeddedLicenseTexts'
+    dependsOn ':fogwall-server:generateLicenseReport', ':fogwall-server:extractEmbeddedLicenseTexts'
+    dependsOn ':fogwall-dashboard:generateLicenseReport', ':fogwall-dashboard:extractEmbeddedLicenseTexts'
+    dependsOn ':fogwall-dashboard:npmLicenseReport'
+
+    outputs.dir(noticesOutputDir)
+
+    doLast {
+        def overrides = parseOverrides()
+
+        writeNotices('server', mergeMavenModules([coreProject, serverProject], overrides))
+
+        def dashboardModules = mergeMavenModules([coreProject, serverProject, dashboardProject], overrides)
+        def npmModules = mergeNpmModules(dashboardProject.file('frontend/notices/npm-licenses.json'))
+        writeNotices('dashboard', dashboardModules + npmModules)
     }
 }

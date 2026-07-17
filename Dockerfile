@@ -46,7 +46,7 @@ RUN --mount=type=cache,target=/root/.gradle/caches \
       arm64) GITLEAKS_TARGET=linux_arm64 ;; \
       *)     GITLEAKS_TARGET=linux_x64   ;; \
     esac \
-    && ./gradlew clean :fogwall-server:installDist :fogwall-dashboard:installDist \
+    && ./gradlew clean :fogwall-server:installDist :fogwall-dashboard:installDist generateThirdPartyNotices \
        -PgitleaksTargets=${GITLEAKS_TARGET} --no-daemon -q
 
 # Prepend a conf/ directory to the classpath so that a mounted fogwall-local.yml
@@ -74,6 +74,12 @@ RUN apt-get update \
 
 COPY --from=builder \
     /workspace/fogwall-server/build/install/fogwall-server/ /app/
+
+COPY --from=builder /workspace/LICENSE /app/LICENSE
+COPY --from=builder \
+    /workspace/build/notices/server/THIRD-PARTY-NOTICES.json \
+    /workspace/build/notices/server/THIRD-PARTY-NOTICES.txt \
+    /app/
 
 # Create the conf directory; mount a fogwall-{profile}.yml here to override config.
 RUN mkdir -p /app/conf
@@ -110,6 +116,12 @@ RUN apt-get update \
 # Copy the built distribution
 COPY --from=builder \
     /workspace/fogwall-dashboard/build/install/fogwall-dashboard/ /app/
+
+COPY --from=builder /workspace/LICENSE /app/LICENSE
+COPY --from=builder \
+    /workspace/build/notices/dashboard/THIRD-PARTY-NOTICES.json \
+    /workspace/build/notices/dashboard/THIRD-PARTY-NOTICES.txt \
+    /app/
 
 # Create the conf directory; mount a fogwall-{profile}.yml here to override config.
 # Example: -v ./docker/fogwall-local.yml:/app/conf/fogwall-local.yml:ro

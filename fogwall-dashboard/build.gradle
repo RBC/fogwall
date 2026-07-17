@@ -68,10 +68,34 @@ tasks.register('prettierDocs', NpxTask) {
     inputs.file(rootProject.file('.prettierignore'))
 }
 
+tasks.register('npmLicenseReport', NpmTask) {
+    group = 'verification'
+    description = 'Generates a JSON license report + per-package license text files for the React frontend'
+    dependsOn tasks.named('npmCi')
+    args = ['run', 'license-report']
+    inputs.file('frontend/package.json')
+    inputs.file('frontend/package-lock.json')
+    outputs.dir('frontend/notices')
+}
+
+// Copies the root project's generated third-party notices JSON into Vite's public/ directory.
+// Files under public/ are served as-is by both the Vite dev server (npm run dev) and the
+// production build (copied verbatim into dist/, then into static/ by copyFrontend below) — so
+// this is the only place the file needs to be placed for the "Legal" page to fetch it in every
+// run mode. Depends on the root :generateThirdPartyNotices task (see root build.gradle), not a
+// module-local task, since notices are aggregated across fogwall-core/server/dashboard + npm.
+tasks.register('copyThirdPartyNoticesToFrontend', Copy) {
+    group = 'build'
+    description = "Copies the generated THIRD-PARTY-NOTICES.json into frontend/public/"
+    dependsOn rootProject.tasks.named('generateThirdPartyNotices')
+    from(rootProject.layout.buildDirectory.file('notices/dashboard/THIRD-PARTY-NOTICES.json'))
+    into('frontend/public')
+}
+
 tasks.register('npmBuild', NpmTask) {
     group = 'build'
     description = 'Builds the React frontend with Vite'
-    dependsOn tasks.named('npmCi')
+    dependsOn tasks.named('npmCi'), tasks.named('copyThirdPartyNoticesToFrontend')
     args = ['run', 'build']
     inputs.dir('frontend/src')
     inputs.file('frontend/package.json')
