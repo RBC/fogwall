@@ -1,0 +1,44 @@
+name: Helm Chart Lint
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: ["main"]
+    paths: ["charts/**"]
+  pull_request:
+    branches: ["main"]
+    paths: ["charts/**"]
+
+env:
+  HELM_VERSION: "3.21.3"
+
+jobs:
+  lint:
+    name: Helm (lint + template)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # ratchet:actions/checkout@v7.0.0
+
+      - name: Install helm
+        run: |
+          cd /tmp
+          ASSET="helm-v${HELM_VERSION}-linux-amd64.tar.gz"
+          curl -sSfL -o "${ASSET}" "https://get.helm.sh/${ASSET}"
+          curl -sSfL -o "${ASSET}.sha256sum" "https://get.helm.sh/${ASSET}.sha256sum"
+          sha256sum --check "${ASSET}.sha256sum"
+          tar -xzf "${ASSET}" linux-amd64/helm
+          sudo mv linux-amd64/helm /usr/local/bin/helm
+
+      - name: helm lint
+        run: helm lint charts/fogwall
+
+      - name: helm template (default values)
+        run: helm template test charts/fogwall
+
+      - name: helm template (multi-replica + secret overrides)
+        run: |
+          helm template test charts/fogwall --set replicaCount=3 \
+            --set-json 'extraEnvFrom=[{"secretRef":{"name":"fogwall-secrets"}}]'

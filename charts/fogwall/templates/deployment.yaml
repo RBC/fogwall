@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fogwall.fullname" . }}
+  labels:
+    {{- include "fogwall.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "fogwall.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "fogwall.selectorLabels" . | nindent 8 }}
+      annotations:
+        # Forces a rollout when the mounted config changes — ConfigMap updates don't
+        # otherwise trigger a restart of already-running pods.
+        checksum/config: {{ .Values.config | sha256sum }}
+    spec:
+      # fogwall reads every FOGWALL_* env var as a config override (see docs/CONFIGURATION.md).
+      # Kubernetes auto-injects <SERVICE_NAME>_SERVICE_PORT-style env vars for every Service in
+      # the namespace — since a release/service named "fogwall*" is the common case, those
+      # auto-injected vars collide with fogwall's own env prefix and break config loading.
+      enableServiceLinks: false
+      containers:
+        - name: fogwall
+          image: "{{ include "fogwall.image" . }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: FOGWALL_CONFIG_PROFILES
+              value: {{ .Values.configProfiles | quote }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.extraEnvFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/conf
+              readOnly: true
+          livenessProbe:
+            {{- include "fogwall.probe" (dict "Values" .Values "kind" "liveness") | nindent 12 }}
+          readinessProbe:
+            {{- include "fogwall.probe" (dict "Values" .Values "kind" "readiness") | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "fogwall.fullname" . }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

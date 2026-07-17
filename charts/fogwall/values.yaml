@@ -1,0 +1,69 @@
+# Default values for the fogwall Helm chart.
+# This is a minimal starting chart — Deployment, Service, ConfigMap, and health probes only.
+# Ingress, PersistentVolumeClaim, ServiceAccount/RBAC, and OpenShift SCC guidance are tracked
+# as follow-up work (see charts/fogwall/README.md).
+
+replicaCount: 1
+
+# Which fogwall image to deploy:
+#   dashboard — proxy + REST API + approval UI, has /api/health, default
+#   server    — proxy + validation pipeline only, no dashboard/REST API, no HTTP health endpoint
+# Sets the default image repository and probe type together. Set image.repository/tag explicitly
+# to override the registry/tag without changing variant-driven defaults (probe type, etc).
+variant: dashboard
+
+image:
+  # Leave blank to use the variant default (ghcr.io/rbc/fogwall or ghcr.io/rbc/fogwall-server).
+  repository: ""
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+# Config profile(s) to load, matching FOGWALL_CONFIG_PROFILES. "custom" (below) is this chart's
+# operator-supplied profile, mounted from the ConfigMap built from `config`. Comma-separated to
+# layer additional profiles baked into a custom image build — later profiles take priority.
+configProfiles: custom
+
+# Name of the operator-supplied profile — the ConfigMap key is fogwall-<configProfileName>.yml.
+# Must appear in configProfiles above for it to actually be loaded.
+configProfileName: custom
+
+# Contents of the fogwall-<configProfileName>.yml file, mounted at /app/conf/. Keep secrets (DB
+# passwords, OIDC client secret, API key) out of this value — use extraEnvFrom to pull them from
+# an existing Secret instead.
+config: |
+  # See docs/CONFIGURATION.md for the full reference.
+  providers:
+    github:
+      type: github
+      enabled: true
+
+# Name of an existing Secret to project as environment variables (e.g. FOGWALL_API_KEY,
+# FOGWALL_DATABASE_PASSWORD). This chart does not create the Secret — bring your own.
+extraEnvFrom: []
+# extraEnvFrom:
+#   - secretRef:
+#       name: fogwall-secrets
+
+extraEnv: []
+
+resources: {}
+# resources:
+#   requests:
+#     cpu: 250m
+#     memory: 512Mi
+#   limits:
+#     memory: 1Gi
+
+# Leave empty to use the variant-driven default (httpGet /api/health for dashboard, tcpSocket
+# for server — the server image has no HTTP health endpoint). Set explicitly to override.
+livenessProbe: {}
+readinessProbe: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

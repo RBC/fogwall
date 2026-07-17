@@ -747,6 +747,26 @@ server:
 This merges the corporate CA with the JVM's built-in trust anchors so public providers (GitHub, GitLab SaaS) continue to
 work without changes.
 
+### Standalone server image (no dashboard)
+
+The default `docker build .` produces the dashboard image (`FogwallDashboardApplication`) — proxy, REST API, approval
+UI. For enforcement-only deployments that don't need the dashboard or approval UI (CI pipelines, automated
+environments), build the lighter standalone server target instead:
+
+```bash
+docker build --target server -t fogwall-server .
+```
+
+This runs `FogwallJettyApplication` — the git proxy and validation pipeline with YAML-driven configuration, no Spring,
+no React/Node build step, no REST API. It uses the same config override mechanism as the dashboard image (mount a
+`fogwall-{profile}.yml` at `/app/conf/`, set `FOGWALL_CONFIG_PROFILES`) and exposes the same port 8080.
+
+```bash
+docker run -e FOGWALL_CONFIG_PROFILES=docker-default \
+  -v ./docker/fogwall-docker-default.yml:/app/conf/fogwall-docker-default.yml:ro \
+  -p 8080:8080 fogwall-server
+```
+
 ### Health check
 
 The dashboard module exposes an unauthenticated health endpoint:
