@@ -1,6 +1,7 @@
 package com.rbc.fogwall.provider;
 
 import java.net.URI;
+import java.util.Optional;
 
 public interface FogwallProvider {
 
@@ -35,5 +36,23 @@ public interface FogwallProvider {
      */
     default int getBlockedInfoRefsStatus() {
         return 403;
+    }
+
+    /**
+     * Builds a browsable web URL for the given repository on this provider's platform, e.g.
+     * {@code https://github.com/owner/repo}. Returns {@link Optional#empty()} for providers with no stable public repo
+     * URL shape (generic bare-git providers).
+     */
+    default Optional<String> buildRepoUrl(String owner, String repo) {
+        return Optional.empty();
+    }
+
+    /**
+     * Builds a browsable web URL for a specific commit within the given repository, e.g.
+     * {@code https://github.com/owner/repo/commit/<sha>}. Returns {@link Optional#empty()} for providers with no stable
+     * public repo URL shape (generic bare-git providers).
+     */
+    default Optional<String> buildCommitUrl(String owner, String repo, String sha) {
+        return Optional.empty();
     }
 }

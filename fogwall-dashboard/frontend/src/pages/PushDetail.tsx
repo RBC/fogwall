@@ -106,7 +106,13 @@ function formatTime(ts: string | number | undefined) {
   }
 }
 
-function upstreamCommitUrl(upstreamUrl: string, sha: string): string {
+/**
+ * Fallback heuristic used only when the backend-computed `commitUrl` is unavailable (e.g. provider no longer
+ * resolvable). Returns undefined for anything other than an http(s) URL — upstreamUrl can be an ssh:// transport URL
+ * (SSH-forwarded pushes) and must never be rendered as a clickable link.
+ */
+function upstreamCommitUrl(upstreamUrl: string, sha: string): string | undefined {
+  if (!/^https?:\/\//.test(upstreamUrl)) return undefined
   const base = upstreamUrl.replace(/\/$/, '').replace(/\.git$/, '')
   if (/gitlab\./.test(base)) return `${base}/-/commit/${sha}`
   return `${base}/commit/${sha}`
@@ -194,9 +200,10 @@ function PushTimeline({ record }: { record: PushRecord }) {
   const forwardStep = (record.steps ?? []).find((s) => FORWARDING_STEPS.has(s.stepName))
   if (record.status === 'FORWARDED') {
     const commitLink =
-      record.upstreamUrl && record.commitTo
+      record.commitUrl ??
+      (record.upstreamUrl && record.commitTo
         ? upstreamCommitUrl(record.upstreamUrl, record.commitTo)
-        : undefined
+        : undefined)
     events.push({
       icon: '→',
       label: 'Forwarded to upstream',
@@ -635,15 +642,38 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
 
               <div className="flex-1 min-w-0 space-y-0.5">
                 <div className="font-mono text-sm text-gray-900 truncate dark:text-gray-100">
-                  {record.upstreamUrl ??
+                  {record.repoUrl ??
+                    record.upstreamUrl ??
                     record.url ??
                     (record.project ?? '') + '/' + (record.repoName ?? '')}
+                  {record.repoUrl && (
+                    <a
+                      href={record.repoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Open repo"
+                      className="ml-1.5 text-blue-500 no-underline hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                      ↗
+                    </a>
+                  )}
                 </div>
                 <div className="text-xs text-gray-500 font-mono dark:text-gray-400">
                   {record.branch}
                 </div>
                 <div className="text-xs font-mono text-gray-400 break-all dark:text-gray-500">
                   {record.commitTo}
+                  {record.commitUrl && (
+                    <a
+                      href={record.commitUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Open commit"
+                      className="ml-1.5 text-blue-500 no-underline hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                      ↗
+                    </a>
+                  )}
                 </div>
                 {record.message && (
                   <div className="text-xs text-gray-600 italic pt-0.5 dark:text-gray-400">

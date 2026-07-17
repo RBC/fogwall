@@ -369,15 +369,40 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
               <StatusBadge status={push.status} />
               <div className="flex-1 min-w-0 space-y-0.5">
                 <div className="font-mono text-sm text-gray-900 truncate dark:text-gray-100">
-                  {push.upstreamUrl ??
+                  {push.repoUrl ??
+                    push.upstreamUrl ??
                     push.url ??
                     (push.project ?? '') + '/' + (push.repoName ?? 'unknown')}
+                  {push.repoUrl && (
+                    <a
+                      href={push.repoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      title="Open repo"
+                      className="ml-1.5 text-blue-500 no-underline hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                      ↗
+                    </a>
+                  )}
                 </div>
                 <div className="text-xs text-gray-500 truncate dark:text-gray-400">
                   {push.branch ?? '—'}
                 </div>
                 <div className="font-mono text-xs text-gray-400 break-all dark:text-gray-500">
                   {push.commitTo ?? '—'}
+                  {push.commitUrl && (
+                    <a
+                      href={push.commitUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      title="Open commit"
+                      className="ml-1.5 text-blue-500 no-underline hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                      ↗
+                    </a>
+                  )}
                 </div>
               </div>
               <div className="text-right text-sm text-gray-500 shrink-0 dark:text-gray-400">

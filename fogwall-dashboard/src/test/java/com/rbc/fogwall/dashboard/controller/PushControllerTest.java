@@ -12,8 +12,11 @@ import com.rbc.fogwall.config.ServerConfig;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
+import com.rbc.fogwall.db.model.PushSummary;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.permission.RepoPermissionService;
+import com.rbc.fogwall.provider.FogwallProvider;
+import com.rbc.fogwall.provider.ProviderRegistry;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -44,6 +47,9 @@ class PushControllerTest {
 
     @Mock
     ConfigHolder configHolder;
+
+    @Mock
+    ProviderRegistry providerRegistry;
 
     // Not injected by default — individual tests that need it set it on the controller directly.
     RepoPermissionService repoPermissionService;
@@ -117,6 +123,47 @@ class PushControllerTest {
             controller.list("PENDING", null, null, null, null, 50, 0, true);
             verify(pushStore).findSummaries(argThat(q -> q.getStatus() == PushStatus.PENDING));
         }
+
+        @Test
+        void resolvableProvider_enrichesRepoAndCommitUrls() {
+            var summary = PushSummary.builder()
+                    .id("p1")
+                    .provider("github")
+                    .project("acme")
+                    .repoName("widgets")
+                    .commitTo("abc123")
+                    .build();
+            when(pushStore.findSummaries(any())).thenReturn(List.of(summary));
+            var provider = mock(FogwallProvider.class);
+            when(provider.buildRepoUrl("acme", "widgets")).thenReturn(Optional.of("https://github.com/acme/widgets"));
+            when(provider.buildCommitUrl("acme", "widgets", "abc123"))
+                    .thenReturn(Optional.of("https://github.com/acme/widgets/commit/abc123"));
+            when(providerRegistry.getProvider("github")).thenReturn(Optional.of(provider));
+
+            var result = controller.list(null, null, null, null, null, 50, 0, true);
+
+            assertEquals("https://github.com/acme/widgets", result.get(0).getRepoUrl());
+            assertEquals(
+                    "https://github.com/acme/widgets/commit/abc123",
+                    result.get(0).getCommitUrl());
+        }
+
+        @Test
+        void unresolvableProvider_leavesUrlsNull() {
+            var summary = PushSummary.builder()
+                    .id("p1")
+                    .provider("removed-provider")
+                    .project("acme")
+                    .repoName("widgets")
+                    .build();
+            when(pushStore.findSummaries(any())).thenReturn(List.of(summary));
+            when(providerRegistry.getProvider("removed-provider")).thenReturn(Optional.empty());
+
+            var result = controller.list(null, null, null, null, null, 50, 0, true);
+
+            assertEquals(null, result.get(0).getRepoUrl());
+            assertEquals(null, result.get(0).getCommitUrl());
+        }
     }
 
     // ── GET /api/push/by-ref/{ref} ────────────────────────────────────────────────
@@ -162,6 +209,31 @@ class PushControllerTest {
             var resp = controller.getByRef("def456_abc123");
             assertEquals(HttpStatus.NOT_FOUND, resp.getStatusCode());
         }
+
+        @Test
+        void resolvableProvider_enrichesRepoAndCommitUrls() {
+            var push = PushRecord.builder()
+                    .id("p1")
+                    .status(PushStatus.PENDING)
+                    .provider("github")
+                    .project("acme")
+                    .repoName("widgets")
+                    .commitTo("abc123")
+                    .build();
+            when(pushStore.find(argThat(q -> "abc123".equals(q.getCommitTo())))).thenReturn(List.of(push));
+            var provider = mock(FogwallProvider.class);
+            when(provider.buildRepoUrl("acme", "widgets")).thenReturn(Optional.of("https://github.com/acme/widgets"));
+            when(provider.buildCommitUrl("acme", "widgets", "abc123"))
+                    .thenReturn(Optional.of("https://github.com/acme/widgets/commit/abc123"));
+            when(providerRegistry.getProvider("github")).thenReturn(Optional.of(provider));
+
+            var resp = controller.getByRef("def456_abc123");
+
+            assertEquals("https://github.com/acme/widgets", resp.getBody().getRepoUrl());
+            assertEquals(
+                    "https://github.com/acme/widgets/commit/abc123",
+                    resp.getBody().getCommitUrl());
+        }
     }
 
     // ── GET /api/push/{id} ────────────────────────────────────────────────────────
@@ -180,6 +252,53 @@ class PushControllerTest {
         void notFound_returns404() {
             when(pushStore.findById("missing")).thenReturn(Optional.empty());
             assertEquals(HttpStatus.NOT_FOUND, controller.getById("missing").getStatusCode());
+        }
+
+        @Test
+        void resolvableProvider_enrichesRepoAndCommitUrls() {
+            var push = PushRecord.builder()
+                    .id("p1")
+                    .status(PushStatus.PENDING)
+                    .provider("gitlab")
+                    .project("acme")
+                    .repoName("widgets")
+                    .commitTo("abc123")
+                    .build();
+            when(pushStore.findById("p1")).thenReturn(Optional.of(push));
+            var provider = mock(FogwallProvider.class);
+            when(provider.buildRepoUrl("acme", "widgets")).thenReturn(Optional.of("https://gitlab.com/acme/widgets"));
+            when(provider.buildCommitUrl("acme", "widgets", "abc123"))
+                    .thenReturn(Optional.of("https://gitlab.com/acme/widgets/-/commit/abc123"));
+            when(providerRegistry.getProvider("gitlab")).thenReturn(Optional.of(provider));
+
+            var resp = controller.getById("p1");
+
+            assertEquals("https://gitlab.com/acme/widgets", resp.getBody().getRepoUrl());
+            assertEquals(
+                    "https://gitlab.com/acme/widgets/-/commit/abc123",
+                    resp.getBody().getCommitUrl());
+        }
+
+        @Test
+        void genericProvider_leavesUrlsNull() {
+            var push = PushRecord.builder()
+                    .id("p1")
+                    .status(PushStatus.PENDING)
+                    .provider("internal-git")
+                    .project("acme")
+                    .repoName("widgets")
+                    .commitTo("abc123")
+                    .build();
+            when(pushStore.findById("p1")).thenReturn(Optional.of(push));
+            var provider = mock(FogwallProvider.class);
+            when(provider.buildRepoUrl("acme", "widgets")).thenReturn(Optional.empty());
+            when(provider.buildCommitUrl("acme", "widgets", "abc123")).thenReturn(Optional.empty());
+            when(providerRegistry.getProvider("internal-git")).thenReturn(Optional.of(provider));
+
+            var resp = controller.getById("p1");
+
+            assertEquals(null, resp.getBody().getRepoUrl());
+            assertEquals(null, resp.getBody().getCommitUrl());
         }
 
         @Test

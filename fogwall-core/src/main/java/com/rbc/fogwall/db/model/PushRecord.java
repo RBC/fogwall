@@ -28,6 +28,18 @@ public class PushRecord {
     /** The upstream repository URL being proxied to (e.g., https://github.com/owner/repo). */
     private String upstreamUrl;
 
+    /**
+     * Browsable web URL for the repository, computed from the provider at query time — not persisted. Absent for
+     * generic providers with no stable public repo URL shape.
+     */
+    private String repoUrl;
+
+    /**
+     * Browsable web URL for {@link #commitTo}, computed from the provider at query time — not persisted. Absent for
+     * generic providers with no stable public repo URL shape.
+     */
+    private String commitUrl;
+
     /** Provider name (e.g., "github", "gitlab"). */
     private String provider;
 
