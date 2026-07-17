@@ -74,6 +74,8 @@ dependencies {
     // Database - JDBC drivers (optional at runtime, depending on which store is used)
     compileOnly "com.h2database:h2:${h2Version}"
     compileOnly "org.postgresql:postgresql:${postgresVersion}"
+    compileOnly "com.mysql:mysql-connector-j:${mysqlVersion}"
+    compileOnly "org.mariadb.jdbc:mariadb-java-client:${mariadbVersion}"
 
     // Database - MongoDB driver
     compileOnly "org.mongodb:mongodb-driver-sync:${mongoVersion}"
@@ -93,6 +95,10 @@ dependencies {
     testImplementation "org.testcontainers:testcontainers:${testContainersVersion}"
     testImplementation "org.testcontainers:testcontainers-junit-jupiter:${testContainersVersion}"
     testImplementation "org.testcontainers:testcontainers-mongodb:${testContainersVersion}"
+    testImplementation "org.testcontainers:testcontainers-mysql:${testContainersVersion}"
+    testImplementation "org.testcontainers:testcontainers-mariadb:${testContainersVersion}"
+    testRuntimeOnly "com.mysql:mysql-connector-j:${mysqlVersion}"
+    testRuntimeOnly "org.mariadb.jdbc:mariadb-java-client:${mariadbVersion}"
     testCompileOnly "org.projectlombok:lombok:${lombokVersion}"
     testAnnotationProcessor "org.projectlombok:lombok:${lombokVersion}"
 }

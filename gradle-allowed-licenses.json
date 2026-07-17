@@ -85,6 +85,8 @@
     { "moduleLicense": "GPL2 w/ CPE" },
     { "moduleLicense": "GNU General Public License, version 2 with the GNU Classpath Exception" },
     { "moduleLicense": "GNU General Public License, version 2, with the Classpath Exception" },
-    { "moduleLicense": "Classpath-exception" }
+    { "moduleLicense": "Classpath-exception" },
+
+    { "moduleLicense": "LGPL-2.1-or-later" }
   ]
 }

@@ -1,0 +1,28 @@
+# Database overlay — MariaDB.
+#
+# Activates the mariadb service from docker-compose.yml (--profile mariadb) and
+# injects database settings as environment variables.  Composes freely with any auth
+# overlay (ldap, oidc, or the default static auth) — just add both -f flags.
+#
+# Examples:
+#   # Static auth + MariaDB
+#   docker compose --profile mariadb -f docker-compose.yml -f docker-compose.mariadb.yml up -d
+#
+#   # LDAP auth + MariaDB
+#   docker compose --profile mariadb -f docker-compose.yml -f docker-compose.ldap.yml -f docker-compose.mariadb.yml up -d
+#
+#   # OIDC auth + MariaDB
+#   docker compose --profile mariadb -f docker-compose.yml -f docker-compose.oidc.yml -f docker-compose.mariadb.yml up -d
+#
+# Adminer (database UI) is available at http://localhost:8082.
+services:
+  fogwall:
+    environment:
+      FOGWALL_DATABASE_TYPE: mariadb
+      FOGWALL_DATABASE_URL: "jdbc:mariadb://mariadb:3306/fogwall?useSsl=false"
+      FOGWALL_DATABASE_USERNAME: fogwall
+      FOGWALL_DATABASE_PASSWORD: fogwall
+      FOGWALL_SERVER_SESSION_STORE: jdbc
+    depends_on:
+      mariadb:
+        condition: service_healthy

@@ -69,6 +69,44 @@ services:
       timeout: 5s
       retries: 10
 
+  # ── MySQL (optional — start with: docker compose --profile mysql up) ───────
+  mysql:
+    image: docker.io/mysql:8.4
+    profiles: [mysql]
+    environment:
+      MYSQL_DATABASE: fogwall
+      MYSQL_USER: fogwall
+      MYSQL_PASSWORD: fogwall
+      MYSQL_ROOT_PASSWORD: fogwall
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-ufogwall", "-pfogwall"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── MariaDB (optional — start with: docker compose --profile mariadb up) ───
+  mariadb:
+    image: docker.io/mariadb:11.4
+    profiles: [mariadb]
+    environment:
+      MARIADB_DATABASE: fogwall
+      MARIADB_USER: fogwall
+      MARIADB_PASSWORD: fogwall
+      MARIADB_ROOT_PASSWORD: fogwall
+    ports:
+      - "3307:3306"
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-ufogwall", "-pfogwall"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   # ── MongoDB (optional — start with: docker compose --profile mongo up) ─────
   mongo:
     image: docker.io/mongo:7
@@ -104,13 +142,13 @@ services:
 
   adminer:
     image: docker.io/adminer:4
-    profiles: [postgres]
-    depends_on:
-      - postgres
+    profiles: [postgres, mysql, mariadb]
     ports:
       - "8082:8080"
 
 volumes:
   gitea-data:
   postgres-data:
+  mysql-data:
+  mariadb-data:
   mongo-data:

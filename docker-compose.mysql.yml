@@ -1,0 +1,28 @@
+# Database overlay — MySQL.
+#
+# Activates the mysql service from docker-compose.yml (--profile mysql) and
+# injects database settings as environment variables.  Composes freely with any auth
+# overlay (ldap, oidc, or the default static auth) — just add both -f flags.
+#
+# Examples:
+#   # Static auth + MySQL
+#   docker compose --profile mysql -f docker-compose.yml -f docker-compose.mysql.yml up -d
+#
+#   # LDAP auth + MySQL
+#   docker compose --profile mysql -f docker-compose.yml -f docker-compose.ldap.yml -f docker-compose.mysql.yml up -d
+#
+#   # OIDC auth + MySQL
+#   docker compose --profile mysql -f docker-compose.yml -f docker-compose.oidc.yml -f docker-compose.mysql.yml up -d
+#
+# Adminer (database UI) is available at http://localhost:8082.
+services:
+  fogwall:
+    environment:
+      FOGWALL_DATABASE_TYPE: mysql
+      FOGWALL_DATABASE_URL: "jdbc:mysql://mysql:3306/fogwall?useSSL=false&allowPublicKeyRetrieval=true"
+      FOGWALL_DATABASE_USERNAME: fogwall
+      FOGWALL_DATABASE_PASSWORD: fogwall
+      FOGWALL_SERVER_SESSION_STORE: jdbc
+    depends_on:
+      mysql:
+        condition: service_healthy

@@ -36,6 +36,8 @@ ext {
     hikariVersion = '7.1.0'
     h2Version = '2.4.240'
     postgresVersion = '42.7.13'
+    mysqlVersion = '9.7.0'
+    mariadbVersion = '3.5.9'
     mongoVersion = '5.9.0'
 
     // Jackson
