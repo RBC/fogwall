@@ -143,6 +143,7 @@ This is a multi-module Gradle project:
 | [Architecture](docs/ARCHITECTURE.md)                         | How the proxy works: two proxy modes, validation pipeline, core abstractions, advanced use cases                 |
 | [JGit Infrastructure](docs/internals/JGIT_INFRASTRUCTURE.md) | Store-and-forward internals: ReceivePackFactory, hook chain, forwarding, credential flow (contributor reference) |
 | [Git Internals](docs/internals/GIT_INTERNALS.md)             | Wire-protocol edge cases: tags, new branches, force pushes, pack parsing (contributor reference)                 |
+| [Helm Chart](charts/fogwall/README.md)                       | Deploying fogwall on Kubernetes: values reference, secrets, multi-replica setup, standalone server image         |
 
 ## Roadmap
 

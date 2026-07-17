@@ -46,17 +46,52 @@ RUN --mount=type=cache,target=/root/.gradle/caches \
       arm64) GITLEAKS_TARGET=linux_arm64 ;; \
       *)     GITLEAKS_TARGET=linux_x64   ;; \
     esac \
-    && ./gradlew clean :fogwall-dashboard:installDist \
+    && ./gradlew clean :fogwall-server:installDist :fogwall-dashboard:installDist \
        -PgitleaksTargets=${GITLEAKS_TARGET} --no-daemon -q
 
 # Prepend a conf/ directory to the classpath so that a mounted fogwall-local.yml
 # is picked up by JettyConfigurationLoader at runtime.
 RUN sed -i \
     's|^CLASSPATH=\$APP_HOME/lib|CLASSPATH=$APP_HOME/conf:$APP_HOME/lib|' \
-    fogwall-dashboard/build/install/fogwall-dashboard/bin/fogwall-dashboard
+    fogwall-dashboard/build/install/fogwall-dashboard/bin/fogwall-dashboard \
+    fogwall-server/build/install/fogwall-server/bin/fogwall-server
 
-# ── Runtime stage ─────────────────────────────────────────────────────────────
-FROM docker.io/eclipse-temurin:25-jre-noble@sha256:2f1da100788559b397bcf48c736169ea5b070bde84e55f203bbee8e83d87a175
+# ── Runtime stage: standalone server (no dashboard, no Spring, no Node) ────────
+# Not built by default — `docker build --target server .` opts in explicitly.
+# Lighter footprint: no React/Node build step, no Spring/dashboard dependencies.
+FROM docker.io/eclipse-temurin:25-jre-noble@sha256:2f1da100788559b397bcf48c736169ea5b070bde84e55f203bbee8e83d87a175 AS server
+
+ARG SECURITY_UPGRADE_PKGS="libssl3t64 openssl"
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && if [ -n "${SECURITY_UPGRADE_PKGS}" ]; then \
+         apt-get install -y --only-upgrade ${SECURITY_UPGRADE_PKGS}; \
+       fi \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder \
+    /workspace/fogwall-server/build/install/fogwall-server/ /app/
+
+# Create the conf directory; mount a fogwall-{profile}.yml here to override config.
+RUN mkdir -p /app/conf
+
+RUN bash -c 'mkdir -p /app/{.data,logs,home} \
+    && chown -R 1000:0 /app/{.data,logs,home} \
+    && chmod g+rwX /app/{.data,logs,home}'
+
+ENV HOME=/app/home
+
+EXPOSE 8080
+
+USER 1000
+
+ENTRYPOINT ["/app/bin/fogwall-server"]
+
+# ── Runtime stage: dashboard (default) ──────────────────────────────────────────
+FROM docker.io/eclipse-temurin:25-jre-noble@sha256:2f1da100788559b397bcf48c736169ea5b070bde84e55f203bbee8e83d87a175 AS dashboard
 
 # Packages to upgrade beyond what the base image ships, space-separated.
 # Used to patch CVEs that are fixed in Ubuntu's repos but not yet picked up by

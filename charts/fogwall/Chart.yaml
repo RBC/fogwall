@@ -1,0 +1,11 @@
+apiVersion: v2
+name: fogwall
+description: Gateway/policy-enforcement proxy for git push validation, approval, and provenance
+type: application
+version: 0.1.0
+appVersion: "1.2.1"
+home: https://github.com/RBC/fogwall
+sources:
+  - https://github.com/RBC/fogwall
+maintainers:
+  - name: RBC/fogwall contributors
