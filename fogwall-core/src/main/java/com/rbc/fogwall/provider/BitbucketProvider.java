@@ -66,6 +66,16 @@ public class BitbucketProvider extends AbstractFogwallProvider implements HttpTo
         return String.format("%s/site/oauth2", uri);
     }
 
+    @Override
+    public Optional<String> buildRepoUrl(String owner, String repo) {
+        return webBaseUrl().map(base -> base + "/" + owner + "/" + repo);
+    }
+
+    @Override
+    public Optional<String> buildCommitUrl(String owner, String repo, String sha) {
+        return buildRepoUrl(owner, repo).map(repoUrl -> repoUrl + "/commits/" + sha);
+    }
+
     /**
      * {@inheritDoc}
      *

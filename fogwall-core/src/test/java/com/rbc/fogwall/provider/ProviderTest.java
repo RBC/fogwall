@@ -47,6 +47,42 @@ class ProviderTest {
         assertEquals("github", new GitHubProvider("/proxy").getName());
     }
 
+    @Test
+    void gitHub_buildRepoUrl() {
+        var p = new GitHubProvider(null);
+        assertEquals(
+                "https://github.com/acme/widgets",
+                p.buildRepoUrl("acme", "widgets").orElseThrow());
+    }
+
+    @Test
+    void gitHub_buildCommitUrl() {
+        var p = new GitHubProvider(null);
+        assertEquals(
+                "https://github.com/acme/widgets/commit/abc123",
+                p.buildCommitUrl("acme", "widgets", "abc123").orElseThrow());
+    }
+
+    @Test
+    void gitHub_sshUri_buildRepoUrl_isEmpty() {
+        // An ssh:// transport URI has no reliable relationship to the web frontend's scheme/host/port —
+        // never guess a link for SSH-forwarded pushes.
+        var p = GitHubProvider.builder()
+                .uri(URI.create("ssh://git@github.example.com:2222"))
+                .pathSuffix("/proxy")
+                .build();
+        assertTrue(p.buildRepoUrl("acme", "widgets").isEmpty());
+    }
+
+    @Test
+    void gitHub_sshUri_buildCommitUrl_isEmpty() {
+        var p = GitHubProvider.builder()
+                .uri(URI.create("ssh://git@github.example.com:2222"))
+                .pathSuffix("/proxy")
+                .build();
+        assertTrue(p.buildCommitUrl("acme", "widgets", "abc123").isEmpty());
+    }
+
     // --- GitLabProvider ---
 
     @Test
@@ -77,6 +113,22 @@ class ProviderTest {
     @Test
     void gitLab_getName() {
         assertEquals("gitlab", new GitLabProvider("/proxy").getName());
+    }
+
+    @Test
+    void gitLab_buildRepoUrl() {
+        var p = new GitLabProvider(null);
+        assertEquals(
+                "https://gitlab.com/acme/widgets",
+                p.buildRepoUrl("acme", "widgets").orElseThrow());
+    }
+
+    @Test
+    void gitLab_buildCommitUrl() {
+        var p = new GitLabProvider(null);
+        assertEquals(
+                "https://gitlab.com/acme/widgets/-/commit/abc123",
+                p.buildCommitUrl("acme", "widgets", "abc123").orElseThrow());
     }
 
     // --- BitbucketProvider ---
@@ -113,6 +165,55 @@ class ProviderTest {
         assertEquals("bitbucket", new BitbucketProvider("/proxy").getName());
     }
 
+    @Test
+    void bitbucket_buildRepoUrl() {
+        var p = new BitbucketProvider(null);
+        assertEquals(
+                "https://bitbucket.org/acme/widgets",
+                p.buildRepoUrl("acme", "widgets").orElseThrow());
+    }
+
+    @Test
+    void bitbucket_buildCommitUrl() {
+        var p = new BitbucketProvider(null);
+        assertEquals(
+                "https://bitbucket.org/acme/widgets/commits/abc123",
+                p.buildCommitUrl("acme", "widgets", "abc123").orElseThrow());
+    }
+
+    // --- ForgejoProvider ---
+
+    @Test
+    void forgejo_buildRepoUrl() {
+        var p = ForgejoProvider.builder()
+                .name("codeberg")
+                .uri(ForgejoProvider.CODEBERG)
+                .build();
+        assertEquals(
+                "https://codeberg.org/acme/widgets",
+                p.buildRepoUrl("acme", "widgets").orElseThrow());
+    }
+
+    @Test
+    void forgejo_buildCommitUrl() {
+        var p = ForgejoProvider.builder()
+                .name("codeberg")
+                .uri(ForgejoProvider.CODEBERG)
+                .build();
+        assertEquals(
+                "https://codeberg.org/acme/widgets/commit/abc123",
+                p.buildCommitUrl("acme", "widgets", "abc123").orElseThrow());
+    }
+
+    @Test
+    void forgejo_sshUri_buildRepoUrl_isEmpty() {
+        var p = ForgejoProvider.builder()
+                .name("internal-gitea")
+                .uri(URI.create("ssh://git@gitea.corp.internal:2222"))
+                .build();
+        assertTrue(p.buildRepoUrl("acme", "widgets").isEmpty());
+    }
+
     // --- GenericProxyProvider ---
 
     @Test
@@ -132,6 +233,24 @@ class ProviderTest {
                 .pathSuffix("/custom")
                 .build();
         assertEquals("/custom", p.servletPath());
+    }
+
+    @Test
+    void generic_buildRepoUrl_isEmpty() {
+        var p = GenericProxyProvider.builder()
+                .name("my-git")
+                .uri(URI.create("https://git.corp.com"))
+                .build();
+        assertTrue(p.buildRepoUrl("acme", "widgets").isEmpty());
+    }
+
+    @Test
+    void generic_buildCommitUrl_isEmpty() {
+        var p = GenericProxyProvider.builder()
+                .name("my-git")
+                .uri(URI.create("https://git.corp.com"))
+                .build();
+        assertTrue(p.buildCommitUrl("acme", "widgets", "abc123").isEmpty());
     }
 
     // --- InMemoryProviderRegistry ---

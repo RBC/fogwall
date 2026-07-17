@@ -12,8 +12,10 @@ import com.rbc.fogwall.db.model.PushSummary;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.permission.RepoPermissionService;
+import com.rbc.fogwall.provider.ProviderRegistry;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.annotation.Resource;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -41,6 +43,9 @@ public class PushController {
 
     @Autowired
     private ConfigHolder configHolder;
+
+    @Resource(name = "providers")
+    private ProviderRegistry providerRegistry;
 
     /** Returns the authenticated username, falling back to {@code body.reviewerUsername}, then {@code "system"}. */
     private static String resolveReviewer(Map<String, String> body) {
@@ -88,7 +93,50 @@ public class PushController {
         if (user != null && !user.isBlank()) query.user(user);
         if (search != null && !search.isBlank()) query.search(search);
 
-        return pushStore.findSummaries(query.build());
+        return pushStore.findSummaries(query.build()).stream()
+                .map(this::enrichUrls)
+                .toList();
+    }
+
+    /**
+     * Populates {@code repoUrl} and (when {@code commitTo} is set) {@code commitUrl} from the push's provider. Absent
+     * for generic providers with no stable public repo URL shape, or when the provider can no longer be resolved (e.g.
+     * removed from config since the push was recorded).
+     */
+    private PushSummary enrichUrls(PushSummary summary) {
+        if (summary.getProvider() == null || summary.getProject() == null || summary.getRepoName() == null) {
+            return summary;
+        }
+        return providerRegistry
+                .getProvider(summary.getProvider())
+                .map(p -> summary.toBuilder()
+                        .repoUrl(p.buildRepoUrl(summary.getProject(), summary.getRepoName())
+                                .orElse(null))
+                        .commitUrl(
+                                summary.getCommitTo() != null
+                                        ? p.buildCommitUrl(
+                                                        summary.getProject(),
+                                                        summary.getRepoName(),
+                                                        summary.getCommitTo())
+                                                .orElse(null)
+                                        : null)
+                        .build())
+                .orElse(summary);
+    }
+
+    /** Record-level counterpart of {@link #enrichUrls(PushSummary)}; mutates {@code record} in place. */
+    private void enrichUrls(PushRecord record) {
+        if (record.getProvider() == null || record.getProject() == null || record.getRepoName() == null) {
+            return;
+        }
+        providerRegistry.getProvider(record.getProvider()).ifPresent(p -> {
+            record.setRepoUrl(
+                    p.buildRepoUrl(record.getProject(), record.getRepoName()).orElse(null));
+            if (record.getCommitTo() != null) {
+                record.setCommitUrl(p.buildCommitUrl(record.getProject(), record.getRepoName(), record.getCommitTo())
+                        .orElse(null));
+            }
+        });
     }
 
     /**
@@ -147,7 +195,12 @@ public class PushController {
                     .collect(Collectors.toList());
         }
 
-        return records.isEmpty() ? ResponseEntity.notFound().build() : ResponseEntity.ok(records.get(0));
+        if (records.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        PushRecord record = records.get(0);
+        enrichUrls(record);
+        return ResponseEntity.ok(record);
     }
 
     /**
@@ -163,6 +216,7 @@ public class PushController {
                 .map(record -> {
                     stripDiffContent(record);
                     record.setCanCurrentUserSelfCertify(computeCanCurrentUserSelfCertify(record));
+                    enrichUrls(record);
                     return ResponseEntity.ok(record);
                 })
                 .orElse(ResponseEntity.notFound().build());

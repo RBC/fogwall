@@ -2,6 +2,7 @@ package com.rbc.fogwall.provider;
 
 import com.rbc.fogwall.servlet.FogwallServlet;
 import java.net.URI;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 
 /** An upstream Git server that will be proxied by the application. */
@@ -74,6 +75,21 @@ public abstract class AbstractFogwallProvider implements FogwallProvider {
     @Override
     public URI getUri() {
         return uri;
+    }
+
+    /**
+     * Web base URL for constructing browsable repo/commit links, present only when {@link #uri} already uses
+     * {@code http}/{@code https}. There is no reliable way to derive a working web URL from an {@code ssh://} transport
+     * URI (the SSH port has no relationship to the web frontend's scheme, host, or port), so pushes made over SSH
+     * transport get no repo/commit link at all rather than a guessed one.
+     */
+    protected Optional<String> webBaseUrl() {
+        String scheme = uri.getScheme();
+        if (!"http".equals(scheme) && !"https".equals(scheme)) {
+            return Optional.empty();
+        }
+        String s = uri.toString();
+        return Optional.of(s.endsWith("/") ? s.substring(0, s.length() - 1) : s);
     }
 
     @Override

@@ -110,6 +110,16 @@ public class GitHubProvider extends AbstractFogwallProvider implements HttpToken
         }
     }
 
+    @Override
+    public Optional<String> buildRepoUrl(String owner, String repo) {
+        return webBaseUrl().map(base -> base + "/" + owner + "/" + repo);
+    }
+
+    @Override
+    public Optional<String> buildCommitUrl(String owner, String repo, String sha) {
+        return buildRepoUrl(owner, repo).map(repoUrl -> repoUrl + "/commit/" + sha);
+    }
+
     /**
      * Determines if the provider is a GitHub Enterprise Cloud with data residency. These instances have a custom domain
      * (e.g. mycompany.ghe.com) and use a different API path from GHEC or self-hosted GHES.

@@ -53,6 +53,16 @@ public class ForgejoProvider extends AbstractFogwallProvider implements HttpToke
         return uri + "/api/v1";
     }
 
+    @Override
+    public Optional<String> buildRepoUrl(String owner, String repo) {
+        return webBaseUrl().map(base -> base + "/" + owner + "/" + repo);
+    }
+
+    @Override
+    public Optional<String> buildCommitUrl(String owner, String repo, String sha) {
+        return buildRepoUrl(owner, repo).map(repoUrl -> repoUrl + "/commit/" + sha);
+    }
+
     /**
      * {@inheritDoc}
      *

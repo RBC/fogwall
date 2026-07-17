@@ -53,8 +53,12 @@ export interface PushRecord {
   repoName?: string
   url?: string
   upstreamUrl?: string
+  /** Browsable web URL for the repository, computed server-side from the provider. Absent for generic providers. */
+  repoUrl?: string
   branch?: string
   commitTo?: string
+  /** Browsable web URL for {@link commitTo}, computed server-side from the provider. Absent for generic providers. */
+  commitUrl?: string
   commitFrom?: string
   message?: string
   author?: string

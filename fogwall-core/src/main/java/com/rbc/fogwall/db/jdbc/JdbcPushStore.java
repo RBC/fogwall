@@ -101,7 +101,7 @@ public class JdbcPushStore implements PushStore {
         MapSqlParameterSource params = new MapSqlParameterSource();
         String where = buildWhere(query, params);
         String sql =
-                "SELECT id, status, url, upstream_url, project, repo_name, branch, commit_to, author, push_user, resolved_user, timestamp"
+                "SELECT id, status, url, upstream_url, provider, project, repo_name, branch, commit_to, author, push_user, resolved_user, timestamp"
                         + " FROM push_records" + where
                         + " ORDER BY timestamp " + (query.isNewestFirst() ? "DESC" : "ASC")
                         + " LIMIT :limit OFFSET :offset";
@@ -115,6 +115,7 @@ public class JdbcPushStore implements PushStore {
                         .status(PushStatus.valueOf(rs.getString("status")))
                         .url(rs.getString("url"))
                         .upstreamUrl(rs.getString("upstream_url"))
+                        .provider(rs.getString("provider"))
                         .project(rs.getString("project"))
                         .repoName(rs.getString("repo_name"))
                         .branch(rs.getString("branch"))

@@ -41,6 +41,7 @@ public interface PushStore {
                         .status(r.getStatus())
                         .url(r.getUrl())
                         .upstreamUrl(r.getUpstreamUrl())
+                        .provider(r.getProvider())
                         .project(r.getProject())
                         .repoName(r.getRepoName())
                         .branch(r.getBranch())
