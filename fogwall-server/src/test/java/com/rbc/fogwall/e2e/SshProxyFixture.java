@@ -131,6 +131,7 @@ class SshProxyFixture implements AutoCloseable {
                 JettyProxyFixture::buildCommitConfig,
                 null,
                 null,
+                null,
                 GpgConfig.defaultConfig(),
                 permissionService,
                 null,

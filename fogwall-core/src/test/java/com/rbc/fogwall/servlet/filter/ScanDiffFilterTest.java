@@ -156,11 +156,11 @@ class ScanDiffFilterTest {
                         .literals(List.of(literal))
                         .build())
                 .build();
-        return new ScanDiffFilter(new GitHubProvider("/proxy"), config);
+        return new ScanDiffFilter(new GitHubProvider("/proxy"), "/proxy", config);
     }
 
     private ScanDiffFilter filterNoRules() {
-        return new ScanDiffFilter(new GitHubProvider("/proxy"), DiffScanConfig.defaultConfig());
+        return new ScanDiffFilter(new GitHubProvider("/proxy"), "/proxy", DiffScanConfig.defaultConfig());
     }
 
     // ---- clean diff → PASS step recorded, no issue ----
@@ -286,6 +286,33 @@ class ScanDiffFilterTest {
         boolean hasDiffStep = details.getSteps().stream().anyMatch(s -> "diff".equals(s.getStepName()));
         assertFalse(hasDiffStep, "tag push must not generate a diff step");
         assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
+    }
+
+    // ---- per-commit scan catches content smuggled in an intermediate commit ----
+
+    @Test
+    void perCommitScan_secretAddedInIntermediateCommitThenRemoved_stillCaught() throws Exception {
+        Git git = Git.open(repoDir.toFile());
+        // Commit B: adds a blocked term
+        commit(git, "secret.txt", "supersecret");
+        // Commit C: removes it — aggregate diff base..C looks clean
+        Files.delete(repoDir.resolve("secret.txt"));
+        git.rm().addFilepattern("secret.txt").call();
+        RevCommit finalCommit = git.commit()
+                .setAuthor(new PersonIdent("Dev", "dev@example.com"))
+                .setCommitter(new PersonIdent("Dev", "dev@example.com"))
+                .setMessage("remove secret")
+                .call();
+
+        GitRequestDetails details = pushDetails(baseCommit, finalCommit.name());
+        FakeResponse resp = new FakeResponse();
+
+        filterWithLiteral("supersecret").doHttpFilter(mockRequest(details), resp.mock);
+
+        assertEquals(
+                GitRequestDetails.GitResult.REJECTED,
+                details.getResult(),
+                "content smuggled in an intermediate commit must still be caught even though the aggregate diff is clean");
     }
 
     // ---- diff step content contains the actual diff text ----

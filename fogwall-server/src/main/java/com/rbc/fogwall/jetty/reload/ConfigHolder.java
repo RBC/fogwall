@@ -1,6 +1,7 @@
 package com.rbc.fogwall.jetty.reload;
 
 import com.rbc.fogwall.config.AttestationQuestion;
+import com.rbc.fogwall.config.BinaryBlobConfig;
 import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.config.DiffScanConfig;
 import com.rbc.fogwall.config.SecretScanConfig;
@@ -19,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>{@link CommitConfig} — per-commit checks: identity verification, author email, commit message
  *   <li>{@link DiffScanConfig} — push-level diff content blocking
  *   <li>{@link SecretScanConfig} — push-level gitleaks secret scanning
+ *   <li>{@link BinaryBlobConfig} — push-level binary blob size / extension / MIME denylist
  *   <li>Attestation questions — global reviewer prompts (applies to all providers in this release)
  * </ul>
  *
@@ -34,16 +36,19 @@ public class ConfigHolder {
     private final AtomicReference<CommitConfig> commitConfig;
     private final AtomicReference<DiffScanConfig> diffScanConfig;
     private final AtomicReference<SecretScanConfig> secretScanConfig;
+    private final AtomicReference<BinaryBlobConfig> binaryBlobConfig;
     private final AtomicReference<List<AttestationQuestion>> attestations;
 
     public ConfigHolder(
             CommitConfig commitConfig,
             DiffScanConfig diffScanConfig,
             SecretScanConfig secretScanConfig,
+            BinaryBlobConfig binaryBlobConfig,
             List<AttestationQuestion> attestations) {
         this.commitConfig = new AtomicReference<>(commitConfig);
         this.diffScanConfig = new AtomicReference<>(diffScanConfig);
         this.secretScanConfig = new AtomicReference<>(secretScanConfig);
+        this.binaryBlobConfig = new AtomicReference<>(binaryBlobConfig);
         this.attestations = new AtomicReference<>(attestations);
     }
 
@@ -60,6 +65,11 @@ public class ConfigHolder {
     /** Returns the current live {@link SecretScanConfig}. Reads are always atomic and never block. */
     public SecretScanConfig getSecretScanConfig() {
         return secretScanConfig.get();
+    }
+
+    /** Returns the current live {@link BinaryBlobConfig}. Reads are always atomic and never block. */
+    public BinaryBlobConfig getBinaryBlobConfig() {
+        return binaryBlobConfig.get();
     }
 
     /**
@@ -101,6 +111,19 @@ public class ConfigHolder {
         SecretScanConfig old = secretScanConfig.getAndSet(newSecretScanConfig);
         log.info("SecretScanConfig reloaded: enabled={}", newSecretScanConfig.isEnabled());
         log.debug("Previous SecretScanConfig replaced: {}", old);
+    }
+
+    /**
+     * Atomically replaces the live binary-blob config. Called by {@link LiveConfigLoader} when a {@code binary-blob}
+     * section reload is triggered.
+     */
+    public void update(BinaryBlobConfig newBinaryBlobConfig) {
+        BinaryBlobConfig old = binaryBlobConfig.getAndSet(newBinaryBlobConfig);
+        log.info(
+                "BinaryBlobConfig reloaded: enabled={}, maxSizeBytes={}",
+                newBinaryBlobConfig.isEnabled(),
+                newBinaryBlobConfig.getMaxSizeBytes());
+        log.debug("Previous BinaryBlobConfig replaced: {}", old);
     }
 
     /**

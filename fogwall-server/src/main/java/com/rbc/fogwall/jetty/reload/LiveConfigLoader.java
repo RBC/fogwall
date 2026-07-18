@@ -48,6 +48,7 @@ public class LiveConfigLoader {
         COMMIT,
         DIFF_SCAN,
         SECRET_SCAN,
+        BINARY_BLOB,
         RULES,
         PERMISSIONS,
         ATTESTATIONS,
@@ -60,6 +61,7 @@ public class LiveConfigLoader {
                 case "commit" -> COMMIT;
                 case "diff_scan" -> DIFF_SCAN;
                 case "secret_scan" -> SECRET_SCAN;
+                case "binary_blob" -> BINARY_BLOB;
                 case "rules" -> RULES;
                 case "permissions" -> PERMISSIONS;
                 case "attestations" -> ATTESTATIONS;
@@ -350,6 +352,7 @@ public class LiveConfigLoader {
             case COMMIT -> reloadCommit(builder);
             case DIFF_SCAN -> reloadDiffScan(builder);
             case SECRET_SCAN -> reloadSecretScanning(builder);
+            case BINARY_BLOB -> reloadBinaryBlob(builder);
             case RULES -> reloadRules(builder, newConfig);
             case PERMISSIONS -> reloadPermissions(builder, newConfig);
             case ATTESTATIONS -> reloadAttestations(builder, newConfig);
@@ -357,6 +360,7 @@ public class LiveConfigLoader {
                 reloadCommit(builder);
                 reloadDiffScan(builder);
                 reloadSecretScanning(builder);
+                reloadBinaryBlob(builder);
                 reloadRules(builder, newConfig);
                 reloadPermissions(builder, newConfig);
                 reloadAttestations(builder, newConfig);
@@ -377,6 +381,10 @@ public class LiveConfigLoader {
 
     private void reloadSecretScanning(JettyConfigurationBuilder builder) {
         configHolder.update(builder.buildSecretScanConfig());
+    }
+
+    private void reloadBinaryBlob(JettyConfigurationBuilder builder) {
+        configHolder.update(builder.buildBinaryBlobConfig());
     }
 
     private void reloadRules(JettyConfigurationBuilder builder, FogwallConfig newConfig) {

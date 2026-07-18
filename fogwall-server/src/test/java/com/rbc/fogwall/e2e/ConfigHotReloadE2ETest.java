@@ -2,6 +2,7 @@ package com.rbc.fogwall.e2e;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.rbc.fogwall.config.BinaryBlobConfig;
 import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.config.DiffScanConfig;
 import com.rbc.fogwall.config.SecretScanConfig;
@@ -66,6 +67,7 @@ class ConfigHotReloadE2ETest {
                 CommitConfig.defaultConfig(),
                 DiffScanConfig.defaultConfig(),
                 SecretScanConfig.defaultConfig(),
+                BinaryBlobConfig.defaultConfig(),
                 List.of());
         var configRegistry = new InMemoryUrlRuleRegistry();
         proxy = new HotReloadJettyFixture(gitea.getBaseUri(), configHolder, configRegistry);

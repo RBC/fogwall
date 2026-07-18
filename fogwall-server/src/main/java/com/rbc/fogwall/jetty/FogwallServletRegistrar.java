@@ -3,6 +3,7 @@ package com.rbc.fogwall.jetty;
 import static org.eclipse.jgit.transport.HttpTransport.setConnectionFactory;
 
 import com.rbc.fogwall.approval.ApprovalGateway;
+import com.rbc.fogwall.config.BinaryBlobConfig;
 import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.config.DiffScanConfig;
 import com.rbc.fogwall.config.GpgConfig;
@@ -76,6 +77,7 @@ public final class FogwallServletRegistrar {
         Supplier<CommitConfig> commitConfigSupplier = configHolder::getCommitConfig;
         Supplier<DiffScanConfig> diffScanConfigSupplier = configHolder::getDiffScanConfig;
         Supplier<SecretScanConfig> secretScanConfigSupplier = configHolder::getSecretScanConfig;
+        Supplier<BinaryBlobConfig> binaryBlobConfigSupplier = configHolder::getBinaryBlobConfig;
 
         // Seed config rules once — registry is the single source of truth for all rule evaluation
         fogwallContext.urlRuleRegistry().seedFromConfig(configBuilder.buildConfigRules());
@@ -90,6 +92,7 @@ public final class FogwallServletRegistrar {
                         commitConfigSupplier,
                         diffScanConfigSupplier,
                         secretScanConfigSupplier,
+                        binaryBlobConfigSupplier,
                         fogwallContext.pushStore(),
                         fogwallContext.serviceUrl(),
                         fogwallContext.approvalGateway(),
@@ -114,6 +117,7 @@ public final class FogwallServletRegistrar {
                         commitConfigSupplier,
                         diffScanConfigSupplier,
                         secretScanConfigSupplier,
+                        binaryBlobConfigSupplier,
                         fogwallContext.pushStore(),
                         fogwallContext.serviceUrl(),
                         fogwallContext.approvalGateway(),
@@ -148,6 +152,7 @@ public final class FogwallServletRegistrar {
                 configHolder::getCommitConfig,
                 configHolder::getDiffScanConfig,
                 configHolder::getSecretScanConfig,
+                configHolder::getBinaryBlobConfig,
                 GpgConfig.defaultConfig(),
                 fogwallContext.repoPermissionService(),
                 fogwallContext.pushIdentityResolver(),
@@ -170,6 +175,7 @@ public final class FogwallServletRegistrar {
             Supplier<CommitConfig> commitConfigSupplier,
             Supplier<DiffScanConfig> diffScanConfigSupplier,
             Supplier<SecretScanConfig> secretScanConfigSupplier,
+            Supplier<BinaryBlobConfig> binaryBlobConfigSupplier,
             PushStore pushStore,
             String serviceUrl,
             ApprovalGateway approvalGateway,
@@ -187,6 +193,7 @@ public final class FogwallServletRegistrar {
                 commitConfigSupplier,
                 diffScanConfigSupplier,
                 secretScanConfigSupplier,
+                binaryBlobConfigSupplier,
                 GpgConfig.defaultConfig(),
                 repoPermissionService,
                 pushIdentityResolver,
@@ -265,6 +272,7 @@ public final class FogwallServletRegistrar {
             Supplier<CommitConfig> commitConfigSupplier,
             Supplier<DiffScanConfig> diffScanConfigSupplier,
             Supplier<SecretScanConfig> secretScanConfigSupplier,
+            Supplier<BinaryBlobConfig> binaryBlobConfigSupplier,
             PushStore pushStore,
             String serviceUrl,
             ApprovalGateway approvalGateway,
@@ -289,15 +297,16 @@ public final class FogwallServletRegistrar {
         filters.add(new UrlRuleAggregateFilter(100, provider, PROXY_PATH_PREFIX, fetchStore, urlRuleRegistry));
 
         if (provider instanceof BitbucketProvider bitbucketProvider) {
-            filters.add(new BitbucketIdentityFilter(bitbucketProvider));
+            filters.add(new BitbucketIdentityFilter(bitbucketProvider, PROXY_PATH_PREFIX));
         }
         filters.add(new CheckUserPushPermissionFilter(pushIdentityResolver, repoPermissionService));
         filters.add(new IdentityVerificationFilter(pushIdentityResolver, commitConfigSupplier));
         filters.add(new CheckEmptyBranchFilter());
-        filters.add(new CheckHiddenCommitsFilter(provider));
+        filters.add(new CheckHiddenCommitsFilter(provider, PROXY_PATH_PREFIX));
         filters.add(new CheckAuthorEmailsFilter(commitConfigSupplier));
         filters.add(new CheckCommitMessagesFilter(commitConfigSupplier));
-        filters.add(new ScanDiffFilter(provider, diffScanConfigSupplier));
+        filters.add(new BinaryBlobFilter(provider, PROXY_PATH_PREFIX, binaryBlobConfigSupplier));
+        filters.add(new ScanDiffFilter(provider, PROXY_PATH_PREFIX, diffScanConfigSupplier));
         filters.add(new SecretScanningFilter(secretScanConfigSupplier));
         filters.add(new GpgSignatureFilter(GpgConfig.defaultConfig()));
         filters.add(new ValidationSummaryFilter());

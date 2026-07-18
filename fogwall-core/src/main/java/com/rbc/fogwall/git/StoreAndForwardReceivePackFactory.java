@@ -1,6 +1,7 @@
 package com.rbc.fogwall.git;
 
 import com.rbc.fogwall.approval.ApprovalGateway;
+import com.rbc.fogwall.config.BinaryBlobConfig;
 import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.config.DiffScanConfig;
 import com.rbc.fogwall.config.GpgConfig;
@@ -44,6 +45,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
     private final Supplier<CommitConfig> commitConfigSupplier;
     private final Supplier<DiffScanConfig> diffScanConfigSupplier;
     private final Supplier<SecretScanConfig> secretScanConfigSupplier;
+    private final Supplier<BinaryBlobConfig> binaryBlobConfigSupplier;
     private final GpgConfig gpgConfig;
     private final RepoPermissionService repoPermissionService;
     private final PushIdentityResolver pushIdentityResolver;
@@ -88,6 +90,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
                 () -> commitConfig,
                 DiffScanConfig::defaultConfig,
                 SecretScanConfig::defaultConfig,
+                BinaryBlobConfig::defaultConfig,
                 GpgConfig.defaultConfig(),
                 null,
                 null,
@@ -113,6 +116,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
                 () -> commitConfig,
                 DiffScanConfig::defaultConfig,
                 SecretScanConfig::defaultConfig,
+                BinaryBlobConfig::defaultConfig,
                 gpgConfig,
                 repoPermissionService,
                 pushIdentityResolver,
@@ -128,6 +132,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
             Supplier<CommitConfig> commitConfigSupplier,
             Supplier<DiffScanConfig> diffScanConfigSupplier,
             Supplier<SecretScanConfig> secretScanConfigSupplier,
+            Supplier<BinaryBlobConfig> binaryBlobConfigSupplier,
             GpgConfig gpgConfig,
             RepoPermissionService repoPermissionService,
             PushIdentityResolver pushIdentityResolver,
@@ -142,6 +147,8 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
                 diffScanConfigSupplier != null ? diffScanConfigSupplier : DiffScanConfig::defaultConfig;
         this.secretScanConfigSupplier =
                 secretScanConfigSupplier != null ? secretScanConfigSupplier : SecretScanConfig::defaultConfig;
+        this.binaryBlobConfigSupplier =
+                binaryBlobConfigSupplier != null ? binaryBlobConfigSupplier : BinaryBlobConfig::defaultConfig;
         this.gpgConfig = gpgConfig != null ? gpgConfig : GpgConfig.defaultConfig();
         this.repoPermissionService = repoPermissionService;
         this.pushIdentityResolver = pushIdentityResolver;
@@ -264,6 +271,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
         CommitConfig commitConfig = commitConfigSupplier.get();
         DiffScanConfig diffScanConfig = diffScanConfigSupplier.get();
         SecretScanConfig secretScanConfig = secretScanConfigSupplier.get();
+        BinaryBlobConfig binaryBlobConfig = binaryBlobConfigSupplier.get();
 
         var identityVerificationHook = new IdentityVerificationHook(
                 pushIdentityResolver, commitConfig.getIdentityVerification(), validationContext, pushContext, provider);
@@ -279,6 +287,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
                 new CommitMessageValidationHook(commitConfig, validationContext, pushContext),
                 new ProxyPreReceiveHook(pushContext),
                 new DiffGenerationHook(pushContext),
+                new BinaryBlobDetectionHook(binaryBlobConfig, validationContext, pushContext),
                 new DiffScanningHook(diffScanConfig, validationContext, pushContext),
                 new GpgSignatureHook(gpgConfig, validationContext, pushContext),
                 new SecretScanningHook(secretScanConfig, validationContext, pushContext)));

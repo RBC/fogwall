@@ -191,6 +191,22 @@ secret-scan:
   #   regex = '''MY_ORG_[A-Z0-9]{32}'''
   # timeout-seconds: 30
 
+# Binary blob detection — flags added/modified blobs that exceed a size threshold or match a denied MIME type.
+# Runs once per push against the aggregate diff, same scope as diff-scan above. ENFORCE-only: a match always
+# blocks the push. MIME type is content-sniffed from magic bytes, not guessed from the file extension — see
+# docs/CONFIGURATION.md#binary-blob-detection for the full signature table and why extensions aren't used.
+# Enabled by default with a 100MiB size ceiling and PDF/ZIP-family denied — a reasonable safety net out of the
+# box. Further content types are a policy choice; see docs/CONFIGURATION.md#binary-blob-detection for the full
+# list of detectable MIME types and uncomment/add your own below.
+binary-blob:
+  enabled: true
+  max-size-bytes: 104857600 # 100MiB; 0 = no size limit
+  deny-mime-types:
+    - application/pdf
+    - application/zip
+#      - application/x-executable
+#      - application/x-msdownload
+
 # User accounts for authentication and push authorization.
 # When this list is non-empty, only listed users may authenticate to the dashboard
 # and only commits whose author email matches a registered user are permitted.
