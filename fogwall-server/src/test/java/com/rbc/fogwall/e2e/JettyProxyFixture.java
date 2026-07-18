@@ -3,6 +3,7 @@ package com.rbc.fogwall.e2e;
 import com.rbc.fogwall.approval.ApprovalGateway;
 import com.rbc.fogwall.approval.AutoApprovalGateway;
 import com.rbc.fogwall.approval.UiApprovalGateway;
+import com.rbc.fogwall.config.BinaryBlobConfig;
 import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.config.DiffScanConfig;
 import com.rbc.fogwall.config.GpgConfig;
@@ -172,6 +173,7 @@ class JettyProxyFixture implements AutoCloseable {
                 () -> commitConfig,
                 DiffScanConfig::defaultConfig,
                 SecretScanConfig::defaultConfig,
+                BinaryBlobConfig::defaultConfig,
                 GpgConfig.defaultConfig(),
                 null,
                 null,
@@ -226,10 +228,10 @@ class JettyProxyFixture implements AutoCloseable {
             filters.add(new IdentityVerificationFilter(identityResolver, identityVerificationConfig));
         }
         filters.add(new CheckEmptyBranchFilter());
-        filters.add(new CheckHiddenCommitsFilter(provider));
+        filters.add(new CheckHiddenCommitsFilter(provider, PROXY_PREFIX));
         filters.add(new CheckAuthorEmailsFilter(commitConfig));
         filters.add(new CheckCommitMessagesFilter(commitConfig));
-        filters.add(new ScanDiffFilter(provider, DiffScanConfig.defaultConfig()));
+        filters.add(new ScanDiffFilter(provider, PROXY_PREFIX, DiffScanConfig.defaultConfig()));
         filters.add(new GpgSignatureFilter(GpgConfig.defaultConfig()));
         filters.add(new ValidationSummaryFilter());
         filters.add(new FetchFinalizerFilter());

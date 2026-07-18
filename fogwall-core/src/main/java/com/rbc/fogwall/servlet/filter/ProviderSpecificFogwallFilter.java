@@ -9,8 +9,9 @@ public abstract class ProviderSpecificFogwallFilter<P extends FogwallProvider>
 
     protected final P provider;
 
-    public ProviderSpecificFogwallFilter(int order, Set<HttpOperation> appliedOperations, P provider) {
-        super(order, appliedOperations, provider);
+    public ProviderSpecificFogwallFilter(
+            int order, Set<HttpOperation> appliedOperations, P provider, String pathPrefix) {
+        super(order, appliedOperations, provider, pathPrefix);
         this.provider = provider;
     }
 }

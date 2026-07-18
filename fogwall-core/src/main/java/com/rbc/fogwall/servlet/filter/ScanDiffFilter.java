@@ -17,6 +17,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.lib.Repository;
@@ -29,25 +30,30 @@ import org.eclipse.jgit.lib.Repository;
  * <p>Only added lines (prefixed with {@code +} in the unified diff, excluding the {@code +++} header) are scanned.
  * Deletions and context lines are ignored.
  *
+ * <p>Two scan passes run, mirroring the store-and-forward {@code DiffScanningHook}: an aggregate scan of the old..new
+ * diff, and a per-commit scan of every individually introduced commit. The per-commit pass exists so that content added
+ * in one commit and removed by a later commit in the same push is still caught — otherwise the aggregate diff alone
+ * would look clean (see RBC/fogwall#339).
+ *
  * <p>This filter runs at order 300, in the content filters range (200-399).
  */
 @Slf4j
 public class ScanDiffFilter extends AbstractProviderAwareFogwallFilter {
 
     private static final int ORDER = 300;
-    private static final String PROXY_PATH_PREFIX = "/proxy";
 
     private final Supplier<DiffScanConfig> diffScanConfigSupplier;
 
     /** Live-reload constructor — config is read from the supplier on every request. */
-    public ScanDiffFilter(FogwallProvider provider, Supplier<DiffScanConfig> diffScanConfigSupplier) {
-        super(ORDER, Set.of(HttpOperation.PUSH), provider, PROXY_PATH_PREFIX);
+    public ScanDiffFilter(
+            FogwallProvider provider, String pathPrefix, Supplier<DiffScanConfig> diffScanConfigSupplier) {
+        super(ORDER, Set.of(HttpOperation.PUSH), provider, pathPrefix);
         this.diffScanConfigSupplier = diffScanConfigSupplier;
     }
 
     /** Fixed-config constructor. Useful in tests; wraps the value in a constant supplier. */
-    public ScanDiffFilter(FogwallProvider provider, DiffScanConfig diffScanConfig) {
-        this(provider, () -> diffScanConfig != null ? diffScanConfig : DiffScanConfig.defaultConfig());
+    public ScanDiffFilter(FogwallProvider provider, String pathPrefix, DiffScanConfig diffScanConfig) {
+        this(provider, pathPrefix, () -> diffScanConfig != null ? diffScanConfig : DiffScanConfig.defaultConfig());
     }
 
     @Override
@@ -75,6 +81,10 @@ public class ScanDiffFilter extends AbstractProviderAwareFogwallFilter {
             return;
         }
 
+        AtomicBoolean anyFailed = new AtomicBoolean(false);
+        BlockedContentDiffCheck check =
+                new BlockedContentDiffCheck(diffScanConfigSupplier.get().getBlock());
+
         try {
             Repository repository = requestDetails.getLocalRepository();
             if (repository == null) {
@@ -83,6 +93,7 @@ public class ScanDiffFilter extends AbstractProviderAwareFogwallFilter {
                 return;
             }
 
+            // Pass 1: aggregate scan of the net old..new diff
             String diff = CommitInspectionService.getFormattedDiff(repository, fromCommit, toCommit);
 
             // Always record the diff so the dashboard can display it
@@ -95,16 +106,31 @@ public class ScanDiffFilter extends AbstractProviderAwareFogwallFilter {
                     .build();
             requestDetails.getSteps().add(diffStep);
 
-            BlockedContentDiffCheck check =
-                    new BlockedContentDiffCheck(diffScanConfigSupplier.get().getBlock());
             List<Violation> violations = check.check(diff).orElse(List.of());
-
             if (!violations.isEmpty()) {
                 log.warn("Diff scan found {} violation(s)", violations.size());
                 for (Violation v : violations) {
                     recordIssue(request, v.reason(), v.formattedDetail());
                 }
-            } else {
+                anyFailed.set(true);
+            }
+
+            // Pass 2: per-commit scan — catches content introduced in intermediate commits
+            CommitInspectionService.forEachIntroducedCommit(repository, fromCommit, toCommit, (commit, diffs) -> {
+                String shortSha = commit.getSha().substring(0, 7);
+                String perCommitDiff = CommitInspectionService.formatDiffEntries(repository, diffs);
+                List<Violation> perCommitViolations = check.check(perCommitDiff).orElse(List.of());
+                if (!perCommitViolations.isEmpty()) {
+                    for (Violation v : perCommitViolations) {
+                        String reason = shortSha + ": " + v.reason();
+                        String detail = "commit " + shortSha + ": " + v.formattedDetail();
+                        recordIssue(request, reason, detail);
+                    }
+                    anyFailed.set(true);
+                }
+            });
+
+            if (!anyFailed.get()) {
                 log.debug("Diff scan passed for {}..{}", fromCommit, toCommit);
                 recordStep(request, StepStatus.PASS, "", "");
             }

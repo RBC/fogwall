@@ -166,6 +166,17 @@ diff-scan:
 secret-scan:
   enabled: true
 
+# Flags added/modified blobs that exceed a size threshold or match a denied MIME type (content-sniffed from magic
+# bytes, not the file extension). ENFORCE-only. Full reference: docs/CONFIGURATION.md#binary-blob-detection
+binary-blob:
+  enabled: true
+  max-size-bytes: 104857600 # 100MiB
+  deny-mime-types:
+    - application/pdf
+    - application/zip
+    - application/x-executable
+    - application/x-msdownload
+
 rules:
   allow:
     - enabled: true

@@ -19,6 +19,7 @@ import lombok.Data;
  * commit:          → {@link CommitSettings}   (per-commit: identity, author email, message)
  * diff-scan:       → {@link DiffScanSettings} (push-level: blocked patterns in diff content)
  * secret-scan:     → {@link SecretScanSettings} (push-level: gitleaks integration)
+ * binary-blob:     → {@link BinaryBlobSettings} (push-level: blob size / extension / MIME denylist)
  * attestations:    → List&lt;{@link AttestationQuestion}&gt; (global reviewer prompts)
  * rules:           → {@link RulesConfig}
  * </pre>
@@ -32,6 +33,7 @@ public class FogwallConfig {
     private CommitSettings commit = new CommitSettings();
     private DiffScanSettings diffScan = new DiffScanSettings();
     private SecretScanSettings secretScan = new SecretScanSettings();
+    private BinaryBlobSettings binaryBlob = new BinaryBlobSettings();
     private RulesConfig rules = new RulesConfig();
 
     /**

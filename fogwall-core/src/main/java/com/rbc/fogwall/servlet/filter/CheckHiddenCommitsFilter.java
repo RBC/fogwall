@@ -48,10 +48,9 @@ import org.eclipse.jgit.revwalk.RevWalk;
 public class CheckHiddenCommitsFilter extends AbstractProviderAwareFogwallFilter {
 
     private static final int ORDER = 220;
-    private static final String PROXY_PATH_PREFIX = "/proxy";
 
-    public CheckHiddenCommitsFilter(FogwallProvider provider) {
-        super(ORDER, Set.of(HttpOperation.PUSH), provider, PROXY_PATH_PREFIX);
+    public CheckHiddenCommitsFilter(FogwallProvider provider, String pathPrefix) {
+        super(ORDER, Set.of(HttpOperation.PUSH), provider, pathPrefix);
     }
 
     @Override

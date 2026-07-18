@@ -1,9 +1,11 @@
 package com.rbc.fogwall.git;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.api.Git;
@@ -177,10 +179,22 @@ public class CommitInspectionService {
      */
     public static String getFormattedDiff(Repository repository, String fromCommit, String toCommit)
             throws IOException {
-        List<DiffEntry> diffs = getDiff(repository, fromCommit, toCommit);
+        return formatDiffEntries(repository, getDiff(repository, fromCommit, toCommit));
+    }
 
+    /**
+     * Formats already-computed {@link DiffEntry} objects as unified diff text. Split out from {@link #getFormattedDiff}
+     * so callers that already hold a {@code List<DiffEntry>} (e.g. {@link #forEachIntroducedCommit}) don't need to
+     * recompute the diff a second time just to get formatted text.
+     *
+     * @param repository The JGit repository
+     * @param diffs Diff entries to format, in order
+     * @return The formatted diff as a string
+     * @throws IOException If git operations fail
+     */
+    public static String formatDiffEntries(Repository repository, List<DiffEntry> diffs) throws IOException {
         StringBuilder diffText = new StringBuilder();
-        try (java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream();
                 DiffFormatter formatter = new DiffFormatter(out)) {
             formatter.setRepository(repository);
             for (DiffEntry diff : diffs) {
@@ -189,8 +203,51 @@ public class CommitInspectionService {
                 out.reset();
             }
         }
-
         return diffText.toString();
+    }
+
+    /**
+     * Walks each commit introduced by a ref update, in chronological order, and invokes {@code consumer} with that
+     * commit's diff against its immediate parent — or against {@code baseCommit} for the oldest introduced commit,
+     * which has no earlier commit within this push to diff against.
+     *
+     * <p>Skipped entirely for single-commit pushes: the aggregate diff (computed separately by callers) already covers
+     * a single-commit push exactly, so a per-commit pass would only duplicate work for no additional coverage.
+     *
+     * <p>Content validation checks (diff-scan, binary-blob, etc.) must scan every introduced commit individually, not
+     * just the aggregate old..new diff — otherwise content added in one commit and removed by a later commit in the
+     * same push produces a clean aggregate diff while still having been present in the pushed history. This is the
+     * "intermediate-commit smuggling" bypass (see RBC/fogwall#339).
+     *
+     * @param repository The JGit repository
+     * @param baseCommit The commit the push started from (old id, or the effective upstream base)
+     * @param tipCommit The commit the push ends at (new id)
+     * @param consumer Invoked once per introduced commit, in chronological (oldest-first) order
+     * @throws IOException If git operations fail
+     * @throws GitAPIException If git API operations fail
+     */
+    public static void forEachIntroducedCommit(
+            Repository repository, String baseCommit, String tipCommit, CommitDiffConsumer consumer)
+            throws IOException, GitAPIException {
+        List<Commit> commits = getCommitRange(repository, baseCommit, tipCommit);
+        if (commits.size() <= 1) {
+            return;
+        }
+
+        // getCommitRange returns newest-first; reverse for chronological traversal
+        Collections.reverse(commits);
+
+        for (Commit commit : commits) {
+            String parent = commit.getParent() != null ? commit.getParent() : baseCommit;
+            List<DiffEntry> diffs = getDiff(repository, parent, commit.getSha());
+            consumer.accept(commit, diffs);
+        }
+    }
+
+    /** Callback invoked once per commit by {@link #forEachIntroducedCommit}. */
+    @FunctionalInterface
+    public interface CommitDiffConsumer {
+        void accept(Commit commit, List<DiffEntry> diffs) throws IOException;
     }
 
     /**

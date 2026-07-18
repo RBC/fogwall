@@ -124,7 +124,11 @@ public class JettyConfigurationBuilder {
     public ConfigHolder buildConfigHolder() {
         if (cachedConfigHolder == null) {
             cachedConfigHolder = new ConfigHolder(
-                    buildCommitConfig(), buildDiffScanConfig(), buildSecretScanConfig(), buildAttestations(config));
+                    buildCommitConfig(),
+                    buildDiffScanConfig(),
+                    buildSecretScanConfig(),
+                    buildBinaryBlobConfig(),
+                    buildAttestations(config));
         }
         return cachedConfigHolder;
     }
@@ -360,6 +364,22 @@ public class JettyConfigurationBuilder {
                 "Loaded diff-scan config: literals={}, patterns={}",
                 cfg.getBlock().getLiterals().size(),
                 cfg.getBlock().getPatterns().size());
+        return cfg;
+    }
+
+    /** Builds the {@link BinaryBlobConfig} from {@code binary-blob:} in fogwall.yml. */
+    public BinaryBlobConfig buildBinaryBlobConfig() {
+        BinaryBlobSettings bb = config.getBinaryBlob();
+        BinaryBlobConfig cfg = BinaryBlobConfig.builder()
+                .enabled(bb.isEnabled())
+                .maxSizeBytes(bb.getMaxSizeBytes())
+                .denyMimeTypes(new ArrayList<>(bb.getDenyMimeTypes()))
+                .build();
+        log.info(
+                "Loaded binary-blob config: enabled={}, maxSizeBytes={}, denyMimeTypes={}",
+                cfg.isEnabled(),
+                cfg.getMaxSizeBytes(),
+                cfg.getDenyMimeTypes().size());
         return cfg;
     }
 

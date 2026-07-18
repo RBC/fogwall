@@ -464,6 +464,33 @@ class JettyConfigurationBuilderTest {
         return config;
     }
 
+    // ---- buildBinaryBlobConfig ----
+
+    @Test
+    void buildBinaryBlobConfig_defaultConfig_disabledWithNoMimeTypes() {
+        var builder = new JettyConfigurationBuilder(new FogwallConfig());
+        BinaryBlobConfig cfg = builder.buildBinaryBlobConfig();
+
+        assertFalse(cfg.isEnabled());
+        assertTrue(cfg.getDenyMimeTypes().isEmpty());
+    }
+
+    @Test
+    void buildBinaryBlobConfig_populatedSettings_carriesThrough() {
+        var config = new FogwallConfig();
+        var settings = new BinaryBlobSettings();
+        settings.setEnabled(true);
+        settings.setMaxSizeBytes(2048L);
+        settings.setDenyMimeTypes(List.of("application/pdf", "application/zip"));
+        config.setBinaryBlob(settings);
+
+        BinaryBlobConfig cfg = new JettyConfigurationBuilder(config).buildBinaryBlobConfig();
+
+        assertTrue(cfg.isEnabled());
+        assertEquals(2048L, cfg.getMaxSizeBytes());
+        assertEquals(List.of("application/pdf", "application/zip"), cfg.getDenyMimeTypes());
+    }
+
     private static FogwallConfig configWithTwoGitHubProviders() {
         var config = new FogwallConfig();
         var publicGitHub = new ProviderConfig();

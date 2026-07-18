@@ -34,8 +34,8 @@ public class BitbucketIdentityFilter extends ProviderSpecificFogwallFilter<Bitbu
 
     private static final int ORDER = 148;
 
-    public BitbucketIdentityFilter(BitbucketProvider provider) {
-        super(ORDER, Set.of(HttpOperation.PUSH), provider);
+    public BitbucketIdentityFilter(BitbucketProvider provider, String pathPrefix) {
+        super(ORDER, Set.of(HttpOperation.PUSH), provider, pathPrefix);
     }
 
     @Override

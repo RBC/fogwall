@@ -87,6 +87,13 @@ diff-scan:
 secret-scan:
   enabled: true
 
+binary-blob:
+  enabled: true
+  max-size-bytes: 104857600
+  deny-mime-types:
+    - application/pdf
+    - application/zip
+
 attestations:
   - id: reviewed-content
     type: checkbox
