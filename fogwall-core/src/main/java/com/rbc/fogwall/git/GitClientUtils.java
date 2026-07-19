@@ -2,6 +2,7 @@ package com.rbc.fogwall.git;
 
 import com.rbc.fogwall.db.model.PushStep;
 import com.rbc.fogwall.db.model.StepStatus;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -235,33 +236,35 @@ public class GitClientUtils {
      */
     public static String buildValidationSummary(List<PushStep> steps) {
         // Pure data / infrastructure steps that don't represent a user-visible check
-        Set<String> skipSteps = Set.of("diff", "diff:default-branch", "forward", "inspection");
+        Set<String> skipSteps = Set.of("diff", "diff:default-branch", "forward", "inspection", "commitEnrichment");
 
         // Human-readable label for each step name (header line)
-        Map<String, String> labels = new java.util.HashMap<>(Map.of(
-                "checkUrlRules", "Checking URL allow rules",
-                "checkUserPermission", "Checking user permission",
-                "identityVerification", "Verifying commit identity",
-                "checkEmptyBranch", "Checking branch",
-                "checkHiddenCommits", "Checking for hidden commits",
-                "checkAuthorEmails", "Checking author emails",
-                "checkCommitMessages", "Checking commit messages",
-                "scanDiff", "Scanning diff content",
-                "checkSignatures", "Checking GPG signatures",
-                "scanSecrets", "Scanning for secrets"));
+        Map<String, String> labels = new HashMap<>(Map.ofEntries(
+                Map.entry("checkUrlRules", "Checking URL allow rules"),
+                Map.entry("checkUserPermission", "Checking user permission"),
+                Map.entry("identityVerification", "Verifying commit identity"),
+                Map.entry("checkEmptyBranch", "Checking branch"),
+                Map.entry("checkHiddenCommits", "Checking for hidden commits"),
+                Map.entry("checkAuthorEmails", "Checking author emails"),
+                Map.entry("checkCommitMessages", "Checking commit messages"),
+                Map.entry("scanDiff", "Scanning diff content"),
+                Map.entry("checkSignatures", "Checking GPG signatures"),
+                Map.entry("scanSecrets", "Scanning for secrets"),
+                Map.entry("binaryBlob", "Scanning for binary blobs")));
 
         // Short pass-result text shown on the second line
-        Map<String, String> passResults = new java.util.HashMap<>(Map.of(
-                "checkUrlRules", "repository allowed",
-                "checkUserPermission", "user authorized",
-                "identityVerification", "identity verified",
-                "checkEmptyBranch", "branch OK",
-                "checkHiddenCommits", "no hidden commits",
-                "checkAuthorEmails", "emails OK",
-                "checkCommitMessages", "messages OK",
-                "scanDiff", "clean",
-                "checkSignatures", "signatures OK",
-                "scanSecrets", "no secrets detected"));
+        Map<String, String> passResults = new HashMap<>(Map.ofEntries(
+                Map.entry("checkUrlRules", "repository allowed"),
+                Map.entry("checkUserPermission", "user authorized"),
+                Map.entry("identityVerification", "identity verified"),
+                Map.entry("checkEmptyBranch", "branch OK"),
+                Map.entry("checkHiddenCommits", "no hidden commits"),
+                Map.entry("checkAuthorEmails", "emails OK"),
+                Map.entry("checkCommitMessages", "messages OK"),
+                Map.entry("scanDiff", "clean"),
+                Map.entry("checkSignatures", "signatures OK"),
+                Map.entry("scanSecrets", "no secrets detected"),
+                Map.entry("binaryBlob", "no blocked binary content")));
 
         List<PushStep> relevant = steps.stream()
                 .filter(s -> s.getStepOrder() >= 100 && s.getStepOrder() <= 400)

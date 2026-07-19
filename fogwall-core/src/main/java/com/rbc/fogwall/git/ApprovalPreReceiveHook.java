@@ -8,6 +8,7 @@ import static com.rbc.fogwall.git.GitClientUtils.sym;
 import com.rbc.fogwall.approval.ApprovalGateway;
 import com.rbc.fogwall.approval.ApprovalResult;
 import com.rbc.fogwall.approval.ClientDisconnectedException;
+import com.rbc.fogwall.approval.ClientLivenessCheck;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.model.Attestation;
 import com.rbc.fogwall.db.model.Attestation.Type;
@@ -41,6 +42,17 @@ import org.eclipse.jgit.transport.ReceivePack;
 public class ApprovalPreReceiveHook implements PreReceiveHook {
 
     private static final Duration DEFAULT_TIMEOUT = Duration.ofMinutes(30);
+
+    /**
+     * Grace period added on top of {@code timeout} before the outer wait gives up on the approval-gateway task. The
+     * gateway's own internal deadline uses the same {@code timeout} value, but its clock starts slightly later (once
+     * the submitted task is actually scheduled), so without this buffer the outer wait would race ahead and interrupt
+     * the gateway before it ever reaches its own deadline check — discarding whatever it was about to conclude (a clean
+     * timeout, a detected disconnect, anything) in favor of a generic, undiagnosable TIMED_OUT. This buffer makes the
+     * outer wait a true last-resort safety net for a genuinely hung task, not the thing that normally fires.
+     */
+    private static final Duration OUTER_WAIT_GRACE_PERIOD = Duration.ofSeconds(10);
+
     private static final ExecutorService APPROVAL_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
 
     private final PushStore pushStore;
@@ -138,9 +150,13 @@ public class ApprovalPreReceiveHook implements PreReceiveHook {
 
         // All clean pushes are PENDING human review
         if (record.getStatus() == PushStatus.PENDING) {
+            ClientLivenessCheck liveness = pushContext != null
+                    ? pushContext.getTransport().livenessCheck()
+                    : ClientLivenessCheck.alwaysConnected();
+
             if (approvalGateway.approvesImmediately()) {
                 // Auto-approval: approve silently, no waiting messages or dashboard links
-                approvalGateway.waitForApproval(validationRecordId, msg -> {}, timeout);
+                approvalGateway.waitForApproval(validationRecordId, msg -> {}, liveness, timeout);
                 return;
             }
 
@@ -154,11 +170,11 @@ public class ApprovalPreReceiveHook implements PreReceiveHook {
                 sendAndFlush(rp, msgOut, color(YELLOW, "   Reason: " + record.getBlockedMessage()));
             }
 
-            Future<ApprovalResult> future = APPROVAL_EXECUTOR.submit(() ->
-                    approvalGateway.waitForApproval(validationRecordId, msg -> sendAndFlush(rp, msgOut, msg), timeout));
+            Future<ApprovalResult> future = APPROVAL_EXECUTOR.submit(() -> approvalGateway.waitForApproval(
+                    validationRecordId, msg -> sendAndFlush(rp, msgOut, msg), liveness, timeout));
             ApprovalResult result;
             try {
-                result = future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+                result = future.get(timeout.plus(OUTER_WAIT_GRACE_PERIOD).toMillis(), TimeUnit.MILLISECONDS);
             } catch (TimeoutException e) {
                 future.cancel(true);
                 result = ApprovalResult.TIMED_OUT;
@@ -167,7 +183,12 @@ public class ApprovalPreReceiveHook implements PreReceiveHook {
                 future.cancel(true);
                 result = ApprovalResult.CANCELED;
             } catch (ExecutionException e) {
-                log.error("Unexpected error in approval gateway", e.getCause());
+                log.error("Unexpected error in approval gateway for push {}", validationRecordId, e.getCause());
+                Throwable cause = e.getCause();
+                pushStore.updateForwardStatus(
+                        validationRecordId,
+                        PushStatus.ERROR,
+                        "Approval gateway error: " + (cause != null ? cause.getMessage() : e.getMessage()));
                 rejectAll(commands, "Approval error");
                 return;
             }

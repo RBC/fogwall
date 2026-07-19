@@ -27,7 +27,8 @@ public class AutoApprovalGateway implements ApprovalGateway {
     }
 
     @Override
-    public ApprovalResult waitForApproval(String pushId, ProgressSender progress, Duration timeout) {
+    public ApprovalResult waitForApproval(
+            String pushId, ProgressSender progress, ClientLivenessCheck liveness, Duration timeout) {
         try {
             pushStore.approve(
                     pushId,

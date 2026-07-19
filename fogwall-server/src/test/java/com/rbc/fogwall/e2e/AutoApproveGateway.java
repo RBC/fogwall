@@ -2,6 +2,7 @@ package com.rbc.fogwall.e2e;
 
 import com.rbc.fogwall.approval.ApprovalGateway;
 import com.rbc.fogwall.approval.ApprovalResult;
+import com.rbc.fogwall.approval.ClientLivenessCheck;
 import com.rbc.fogwall.approval.ProgressSender;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.model.Attestation;
@@ -20,7 +21,8 @@ class AutoApproveGateway implements ApprovalGateway {
     }
 
     @Override
-    public ApprovalResult waitForApproval(String pushId, ProgressSender progress, Duration timeout) {
+    public ApprovalResult waitForApproval(
+            String pushId, ProgressSender progress, ClientLivenessCheck liveness, Duration timeout) {
         pushStore.approve(
                 pushId,
                 Attestation.builder()

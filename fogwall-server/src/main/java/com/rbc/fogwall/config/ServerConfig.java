@@ -36,6 +36,12 @@ public class ServerConfig {
     private int heartbeatIntervalSeconds = 10;
 
     /**
+     * Maximum time in seconds a store-and-forward push waits for human review before the record is marked timed out.
+     * Only applies to {@code ui}/{@code servicenow} approval modes — {@code auto} approves immediately and never waits.
+     */
+    private int approvalTimeoutSeconds = 1800;
+
+    /**
      * When {@code true}, the validation pipeline stops after the first failed check rather than collecting all issues.
      * The developer sees only the first problem per push. Defaults to {@code false} (collect all issues).
      */

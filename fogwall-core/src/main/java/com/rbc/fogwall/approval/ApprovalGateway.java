@@ -9,9 +9,11 @@ import java.time.Duration;
 public interface ApprovalGateway {
     /**
      * Wait until the push is approved, rejected, or canceled, or until timeout expires. Implementations should send
-     * heartbeat progress messages to keep the git client alive.
+     * heartbeat progress messages to keep the git client alive, and should treat a {@code false} result from
+     * {@code liveness} as an immediate {@link ApprovalResult#CANCELED}.
      */
-    ApprovalResult waitForApproval(String pushId, ProgressSender progress, Duration timeout);
+    ApprovalResult waitForApproval(
+            String pushId, ProgressSender progress, ClientLivenessCheck liveness, Duration timeout);
 
     /**
      * Returns {@code true} if this gateway approves pushes immediately without requiring human review.

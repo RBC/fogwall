@@ -99,6 +99,7 @@ public final class FogwallServletRegistrar {
                         fogwallContext.pushIdentityResolver(),
                         fogwallContext.repoPermissionService(),
                         fogwallContext.heartbeatIntervalSeconds(),
+                        fogwallContext.approvalTimeoutSeconds(),
                         fogwallContext.failFast(),
                         fogwallContext.upstreamConnectTimeoutSeconds(),
                         fogwallContext.urlRuleRegistry(),
@@ -163,6 +164,7 @@ public final class FogwallServletRegistrar {
                 fogwallContext.urlRuleRegistry());
         factory.setFailFast(configBuilder.isFailFast());
         factory.setConnectTimeoutSeconds(fogwallContext.upstreamConnectTimeoutSeconds());
+        factory.setApprovalTimeout(Duration.ofSeconds(fogwallContext.approvalTimeoutSeconds()));
         factory.setCache(fogwallContext.storeForwardCache());
         factory.setSshScmIdentityEnricher(fogwallContext.sshScmIdentityEnricher());
         return factory;
@@ -182,6 +184,7 @@ public final class FogwallServletRegistrar {
             PushIdentityResolver pushIdentityResolver,
             RepoPermissionService repoPermissionService,
             int heartbeatIntervalSeconds,
+            int approvalTimeoutSeconds,
             boolean failFast,
             int connectTimeoutSeconds,
             UrlRuleRegistry urlRuleRegistry,
@@ -204,6 +207,7 @@ public final class FogwallServletRegistrar {
                 urlRuleRegistry);
         factory.setFailFast(failFast);
         factory.setConnectTimeoutSeconds(connectTimeoutSeconds);
+        factory.setApprovalTimeout(Duration.ofSeconds(approvalTimeoutSeconds));
         factory.setCache(cache);
 
         var gitServlet = new GitServlet();

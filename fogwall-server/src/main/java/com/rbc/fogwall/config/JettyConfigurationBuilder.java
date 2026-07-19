@@ -100,6 +100,11 @@ public class JettyConfigurationBuilder {
         return config.getServer().getHeartbeatIntervalSeconds();
     }
 
+    /** Returns the store-and-forward approval wait timeout in seconds. */
+    public int getApprovalTimeoutSeconds() {
+        return config.getServer().getApprovalTimeoutSeconds();
+    }
+
     /** Returns whether fail-fast validation is enabled (stop after first failure). */
     public boolean isFailFast() {
         return config.getServer().isFailFast();
@@ -442,6 +447,7 @@ public class JettyConfigurationBuilder {
                 buildCommitConfig(),
                 getServiceUrl(),
                 getHeartbeatIntervalSeconds(),
+                getApprovalTimeoutSeconds(),
                 isFailFast(),
                 getUpstreamConnectTimeoutSeconds(),
                 getProxyConnectTimeoutSeconds(),
