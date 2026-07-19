@@ -92,6 +92,35 @@ class CompositeUserStoreTest {
         assertTrue(store.findByScmIdentity("github", "bob-gh").isPresent());
     }
 
+    @Test
+    void findBySshFingerprint_unknown_returnsEmpty() {
+        assertTrue(store.findBySshFingerprint("SHA256:nope").isEmpty());
+    }
+
+    @Test
+    void findBySshFingerprint_dbOnlyUser_returnsDbVersion() {
+        jdbcStore.createUser("bob", "{noop}pw", "USER");
+        jdbcStore.addSshKey("bob", "SHA256:bobkey", "ssh-ed25519 AAAAbob", "bob's key");
+        var result = store.findBySshFingerprint("SHA256:bobkey");
+        assertTrue(result.isPresent());
+        assertEquals("bob", result.get().getUsername());
+    }
+
+    @Test
+    void findBySshFingerprint_configUserWithDbAddedKey_mergesConfigScmIdentities() {
+        // alice is config-defined with a config scmIdentity, but adds her SSH key via the dashboard (DB-only) —
+        // resolving her by that key's fingerprint must still surface her config-declared scmIdentities (#429).
+        store.addSshKey("alice", "SHA256:alicekey", "ssh-ed25519 AAAAalice", "alice's key");
+
+        var result = store.findBySshFingerprint("SHA256:alicekey");
+
+        assertTrue(result.isPresent());
+        assertEquals("alice", result.get().getUsername());
+        assertEquals(1, result.get().getScmIdentities().size());
+        assertEquals("alice-config", result.get().getScmIdentities().get(0).getUsername());
+        assertEquals(List.of("alice@config.com"), result.get().getEmails());
+    }
+
     // ── findAll merges both ──────────────────────────────────────────────────────
 
     @Test
