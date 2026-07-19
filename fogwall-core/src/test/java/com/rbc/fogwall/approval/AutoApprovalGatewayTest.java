@@ -33,7 +33,8 @@ class AutoApprovalGatewayTest {
     void returnsApproved_immediately() {
         PushRecord r = blockedRecord();
 
-        ApprovalResult result = gateway.waitForApproval(r.getId(), msg -> {}, Duration.ofSeconds(30));
+        ApprovalResult result = gateway.waitForApproval(
+                r.getId(), msg -> {}, ClientLivenessCheck.alwaysConnected(), Duration.ofSeconds(30));
 
         assertEquals(ApprovalResult.APPROVED, result);
     }
@@ -42,7 +43,7 @@ class AutoApprovalGatewayTest {
     void recordsApprovalInStore() {
         PushRecord r = blockedRecord();
 
-        gateway.waitForApproval(r.getId(), msg -> {}, Duration.ofSeconds(30));
+        gateway.waitForApproval(r.getId(), msg -> {}, ClientLivenessCheck.alwaysConnected(), Duration.ofSeconds(30));
 
         PushRecord updated = pushStore.findById(r.getId()).orElseThrow();
         assertEquals(PushStatus.APPROVED, updated.getStatus());
@@ -52,7 +53,7 @@ class AutoApprovalGatewayTest {
     void attestation_isMarkedAutomated() {
         PushRecord r = blockedRecord();
 
-        gateway.waitForApproval(r.getId(), msg -> {}, Duration.ofSeconds(30));
+        gateway.waitForApproval(r.getId(), msg -> {}, ClientLivenessCheck.alwaysConnected(), Duration.ofSeconds(30));
 
         PushRecord updated = pushStore.findById(r.getId()).orElseThrow();
         assertNotNull(updated.getAttestation(), "Attestation should be set");
@@ -65,7 +66,8 @@ class AutoApprovalGatewayTest {
         PushRecord r = blockedRecord();
         List<String> messages = new ArrayList<>();
 
-        gateway.waitForApproval(r.getId(), messages::add, Duration.ofSeconds(30));
+        gateway.waitForApproval(
+                r.getId(), messages::add, ClientLivenessCheck.alwaysConnected(), Duration.ofSeconds(30));
 
         assertTrue(messages.isEmpty(), "AutoApprovalGateway should not send any progress messages");
     }
@@ -73,7 +75,8 @@ class AutoApprovalGatewayTest {
     @Test
     void returnsApproved_evenWhenStoreUpdateFails() {
         // Gateway should still return APPROVED if the store throws (e.g. record not found)
-        ApprovalResult result = gateway.waitForApproval("no-such-id", msg -> {}, Duration.ofSeconds(30));
+        ApprovalResult result = gateway.waitForApproval(
+                "no-such-id", msg -> {}, ClientLivenessCheck.alwaysConnected(), Duration.ofSeconds(30));
 
         assertEquals(ApprovalResult.APPROVED, result);
     }

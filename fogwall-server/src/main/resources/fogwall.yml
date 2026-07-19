@@ -10,6 +10,9 @@ server:
   # Sends a "." progress packet periodically to prevent idle-timeout disconnects during long validation steps
   # (e.g. secret scanning, approval polling). Set to 0 to disable.
   heartbeat-interval-seconds: 10
+  # Maximum time in seconds a store-and-forward push waits for human review before the record is marked
+  # timed out (and canceled). Only applies to 'ui'/'servicenow' approval modes.
+  approval-timeout-seconds: 1800
   # HTTP session persistence backend. Options:
   #   none   — in-memory sessions (default); sessions are lost on restart and not shared across instances
   #   jdbc   — persisted to the configured JDBC database (h2-file or postgres);

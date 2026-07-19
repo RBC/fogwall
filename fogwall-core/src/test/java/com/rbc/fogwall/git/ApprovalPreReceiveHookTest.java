@@ -121,7 +121,7 @@ class ApprovalPreReceiveHookTest {
         PushRecord record =
                 PushRecord.builder().id(recordId).status(PushStatus.PENDING).build();
         when(pushStore.findById(recordId)).thenReturn(Optional.of(record));
-        when(approvalGateway.waitForApproval(eq(recordId), any(), any(Duration.class)))
+        when(approvalGateway.waitForApproval(eq(recordId), any(), any(), any(Duration.class)))
                 .thenReturn(ApprovalResult.APPROVED);
 
         RevCommit c1 = createCommit("init");
@@ -145,7 +145,7 @@ class ApprovalPreReceiveHookTest {
         PushRecord updatedRecord =
                 PushRecord.builder().id(recordId).status(PushStatus.REJECTED).build();
         when(pushStore.findById(recordId)).thenReturn(Optional.of(record)).thenReturn(Optional.of(updatedRecord));
-        when(approvalGateway.waitForApproval(eq(recordId), any(), any(Duration.class)))
+        when(approvalGateway.waitForApproval(eq(recordId), any(), any(), any(Duration.class)))
                 .thenReturn(ApprovalResult.REJECTED);
 
         RevCommit c1 = createCommit("init");
@@ -256,7 +256,7 @@ class ApprovalPreReceiveHookTest {
                 .attestation(att)
                 .build();
         when(pushStore.findById(recordId)).thenReturn(Optional.of(pending)).thenReturn(Optional.of(approved));
-        when(approvalGateway.waitForApproval(eq(recordId), any(), any(Duration.class)))
+        when(approvalGateway.waitForApproval(eq(recordId), any(), any(), any(Duration.class)))
                 .thenReturn(ApprovalResult.APPROVED);
         RepoPermissionService perms = mock(RepoPermissionService.class);
         when(perms.isBypassReviewAllowed("alice", "github", "/owner/repo")).thenReturn(false);
@@ -315,7 +315,7 @@ class ApprovalPreReceiveHookTest {
         PushRecord record =
                 PushRecord.builder().id(recordId).status(PushStatus.PENDING).build();
         when(pushStore.findById(recordId)).thenReturn(Optional.of(record));
-        when(approvalGateway.waitForApproval(eq(recordId), any(), any(Duration.class)))
+        when(approvalGateway.waitForApproval(eq(recordId), any(), any(), any(Duration.class)))
                 .thenReturn(ApprovalResult.TIMED_OUT);
 
         RevCommit c1 = createCommit("init");
@@ -339,7 +339,7 @@ class ApprovalPreReceiveHookTest {
                 PushRecord.builder().id(recordId).status(PushStatus.PENDING).build();
         // First call: initial fetch; second call: re-fetch inside CANCELED branch
         when(pushStore.findById(recordId)).thenReturn(Optional.of(pending));
-        when(approvalGateway.waitForApproval(eq(recordId), any(), any(Duration.class)))
+        when(approvalGateway.waitForApproval(eq(recordId), any(), any(), any(Duration.class)))
                 .thenReturn(ApprovalResult.CANCELED);
 
         RevCommit c1 = createCommit("init");
@@ -365,7 +365,7 @@ class ApprovalPreReceiveHookTest {
                 PushRecord.builder().id(recordId).status(PushStatus.CANCELED).build();
         // First call returns PENDING (hook start), second call returns CANCELED (re-fetch in CANCELED branch)
         when(pushStore.findById(recordId)).thenReturn(Optional.of(pending)).thenReturn(Optional.of(alreadyCanceled));
-        when(approvalGateway.waitForApproval(eq(recordId), any(), any(Duration.class)))
+        when(approvalGateway.waitForApproval(eq(recordId), any(), any(), any(Duration.class)))
                 .thenReturn(ApprovalResult.CANCELED);
 
         RevCommit c1 = createCommit("init");

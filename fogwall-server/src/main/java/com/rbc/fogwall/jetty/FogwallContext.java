@@ -34,6 +34,7 @@ public record FogwallContext(
         CommitConfig commitConfig,
         String serviceUrl,
         int heartbeatIntervalSeconds,
+        int approvalTimeoutSeconds,
         boolean failFast,
         int upstreamConnectTimeoutSeconds,
         int proxyConnectTimeoutSeconds,

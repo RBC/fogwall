@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -49,7 +50,8 @@ class UiApprovalGatewayTest {
         r.setStatus(PushStatus.APPROVED);
         pushStore.save(r);
 
-        ApprovalResult result = gateway.waitForApproval(r.getId(), msg -> {}, Duration.ofSeconds(10));
+        ApprovalResult result = gateway.waitForApproval(
+                r.getId(), msg -> {}, ClientLivenessCheck.alwaysConnected(), Duration.ofSeconds(10));
 
         assertEquals(ApprovalResult.APPROVED, result);
     }
@@ -60,7 +62,8 @@ class UiApprovalGatewayTest {
         r.setStatus(PushStatus.REJECTED);
         pushStore.save(r);
 
-        ApprovalResult result = gateway.waitForApproval(r.getId(), msg -> {}, Duration.ofSeconds(10));
+        ApprovalResult result = gateway.waitForApproval(
+                r.getId(), msg -> {}, ClientLivenessCheck.alwaysConnected(), Duration.ofSeconds(10));
 
         assertEquals(ApprovalResult.REJECTED, result);
     }
@@ -71,7 +74,8 @@ class UiApprovalGatewayTest {
         r.setStatus(PushStatus.CANCELED);
         pushStore.save(r);
 
-        ApprovalResult result = gateway.waitForApproval(r.getId(), msg -> {}, Duration.ofSeconds(10));
+        ApprovalResult result = gateway.waitForApproval(
+                r.getId(), msg -> {}, ClientLivenessCheck.alwaysConnected(), Duration.ofSeconds(10));
 
         assertEquals(ApprovalResult.CANCELED, result);
     }
@@ -79,7 +83,8 @@ class UiApprovalGatewayTest {
     @Test
     void returnsTimedOut_whenPushIdNotFound() {
         // Non-existent record - should time out immediately since no record ever becomes terminal
-        ApprovalResult result = gateway.waitForApproval("no-such-id", msg -> {}, Duration.ofMillis(50));
+        ApprovalResult result = gateway.waitForApproval(
+                "no-such-id", msg -> {}, ClientLivenessCheck.alwaysConnected(), Duration.ofMillis(50));
 
         assertEquals(ApprovalResult.TIMED_OUT, result);
     }
@@ -88,7 +93,8 @@ class UiApprovalGatewayTest {
     void returnsTimedOut_whenRecordStaysBlocked() {
         PushRecord r = blockedRecord();
 
-        ApprovalResult result = gateway.waitForApproval(r.getId(), msg -> {}, Duration.ofMillis(60));
+        ApprovalResult result = gateway.waitForApproval(
+                r.getId(), msg -> {}, ClientLivenessCheck.alwaysConnected(), Duration.ofMillis(60));
 
         assertEquals(ApprovalResult.TIMED_OUT, result);
     }
@@ -112,7 +118,8 @@ class UiApprovalGatewayTest {
             });
             latch.countDown();
 
-            ApprovalResult result = gateway.waitForApproval(r.getId(), msg -> {}, Duration.ofSeconds(10));
+            ApprovalResult result = gateway.waitForApproval(
+                    r.getId(), msg -> {}, ClientLivenessCheck.alwaysConnected(), Duration.ofSeconds(10));
 
             assertEquals(ApprovalResult.APPROVED, result);
         } finally {
@@ -143,7 +150,8 @@ class UiApprovalGatewayTest {
             });
             latch.countDown();
 
-            ApprovalResult result = gateway.waitForApproval(r.getId(), msg -> {}, Duration.ofSeconds(10));
+            ApprovalResult result = gateway.waitForApproval(
+                    r.getId(), msg -> {}, ClientLivenessCheck.alwaysConnected(), Duration.ofSeconds(10));
 
             assertEquals(ApprovalResult.REJECTED, result);
         } finally {
@@ -159,7 +167,7 @@ class UiApprovalGatewayTest {
         List<String> messages = new ArrayList<>();
 
         // Short timeout with multiple poll intervals - should capture at least one progress message
-        gateway.waitForApproval(r.getId(), messages::add, Duration.ofMillis(60));
+        gateway.waitForApproval(r.getId(), messages::add, ClientLivenessCheck.alwaysConnected(), Duration.ofMillis(60));
 
         // After timeout, at least one heartbeat was sent
         assertFalse(messages.isEmpty(), "Expected at least one heartbeat message during polling");
@@ -178,7 +186,37 @@ class UiApprovalGatewayTest {
             throw new ClientDisconnectedException(new java.io.IOException("Broken pipe"));
         };
 
-        ApprovalResult result = gateway.waitForApproval(r.getId(), disconnectingSender, Duration.ofSeconds(10));
+        ApprovalResult result = gateway.waitForApproval(
+                r.getId(), disconnectingSender, ClientLivenessCheck.alwaysConnected(), Duration.ofSeconds(10));
+
+        assertEquals(ApprovalResult.CANCELED, result);
+    }
+
+    @Test
+    void returnsCanceled_whenLivenessCheckIsFalseBeforeFirstPoll() {
+        PushRecord r = blockedRecord();
+        List<String> messages = new ArrayList<>();
+
+        ApprovalResult result = gateway.waitForApproval(r.getId(), messages::add, () -> false, Duration.ofSeconds(10));
+
+        assertEquals(ApprovalResult.CANCELED, result);
+        assertTrue(messages.isEmpty(), "No progress message should be sent once the client is already gone");
+    }
+
+    @Test
+    void returnsCanceled_whenLivenessCheckFlipsFalseMidWait() {
+        PushRecord r = blockedRecord();
+        var connected = new AtomicBoolean(true);
+        List<String> messages = new ArrayList<>();
+
+        // Simulate the client vanishing partway through the poll loop, ahead of any write attempt.
+        ClientLivenessCheck liveness = () -> {
+            boolean wasConnected = connected.get();
+            connected.set(false);
+            return wasConnected;
+        };
+
+        ApprovalResult result = gateway.waitForApproval(r.getId(), messages::add, liveness, Duration.ofSeconds(10));
 
         assertEquals(ApprovalResult.CANCELED, result);
     }
@@ -190,7 +228,8 @@ class UiApprovalGatewayTest {
         PushRecord r = blockedRecord();
         var resultHolder = new ApprovalResult[1];
         var thread = new Thread(() -> {
-            resultHolder[0] = gateway.waitForApproval(r.getId(), msg -> {}, Duration.ofSeconds(30));
+            resultHolder[0] = gateway.waitForApproval(
+                    r.getId(), msg -> {}, ClientLivenessCheck.alwaysConnected(), Duration.ofSeconds(30));
         });
         thread.start();
 

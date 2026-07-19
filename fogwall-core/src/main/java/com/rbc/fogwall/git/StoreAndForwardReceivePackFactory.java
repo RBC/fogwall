@@ -40,6 +40,7 @@ import org.eclipse.jgit.transport.resolver.ServiceNotEnabledException;
 public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<HttpServletRequest> {
 
     private static final Duration DEFAULT_HEARTBEAT_INTERVAL = Duration.ofSeconds(10);
+    private static final Duration DEFAULT_APPROVAL_TIMEOUT = Duration.ofMinutes(30);
 
     private final FogwallProvider provider;
     private final Supplier<CommitConfig> commitConfigSupplier;
@@ -63,6 +64,9 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
     /** Connect timeout in seconds passed to the JGit {@link org.eclipse.jgit.transport.Transport} (0 = no timeout). */
     private int connectTimeoutSeconds = 0;
 
+    /** Maximum time a push waits for human review before being marked timed out (see {@link ServerConfig}). */
+    private Duration approvalTimeout = DEFAULT_APPROVAL_TIMEOUT;
+
     /** Enable fail-fast mode. Call after construction before the factory handles any requests. */
     public void setFailFast(boolean failFast) {
         this.failFast = failFast;
@@ -80,6 +84,11 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
 
     public void setSshScmIdentityEnricher(SshScmIdentityEnricher enricher) {
         this.sshScmIdentityEnricher = enricher;
+    }
+
+    /** Set the approval-wait timeout. Call after construction before the factory handles any requests. */
+    public void setApprovalTimeout(Duration approvalTimeout) {
+        this.approvalTimeout = approvalTimeout != null ? approvalTimeout : DEFAULT_APPROVAL_TIMEOUT;
     }
 
     /** Fixed-config constructors for use in tests and simple setups (no URL rule enforcement). */
@@ -184,7 +193,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
             repoSlug = slug;
         }
 
-        return buildReceivePack(db, creds, pushUser, pushToken, repoSlug);
+        return buildReceivePack(db, creds, pushUser, pushToken, repoSlug, PushTransport.http());
     }
 
     /**
@@ -194,12 +203,6 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
     public ReceivePack createForSsh(Repository db, String pushUser, String repoSlug, PushTransport.Ssh transport)
             throws ServiceNotEnabledException, ServiceNotAuthorizedException {
         return buildReceivePack(db, null, pushUser, null, repoSlug, transport);
-    }
-
-    private ReceivePack buildReceivePack(
-            Repository db, CredentialsProvider creds, String pushUser, String pushToken, String repoSlug)
-            throws ServiceNotEnabledException, ServiceNotAuthorizedException {
-        return buildReceivePack(db, creds, pushUser, pushToken, repoSlug, PushTransport.http());
     }
 
     private ReceivePack buildReceivePack(
@@ -306,7 +309,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
             hooks.addAll(validationHooks);
             hooks.add(persistenceHook.validationResultHook(validationContext));
             hooks.add(new ApprovalPreReceiveHook(
-                    pushStore, approvalGateway, serviceUrl, repoPermissionService, pushContext));
+                    pushStore, approvalGateway, approvalTimeout, serviceUrl, repoPermissionService, pushContext));
             preHooks = hooks.toArray(PreReceiveHook[]::new);
         } else {
             preHooks = validationHooks.toArray(PreReceiveHook[]::new);

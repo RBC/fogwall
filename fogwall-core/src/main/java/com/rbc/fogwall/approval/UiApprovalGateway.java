@@ -1,6 +1,7 @@
 package com.rbc.fogwall.approval;
 
 import com.rbc.fogwall.db.PushStore;
+import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
 import java.time.Duration;
 import java.util.Set;
@@ -24,12 +25,19 @@ public class UiApprovalGateway implements ApprovalGateway {
     }
 
     @Override
-    public ApprovalResult waitForApproval(String pushId, ProgressSender progress, Duration timeout) {
+    public ApprovalResult waitForApproval(
+            String pushId, ProgressSender progress, ClientLivenessCheck liveness, Duration timeout) {
         long deadlineMs = System.currentTimeMillis() + timeout.toMillis();
         long elapsedSecs = 0;
 
         while (System.currentTimeMillis() < deadlineMs) {
-            var record = pushStore.findById(pushId).orElse(null);
+            PushRecord record;
+            try {
+                record = pushStore.findById(pushId).orElse(null);
+            } catch (Exception e) {
+                log.error("Failed to poll push store for push {} - will retry next interval", pushId, e);
+                record = null;
+            }
             if (record != null && TERMINAL_STATUSES.contains(record.getStatus())) {
                 return switch (record.getStatus()) {
                     case APPROVED -> ApprovalResult.APPROVED;
@@ -39,11 +47,27 @@ public class UiApprovalGateway implements ApprovalGateway {
                 };
             }
 
+            if (!liveness.isConnected()) {
+                log.debug("Client connection already gone during approval wait for push {}", pushId);
+                return ApprovalResult.CANCELED;
+            }
+
             try {
                 //noinspection BusyWait
                 Thread.sleep(POLL_INTERVAL.toMillis());
                 elapsedSecs += POLL_INTERVAL.toSeconds();
+
+                if (!liveness.isConnected()) {
+                    log.debug("Client disconnected during approval wait for push {}", pushId);
+                    return ApprovalResult.CANCELED;
+                }
+
                 long remainingSecs = (deadlineMs - System.currentTimeMillis()) / 1000;
+                log.debug(
+                        "Approval poll tick for push {} ({}s elapsed, ~{}s remaining)",
+                        pushId,
+                        elapsedSecs,
+                        remainingSecs);
                 progress.send(
                         String.format("Awaiting review... (%ds elapsed, ~%ds remaining)", elapsedSecs, remainingSecs));
             } catch (ClientDisconnectedException e) {
@@ -55,6 +79,7 @@ public class UiApprovalGateway implements ApprovalGateway {
             }
         }
 
+        log.debug("Approval deadline reached for push {} - returning TIMED_OUT", pushId);
         return ApprovalResult.TIMED_OUT;
     }
 }
