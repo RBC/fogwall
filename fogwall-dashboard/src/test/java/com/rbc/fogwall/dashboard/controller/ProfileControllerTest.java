@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -16,7 +17,10 @@ import com.rbc.fogwall.user.EmailConflictException;
 import com.rbc.fogwall.user.LockedByConfigException;
 import com.rbc.fogwall.user.LockedEmailException;
 import com.rbc.fogwall.user.ScmIdentityConflictException;
+import com.rbc.fogwall.user.SshKeyConflictException;
+import com.rbc.fogwall.user.SshKeyEntry;
 import com.rbc.fogwall.user.UserStore;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -47,9 +51,9 @@ class ProfileControllerTest {
     @BeforeEach
     void setupSecurityContext() {
         Authentication auth = mock(Authentication.class);
-        when(auth.getName()).thenReturn("alice");
+        lenient().when(auth.getName()).thenReturn("alice");
         SecurityContext ctx = mock(SecurityContext.class);
-        when(ctx.getAuthentication()).thenReturn(auth);
+        lenient().when(ctx.getAuthentication()).thenReturn(auth);
         SecurityContextHolder.setContext(ctx);
     }
 
@@ -163,6 +167,93 @@ class ProfileControllerTest {
     void removeScmIdentity_success_returns204() {
         var resp = controller.removeScmIdentity("github", "alice-gh");
         assertEquals(HttpStatus.NO_CONTENT, resp.getStatusCode());
+    }
+
+    // ── SSH key management (GET/POST/DELETE /api/me/ssh-keys) ───────────────────
+    // Regression coverage for #429-adjacent DELETE /api/me/ssh-keys/{id} returning an unhandled 400/500 instead of
+    // a clean 403 when removing a config-locked key - CompositeUserStore.removeSshKey now throws
+    // LockedByConfigException (matching removeEmail/removeScmIdentity) instead of a bare IllegalStateException.
+
+    private static final String TEST_SSH_KEY =
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIQiTzhWg82OVGUGpUMctA7FoBSZteJQ5R/TPaVfCC95";
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listSshKeys_returnsRegisteredKeys() {
+        SshKeyEntry key = SshKeyEntry.builder()
+                .id("key-1")
+                .username("alice")
+                .fingerprint("SHA256:abc")
+                .publicKey(TEST_SSH_KEY)
+                .label("laptop")
+                .createdAt(Instant.EPOCH)
+                .build();
+        when(userStore.findSshKeys("alice")).thenReturn(List.of(key));
+
+        var resp = controller.listSshKeys();
+
+        assertEquals(HttpStatus.OK, resp.getStatusCode());
+        var body = (List<Map<String, String>>) resp.getBody();
+        assertEquals(1, body.size());
+        assertEquals("key-1", body.get(0).get("id"));
+        assertEquals("SHA256:abc", body.get(0).get("fingerprint"));
+    }
+
+    @Test
+    void addSshKey_missingPublicKey_returns400() {
+        var resp = controller.addSshKey(Map.of());
+        assertEquals(HttpStatus.BAD_REQUEST, resp.getStatusCode());
+    }
+
+    @Test
+    void addSshKey_malformedPublicKey_returns400() {
+        var resp = controller.addSshKey(Map.of("publicKey", "not-an-ssh-key"));
+        assertEquals(HttpStatus.BAD_REQUEST, resp.getStatusCode());
+    }
+
+    @Test
+    void addSshKey_conflict_returns409() {
+        when(userStore.addSshKey(eq("alice"), any(), any(), any()))
+                .thenThrow(new SshKeyConflictException("SHA256:abc", "bob"));
+
+        var resp = controller.addSshKey(Map.of("publicKey", TEST_SSH_KEY, "label", "laptop"));
+
+        assertEquals(HttpStatus.CONFLICT, resp.getStatusCode());
+    }
+
+    @Test
+    void addSshKey_success_returns200() {
+        SshKeyEntry entry = SshKeyEntry.builder()
+                .id("key-1")
+                .username("alice")
+                .fingerprint("SHA256:abc")
+                .publicKey(TEST_SSH_KEY)
+                .label("laptop")
+                .createdAt(Instant.EPOCH)
+                .build();
+        when(userStore.addSshKey(eq("alice"), any(), any(), eq("laptop"))).thenReturn(entry);
+
+        var resp = controller.addSshKey(Map.of("publicKey", TEST_SSH_KEY, "label", "laptop"));
+
+        assertEquals(HttpStatus.OK, resp.getStatusCode());
+        verify(userStore).addSshKey(eq("alice"), any(), any(), eq("laptop"));
+    }
+
+    @Test
+    void removeSshKey_configLocked_returns403() {
+        doThrow(new LockedByConfigException("alice")).when(userStore).removeSshKey(eq("alice"), eq("key-1"));
+
+        var resp = controller.removeSshKey("key-1");
+
+        assertEquals(HttpStatus.FORBIDDEN, resp.getStatusCode());
+    }
+
+    @Test
+    void removeSshKey_success_returns204() {
+        var resp = controller.removeSshKey("key-1");
+
+        assertEquals(HttpStatus.NO_CONTENT, resp.getStatusCode());
+        verify(userStore).removeSshKey("alice", "key-1");
     }
 
     // ── GET /api/me/permissions ──────────────────────────────────────────────────

@@ -200,7 +200,58 @@ public class CompositeUserStore implements UserStore {
     @Override
     public Optional<UserEntry> findBySshFingerprint(String fingerprint) {
         Optional<UserEntry> fromConfig = configStore.findBySshFingerprint(fingerprint);
-        return fromConfig.isPresent() ? fromConfig : mutableStore.findBySshFingerprint(fingerprint);
+        if (fromConfig.isPresent()) {
+            return fromConfig;
+        }
+        return mutableStore.findBySshFingerprint(fingerprint).map(this::mergeConfigFields);
+    }
+
+    /**
+     * Merges config-sourced emails/scmIdentities/sshKeys onto a {@link UserEntry} resolved from the mutable store, for
+     * a username that is also config-defined.
+     *
+     * <p>Needed because lookups keyed by something other than username (e.g. an SSH key fingerprint added via the
+     * dashboard, not YAML) can resolve a config-defined user via the mutable store's own fingerprint index — but the
+     * raw mutable-store record doesn't carry that username's config-only supplemental data (e.g.
+     * {@code scm-identities}), unlike {@link #findScmIdentitiesWithVerified} and friends which already merge correctly
+     * by username. Without this, e.g. SSH auth via a dashboard-added key resolves a user with no linked SCM identities
+     * even though the config declares them.
+     */
+    private UserEntry mergeConfigFields(UserEntry fromMutable) {
+        Optional<UserEntry> configUser = configStore.findByUsername(fromMutable.getUsername());
+        if (configUser.isEmpty()) {
+            return fromMutable;
+        }
+        UserEntry cfg = configUser.get();
+
+        List<String> mergedEmails = new ArrayList<>(cfg.getEmails());
+        fromMutable.getEmails().stream()
+                .filter(e -> !cfg.getEmails().contains(e))
+                .forEach(mergedEmails::add);
+
+        Set<String> configScmKeys = cfg.getScmIdentities().stream()
+                .map(id -> id.getProvider() + ":" + id.getUsername())
+                .collect(Collectors.toSet());
+        List<ScmIdentity> mergedScmIdentities = new ArrayList<>(cfg.getScmIdentities());
+        fromMutable.getScmIdentities().stream()
+                .filter(id -> !configScmKeys.contains(id.getProvider() + ":" + id.getUsername()))
+                .forEach(mergedScmIdentities::add);
+
+        Set<String> configFingerprints =
+                cfg.getSshKeys().stream().map(SshKeyEntry::getFingerprint).collect(Collectors.toSet());
+        List<SshKeyEntry> mergedSshKeys = new ArrayList<>(cfg.getSshKeys());
+        fromMutable.getSshKeys().stream()
+                .filter(k -> !configFingerprints.contains(k.getFingerprint()))
+                .forEach(mergedSshKeys::add);
+
+        return UserEntry.builder()
+                .username(fromMutable.getUsername())
+                .passwordHash(fromMutable.getPasswordHash())
+                .emails(mergedEmails)
+                .scmIdentities(mergedScmIdentities)
+                .sshKeys(mergedSshKeys)
+                .roles(fromMutable.getRoles())
+                .build();
     }
 
     @Override
@@ -222,7 +273,7 @@ public class CompositeUserStore implements UserStore {
         // Block removal of config-locked keys
         configStore.findByUsername(username).ifPresent(u -> {
             boolean inConfig = u.getSshKeys().stream().anyMatch(k -> k.getId().equals(keyId));
-            if (inConfig) throw new IllegalStateException("SSH key is locked by config and cannot be removed");
+            if (inConfig) throw new LockedByConfigException(username);
         });
         mutableStore.removeSshKey(username, keyId);
     }

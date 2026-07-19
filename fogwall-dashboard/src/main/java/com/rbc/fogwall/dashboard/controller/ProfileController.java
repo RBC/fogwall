@@ -181,7 +181,11 @@ public class ProfileController {
     @DeleteMapping("/ssh-keys/{id}")
     public ResponseEntity<?> removeSshKey(@PathVariable String id) {
         if (!(userStore instanceof UserStore mutable)) return NOT_MUTABLE;
-        mutable.removeSshKey(currentUsername(), id);
+        try {
+            mutable.removeSshKey(currentUsername(), id);
+        } catch (LockedByConfigException e) {
+            return LOCKED_BY_CONFIG;
+        }
         return ResponseEntity.noContent().build();
     }
 
