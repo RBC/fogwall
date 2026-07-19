@@ -627,14 +627,11 @@ export NO_PROXY=localhost,127.0.0.1,*.internal.example.com
 
 fogwall reads these at startup and configures all three outbound paths accordingly. No YAML config is needed.
 
-Many organisations run a local proxy relay (cntlm, Alpaca) that handles NTLM/Kerberos authentication to the corporate
-proxy transparently. Point `HTTPS_PROXY` at the relay (e.g. `http://localhost:3128`) and fogwall will work without any
-auth configuration.
-
-<!-- prettier-ignore-start -->
-> [!NOTE]
-> Full proxy authentication (Basic, NTLM) in YAML config is tracked in [#158](https://github.com/RBC/fogwall/issues/158).
-<!-- prettier-ignore-end -->
+When the configured proxy requires authentication, set `server.outbound-proxy.auth` in YAML — see
+[Outbound proxy](CONFIGURATION.md#outbound-proxy) in the configuration reference for Basic and Kerberos options. NTLM is
+not supported as a scheme fogwall speaks directly: it's a deprecated protocol, and Jetty's HTTP client (used for
+transparent-proxy forwarding) has no NTLM support at all. Kerberos/Negotiate is the modern successor in Active-Directory
+environments and is supported natively across all three outbound paths.
 
 ### Connectivity diagnostics (dashboard)
 

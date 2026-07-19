@@ -2,6 +2,7 @@ package com.rbc.fogwall.provider;
 
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.annotation.Nulls;
+import com.rbc.fogwall.net.FogwallHttpExecutor;
 import com.rbc.fogwall.ssh.SshKeyUtils;
 import java.net.URI;
 import java.util.Arrays;
@@ -65,7 +66,7 @@ public class GitHubProvider extends AbstractFogwallProvider implements HttpToken
         try {
             var response = Request.get(getApiUrl() + "/user")
                     .addHeader("Authorization", "token " + token)
-                    .execute()
+                    .execute(FogwallHttpExecutor.instance())
                     .returnContent()
                     .asString();
             var info = new JsonMapper().readValue(response, GitHubUserInfo.class);
@@ -89,7 +90,7 @@ public class GitHubProvider extends AbstractFogwallProvider implements HttpToken
             var response = Request.get(getApiUrl() + "/users/" + login + "/keys")
                     .connectTimeout(Timeout.ofSeconds(10))
                     .responseTimeout(Timeout.ofSeconds(10))
-                    .execute()
+                    .execute(FogwallHttpExecutor.instance())
                     .returnContent()
                     .asString();
             var keys = new JsonMapper().readValue(response, GitHubPublicKey[].class);

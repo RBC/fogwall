@@ -1,5 +1,6 @@
 package com.rbc.fogwall.provider;
 
+import com.rbc.fogwall.net.FogwallHttpExecutor;
 import com.rbc.fogwall.ssh.SshKeyUtils;
 import java.net.URI;
 import java.util.Arrays;
@@ -76,7 +77,7 @@ public class ForgejoProvider extends AbstractFogwallProvider implements HttpToke
         try {
             var response = Request.get(getApiUrl() + "/user")
                     .addHeader("Authorization", "token " + token)
-                    .execute()
+                    .execute(FogwallHttpExecutor.instance())
                     .returnContent()
                     .asString();
             var info = new JsonMapper().readValue(response, ForgejoUserInfo.class);
@@ -101,7 +102,9 @@ public class ForgejoProvider extends AbstractFogwallProvider implements HttpToke
             if (apiToken != null && !apiToken.isBlank()) {
                 request = request.addHeader("Authorization", "token " + apiToken);
             }
-            var response = request.execute().returnContent().asString();
+            var response = request.execute(FogwallHttpExecutor.instance())
+                    .returnContent()
+                    .asString();
             var keys = new JsonMapper().readValue(response, ForgejoPublicKey[].class);
             return Arrays.stream(keys)
                     .map(k -> {

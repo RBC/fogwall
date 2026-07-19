@@ -17,6 +17,7 @@ import com.rbc.fogwall.git.StoreAndForwardReceivePackFactory;
 import com.rbc.fogwall.git.StoreAndForwardRepositoryResolver;
 import com.rbc.fogwall.git.StoreAndForwardUploadPackFactory;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
+import com.rbc.fogwall.net.ResolvedOutboundProxy;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.BitbucketProvider;
 import com.rbc.fogwall.provider.FogwallProvider;
@@ -109,7 +110,8 @@ public final class FogwallServletRegistrar {
                         provider,
                         fogwallContext.pushStore(),
                         fogwallContext.proxyConnectTimeoutSeconds(),
-                        fogwallContext.upstreamTls());
+                        fogwallContext.upstreamTls(),
+                        configBuilder.getResolvedOutboundProxy());
                 registerCoreFilters(
                         context,
                         provider,
@@ -241,11 +243,13 @@ public final class FogwallServletRegistrar {
             FogwallProvider provider,
             PushStore pushStore,
             int connectTimeoutSeconds,
-            SslUtil.UpstreamTls upstreamTls) {
+            SslUtil.UpstreamTls upstreamTls,
+            ResolvedOutboundProxy outboundProxy) {
         String proxyPath = PROXY_PATH_PREFIX + provider.servletPath();
         String proxyMapping = proxyPath + "/*";
 
-        var proxyServlet = new FogwallServlet(pushStore, upstreamTls != null ? upstreamTls.sslContext() : null);
+        var proxyServlet =
+                new FogwallServlet(pushStore, upstreamTls != null ? upstreamTls.sslContext() : null, outboundProxy);
         var proxyHolder = new ServletHolder(proxyServlet);
         proxyHolder.setName("proxy-" + provider.getName());
         proxyHolder.setInitParameter("proxyTo", provider.getUri().toString());

@@ -44,6 +44,7 @@ public class FogwallJettyApplication {
         var fogwallConfig = FogwallConfigLoader.load();
         var configBuilder = new JettyConfigurationBuilder(fogwallConfig);
         configBuilder.validateProviderReferences(); // fail fast before any DB or port setup
+        configBuilder.applyOutboundProxySystemWiring(); // before any outbound connection is made
 
         var threadPool = new QueuedThreadPool();
         threadPool.setName("fogwall-server");

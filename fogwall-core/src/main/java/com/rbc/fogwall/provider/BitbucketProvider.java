@@ -2,6 +2,7 @@ package com.rbc.fogwall.provider;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.rbc.fogwall.git.GitRequestDetails;
+import com.rbc.fogwall.net.FogwallHttpExecutor;
 import java.net.URI;
 import java.util.Base64;
 import java.util.Optional;
@@ -95,7 +96,7 @@ public class BitbucketProvider extends AbstractFogwallProvider implements HttpTo
             String credentials = Base64.getEncoder().encodeToString((pushUsername + ":" + token).getBytes());
             var response = Request.get(getApiUrl() + "/user")
                     .addHeader("Authorization", "Basic " + credentials)
-                    .execute()
+                    .execute(FogwallHttpExecutor.instance())
                     .returnContent()
                     .asString();
             var info = new JsonMapper().readValue(response, BitbucketUserInfo.class);

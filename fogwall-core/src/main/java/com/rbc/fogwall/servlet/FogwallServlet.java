@@ -3,6 +3,8 @@ package com.rbc.fogwall.servlet;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.model.PushStatus;
 import com.rbc.fogwall.git.GitRequestDetails;
+import com.rbc.fogwall.net.OutboundProxyJetty;
+import com.rbc.fogwall.net.ResolvedOutboundProxy;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -32,26 +34,36 @@ public class FogwallServlet extends AsyncProxyServlet.Transparent {
 
     private final PushStore pushStore;
     private final SSLContext upstreamSslContext;
+    private final ResolvedOutboundProxy outboundProxy;
 
     public FogwallServlet(PushStore pushStore) {
-        this(pushStore, null);
+        this(pushStore, null, null);
     }
 
     public FogwallServlet(PushStore pushStore, SSLContext upstreamSslContext) {
+        this(pushStore, upstreamSslContext, null);
+    }
+
+    public FogwallServlet(PushStore pushStore, SSLContext upstreamSslContext, ResolvedOutboundProxy outboundProxy) {
         this.pushStore = pushStore;
         this.upstreamSslContext = upstreamSslContext;
+        this.outboundProxy = outboundProxy;
     }
 
     @Override
     protected HttpClient newHttpClient() {
+        HttpClient client;
         if (upstreamSslContext != null) {
             var sslFactory = new SslContextFactory.Client();
             sslFactory.setSslContext(upstreamSslContext);
             var connector = new ClientConnector();
             connector.setSslContextFactory(sslFactory);
-            return new HttpClient(new HttpClientTransportOverHTTP(connector));
+            client = new HttpClient(new HttpClientTransportOverHTTP(connector));
+        } else {
+            client = super.newHttpClient();
         }
-        return super.newHttpClient();
+        OutboundProxyJetty.configure(client, outboundProxy);
+        return client;
     }
 
     @Override
