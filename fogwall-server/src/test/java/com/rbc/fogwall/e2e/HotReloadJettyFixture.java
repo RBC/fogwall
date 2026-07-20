@@ -124,18 +124,18 @@ class HotReloadJettyFixture implements AutoCloseable {
         String serviceUrl = "http://localhost";
         addFilter(context, proxyMapping, new PushStoreAuditFilter(pushStore));
         addFilter(context, proxyMapping, new ForceGitClientFilter());
-        addFilter(context, proxyMapping, new ParseGitRequestFilter(provider, PROXY_PREFIX));
-        addFilter(context, proxyMapping, new EnrichPushCommitsFilter(provider, proxyCache, PROXY_PREFIX));
+        addFilter(context, proxyMapping, new ParseGitRequestFilter(provider));
+        addFilter(context, proxyMapping, new EnrichPushCommitsFilter(provider, proxyCache));
         addFilter(context, proxyMapping, new AllowApprovedPushFilter(pushStore, serviceUrl));
         // Always register the URL rule filter, backed by the live configRegistry.
         // Note: proxy is fail-closed — no matching rule results in 403.
         // Tests must seed the registry with at least one allow rule before making requests.
-        addFilter(context, proxyMapping, new UrlRuleAggregateFilter(100, provider, PROXY_PREFIX, null, configRegistry));
+        addFilter(context, proxyMapping, new UrlRuleAggregateFilter(100, provider, null, configRegistry));
         addFilter(context, proxyMapping, new CheckEmptyBranchFilter());
-        addFilter(context, proxyMapping, new CheckHiddenCommitsFilter(provider, PROXY_PREFIX));
+        addFilter(context, proxyMapping, new CheckHiddenCommitsFilter());
         addFilter(context, proxyMapping, new CheckAuthorEmailsFilter(configHolder::getCommitConfig));
         addFilter(context, proxyMapping, new CheckCommitMessagesFilter(configHolder::getCommitConfig));
-        addFilter(context, proxyMapping, new ScanDiffFilter(provider, PROXY_PREFIX, configHolder::getDiffScanConfig));
+        addFilter(context, proxyMapping, new ScanDiffFilter(configHolder::getDiffScanConfig));
         addFilter(context, proxyMapping, new SecretScanningFilter(configHolder::getSecretScanConfig));
         addFilter(context, proxyMapping, new GpgSignatureFilter(GpgConfig.defaultConfig()));
         addFilter(context, proxyMapping, new ValidationSummaryFilter());

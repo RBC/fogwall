@@ -30,12 +30,12 @@ import lombok.extern.slf4j.Slf4j;
  * throughout the rest of the chain if needed.
  */
 @Slf4j
-public class BitbucketIdentityFilter extends ProviderSpecificFogwallFilter<BitbucketProvider> {
+public class BitbucketIdentityFilter extends ProviderAwareFogwallFilter<BitbucketProvider> {
 
     private static final int ORDER = 148;
 
-    public BitbucketIdentityFilter(BitbucketProvider provider, String pathPrefix) {
-        super(ORDER, Set.of(HttpOperation.PUSH), provider, pathPrefix);
+    public BitbucketIdentityFilter(BitbucketProvider provider) {
+        super(ORDER, Set.of(HttpOperation.PUSH), provider);
     }
 
     @Override

@@ -7,7 +7,6 @@ import static org.mockito.Mockito.*;
 import com.rbc.fogwall.config.BinaryBlobConfig;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
-import com.rbc.fogwall.provider.GitHubProvider;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.ServletOutputStream;
@@ -149,11 +148,11 @@ class BinaryBlobFilterTest {
                 .enabled(true)
                 .maxSizeBytes(maxSizeBytes)
                 .build();
-        return new BinaryBlobFilter(new GitHubProvider("/proxy"), "/proxy", config);
+        return new BinaryBlobFilter(config);
     }
 
     private BinaryBlobFilter disabledFilter() {
-        return new BinaryBlobFilter(new GitHubProvider("/proxy"), "/proxy", BinaryBlobConfig.defaultConfig());
+        return new BinaryBlobFilter(BinaryBlobConfig.defaultConfig());
     }
 
     // ---- disabled config → no-op ----
@@ -272,8 +271,7 @@ class BinaryBlobFilterTest {
                 .enabled(true)
                 .denyMimeTypes(List.of("application/pdf"))
                 .build();
-        new BinaryBlobFilter(new GitHubProvider("/proxy"), "/proxy", config)
-                .doHttpFilter(mockRequest(details), resp.mock);
+        new BinaryBlobFilter(config).doHttpFilter(mockRequest(details), resp.mock);
 
         assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
     }

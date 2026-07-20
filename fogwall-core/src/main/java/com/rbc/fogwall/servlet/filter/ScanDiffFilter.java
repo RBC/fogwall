@@ -9,7 +9,6 @@ import com.rbc.fogwall.git.CommitInspectionService;
 import com.rbc.fogwall.git.DiffGenerationHook;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
-import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.validation.BlockedContentDiffCheck;
 import com.rbc.fogwall.validation.Violation;
 import jakarta.servlet.http.HttpServletRequest;
@@ -38,22 +37,21 @@ import org.eclipse.jgit.lib.Repository;
  * <p>This filter runs at order 300, in the content filters range (200-399).
  */
 @Slf4j
-public class ScanDiffFilter extends AbstractProviderAwareFogwallFilter {
+public class ScanDiffFilter extends AbstractFogwallFilter {
 
     private static final int ORDER = 300;
 
     private final Supplier<DiffScanConfig> diffScanConfigSupplier;
 
     /** Live-reload constructor — config is read from the supplier on every request. */
-    public ScanDiffFilter(
-            FogwallProvider provider, String pathPrefix, Supplier<DiffScanConfig> diffScanConfigSupplier) {
-        super(ORDER, Set.of(HttpOperation.PUSH), provider, pathPrefix);
+    public ScanDiffFilter(Supplier<DiffScanConfig> diffScanConfigSupplier) {
+        super(ORDER, Set.of(HttpOperation.PUSH));
         this.diffScanConfigSupplier = diffScanConfigSupplier;
     }
 
     /** Fixed-config constructor. Useful in tests; wraps the value in a constant supplier. */
-    public ScanDiffFilter(FogwallProvider provider, String pathPrefix, DiffScanConfig diffScanConfig) {
-        this(provider, pathPrefix, () -> diffScanConfig != null ? diffScanConfig : DiffScanConfig.defaultConfig());
+    public ScanDiffFilter(DiffScanConfig diffScanConfig) {
+        this(() -> diffScanConfig != null ? diffScanConfig : DiffScanConfig.defaultConfig());
     }
 
     @Override

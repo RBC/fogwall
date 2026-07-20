@@ -36,7 +36,7 @@ import org.eclipse.jgit.transport.PacketLineIn;
  * message, signature - rather than just the basic SHA/ref from the packet line header.
  */
 @Slf4j
-public class EnrichPushCommitsFilter extends AbstractProviderAwareFogwallFilter {
+public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallProvider> {
 
     // Order 60 — runs after AllowApprovedPushFilter (50) so that re-pushes of approved pushes are
     // short-circuited by FogwallFilter before enrichment runs again. Must stay before content
@@ -46,11 +46,6 @@ public class EnrichPushCommitsFilter extends AbstractProviderAwareFogwallFilter 
 
     public EnrichPushCommitsFilter(FogwallProvider provider, LocalRepositoryCache repositoryCache) {
         super(ORDER, Set.of(HttpOperation.PUSH), provider);
-        this.repositoryCache = repositoryCache;
-    }
-
-    public EnrichPushCommitsFilter(FogwallProvider provider, LocalRepositoryCache repositoryCache, String pathPrefix) {
-        super(ORDER, Set.of(HttpOperation.PUSH), provider, pathPrefix);
         this.repositoryCache = repositoryCache;
     }
 

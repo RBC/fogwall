@@ -380,7 +380,7 @@ class UrlRuleFilterTest {
     void infoRefs_fetchBlocked_notAllowed_recordsFetch() throws Exception {
         FetchStore fetchStore = mock(FetchStore.class);
         var registry = new InMemoryUrlRuleRegistry();
-        var aggregate = new UrlRuleAggregateFilter(50, GITHUB, "/proxy", fetchStore, registry);
+        var aggregate = new UrlRuleAggregateFilter(50, GITHUB, fetchStore, registry);
         GitRequestDetails details = makeInfoDetails("owner", "repo", "/owner/repo");
         FakeResponse resp = new FakeResponse();
 
@@ -404,7 +404,7 @@ class UrlRuleFilterTest {
                 .value("/owner/repo")
                 .matchType(MatchType.LITERAL)
                 .build());
-        var aggregate = new UrlRuleAggregateFilter(50, GITHUB, "/proxy", fetchStore, registry);
+        var aggregate = new UrlRuleAggregateFilter(50, GITHUB, fetchStore, registry);
         GitRequestDetails details = makeInfoDetails("owner", "repo", "/owner/repo");
         FakeResponse resp = new FakeResponse();
 
@@ -420,7 +420,7 @@ class UrlRuleFilterTest {
     void infoRefs_pushBlocked_doesNotRecordFetch() throws Exception {
         FetchStore fetchStore = mock(FetchStore.class);
         var registry = new InMemoryUrlRuleRegistry();
-        var aggregate = new UrlRuleAggregateFilter(50, GITHUB, "/proxy", fetchStore, registry);
+        var aggregate = new UrlRuleAggregateFilter(50, GITHUB, fetchStore, registry);
         GitRequestDetails details = makeInfoDetails("owner", "repo", "/owner/repo");
         FakeResponse resp = new FakeResponse();
 
@@ -442,7 +442,7 @@ class UrlRuleFilterTest {
                 .value("/owner/repo")
                 .matchType(MatchType.LITERAL)
                 .build());
-        var aggregate = new UrlRuleAggregateFilter(50, GITHUB, "/proxy", fetchStore, registry);
+        var aggregate = new UrlRuleAggregateFilter(50, GITHUB, fetchStore, registry);
         GitRequestDetails details = makeInfoDetails("owner", "repo", "/owner/repo");
         FakeResponse resp = new FakeResponse();
 
