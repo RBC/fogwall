@@ -11,6 +11,12 @@ jobs:
   grype:
     name: Container Scan
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: dashboard
+          - name: server
     env:
       GRYPE_VERSION: "0.112.0"
     steps:
@@ -31,7 +37,9 @@ jobs:
       # SARIF upload intentionally omitted — OS-layer CVEs are triaged with application
       # context; uploading creates misleading noise in the GitHub Security tab.
       - name: Set image name
-        run: echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+        run: |
+          SUFFIX="${{ matrix.name == 'server' && '-server' || '' }}"
+          echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')${SUFFIX}" >> "$GITHUB_ENV"
 
       - name: Scan image
         if: always()
@@ -45,7 +53,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # ratchet:actions/upload-artifact@v7
         with:
-          name: grype-container-scan
+          name: grype-container-scan-${{ matrix.name }}
           path: |
             grype-report.txt
             grype-report.json

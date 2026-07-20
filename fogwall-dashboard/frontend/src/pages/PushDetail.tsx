@@ -861,13 +861,22 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
                                     : 'text-gray-400 dark:text-gray-500'
                           }
                         >
-                          {s.status === 'PASS' ? '✓' : isFailed ? '✗' : isWarn || isSkipped ? '⚠' : '–'}
+                          {s.status === 'PASS'
+                            ? '✓'
+                            : isFailed
+                              ? '✗'
+                              : isWarn || isSkipped
+                                ? '⚠'
+                                : '–'}
                         </span>
                         <span className="text-sm text-gray-700 w-56 shrink-0 dark:text-gray-300">
                           {stepDisplayName(s.stepName)}
                         </span>
                         <span className="text-gray-500 text-xs truncate flex-1 dark:text-gray-400">
-                          {s.errorMessage ?? s.blockedMessage ?? (isWarn ? s.content : undefined) ?? (isSkipped ? 'skipped' : '')}
+                          {s.errorMessage ??
+                            s.blockedMessage ??
+                            (isWarn ? s.content : undefined) ??
+                            (isSkipped ? 'skipped' : '')}
                         </span>
                         {(isFailed || isWarn || isSkipped) &&
                           (s.content || s.errorMessage || s.blockedMessage) && (
