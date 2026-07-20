@@ -2,7 +2,8 @@ name: Cleanup Interim Images
 
 # Deletes GHCR package versions whose tags are exclusively build-* (ephemeral
 # per-commit images). Versions carrying any other tag (v*, edge, latest, etc.)
-# are never touched. Runs weekly and can be triggered manually.
+# are never touched. Runs weekly and can be triggered manually. Logic lives in
+# scripts/cleanup-interim-images.sh so it can also be run locally.
 
 on:
   schedule:
@@ -25,58 +26,9 @@ jobs:
     permissions:
       packages: write
     steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # ratchet:actions/checkout@v7.0.0
+
       - name: Delete stale build-* package versions
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          OWNER="${{ github.repository_owner }}"
-          PACKAGE="${{ github.event.repository.name }}"
-          DELETED=0
-          KEPT=0
-
-          echo "Fetching package versions for ${OWNER}/${PACKAGE}..."
-
-          # Collect all versions into a temp file (handles pagination via --paginate)
-          gh api \
-            -H "Accept: application/vnd.github+json" \
-            "/users/${OWNER}/packages/container/${PACKAGE}/versions" \
-            --paginate > /tmp/versions.json
-
-          TOTAL=$(jq 'length' /tmp/versions.json)
-          echo "Found ${TOTAL} total package versions."
-          echo ""
-
-          jq -c '.[]' /tmp/versions.json | while read -r version; do
-            VERSION_ID=$(echo "$version" | jq -r '.id')
-            TAGS=$(echo "$version" | jq -r '.metadata.container.tags // [] | .[]')
-
-            # Skip untagged versions — never delete them (likely referenced by a manifest list)
-            if [ -z "$TAGS" ]; then
-              echo "KEEP  [${VERSION_ID}] (untagged)"
-              continue
-            fi
-
-            TAG_LIST=$(echo "$TAGS" | tr '\n' ' ' | sed 's/ $//')
-
-            # Guard: keep if ANY tag does not match build-[0-9a-f]+
-            PROTECTED=false
-            while IFS= read -r tag; do
-              if [[ ! "$tag" =~ ^build-[0-9a-f]+$ ]]; then
-                PROTECTED=true
-                break
-              fi
-            done <<< "$TAGS"
-
-            if [ "$PROTECTED" = true ]; then
-              echo "KEEP  [${VERSION_ID}] tags: ${TAG_LIST}"
-            else
-              echo "DELETE [${VERSION_ID}] tags: ${TAG_LIST}"
-              gh api \
-                --method DELETE \
-                -H "Accept: application/vnd.github+json" \
-                "/users/${OWNER}/packages/container/${PACKAGE}/versions/${VERSION_ID}"
-            fi
-          done
-
-          echo ""
-          echo "Cleanup complete."
+        run: ./scripts/cleanup-interim-images.sh
