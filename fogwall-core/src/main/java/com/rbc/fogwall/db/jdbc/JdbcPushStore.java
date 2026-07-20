@@ -208,17 +208,30 @@ public class JdbcPushStore implements PushStore {
     @Override
     public void updateForwardStatus(String id, PushStatus status, String errorMessage) {
         Timestamp now = Timestamp.from(java.time.Instant.now());
-        tx.executeWithoutResult(txStatus -> jdbc.update(
-                "UPDATE push_records SET status = :status, error_message = :errorMessage, forwarded_at = :forwardedAt WHERE id = :id",
-                Map.of(
-                        "status",
-                        status.name(),
-                        "errorMessage",
-                        errorMessage != null ? errorMessage : "",
-                        "forwardedAt",
-                        now,
-                        "id",
-                        id)));
+        tx.executeWithoutResult(txStatus -> {
+            String currentStatus = jdbc.queryForObject(
+                    "SELECT status FROM push_records WHERE id = :id", Map.of("id", id), String.class);
+            if (currentStatus == null) {
+                throw new IllegalArgumentException("Push not found: " + id);
+            }
+            int updated = jdbc.update(
+                    "UPDATE push_records SET status = :status, error_message = :errorMessage, forwarded_at = :forwardedAt WHERE id = :id AND status = :before",
+                    Map.of(
+                            "status",
+                            status.name(),
+                            "errorMessage",
+                            errorMessage != null ? errorMessage : "",
+                            "forwardedAt",
+                            now,
+                            "id",
+                            id,
+                            "before",
+                            currentStatus));
+            if (updated == 0) {
+                throw new IllegalStateException(
+                        "Push " + id + " status changed concurrently (expected " + currentStatus + ")");
+            }
+        });
     }
 
     @Override
@@ -280,11 +293,17 @@ public class JdbcPushStore implements PushStore {
 
     private PushRecord updateStatus(String id, PushStatus status, Attestation attestation) {
         tx.executeWithoutResult(txStatus -> {
-            int updated = jdbc.update(
-                    "UPDATE push_records SET status = :status WHERE id = :id",
-                    Map.of("status", status.name(), "id", id));
-            if (updated == 0) {
+            String currentStatus = jdbc.queryForObject(
+                    "SELECT status FROM push_records WHERE id = :id", Map.of("id", id), String.class);
+            if (currentStatus == null) {
                 throw new IllegalArgumentException("Push not found: " + id);
+            }
+            int updated = jdbc.update(
+                    "UPDATE push_records SET status = :status WHERE id = :id AND status = :before",
+                    Map.of("status", status.name(), "id", id, "before", currentStatus));
+            if (updated == 0) {
+                throw new IllegalStateException(
+                        "Push " + id + " status changed concurrently (expected " + currentStatus + ")");
             }
             if (attestation != null) {
                 saveAttestation(id, attestation);

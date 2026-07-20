@@ -13,6 +13,7 @@ import com.rbc.fogwall.provider.*;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class JettyConfigurationBuilderTest {
@@ -22,21 +23,21 @@ class JettyConfigurationBuilderTest {
     @Test
     void buildApprovalGateway_defaultConfig_returnsAutoApprovalGateway() {
         var builder = new JettyConfigurationBuilder(configWithApprovalMode("auto"));
-        var gateway = builder.buildApprovalGateway(PushStoreFactory.inMemory());
+        var gateway = builder.buildApprovalGateway(PushStoreFactory.h2InMemory("test-" + UUID.randomUUID()));
         assertInstanceOf(AutoApprovalGateway.class, gateway);
     }
 
     @Test
     void buildApprovalGateway_uiMode_returnsUiApprovalGateway() {
         var builder = new JettyConfigurationBuilder(configWithApprovalMode("ui"));
-        var gateway = builder.buildApprovalGateway(PushStoreFactory.inMemory());
+        var gateway = builder.buildApprovalGateway(PushStoreFactory.h2InMemory("test-" + UUID.randomUUID()));
         assertInstanceOf(UiApprovalGateway.class, gateway);
     }
 
     @Test
     void buildApprovalGateway_unknownMode_fallsBackToAuto() {
         var builder = new JettyConfigurationBuilder(configWithApprovalMode("bogus"));
-        var gateway = builder.buildApprovalGateway(PushStoreFactory.inMemory());
+        var gateway = builder.buildApprovalGateway(PushStoreFactory.h2InMemory("test-" + UUID.randomUUID()));
         assertInstanceOf(AutoApprovalGateway.class, gateway);
     }
 

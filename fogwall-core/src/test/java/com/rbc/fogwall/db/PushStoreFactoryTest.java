@@ -8,12 +8,6 @@ import org.junit.jupiter.api.io.TempDir;
 class PushStoreFactoryTest {
 
     @Test
-    void inMemory_returnsInitializedStore() {
-        PushStore store = PushStoreFactory.inMemory();
-        assertNotNull(store);
-    }
-
-    @Test
     void h2InMemory_defaultName_returnsInitializedStore() {
         PushStore store = PushStoreFactory.h2InMemory();
         assertNotNull(store);

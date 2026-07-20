@@ -3,7 +3,6 @@ package com.rbc.fogwall.db;
 import com.mongodb.client.MongoClients;
 import com.rbc.fogwall.db.jdbc.DataSourceFactory;
 import com.rbc.fogwall.db.jdbc.JdbcPushStore;
-import com.rbc.fogwall.db.memory.InMemoryPushStore;
 import com.rbc.fogwall.db.mongo.MongoPushStore;
 import javax.sql.DataSource;
 
@@ -14,13 +13,6 @@ import javax.sql.DataSource;
 public final class PushStoreFactory {
 
     private PushStoreFactory() {}
-
-    /** Create an in-memory store (data is lost on restart). */
-    public static PushStore inMemory() {
-        InMemoryPushStore store = new InMemoryPushStore();
-        store.initialize();
-        return store;
-    }
 
     /** Create an H2 in-memory store (SQL with schema, but data is lost on restart). */
     public static PushStore h2InMemory() {

@@ -56,6 +56,10 @@ public class GitRequestDetails {
     private GitResult result = GitResult.PENDING;
     private String reason;
 
+    // Raw secret values found by SecretScanningFilter, for redacting stored step content before persistence.
+    // Never logged and never included in any user-facing message - see SecretRedactor.
+    private List<String> secretsToRedact = new ArrayList<>();
+
     /** Returns true when this push is a ref deletion (commitTo is the all-zeros null SHA). */
     public boolean isRefDeletion() {
         return commitTo != null && commitTo.matches("^0+$");

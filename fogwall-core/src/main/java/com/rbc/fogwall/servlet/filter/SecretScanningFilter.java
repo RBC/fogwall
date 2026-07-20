@@ -117,6 +117,10 @@ public class SecretScanningFilter extends AbstractFogwallFilter {
         for (GitleaksRunner.Finding f : findings) {
             String msg = f.toMessage();
             recordIssue(request, msg, sym(CROSS_MARK) + "  " + msg + "\n" + REMEDIATION_HINT);
+            // Raw secret value, for redacting the stored diff only - never used in a message. See SecretRedactor.
+            if (f.getSecret() != null && !f.getSecret().isBlank()) {
+                requestDetails.getSecretsToRedact().add(f.getSecret());
+            }
         }
     }
 }

@@ -6,7 +6,7 @@ import static com.rbc.fogwall.servlet.FogwallServlet.SERVICE_URL_ATTR;
 import static org.mockito.Mockito.*;
 
 import com.rbc.fogwall.db.PushStore;
-import com.rbc.fogwall.db.memory.InMemoryPushStore;
+import com.rbc.fogwall.db.PushStoreFactory;
 import com.rbc.fogwall.db.model.Attestation;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.git.Commit;
@@ -14,6 +14,7 @@ import com.rbc.fogwall.git.Contributor;
 import com.rbc.fogwall.git.GitRequestDetails;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class AllowApprovedPushFilterTest {
@@ -54,7 +55,7 @@ class AllowApprovedPushFilterTest {
 
     @Test
     void noApprovedRecord_doesNotSetPreApproved() throws Exception {
-        InMemoryPushStore store = new InMemoryPushStore();
+        PushStore store = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
         AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080");
         GitRequestDetails details = pushDetailsFor("abc123", "refs/heads/main", "my-repo");
         HttpServletRequest req = mockPushRequest(details);
@@ -67,7 +68,7 @@ class AllowApprovedPushFilterTest {
 
     @Test
     void approvedRecord_setsPreApproved() throws Exception {
-        InMemoryPushStore store = new InMemoryPushStore();
+        PushStore store = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
         // Save an approved push record for the same commitTo + branch + repo
         PushRecord approved = PushRecord.builder()
                 .commitTo("deadbeef")
@@ -95,7 +96,7 @@ class AllowApprovedPushFilterTest {
 
     @Test
     void alwaysSetsServiceUrlAttribute() throws Exception {
-        InMemoryPushStore store = new InMemoryPushStore();
+        PushStore store = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
         AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://my-dashboard:8080");
         GitRequestDetails details = pushDetailsFor("abc", "refs/heads/main", "repo");
         HttpServletRequest req = mockPushRequest(details);
@@ -108,7 +109,7 @@ class AllowApprovedPushFilterTest {
 
     @Test
     void approvedRecordForDifferentCommit_doesNotSetPreApproved() throws Exception {
-        InMemoryPushStore store = new InMemoryPushStore();
+        PushStore store = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
         PushRecord approved = PushRecord.builder()
                 .commitTo("aaaaaa")
                 .branch("refs/heads/main")
@@ -137,7 +138,7 @@ class AllowApprovedPushFilterTest {
     @Test
     void tagPush_approvedRecord_setsPreApproved() throws Exception {
         // Tag pushes have commit == null; the filter must still honour a prior approval.
-        InMemoryPushStore store = new InMemoryPushStore();
+        PushStore store = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
         PushRecord approved = PushRecord.builder()
                 .commitTo("tagsha123")
                 .branch("refs/tags/v1.0")

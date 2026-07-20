@@ -77,6 +77,10 @@ public class SecretScanningHook implements FogwallHook {
             for (GitleaksRunner.Finding f : result.get()) {
                 String msg = f.toMessage();
                 allViolations.add(new Violation(msg, msg, sym(CROSS_MARK) + "  " + msg + "\n" + REMEDIATION_HINT));
+                // Raw secret value, for redacting the stored diff only - never used in a message. See SecretRedactor.
+                if (f.getSecret() != null && !f.getSecret().isBlank()) {
+                    pushContext.addSecretsToRedact(List.of(f.getSecret()));
+                }
             }
         }
 

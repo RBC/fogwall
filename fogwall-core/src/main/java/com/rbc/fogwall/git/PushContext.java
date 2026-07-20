@@ -22,6 +22,10 @@ public class PushContext {
 
     private final List<PushStep> steps = new ArrayList<>();
 
+    // Raw secret values found by SecretScanningHook, for redacting stored step content before persistence.
+    // Never logged and never included in any user-facing message - see SecretRedactor.
+    private final List<String> secretsToRedact = new ArrayList<>();
+
     // Per-request credentials — written by StoreAndForwardReceivePackFactory before any hook runs.
     private String pushUser;
     private String pushToken;
@@ -59,6 +63,16 @@ public class PushContext {
     /** All accumulated steps, in the order they were added. */
     public List<PushStep> getSteps() {
         return Collections.unmodifiableList(steps);
+    }
+
+    /** Record raw secret values found during this push, for later redaction. Never logged. */
+    public void addSecretsToRedact(List<String> secrets) {
+        secretsToRedact.addAll(secrets);
+    }
+
+    /** Raw secret values found during this push, if any. Never logged - use only for redaction. */
+    public List<String> getSecretsToRedact() {
+        return Collections.unmodifiableList(secretsToRedact);
     }
 
     /** Store the effective upstream base SHA for a ref, overriding cmd.getOldId() for commit enumeration. */

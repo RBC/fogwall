@@ -5,7 +5,9 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Indexes;
+import com.mongodb.client.model.Projections;
 import com.mongodb.client.model.Sorts;
+import com.mongodb.client.result.UpdateResult;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.model.*;
 import java.util.ArrayList;
@@ -131,9 +133,16 @@ public class MongoPushStore implements PushStore {
 
     @Override
     public void updateForwardStatus(String id, PushStatus status, String errorMessage) {
+        PushStatus before = currentStatus(id);
         Document set = new Document("status", status.name()).append("forwardedAt", new java.util.Date());
         if (errorMessage != null) set.append("errorMessage", errorMessage);
-        getCollection().updateOne(Filters.eq("_id", id), new Document("$set", set));
+        UpdateResult result = getCollection()
+                .updateOne(
+                        Filters.and(Filters.eq("_id", id), Filters.eq("status", before.name())),
+                        new Document("$set", set));
+        if (result.getMatchedCount() == 0) {
+            throw new IllegalStateException("Push " + id + " status changed concurrently (expected " + before + ")");
+        }
     }
 
     @Override
@@ -144,12 +153,29 @@ public class MongoPushStore implements PushStore {
     // --- Private helpers ---
 
     private PushRecord updateStatus(String id, PushStatus status, Attestation attestation) {
+        PushStatus before = currentStatus(id);
         Document update = new Document("$set", new Document("status", status.name()));
         if (attestation != null) {
             update.get("$set", Document.class).append("attestation", attestationToDocument(attestation));
         }
-        getCollection().updateOne(Filters.eq("_id", id), update);
+        UpdateResult result = getCollection()
+                .updateOne(Filters.and(Filters.eq("_id", id), Filters.eq("status", before.name())), update);
+        if (result.getMatchedCount() == 0) {
+            throw new IllegalStateException("Push " + id + " status changed concurrently (expected " + before + ")");
+        }
         return findById(id).orElseThrow(() -> new IllegalArgumentException("Push not found: " + id));
+    }
+
+    /** Reads just the {@code status} field for {@code id}, avoiding a full document hydrate. */
+    private PushStatus currentStatus(String id) {
+        Document doc = getCollection()
+                .find(Filters.eq("_id", id))
+                .projection(Projections.include("status"))
+                .first();
+        if (doc == null) {
+            throw new IllegalArgumentException("Push not found: " + id);
+        }
+        return PushStatus.valueOf(doc.getString("status"));
     }
 
     private MongoCollection<Document> getCollection() {

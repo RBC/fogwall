@@ -464,7 +464,6 @@ public class GitleaksRunner {
         cmd.add("--report-path");
         cmd.add(reportFile.toString());
         cmd.add("--no-banner");
-        cmd.add("--redact");
         cmd.add("--exit-code");
         cmd.add(String.valueOf(FINDINGS_EXIT_CODE));
 
@@ -612,11 +611,30 @@ public class GitleaksRunner {
         private String commit;
 
         /**
-         * The matched text with the actual secret value partially redacted by gitleaks (the {@code Match} field) rather
-         * than the raw {@code Secret} field, to avoid logging plaintext secrets.
+         * The full matched text, verbatim from gitleaks (no {@code --redact} flag is used - see {@link #secret}). Never
+         * append this directly to a user-facing message or log line; use {@link #maskedMatch()} instead.
          */
         @JsonProperty("Match")
         private String match;
+
+        /**
+         * The raw secret value gitleaks matched. Use only for redacting stored diff content (see
+         * {@code SecretRedactor}) - never log it or include it in a {@link Violation} or any user-facing message.
+         */
+        @JsonProperty("Secret")
+        private String secret;
+
+        /**
+         * {@link #match} with the raw {@link #secret} value blanked out - safe to log or show to the pushing user.
+         * Mirrors what gitleaks' own {@code --redact} flag used to do, but computed here since we always request raw
+         * output now (needed to redact the stored diff).
+         */
+        private String maskedMatch() {
+            if (match == null || match.isBlank()) {
+                return match;
+            }
+            return secret != null && !secret.isBlank() ? match.replace(secret, "[REDACTED]") : "[REDACTED]";
+        }
 
         /**
          * Multi-line summary suitable for a push error message. Each line is kept short to fit the git sideband 80-char
@@ -640,8 +658,9 @@ public class GitleaksRunner {
             }
 
             // Line 3: redacted match snippet
-            if (match != null && !match.isBlank()) {
-                sb.append("\n  match:  ").append(match);
+            String masked = maskedMatch();
+            if (masked != null && !masked.isBlank()) {
+                sb.append("\n  match:  ").append(masked);
             }
 
             return sb.toString();

@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.db.PushStore;
-import com.rbc.fogwall.db.memory.InMemoryPushStore;
+import com.rbc.fogwall.db.PushStoreFactory;
 import com.rbc.fogwall.db.model.PushQuery;
 import com.rbc.fogwall.db.model.PushStatus;
 import com.rbc.fogwall.db.model.PushStep;
@@ -14,6 +14,7 @@ import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.UUID;
 import java.util.regex.Pattern;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.ObjectId;
@@ -32,7 +33,7 @@ import org.junit.jupiter.api.io.TempDir;
  * <p>Exercises the pre-receive hook (creates initial RECEIVED record) and the validation-result hook (transitions to
  * PENDING or REJECTED based on the {@link ValidationContext}).
  *
- * <p>Uses a real JGit repository (via {@code @TempDir}) and the in-memory push store so there are no external
+ * <p>Uses a real JGit repository (via {@code @TempDir}) and an H2 in-memory push store so there are no external
  * dependencies.
  */
 class PushStorePersistenceHookTest {
@@ -64,7 +65,7 @@ class PushStorePersistenceHookTest {
                 .call();
         commitId = c.getId();
 
-        pushStore = new InMemoryPushStore();
+        pushStore = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
         hook = new PushStorePersistenceHook(pushStore, new GitHubProvider("/push"));
         pushContext = new PushContext();
         hook.setPushContext(pushContext);

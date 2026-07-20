@@ -19,6 +19,7 @@ import jakarta.servlet.ServletContextEvent;
 import jakarta.servlet.ServletContextListener;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.UUID;
 import org.eclipse.jetty.ee11.servlet.FilterHolder;
 import org.eclipse.jetty.ee11.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee11.servlet.ServletHolder;
@@ -74,7 +75,7 @@ class DashboardFixture implements AutoCloseable {
         appContext.addBeanFactoryPostProcessor(bf -> {
             bf.registerSingleton("userStore", userStore);
             bf.registerSingleton("fogwallConfig", config);
-            bf.registerSingleton("pushStore", PushStoreFactory.inMemory());
+            bf.registerSingleton("pushStore", PushStoreFactory.h2InMemory("test-" + UUID.randomUUID()));
             bf.registerSingleton("providers", new InMemoryProviderRegistry(List.of()));
             bf.registerSingleton("configHolder", configHolder);
             bf.registerSingleton("liveConfigLoader", liveConfigLoader);
