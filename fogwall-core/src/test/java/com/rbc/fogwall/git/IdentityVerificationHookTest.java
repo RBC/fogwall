@@ -198,7 +198,7 @@ class IdentityVerificationHookTest {
     // ---- committer warn + mismatch → no issue, push proceeds ----
 
     @Test
-    void committerWarn_mismatch_noIssue_recordsPass() throws Exception {
+    void committerWarn_mismatch_noIssue_recordsWarn() throws Exception {
         when(resolver.resolve(any(FogwallProvider.class), eq("alice-git"), isNull()))
                 .thenReturn(Optional.of(alice()));
 
@@ -214,7 +214,7 @@ class IdentityVerificationHookTest {
 
         assertFalse(vc.hasIssues(), "WARN mode should not block the push");
         assertFalse(pc.getSteps().isEmpty());
-        assertEquals(StepStatus.PASS, pc.getSteps().get(0).getStatus());
+        assertEquals(StepStatus.WARN, pc.getSteps().get(0).getStatus());
     }
 
     // ---- DELETE command → skipped entirely, no violation ----

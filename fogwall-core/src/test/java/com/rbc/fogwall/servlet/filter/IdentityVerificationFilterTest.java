@@ -259,11 +259,11 @@ class IdentityVerificationFilterTest {
 
         assertFalse(resp.committed.get());
         assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult(), "WARN mode must not reject push");
-        // WARN mode records a PASS step with violation details in content (for the amber dashboard badge)
+        // WARN mode records a WARN step with violation details in content (for the amber dashboard badge)
         assertFalse(details.getSteps().isEmpty(), "WARN mode should record a step");
         var step = details.getSteps().get(0);
         assertEquals("identityVerification", step.getStepName());
-        assertEquals(StepStatus.PASS, step.getStatus());
+        assertEquals(StepStatus.WARN, step.getStatus());
         assertNotNull(step.getContent(), "WARN mode step should carry violation details in content");
     }
 

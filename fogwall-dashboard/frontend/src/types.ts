@@ -5,7 +5,7 @@ export interface Step {
   id: string
   stepName: string
   stepOrder: number
-  status: 'PASS' | 'FAIL' | 'BLOCKED' | string
+  status: 'PASS' | 'WARN' | 'FAIL' | 'BLOCKED' | 'SKIPPED' | string
   errorMessage?: string
   blockedMessage?: string
   content?: string

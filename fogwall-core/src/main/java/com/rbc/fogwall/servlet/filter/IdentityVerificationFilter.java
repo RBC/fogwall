@@ -169,7 +169,7 @@ public class IdentityVerificationFilter extends AbstractFogwallFilter {
                     warnViolations.size());
             recordStep(
                     request,
-                    StepStatus.PASS,
+                    StepStatus.WARN,
                     null,
                     warnViolations.size() + " unrecognised commit email(s) — not in proxy user registry");
         }
