@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import org.eclipse.jetty.ee11.servlet.FilterHolder;
@@ -136,7 +137,7 @@ class JettyProxyFixture implements AutoCloseable {
         connector.setPort(0); // ephemeral
         server.addConnector(connector);
 
-        pushStore = PushStoreFactory.inMemory();
+        pushStore = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
         var storeForwardCache = new LocalRepositoryCache(Files.createTempDirectory("fogwall-e2e-sf-"), 0, true);
         var proxyCache = new LocalRepositoryCache();
 

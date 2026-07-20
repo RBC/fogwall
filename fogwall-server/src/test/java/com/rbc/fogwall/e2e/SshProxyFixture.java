@@ -29,6 +29,7 @@ import java.nio.file.Files;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Test fixture that starts a fogwall SSH server ({@link SshGitServer}) on an ephemeral port, wired to a
@@ -102,7 +103,7 @@ class SshProxyFixture implements AutoCloseable {
                 .apiToken(giteaApiToken)
                 .build();
 
-        pushStore = PushStoreFactory.inMemory();
+        pushStore = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
         var cache = new LocalRepositoryCache(Files.createTempDirectory("fogwall-ssh-e2e-cache-"), 0, true);
 
         var urlRuleRegistry = new InMemoryUrlRuleRegistry();

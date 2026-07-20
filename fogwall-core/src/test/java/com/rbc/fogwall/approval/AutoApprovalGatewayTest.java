@@ -2,23 +2,25 @@ package com.rbc.fogwall.approval;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.rbc.fogwall.db.memory.InMemoryPushStore;
+import com.rbc.fogwall.db.PushStore;
+import com.rbc.fogwall.db.PushStoreFactory;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class AutoApprovalGatewayTest {
 
-    private InMemoryPushStore pushStore;
+    private PushStore pushStore;
     private AutoApprovalGateway gateway;
 
     @BeforeEach
     void setUp() {
-        pushStore = new InMemoryPushStore();
+        pushStore = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
         gateway = new AutoApprovalGateway(pushStore);
     }
 

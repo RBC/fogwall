@@ -18,8 +18,8 @@ import org.junit.jupiter.api.Test;
  *
  * <p>Each test gets its own isolated H2 database (unique name) to prevent state leakage between tests.
  *
- * <p>Covers the same contract as {@code InMemoryPushStoreTest} but exercises the full SQL path: schema initialization,
- * INSERT, SELECT, UPDATE, DELETE, and relationship tables (steps, commits, attestations).
+ * <p>Exercises the full SQL path: schema initialization, INSERT, SELECT, UPDATE, DELETE, and relationship tables
+ * (steps, commits, attestations).
  */
 class JdbcPushStoreIntegrationTest {
 
@@ -74,8 +74,7 @@ class JdbcPushStoreIntegrationTest {
     }
 
     // The JDBC store is append-only - each save() INSERTs a new event record.
-    // Status transitions (approve/reject/cancel) use UPDATE, not save().
-    // There is no upsert/overwrite contract for JDBC unlike InMemoryPushStore.
+    // Status transitions (approve/reject/cancel) use UPDATE, not save() - there is no upsert/overwrite contract.
 
     // ---- delete ----
 

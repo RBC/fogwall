@@ -160,6 +160,9 @@ public class PushStorePersistenceHook {
                         record.setAutoRejected(true);
                         record.setBlockedMessage(validationContext.getIssues().size() + " validation issue(s) found");
                         record.setSteps(allSteps);
+                        if (pushContext != null) {
+                            SecretRedactor.redact(record, pushContext.getSecretsToRedact());
+                        }
                         pushStore.save(record);
                         if (pushContext != null) pushContext.setValidationRecordId(record.getId());
                         log.debug(

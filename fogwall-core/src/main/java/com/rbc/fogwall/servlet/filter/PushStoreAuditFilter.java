@@ -8,6 +8,7 @@ import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.SecretRedactor;
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
@@ -52,6 +53,7 @@ public class PushStoreAuditFilter implements Filter {
 
         try {
             PushRecord record = PushRecordMapper.fromRequestDetails(requestDetails);
+            SecretRedactor.redact(record, requestDetails.getSecretsToRedact());
             pushStore.save(record);
 
             log.info(

@@ -24,6 +24,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
@@ -212,7 +213,7 @@ class PushFinalizerFilterTest {
     @Test
     void autoApprovalGateway_allowsPushWithoutBlocking() throws Exception {
         GitRequestDetails details = pendingPushDetails();
-        var gateway = new AutoApprovalGateway(PushStoreFactory.inMemory());
+        var gateway = new AutoApprovalGateway(PushStoreFactory.h2InMemory("test-" + UUID.randomUUID()));
         PushFinalizerFilter filter = new PushFinalizerFilter("http://localhost:8080", gateway);
         FakeResponse fakeResponse = new FakeResponse();
 
@@ -230,7 +231,7 @@ class PushFinalizerFilterTest {
         GitRequestDetails details = pendingPushDetails();
         details.setUpstreamUsername("bb-username");
 
-        var gateway = new AutoApprovalGateway(PushStoreFactory.inMemory());
+        var gateway = new AutoApprovalGateway(PushStoreFactory.h2InMemory("test-" + UUID.randomUUID()));
         PushFinalizerFilter filter = new PushFinalizerFilter("http://localhost:8080", gateway);
 
         HttpServletRequest req = mockPushRequest(details);

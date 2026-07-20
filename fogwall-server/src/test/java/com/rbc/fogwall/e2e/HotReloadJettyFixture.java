@@ -23,6 +23,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.EnumSet;
+import java.util.UUID;
 import org.eclipse.jetty.ee11.servlet.FilterHolder;
 import org.eclipse.jetty.ee11.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee11.servlet.ServletHolder;
@@ -64,7 +65,7 @@ class HotReloadJettyFixture implements AutoCloseable {
         connector.setPort(0);
         server.addConnector(connector);
 
-        pushStore = PushStoreFactory.inMemory();
+        pushStore = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
         var storeForwardCache = new LocalRepositoryCache(Files.createTempDirectory("fogwall-hotreload-sf-"), 0, true);
         var proxyCache = new LocalRepositoryCache();
 
