@@ -278,17 +278,11 @@ public class GitClientUtils {
             sb.append(color(AnsiColor.CYAN, sym(SymbolCodes.KEY) + "  " + label + "..."))
                     .append("\n");
             if (step.getStatus() == StepStatus.PASS) {
-                if (step.getContent() != null && !step.getContent().isBlank()) {
-                    // PASS with content = warning (e.g. identity verified via SCM but emails unregistered)
-                    for (String line : step.getContent().split("\n")) {
-                        sb.append(color(AnsiColor.YELLOW, "  " + sym(SymbolCodes.WARNING) + "  " + line))
-                                .append("\n");
-                    }
-                } else {
-                    String result = passResults.getOrDefault(step.getStepName(), "passed");
-                    sb.append(color(AnsiColor.GREEN, "  " + sym(SymbolCodes.HEAVY_CHECK_MARK) + "  " + result))
-                            .append("\n");
-                }
+                String result = passResults.getOrDefault(step.getStepName(), "passed");
+                sb.append(color(AnsiColor.GREEN, "  " + sym(SymbolCodes.HEAVY_CHECK_MARK) + "  " + result))
+                        .append("\n");
+            } else if (step.getStatus() == StepStatus.WARN) {
+                appendWarningLines(sb, step.getContent());
             } else if (step.getStatus() == StepStatus.FAIL) {
                 String detail = step.getErrorMessage() != null ? step.getErrorMessage() : "failed";
                 sb.append(color(AnsiColor.RED, "  " + sym(SymbolCodes.CROSS_MARK) + "  " + detail))
@@ -299,5 +293,16 @@ public class GitClientUtils {
             }
         }
         return sb.toString();
+    }
+
+    /** Appends each line of {@code content} to {@code sb} as a yellow warning line, prefixed with a warning symbol. */
+    private static void appendWarningLines(StringBuilder sb, String content) {
+        if (content == null || content.isBlank()) {
+            return;
+        }
+        for (String line : content.split("\n")) {
+            sb.append(color(AnsiColor.YELLOW, "  " + sym(SymbolCodes.WARNING) + "  " + line))
+                    .append("\n");
+        }
     }
 }

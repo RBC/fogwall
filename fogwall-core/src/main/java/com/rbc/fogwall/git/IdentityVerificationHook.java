@@ -175,7 +175,7 @@ public class IdentityVerificationHook implements FogwallHook {
             pushContext.addStep(PushStep.builder()
                     .stepName(STEP_NAME)
                     .stepOrder(ORDER)
-                    .status(StepStatus.PASS)
+                    .status(StepStatus.WARN)
                     .content(String.join("\n", warnViolations))
                     .build());
         }

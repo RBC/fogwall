@@ -59,7 +59,7 @@ const STEP_DISPLAY_NAMES: Record<string, string> = {
 function IdentityBadge({ record }: { record: PushRecord }) {
   if (record.resolvedUser) {
     const idStep = (record.steps ?? []).find((s) => s.stepName === 'identityVerification')
-    const hasEmailWarning = idStep?.status === 'PASS' && !!idStep?.content
+    const hasEmailWarning = idStep?.status === 'WARN'
     if (hasEmailWarning) {
       return (
         <span
@@ -839,6 +839,7 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
               <div className="space-y-1">
                 {validationSteps.map((s) => {
                   const isFailed = s.status === 'FAIL' || s.status === 'BLOCKED'
+                  const isWarn = s.status === 'WARN'
                   const isSkipped = s.status === 'SKIPPED'
                   const isOpen = openSteps[s.id]
                   return (
@@ -853,20 +854,22 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
                               ? 'text-green-500 dark:text-green-400'
                               : isFailed
                                 ? 'text-red-500 dark:text-red-400'
-                                : isSkipped
-                                  ? 'text-yellow-500 dark:text-yellow-400'
-                                  : 'text-gray-400 dark:text-gray-500'
+                                : isWarn
+                                  ? 'text-amber-500 dark:text-amber-400'
+                                  : isSkipped
+                                    ? 'text-yellow-500 dark:text-yellow-400'
+                                    : 'text-gray-400 dark:text-gray-500'
                           }
                         >
-                          {s.status === 'PASS' ? '✓' : isFailed ? '✗' : isSkipped ? '⚠' : '–'}
+                          {s.status === 'PASS' ? '✓' : isFailed ? '✗' : isWarn || isSkipped ? '⚠' : '–'}
                         </span>
                         <span className="text-sm text-gray-700 w-56 shrink-0 dark:text-gray-300">
                           {stepDisplayName(s.stepName)}
                         </span>
                         <span className="text-gray-500 text-xs truncate flex-1 dark:text-gray-400">
-                          {s.errorMessage ?? s.blockedMessage ?? (isSkipped ? 'skipped' : '')}
+                          {s.errorMessage ?? s.blockedMessage ?? (isWarn ? s.content : undefined) ?? (isSkipped ? 'skipped' : '')}
                         </span>
-                        {(isFailed || isSkipped) &&
+                        {(isFailed || isWarn || isSkipped) &&
                           (s.content || s.errorMessage || s.blockedMessage) && (
                             <span className="text-xs text-gray-400 shrink-0 dark:text-gray-500">
                               {isOpen ? '▲ hide' : '▼ details'}
