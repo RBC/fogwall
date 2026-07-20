@@ -51,8 +51,8 @@ public class SshServerRegistrar {
 
         FogwallProvider sshProvider = sshProviders.get(0);
         var factory = FogwallServletRegistrar.buildReceivePackFactory(ctx, configBuilder, sshProvider);
-        SshGitServer server =
-                SshGitServer.create(sshConfig, sshProvider, ctx.storeForwardCache(), factory, ctx.userStore());
+        SshGitServer server = SshGitServer.create(
+                sshConfig, sshProvider, ctx.storeForwardCache(), factory, ctx.userStore(), ctx.urlRuleRegistry());
         server.start();
         return server;
     }

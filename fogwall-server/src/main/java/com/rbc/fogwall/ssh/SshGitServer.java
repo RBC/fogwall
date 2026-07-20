@@ -1,6 +1,7 @@
 package com.rbc.fogwall.ssh;
 
 import com.rbc.fogwall.config.SshConfig;
+import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.git.StoreAndForwardReceivePackFactory;
 import com.rbc.fogwall.provider.FogwallProvider;
@@ -18,9 +19,9 @@ import org.apache.sshd.server.keyprovider.SimpleGeneratorHostKeyProvider;
 import org.apache.sshd.server.session.ServerSession;
 
 /**
- * Wraps an Apache MINA SSHD server that accepts {@code git push} connections over SSH. On each push,
- * {@link SshGitCommandFactory} routes the {@code git-receive-pack} command to {@link SshGitReceiveCommand}, which runs
- * the same validation hook chain as the HTTP store-and-forward path.
+ * Wraps an Apache MINA SSHD server that accepts {@code git push}/{@code git fetch} connections over SSH.
+ * {@link SshGitCommandFactory} routes {@code git-receive-pack} to {@link SshGitReceiveCommand} (which runs the same
+ * validation hook chain as the HTTP store-and-forward path) and {@code git-upload-pack} to {@link SshGitUploadCommand}.
  *
  * <p>Upstream authentication uses SSH agent forwarding. Clients must connect with agent forwarding enabled ({@code ssh
  * -A}, or {@code ForwardAgent yes} in {@code ~/.ssh/config}). Fogwall relays the forwarded agent to authenticate with
@@ -30,12 +31,7 @@ import org.apache.sshd.server.session.ServerSession;
  * looked up in the user store at connection time to resolve their {@link UserEntry}, which is then stored on the MINA
  * session for use by {@link SshGitReceiveCommand}.
  *
- * <p>MVP constraints:
- *
- * <ul>
- *   <li>Only a single provider is supported per server instance.
- *   <li>{@code git-upload-pack} (clone/fetch over SSH) is not yet implemented.
- * </ul>
+ * <p>MVP constraint: only a single provider is supported per server instance.
  */
 @Slf4j
 public class SshGitServer {
@@ -57,7 +53,8 @@ public class SshGitServer {
             FogwallProvider provider,
             LocalRepositoryCache cache,
             StoreAndForwardReceivePackFactory receivePackFactory,
-            ReadOnlyUserStore userStore)
+            ReadOnlyUserStore userStore,
+            UrlRuleRegistry urlRuleRegistry)
             throws IOException {
 
         SshServer sshd = SshServer.setUpDefaultServer();
@@ -75,7 +72,8 @@ public class SshGitServer {
         sshd.setAgentFactory(agentFactory);
         sshd.setForwardingFilter(AcceptAllForwardingFilter.INSTANCE);
 
-        sshd.setCommandFactory(new SshGitCommandFactory(provider, cache, receivePackFactory, agentFactory));
+        sshd.setCommandFactory(
+                new SshGitCommandFactory(provider, cache, receivePackFactory, agentFactory, urlRuleRegistry));
 
         return new SshGitServer(sshd);
     }

@@ -53,6 +53,7 @@ class SshProxyFixture implements AutoCloseable {
     private final int sshPort;
     private final PushStore pushStore;
     private final String giteaSshHostPort;
+    private final InMemoryUrlRuleRegistry urlRuleRegistry;
 
     /**
      * Creates and starts the SSH fixture.
@@ -105,7 +106,7 @@ class SshProxyFixture implements AutoCloseable {
         pushStore = PushStoreFactory.inMemory();
         var cache = new LocalRepositoryCache(Files.createTempDirectory("fogwall-ssh-e2e-cache-"), 0, true);
 
-        var urlRuleRegistry = new InMemoryUrlRuleRegistry();
+        urlRuleRegistry = new InMemoryUrlRuleRegistry();
         urlRuleRegistry.save(AccessRule.builder()
                 .ruleOrder(1)
                 .access(AccessRule.Access.ALLOW)
@@ -150,7 +151,7 @@ class SshProxyFixture implements AutoCloseable {
                 .resolve("host_key")
                 .toString());
 
-        sshServer = SshGitServer.create(sshConfig, provider, cache, receivePackFactory, userStore);
+        sshServer = SshGitServer.create(sshConfig, provider, cache, receivePackFactory, userStore, urlRuleRegistry);
         sshServer.start();
     }
 
@@ -166,6 +167,10 @@ class SshProxyFixture implements AutoCloseable {
 
     PushStore getPushStore() {
         return pushStore;
+    }
+
+    InMemoryUrlRuleRegistry getUrlRuleRegistry() {
+        return urlRuleRegistry;
     }
 
     @Override

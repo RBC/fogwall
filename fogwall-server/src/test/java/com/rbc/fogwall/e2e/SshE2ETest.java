@@ -2,6 +2,9 @@ package com.rbc.fogwall.e2e;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.rbc.fogwall.db.model.AccessRule;
+import com.rbc.fogwall.db.model.MatchTarget;
+import com.rbc.fogwall.db.model.MatchType;
 import com.rbc.fogwall.db.model.PushQuery;
 import com.rbc.fogwall.db.model.PushStatus;
 import java.io.IOException;
@@ -12,11 +15,13 @@ import java.util.regex.Pattern;
 import org.junit.jupiter.api.*;
 
 /**
- * End-to-end tests for the SSH store-and-forward path.
+ * End-to-end tests for the SSH store-and-forward path — both {@code git-receive-pack} (push) and
+ * {@code git-upload-pack} (fetch/clone).
  *
- * <p>Each test clones the upstream test repo from Gitea over HTTP, switches the push remote to fogwall's SSH port, and
- * pushes a unique commit. The test key is pre-seeded in fogwall's {@link com.rbc.fogwall.user.StaticUserStore} and
- * registered with Gitea, so the full agent-forwarding path is exercised end-to-end.
+ * <p>Push-focused tests clone the upstream test repo from Gitea over HTTP, switch the push remote to fogwall's SSH
+ * port, and push a unique commit. Fetch-focused tests clone directly through fogwall's SSH endpoint. The test key is
+ * pre-seeded in fogwall's {@link com.rbc.fogwall.user.StaticUserStore} and registered with Gitea, so the full
+ * agent-forwarding path is exercised end-to-end.
  *
  * <p>Infrastructure: a Gitea container with SSH exposed, fogwall's SSH server on an ephemeral port, and a real
  * {@code ssh-agent} process started in {@link #startInfrastructure()}.
@@ -104,10 +109,10 @@ class SshE2ETest {
 
     /**
      * Clones the test repo from Gitea via HTTP, sets the push remote to fogwall SSH, and configures a valid author.
-     * Returns the cloned repo path.
+     * Returns the cloned repo path. Push-focused tests only care about the push path, so cloning directly from upstream
+     * keeps setup independent of the fetch-via-SSH path covered separately below.
      */
     private Path prepareRepo(String dirSuffix) throws Exception {
-        // Clone over HTTP (upload-pack via SSH not yet implemented), then redirect push remote to fogwall SSH
         var git = sshGit();
         Path repo = git.clone(
                 gitea.getBaseUrl() + "/" + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO + ".git",
@@ -207,6 +212,40 @@ class SshE2ETest {
         assertTrue(
                 result.output().contains("agent forwarding") || result.output().contains("ssh -A"),
                 "Expected agent forwarding hint in output:\n" + result.output());
+    }
+
+    @Test
+    @Order(5)
+    void fetchViaSsh_clonesRepoContent() throws Exception {
+        var git = sshGit();
+        Path repo = git.clone(proxy.pushUrl(GiteaContainer.TEST_ORG, GiteaContainer.TEST_REPO), "ssh-fetch");
+
+        assertTrue(Files.isDirectory(repo.resolve(".git")), "Expected a valid git repo to be cloned via SSH");
+        runCmd(repo, "git", "log", "-1"); // throws if HEAD doesn't resolve to a real commit
+    }
+
+    @Test
+    @Order(6)
+    void fetchViaSsh_deniedByUrlRule_isRejected() throws Exception {
+        // Lower ruleOrder than the fixture's catch-all allow (order 1), so this is evaluated first.
+        // Last test in the class by design — no cleanup needed for a rule that outlives this method.
+        proxy.getUrlRuleRegistry()
+                .save(AccessRule.builder()
+                        .ruleOrder(0)
+                        .access(AccessRule.Access.DENY)
+                        .operation(AccessRule.Operation.BOTH)
+                        .target(MatchTarget.SLUG)
+                        .value(GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO)
+                        .matchType(MatchType.LITERAL)
+                        .build());
+
+        var git = sshGit();
+        RuntimeException ex = assertThrows(
+                RuntimeException.class,
+                () -> git.clone(proxy.pushUrl(GiteaContainer.TEST_ORG, GiteaContainer.TEST_REPO), "ssh-fetch-denied"));
+        assertTrue(
+                ex.getMessage().contains("denied") || ex.getMessage().contains("not permitted"),
+                "Expected URL-rule denial in clone failure output:\n" + ex.getMessage());
     }
 
     // ── static utilities ──────────────────────────────────────────────────────
