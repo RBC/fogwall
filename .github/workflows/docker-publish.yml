@@ -29,8 +29,19 @@ jobs:
     # Tags are released by promoting the already-built build image — no rebuild needed.
     if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: dashboard
+          - name: server
+    # Matrix legs run in parallel, so PR wall-clock time is unchanged by adding the server image
+    # — only total runner-minutes go up. Each leg writes its digest under a name-scoped output key
+    # (digest_dashboard / digest_server) since matrix job outputs collapse to one value per key;
+    # distinct keys per leg is the standard workaround so `scan` can look up the right digest.
     outputs:
-      digest: ${{ steps.push.outputs.digest }}
+      digest_dashboard: ${{ steps.export.outputs.digest_dashboard }}
+      digest_server: ${{ steps.export.outputs.digest_server }}
     permissions:
       contents: read
       packages: write
@@ -45,7 +56,9 @@ jobs:
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # ratchet:docker/setup-buildx-action@v4
 
       - name: Set image name
-        run: echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+        run: |
+          SUFFIX="${{ matrix.name == 'server' && '-server' || '' }}"
+          echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')${SUFFIX}" >> "$GITHUB_ENV"
 
       - name: Log in to GHCR
         if: github.event_name != 'pull_request'
@@ -71,14 +84,19 @@ jobs:
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # ratchet:docker/build-push-action@v7
         with:
           context: .
+          target: ${{ matrix.name }}
           platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           push: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: mode=max
           sbom: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+      - name: Export digest
+        id: export
+        run: echo "digest_${{ matrix.name }}=${{ steps.push.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
       - name: Attest image
         if: github.event_name != 'pull_request'
@@ -92,6 +110,12 @@ jobs:
     name: Container Scan
     needs: build-and-push
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: dashboard
+          - name: server
     permissions:
       contents: read
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -102,7 +126,9 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # ratchet:actions/checkout@v7.0.0
 
       - name: Set image name
-        run: echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+        run: |
+          SUFFIX="${{ matrix.name == 'server' && '-server' || '' }}"
+          echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')${SUFFIX}" >> "$GITHUB_ENV"
 
       - name: Install grype
         run: |
@@ -116,7 +142,8 @@ jobs:
 
       - name: Scan image
         run: |
-          grype "${IMAGE}@${{ needs.build-and-push.outputs.digest }}" \
+          DIGEST="${{ needs.build-and-push.outputs[format('digest_{0}', matrix.name)] }}"
+          grype "${IMAGE}@${DIGEST}" \
             --config .grype.yaml \
             -o "template=grype-report.txt" \
             -o "json=grype-report.json"
@@ -125,7 +152,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # ratchet:actions/upload-artifact@v7
         with:
-          name: grype-container-scan
+          name: grype-container-scan-${{ matrix.name }}
           path: |
             grype-report.txt
             grype-report.json
@@ -135,6 +162,12 @@ jobs:
     name: Publish Release
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: dashboard
+          - name: server
     permissions:
       contents: read
       packages: write
@@ -154,13 +187,15 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set image name
-        run: echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+        run: |
+          SUFFIX="${{ matrix.name == 'server' && '-server' || '' }}"
+          echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')${SUFFIX}" >> "$GITHUB_ENV"
 
       # Resolve the digest of the build-{sha} image produced when this commit landed on main.
-      # The tag ruleset enforces Container Scan passed on this commit before the tag could be
-      # pushed, so the build image is guaranteed scanned. Using the commit-pinned build tag
-      # (not :edge) ensures we promote the exact image for this release regardless of how
-      # many commits have landed on main since.
+      # The tag ruleset enforces Container Scan (per image) passed on this commit before the tag
+      # could be pushed, so the build image is guaranteed scanned. Using the commit-pinned build
+      # tag (not :edge) ensures we promote the exact image for this release regardless of how many
+      # commits have landed on main since.
       - name: Resolve build image digest
         id: build
         run: |
