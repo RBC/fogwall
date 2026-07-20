@@ -26,7 +26,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @ToString
-public class UrlRuleAggregateFilter extends AbstractProviderAwareFogwallFilter {
+public class UrlRuleAggregateFilter extends ProviderAwareFogwallFilter<FogwallProvider> {
 
     private final UrlRuleEvaluator evaluator;
     private final FetchStore fetchStore;
@@ -36,21 +36,12 @@ public class UrlRuleAggregateFilter extends AbstractProviderAwareFogwallFilter {
     private static final int MAX_ORDER = 199;
 
     public UrlRuleAggregateFilter(int order, FogwallProvider provider, UrlRuleRegistry urlRuleRegistry) {
-        this(order, provider, null, null, urlRuleRegistry);
+        this(order, provider, null, urlRuleRegistry);
     }
 
     public UrlRuleAggregateFilter(
-            int order, FogwallProvider provider, String pathPrefix, UrlRuleRegistry urlRuleRegistry) {
-        this(order, provider, pathPrefix, null, urlRuleRegistry);
-    }
-
-    public UrlRuleAggregateFilter(
-            int order,
-            FogwallProvider provider,
-            String pathPrefix,
-            FetchStore fetchStore,
-            UrlRuleRegistry urlRuleRegistry) {
-        super(validateOrder(order), ALL_OPERATIONS, provider, pathPrefix != null ? pathPrefix : "");
+            int order, FogwallProvider provider, FetchStore fetchStore, UrlRuleRegistry urlRuleRegistry) {
+        super(validateOrder(order), ALL_OPERATIONS, provider);
         this.evaluator = new UrlRuleEvaluator(urlRuleRegistry, provider);
         this.fetchStore = fetchStore;
     }

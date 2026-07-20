@@ -6,7 +6,6 @@ import static org.mockito.Mockito.*;
 
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
-import com.rbc.fogwall.provider.GitHubProvider;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.ServletOutputStream;
@@ -137,8 +136,7 @@ class CheckHiddenCommitsFilterTest {
         details.setLocalRepository(repo);
 
         FakeResponse resp = new FakeResponse();
-        new CheckHiddenCommitsFilter(new GitHubProvider("/proxy"), "/proxy")
-                .doHttpFilter(mockRequest(details), resp.mock);
+        new CheckHiddenCommitsFilter().doHttpFilter(mockRequest(details), resp.mock);
 
         assertFalse(resp.committed.get(), "Lightweight tag push must not be rejected as hidden commits");
     }
@@ -166,8 +164,7 @@ class CheckHiddenCommitsFilterTest {
         details.setLocalRepository(repo);
 
         FakeResponse resp = new FakeResponse();
-        new CheckHiddenCommitsFilter(new GitHubProvider("/proxy"), "/proxy")
-                .doHttpFilter(mockRequest(details), resp.mock);
+        new CheckHiddenCommitsFilter().doHttpFilter(mockRequest(details), resp.mock);
 
         assertFalse(resp.committed.get(), "Annotated tag push must not throw or reject due to tag object type");
     }

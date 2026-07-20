@@ -10,7 +10,6 @@ import com.rbc.fogwall.db.model.PushStep;
 import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
-import com.rbc.fogwall.provider.GitHubProvider;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.ServletOutputStream;
@@ -156,11 +155,11 @@ class ScanDiffFilterTest {
                         .literals(List.of(literal))
                         .build())
                 .build();
-        return new ScanDiffFilter(new GitHubProvider("/proxy"), "/proxy", config);
+        return new ScanDiffFilter(config);
     }
 
     private ScanDiffFilter filterNoRules() {
-        return new ScanDiffFilter(new GitHubProvider("/proxy"), "/proxy", DiffScanConfig.defaultConfig());
+        return new ScanDiffFilter(DiffScanConfig.defaultConfig());
     }
 
     // ---- clean diff → PASS step recorded, no issue ----

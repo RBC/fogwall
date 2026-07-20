@@ -219,19 +219,19 @@ class JettyProxyFixture implements AutoCloseable {
         // because the fixture uses simplified configs that don't need them.
         List<FogwallFilter> filters = new ArrayList<>();
         filters.add(new ForceGitClientFilter());
-        filters.add(new ParseGitRequestFilter(provider, PROXY_PREFIX));
+        filters.add(new ParseGitRequestFilter(provider));
         filters.add(new AllowApprovedPushFilter(pushStore, serviceUrl));
-        filters.add(new EnrichPushCommitsFilter(provider, proxyCache, PROXY_PREFIX));
-        filters.add(new UrlRuleAggregateFilter(100, provider, PROXY_PREFIX, urlRuleRegistry));
+        filters.add(new EnrichPushCommitsFilter(provider, proxyCache));
+        filters.add(new UrlRuleAggregateFilter(100, provider, urlRuleRegistry));
         if (identityResolver != null && permissionService != null) {
             filters.add(new CheckUserPushPermissionFilter(identityResolver, permissionService));
             filters.add(new IdentityVerificationFilter(identityResolver, identityVerificationConfig));
         }
         filters.add(new CheckEmptyBranchFilter());
-        filters.add(new CheckHiddenCommitsFilter(provider, PROXY_PREFIX));
+        filters.add(new CheckHiddenCommitsFilter());
         filters.add(new CheckAuthorEmailsFilter(commitConfig));
         filters.add(new CheckCommitMessagesFilter(commitConfig));
-        filters.add(new ScanDiffFilter(provider, PROXY_PREFIX, DiffScanConfig.defaultConfig()));
+        filters.add(new ScanDiffFilter(DiffScanConfig.defaultConfig()));
         filters.add(new GpgSignatureFilter(GpgConfig.defaultConfig()));
         filters.add(new ValidationSummaryFilter());
         filters.add(new FetchFinalizerFilter());

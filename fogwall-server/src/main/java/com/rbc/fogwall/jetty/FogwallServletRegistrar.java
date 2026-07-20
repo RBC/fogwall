@@ -227,12 +227,9 @@ public final class FogwallServletRegistrar {
         context.addFilter(
                 new FilterHolder(new BasicAuthChallengeFilter()), pushMapping, EnumSet.of(DispatcherType.REQUEST));
         context.addFilter(
-                new FilterHolder(new ParseGitRequestFilter(provider, PUSH_PATH_PREFIX)),
-                pushMapping,
-                EnumSet.of(DispatcherType.REQUEST));
+                new FilterHolder(new ParseGitRequestFilter(provider)), pushMapping, EnumSet.of(DispatcherType.REQUEST));
         context.addFilter(
-                new FilterHolder(
-                        new UrlRuleAggregateFilter(100, provider, PUSH_PATH_PREFIX, fetchStore, urlRuleRegistry)),
+                new FilterHolder(new UrlRuleAggregateFilter(100, provider, fetchStore, urlRuleRegistry)),
                 pushMapping,
                 EnumSet.of(DispatcherType.REQUEST));
 
@@ -294,23 +291,23 @@ public final class FogwallServletRegistrar {
         // Build the orderable filter list. Sorted by getOrder() before registration so the Jetty chain
         // execution order matches the documented order ranges in fogwallFilter.
         List<FogwallFilter> filters = new ArrayList<>();
-        filters.add(new ParseGitRequestFilter(provider, PROXY_PATH_PREFIX));
-        filters.add(new EnrichPushCommitsFilter(provider, repositoryCache, PROXY_PATH_PREFIX));
+        filters.add(new ParseGitRequestFilter(provider));
+        filters.add(new EnrichPushCommitsFilter(provider, repositoryCache));
         filters.add(new AllowApprovedPushFilter(pushStore, serviceUrl));
 
-        filters.add(new UrlRuleAggregateFilter(100, provider, PROXY_PATH_PREFIX, fetchStore, urlRuleRegistry));
+        filters.add(new UrlRuleAggregateFilter(100, provider, fetchStore, urlRuleRegistry));
 
         if (provider instanceof BitbucketProvider bitbucketProvider) {
-            filters.add(new BitbucketIdentityFilter(bitbucketProvider, PROXY_PATH_PREFIX));
+            filters.add(new BitbucketIdentityFilter(bitbucketProvider));
         }
         filters.add(new CheckUserPushPermissionFilter(pushIdentityResolver, repoPermissionService));
         filters.add(new IdentityVerificationFilter(pushIdentityResolver, commitConfigSupplier));
         filters.add(new CheckEmptyBranchFilter());
-        filters.add(new CheckHiddenCommitsFilter(provider, PROXY_PATH_PREFIX));
+        filters.add(new CheckHiddenCommitsFilter());
         filters.add(new CheckAuthorEmailsFilter(commitConfigSupplier));
         filters.add(new CheckCommitMessagesFilter(commitConfigSupplier));
-        filters.add(new BinaryBlobFilter(provider, PROXY_PATH_PREFIX, binaryBlobConfigSupplier));
-        filters.add(new ScanDiffFilter(provider, PROXY_PATH_PREFIX, diffScanConfigSupplier));
+        filters.add(new BinaryBlobFilter(binaryBlobConfigSupplier));
+        filters.add(new ScanDiffFilter(diffScanConfigSupplier));
         filters.add(new SecretScanningFilter(secretScanConfigSupplier));
         filters.add(new GpgSignatureFilter(GpgConfig.defaultConfig()));
         filters.add(new ValidationSummaryFilter());

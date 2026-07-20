@@ -7,7 +7,6 @@ import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.git.CommitInspectionService;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
-import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.validation.BinaryBlobCheck;
 import com.rbc.fogwall.validation.Violation;
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,25 +34,21 @@ import org.eclipse.jgit.lib.Repository;
  * <p>This filter runs at order 290, in the content filters range (200-399) — just before {@link ScanDiffFilter}.
  */
 @Slf4j
-public class BinaryBlobFilter extends AbstractProviderAwareFogwallFilter {
+public class BinaryBlobFilter extends AbstractFogwallFilter {
 
     private static final int ORDER = 290;
 
     private final Supplier<BinaryBlobConfig> binaryBlobConfigSupplier;
 
     /** Live-reload constructor — config is read from the supplier on every request. */
-    public BinaryBlobFilter(
-            FogwallProvider provider, String pathPrefix, Supplier<BinaryBlobConfig> binaryBlobConfigSupplier) {
-        super(ORDER, Set.of(HttpOperation.PUSH), provider, pathPrefix);
+    public BinaryBlobFilter(Supplier<BinaryBlobConfig> binaryBlobConfigSupplier) {
+        super(ORDER, Set.of(HttpOperation.PUSH));
         this.binaryBlobConfigSupplier = binaryBlobConfigSupplier;
     }
 
     /** Fixed-config constructor. Useful in tests; wraps the value in a constant supplier. */
-    public BinaryBlobFilter(FogwallProvider provider, String pathPrefix, BinaryBlobConfig binaryBlobConfig) {
-        this(
-                provider,
-                pathPrefix,
-                () -> binaryBlobConfig != null ? binaryBlobConfig : BinaryBlobConfig.defaultConfig());
+    public BinaryBlobFilter(BinaryBlobConfig binaryBlobConfig) {
+        this(() -> binaryBlobConfig != null ? binaryBlobConfig : BinaryBlobConfig.defaultConfig());
     }
 
     @Override

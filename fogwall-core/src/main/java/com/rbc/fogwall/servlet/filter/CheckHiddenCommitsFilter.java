@@ -10,7 +10,6 @@ import com.rbc.fogwall.git.Commit;
 import com.rbc.fogwall.git.GitClientUtils;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
-import com.rbc.fogwall.provider.FogwallProvider;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -45,12 +44,12 @@ import org.eclipse.jgit.revwalk.RevWalk;
  * <p>Runs at order 220, early in the content validation range (200-399).
  */
 @Slf4j
-public class CheckHiddenCommitsFilter extends AbstractProviderAwareFogwallFilter {
+public class CheckHiddenCommitsFilter extends AbstractFogwallFilter {
 
     private static final int ORDER = 220;
 
-    public CheckHiddenCommitsFilter(FogwallProvider provider, String pathPrefix) {
-        super(ORDER, Set.of(HttpOperation.PUSH), provider, pathPrefix);
+    public CheckHiddenCommitsFilter() {
+        super(ORDER, Set.of(HttpOperation.PUSH));
     }
 
     @Override

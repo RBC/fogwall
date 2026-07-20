@@ -30,8 +30,7 @@ import org.eclipse.jgit.transport.SideBandOutputStream;
  * requests and provides a method to filter only HTTP requests. Classes implementing this interface signal whether this
  * filter should be applied to a given request using a {@link Predicate}.
  *
- * <p>Custom filters should generally extend {@link AbstractFogwallFilter} or {@link AbstractProviderAwareFogwallFilter}
- * {@see AbstractfogwallFilter} {@see AbstractProviderAwarefogwallFilter}
+ * <p>Custom filters should generally extend {@link AbstractFogwallFilter} or {@link ProviderAwareFogwallFilter}
  *
  * <h2>Filter Order Ranges</h2>
  *
