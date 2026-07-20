@@ -281,6 +281,8 @@ This applies to both proxy modes:
 
 ## Outbound proxy
 
+_Available since v1.3.0._
+
 For environments without direct internet access, fogwall can route its own outbound connections through a corporate HTTP
 proxy. This covers all three places fogwall makes outbound connections: store-and-forward upstream pushes (JGit
 Transport), transparent-proxy forwarding (Jetty `HttpClient`), and provider REST API calls (identity resolution, SSH key
