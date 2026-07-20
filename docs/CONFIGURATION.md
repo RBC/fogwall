@@ -3,6 +3,10 @@
 fogwall uses layered YAML configuration merged at startup. A base file ships with the jar; additional profile files and
 environment variable overrides are applied on top in a defined order.
 
+> A section introducing a new config surface is tagged with the release it first shipped in, e.g.
+> `_Available since v1.3.0._`, right under the heading. Untagged sections predate this convention — it isn't backfilled
+> retroactively, only applied going forward from the section's introduction.
+
 ## Configuration files and profiles
 
 ### Load order (lowest → highest priority)
@@ -89,6 +93,23 @@ Strip the `FOGWALL_` prefix, lowercase, and replace `_` with `.` to get the conf
 
 > Complex nested structures (URL rules, full commit validation blocks) are not overridable via env vars. Use YAML
 > profile files instead.
+
+### Hyphenated keys and provider names
+
+_Available since v1.3.0._
+
+The single-underscore rule above can't produce a hyphen — there's no way to write `providers.gitea-ssh.api-token` as an
+env var name if every `_` is a path separator. For a config key or a provider name that itself contains a hyphen, use
+the double-underscore convention instead (same idea as systemd, Kubernetes, and Docker Compose): `__` is the path
+separator, and a lone `_` becomes a hyphen.
+
+| Environment Variable                      | Config path                     |
+| ----------------------------------------- | ------------------------------- |
+| `FOGWALL_PROVIDERS__GITEA_SSH__API_TOKEN` | `providers.gitea-ssh.api-token` |
+| `FOGWALL_SERVER__SESSION_STORE`           | `server.session-store`          |
+
+This only activates when the env var name contains `__` — every existing single-underscore example above still works
+unchanged, since none of them contain `__`.
 
 ## Server settings
 
@@ -634,12 +655,15 @@ providers:
 
 ### Provider properties
 
-| Property       | Type    | Default              | Description                                                                                                                                                 |
-| -------------- | ------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `enabled`      | boolean | `true`               | Whether the provider is active                                                                                                                              |
-| `servlet-path` | string  | `""`                 | Additional URL prefix for this provider                                                                                                                     |
-| `uri`          | string  | _(built-in default)_ | Upstream base URI. Required for custom-named providers; omit for built-ins.                                                                                 |
-| `type`         | string  | _(from name)_        | Provider implementation: `github`, `gitlab`, `bitbucket`, `codeberg`, `forgejo`, `gitea`. Required for any name that is not one of the five reserved names. |
+| Property                   | Type    | Default                | Description                                                                                                                                                                                                                                                                |
+| -------------------------- | ------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`                  | boolean | `true`                 | Whether the provider is active                                                                                                                                                                                                                                             |
+| `servlet-path`             | string  | `""`                   | Additional URL prefix for this provider                                                                                                                                                                                                                                    |
+| `uri`                      | string  | _(built-in default)_   | Upstream base URI. Required for custom-named providers; omit for built-ins.                                                                                                                                                                                                |
+| `type`                     | string  | _(from name)_          | Provider implementation: `github`, `gitlab`, `bitbucket`, `codeberg`, `forgejo`, `gitea`. Required for any name that is not one of the five reserved names.                                                                                                                |
+| `api-uri`                  | string  | _(derived from `uri`)_ | HTTP base URI for provider REST API calls (identity resolution, SSH key lookup). Only needed when the HTTP API port can't be derived from `uri` — e.g. a self-hosted SSH provider where the HTTP and SSH ports are both non-standard. See [SSH transport](#ssh-transport). |
+| `api-token`                | string  | _(none)_               | PAT used when the provider's SSH key listing API requires authentication (Forgejo/GitLab with `REQUIRE_SIGNIN_VIEW=true`). GitHub's equivalent endpoint is public and needs no token.                                                                                      |
+| `blocked-info-refs-status` | int     | `403`                  | HTTP status returned when a blocked `/info/refs` discovery request is denied. `403` is unambiguous; `404` obscures whether the repo exists (security by obscurity).                                                                                                        |
 
 The five reserved names (`github`, `gitlab`, `bitbucket`, `codeberg`, `gitea`) carry a built-in default URI and provider
 type. Any other name is opaque — the name is never parsed for type hints — so `type` and `uri` must both be set. The
@@ -668,6 +692,39 @@ accepts the internal username, not an email address.
 <!-- prettier-ignore-start -->
 > [!TIP]
 > **M&A / private server use case:** This same mechanism works for self-hosted Bitbucket Data Center instances. Set `uri` to your internal Bitbucket URL and the proxy will route and rewrite credentials accordingly, making it straightforward to gate pushes to acquired-company repositories during an integration period.
+<!-- prettier-ignore-end -->
+
+## SSH transport
+
+_Available since v1.3.0._
+
+An alternative to the HTTP push path — see [docs/ADMIN_GUIDE.md](ADMIN_GUIDE.md#ssh-transport) for how identity
+verification and agent forwarding work. This section covers the listener config itself.
+
+```yaml
+server:
+  ssh:
+    enabled: false # off by default
+    port: 2222 # non-standard on purpose - see note below
+    host-key-path: .ssh/fogwall_host_key # generated on first start if absent
+```
+
+| Property        | Type    | Default                 | Description                                                                   |
+| --------------- | ------- | ----------------------- | ----------------------------------------------------------------------------- |
+| `enabled`       | boolean | `false`                 | Whether the SSH listener starts                                               |
+| `port`          | int     | `2222`                  | TCP port the SSH server binds                                                 |
+| `host-key-path` | string  | `.ssh/fogwall_host_key` | Path to the SSH host key file (absolute or relative to the working directory) |
+
+<!-- prettier-ignore-start -->
+> [!NOTE]
+> **Why port 2222, and why `git@host:path` shorthand doesn't work out of the box:** the default avoids clashing with a
+> real `sshd` that may already be running on the same host, and avoids the container needing root or
+> `CAP_NET_BIND_SERVICE` just to bind a port below 1024. The trade-off is that Git's SCP-like shorthand
+> (`git@host:owner/repo.git`, the syntax GitHub's `git@github.com:...` uses) has no field for a non-default port — only
+> the explicit `ssh://host:port/path` form does. If you want the shorthand to work, put fogwall's SSH port behind a
+> plain TCP/L4 passthrough on your load balancer or `Service` (external `:22` → the pod's `:2222`) rather than changing
+> what the container itself binds — the same pattern most deployments already use for terminating TLS on 443 in front
+> of the container's plaintext 8080. The Helm chart's `sshService.*` values do exactly this.
 <!-- prettier-ignore-end -->
 
 ## Commit validation
@@ -758,6 +815,8 @@ secret-scan:
 ```
 
 ## Binary blob detection
+
+_Available since v1.3.0._
 
 Push-level check applied once per push against the aggregate diff (all commits combined) — same scope as
 [diff scan](#diff-scan). Flags added/modified blobs that exceed a size threshold or match a denied MIME type.
@@ -1367,6 +1426,49 @@ permissions:
 > `SELF_CERTIFY` is a two-key lock: the user must have both a `SELF_CERTIFY` permission entry for the repository _and_ the `SELF_CERTIFY` role (set via `users[].roles` or `auth.role-mappings`). Either alone is not sufficient.
 <!-- prettier-ignore-end -->
 
+## Groups
+
+_Available since v1.3.0._
+
+Named groups of users that share a common set of permission grants — an alternative to repeating the same `permissions:`
+entry for every member individually. A user assigned to a group inherits all of the group's grants in addition to any
+directly-assigned permissions.
+
+```yaml
+groups:
+  - name: team-alpha
+    description: "Alpha team push access"
+    members:
+      - alice
+      - bob
+    grants:
+      - provider: github
+        match:
+          target: SLUG
+          value: /myorg/**
+          type: GLOB
+        grant: PUSH
+```
+
+### Group properties
+
+| Property            | Type   | Default | Description                                                                                        |
+| ------------------- | ------ | ------- | -------------------------------------------------------------------------------------------------- |
+| `name`              | string | —       | Group name, shown in the dashboard                                                                 |
+| `description`       | string | `""`    | Free-text description                                                                              |
+| `members`           | list   | `[]`    | Usernames belonging to this group (must match a `users:` entry or a DB user)                       |
+| `grants`            | list   | `[]`    | Permission grants applied to every member — same shape as `permissions:` entries, minus `username` |
+| `grants[].provider` | string | —       | Provider name as defined in `providers:` config                                                    |
+| `grants[].match`    | object | —       | Repository match criteria — same semantics as [Permissions](#permissions)                          |
+| `grants[].grant`    | enum   | `PUSH`  | `PUSH`, `REVIEW`, `PUSH_AND_REVIEW`, or `SELF_CERTIFY` — see [Grant](#grant)                       |
+
+<!-- prettier-ignore-start -->
+> [!NOTE]
+> Groups defined here are CONFIG-sourced and read-only from the dashboard — editing or deleting a config-sourced group
+> via the UI/REST API is rejected. Groups created through the dashboard instead are DB-sourced and fully editable there.
+> This mirrors how CONFIG-sourced `permissions:`/`rules:` entries behave.
+<!-- prettier-ignore-end -->
+
 ## Attestations
 
 Attestation questions are presented to reviewers in the dashboard approval form. All configured questions must be
@@ -1398,18 +1500,29 @@ attestations:
       - High
     required: true
     tooltip: "Select the risk level based on the scope and nature of the change"
+
+  - id: policy-review
+    type: checkbox
+    label: "I have reviewed the applicable policy"
+    required: true
+    links:
+      - text: "Open source contribution policy"
+        url: "https://policy.example.com/open-source"
+      - text: "Data classification guide"
+        url: "https://policy.example.com/data-classification"
 ```
 
 ### Attestation properties
 
-| Property   | Type    | Default    | Description                                                          |
-| ---------- | ------- | ---------- | -------------------------------------------------------------------- |
-| `id`       | string  | —          | Unique key used to store the reviewer's answer in the push record    |
-| `type`     | string  | `checkbox` | Input type: `checkbox`, `text`, or `dropdown`                        |
-| `label`    | string  | —          | Question text shown in the review form                               |
-| `required` | boolean | `false`    | Whether the question must be answered before the reviewer can submit |
-| `options`  | list    | _(empty)_  | Choices for `dropdown` type; ignored for other types                 |
-| `tooltip`  | string  | _(none)_   | Optional help text shown alongside the question                      |
+| Property   | Type    | Default    | Description                                                              |
+| ---------- | ------- | ---------- | ------------------------------------------------------------------------ |
+| `id`       | string  | —          | Unique key used to store the reviewer's answer in the push record        |
+| `type`     | string  | `checkbox` | Input type: `checkbox`, `text`, or `dropdown`                            |
+| `label`    | string  | —          | Question text shown in the review form                                   |
+| `required` | boolean | `false`    | Whether the question must be answered before the reviewer can submit     |
+| `links`    | list    | `[]`       | Policy/reference links (`text` + `url` each) rendered below the question |
+| `options`  | list    | _(empty)_  | Choices for `dropdown` type; ignored for other types                     |
+| `tooltip`  | string  | _(none)_   | Optional help text shown alongside the question                          |
 
 Set `attestations: []` (or omit the key) to disable attestations entirely.
 

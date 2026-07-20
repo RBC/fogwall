@@ -1,5 +1,7 @@
 # fogwall Helm chart
 
+_Available since v1.3.0._
+
 A minimal starting chart for deploying fogwall on Kubernetes: `Deployment`, `Service`, `ConfigMap`, and
 liveness/readiness probes. It defaults to the dashboard image (`ghcr.io/rbc/fogwall`) — proxy, REST API, and approval
 UI.
@@ -75,24 +77,27 @@ check — the server image has no `/api/health` endpoint (see
 
 ## Values reference
 
-| Key                  | Default        | Description                                                                       |
-| -------------------- | -------------- | --------------------------------------------------------------------------------- |
-| `variant`            | `dashboard`    | `dashboard` or `server` — picks the default image and probe type together         |
-| `replicaCount`       | `1`            | Pod replica count                                                                 |
-| `image.repository`   | _(by variant)_ | Override to deploy a private mirror; blank uses the `variant` default             |
-| `image.tag`          | `latest`       | Image tag — pin to a specific release in production                               |
-| `image.pullPolicy`   | `IfNotPresent` |                                                                                   |
-| `service.type`       | `ClusterIP`    |                                                                                   |
-| `service.port`       | `80`           | Service port (routes to `targetPort` on the pod)                                  |
-| `service.targetPort` | `8080`         | Container port                                                                    |
-| `configProfiles`     | `custom`       | `FOGWALL_CONFIG_PROFILES` value — comma-separated profile names                   |
-| `configProfileName`  | `custom`       | Name used for the operator-supplied profile file mounted from the `ConfigMap`     |
-| `config`             | _(sample)_     | Contents of `fogwall-<configProfileName>.yml` — see [Install](#install)           |
-| `extraEnvFrom`       | `[]`           | `envFrom` entries — use to project an existing `Secret`                           |
-| `extraEnv`           | `[]`           | Additional `env` entries                                                          |
-| `resources`          | `{}`           | Pod resource requests/limits                                                      |
-| `livenessProbe`      | _(by variant)_ | Override to replace the variant default entirely (`httpGet`, `tcpSocket`, `exec`) |
-| `readinessProbe`     | _(by variant)_ | Override to replace the variant default entirely                                  |
-| `nodeSelector`       | `{}`           |                                                                                   |
-| `tolerations`        | `[]`           |                                                                                   |
-| `affinity`           | `{}`           |                                                                                   |
+| Key                     | Default        | Description                                                                                      |
+| ----------------------- | -------------- | ------------------------------------------------------------------------------------------------ |
+| `variant`               | `dashboard`    | `dashboard` or `server` — picks the default image and probe type together                        |
+| `replicaCount`          | `1`            | Pod replica count                                                                                |
+| `image.repository`      | _(by variant)_ | Override to deploy a private mirror; blank uses the `variant` default                            |
+| `image.tag`             | `latest`       | Image tag — pin to a specific release in production                                              |
+| `image.pullPolicy`      | `IfNotPresent` |                                                                                                  |
+| `service.type`          | `ClusterIP`    |                                                                                                  |
+| `service.port`          | `80`           | Service port (routes to `targetPort` on the pod)                                                 |
+| `service.targetPort`    | `8080`         | Container port                                                                                   |
+| `sshService.enabled`    | `false`        | Adds an SSH `Service` port + container port. Still needs `server.ssh.enabled: true` in `config`  |
+| `sshService.port`       | `22`           | Service port for SSH — LB/Service does the privileged-port mapping, the container never binds it |
+| `sshService.targetPort` | `2222`         | Container port — matches fogwall's own `server.ssh.port` default                                 |
+| `configProfiles`        | `custom`       | `FOGWALL_CONFIG_PROFILES` value — comma-separated profile names                                  |
+| `configProfileName`     | `custom`       | Name used for the operator-supplied profile file mounted from the `ConfigMap`                    |
+| `config`                | _(sample)_     | Contents of `fogwall-<configProfileName>.yml` — see [Install](#install)                          |
+| `extraEnvFrom`          | `[]`           | `envFrom` entries — use to project an existing `Secret`                                          |
+| `extraEnv`              | `[]`           | Additional `env` entries                                                                         |
+| `resources`             | `{}`           | Pod resource requests/limits                                                                     |
+| `livenessProbe`         | _(by variant)_ | Override to replace the variant default entirely (`httpGet`, `tcpSocket`, `exec`)                |
+| `readinessProbe`        | _(by variant)_ | Override to replace the variant default entirely                                                 |
+| `nodeSelector`          | `{}`           |                                                                                                  |
+| `tolerations`           | `[]`           |                                                                                                  |
+| `affinity`              | `{}`           |                                                                                                  |
