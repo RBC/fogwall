@@ -11,5 +11,11 @@ spec:
       targetPort: {{ .Values.service.targetPort }}
       protocol: TCP
       name: http
+    {{- if .Values.sshService.enabled }}
+    - port: {{ .Values.sshService.port }}
+      targetPort: {{ .Values.sshService.targetPort }}
+      protocol: TCP
+      name: ssh
+    {{- end }}
   selector:
     {{- include "fogwall.selectorLabels" . | nindent 4 }}

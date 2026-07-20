@@ -827,8 +827,24 @@ that needs an audit trail.
 
 ## SSH transport
 
+_Available since v1.3.0._
+
 fogwall can accept pushes over SSH on port 2222 (default). This is an alternative to the HTTP push path — not a
 replacement. SSH transport and HTTP transport run side-by-side; a provider can be reached via either or both.
+
+### Exposing SSH on the standard port
+
+The container never binds port 22 directly — that would need root or `CAP_NET_BIND_SERVICE`, the same constraint that
+already keeps the HTTP listener on plaintext 8080 behind your load balancer's TLS termination for 443. Apply the same
+pattern for SSH: a plain TCP/L4 passthrough rule (external `:22` → the pod's `:2222`) needs no app or container change,
+since SSH is a single TCP stream with no Host-header-style routing for an L7 proxy to key off. The Helm chart's
+`sshService.*` values do this out of the box.
+
+This matters for clients: Git's SCP-like shorthand (`git@host:owner/repo.git`, what GitHub's own
+`git@github.com:owner/repo.git` uses) has no field for a non-default port — only the explicit `ssh://host:port/path`
+form does. Without the port-22 passthrough above, your users are stuck with the explicit form (see
+[Adding an SSH remote](USER_GUIDE.md#setting-up-ssh) in the user guide). With it, the shorthand form works unchanged,
+since fogwall's own command parsing doesn't care which URL syntax the client's git produced it from.
 
 ### How SSH identity verification works
 

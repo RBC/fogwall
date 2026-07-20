@@ -91,6 +91,8 @@ RUN bash -c 'mkdir -p /app/{.data,logs,home} \
 ENV HOME=/app/home
 
 EXPOSE 8080
+# SSH transport (server.ssh.enabled, default false) - declared for images that opt into it.
+EXPOSE 2222
 
 USER 1000
 
@@ -139,6 +141,8 @@ RUN bash -c 'mkdir -p /app/{.data,logs,home} \
 ENV HOME=/app/home
 
 EXPOSE 8080
+# SSH transport (server.ssh.enabled, default false) - declared for images that opt into it.
+EXPOSE 2222
 
 USER 1000
 

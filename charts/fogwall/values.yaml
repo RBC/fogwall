@@ -23,6 +23,14 @@ service:
   port: 80
   targetPort: 8080
 
+# SSH transport (see docs/CONFIGURATION.md#ssh-transport). Off by default, matching fogwall's own
+# server.ssh.enabled default. Setting sshService.enabled here only exposes the port — you still
+# need server.ssh.enabled: true (and at least one provider configured for SSH) in `config` below.
+sshService:
+  enabled: false
+  port: 22
+  targetPort: 2222
+
 # Config profile(s) to load, matching FOGWALL_CONFIG_PROFILES. "custom" (below) is this chart's
 # operator-supplied profile, mounted from the ConfigMap built from `config`. Comma-separated to
 # layer additional profiles baked into a custom image build — later profiles take priority.

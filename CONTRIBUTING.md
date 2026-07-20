@@ -434,3 +434,10 @@ this step.
 
 This means every release image is byte-for-byte identical to the `:edge` image that was scanned when the version bump
 merged.
+
+### Documenting new config surface
+
+When a PR introduces a new config section (not just a key on an existing one) in
+[docs/CONFIGURATION.md](docs/CONFIGURATION.md), tag it with the release it's shipping in, e.g.
+`_Available since v1.3.0._`, right under the heading. This isn't backfilled onto existing sections — only applied going
+forward from a section's introduction.

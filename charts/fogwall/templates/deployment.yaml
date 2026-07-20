@@ -31,6 +31,11 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
+            {{- if .Values.sshService.enabled }}
+            - name: ssh
+              containerPort: {{ .Values.sshService.targetPort }}
+              protocol: TCP
+            {{- end }}
           env:
             - name: FOGWALL_CONFIG_PROFILES
               value: {{ .Values.configProfiles | quote }}

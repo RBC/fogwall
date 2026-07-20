@@ -151,7 +151,21 @@ do not use a PAT — your identity is tied to your SSH key instead.
    git push proxy main
    ```
 
-   Your administrator can confirm the exact SCM host and port for each configured SSH provider.
+   Check the **Providers** page in the dashboard to see the exact SCM host and port for each configured SSH provider —
+   it shows the upstream URI verbatim, exactly as your administrator configured it. This matters because whether the
+   `<scm-ssh-port>` segment is needed is an exact match against that URI string, not a "is this the default port" check:
+   if the port was written explicitly there, include it; if it wasn't, omit it entirely (including it when it's not
+   expected is itself a mismatch).
+
+   **Why not the `git@host:owner/repo.git` shorthand you're used to from GitHub?** That shorthand syntax has no way to
+   specify a non-default SSH port, and fogwall's SSH listener normally runs on a non-standard port (`2222` by default)
+   rather than `22`. It's the same underlying SSH protocol either way — just ask your administrator whether they've
+   exposed the proxy's SSH port behind a standard `:22` mapping. If so, the shorthand form works too (same caveat about
+   the `<scm-ssh-port>` segment applies):
+
+   ```shell
+   git remote add proxy git@fogwall.corp.example.com:gitea.corp.example.com:22/myorg/myrepo.git
+   ```
 
 ### SSH identity verification
 
