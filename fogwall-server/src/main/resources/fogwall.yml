@@ -49,6 +49,26 @@ server:
 #    port: 2222
 #    host-key-path: .ssh/fogwall_host_key    # generated on first start if absent
 
+# Outbound proxy for connections fogwall itself makes: store-and-forward upstream pushes,
+# transparent-proxy forwarding, and provider REST API calls (identity resolution, SSH key listing).
+#
+# Unset here, http-proxy/https-proxy/no-proxy fall back to the HTTP_PROXY/HTTPS_PROXY/NO_PROXY env vars.
+# Leave auth.type at "none" (the default) when the configured proxy doesn't require fogwall to
+# authenticate itself.
+#
+# outbound-proxy:
+#   https-proxy: http://proxy.example.com:8080
+#   no-proxy: localhost,*.internal.example.com
+#   auth:
+#     type: none        # none (default) | basic | kerberos
+#     # basic:
+#     # username: ${PROXY_USER}
+#     # password: ${PROXY_PASS}
+#     # kerberos: omit keytab-path to use the existing OS ticket cache (e.g. from domain/SSO login);
+#     # set it only when fogwall should authenticate as its own service identity.
+#     # keytab-path: /etc/fogwall/proxy.keytab
+#     # principal: fogwall/host@CORP.EXAMPLE.COM
+
 # Database configuration for push audit storage.
 # Supported types: h2-mem, h2-file, postgres, mongo
 # h2-file persists to ./.data/fogwall.mv.db relative to the working directory.

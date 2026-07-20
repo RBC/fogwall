@@ -20,6 +20,10 @@ import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.jetty.FogwallContext;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.jetty.reload.LiveConfigLoader;
+import com.rbc.fogwall.net.FogwallHttpExecutor;
+import com.rbc.fogwall.net.OutboundProxyResolver;
+import com.rbc.fogwall.net.OutboundProxySystemProperties;
+import com.rbc.fogwall.net.ResolvedOutboundProxy;
 import com.rbc.fogwall.permission.GroupPermissionRule;
 import com.rbc.fogwall.permission.GroupPermissionStore;
 import com.rbc.fogwall.permission.JdbcGroupPermissionStore;
@@ -85,6 +89,7 @@ public class JettyConfigurationBuilder {
     private GroupPermissionStore cachedGroupPermissionStore;
     private UrlRuleRegistry cachedUrlRuleRegistry;
     private ConfigHolder cachedConfigHolder;
+    private ResolvedOutboundProxy cachedOutboundProxy;
 
     public JettyConfigurationBuilder(FogwallConfig config) {
         this.config = config;
@@ -118,6 +123,29 @@ public class JettyConfigurationBuilder {
     /** Returns the transparent-proxy connect timeout in seconds (0 = no timeout). */
     public int getProxyConnectTimeoutSeconds() {
         return config.getServer().getProxyConnectTimeoutSeconds();
+    }
+
+    /**
+     * Resolves {@code server.outbound-proxy} (with env-var fallback). Result is cached — the underlying config is only
+     * re-read on a full process restart, not hot-reloaded.
+     */
+    public ResolvedOutboundProxy getResolvedOutboundProxy() {
+        if (cachedOutboundProxy == null) {
+            cachedOutboundProxy =
+                    OutboundProxyResolver.resolve(config.getServer().getOutboundProxy());
+        }
+        return cachedOutboundProxy;
+    }
+
+    /**
+     * Applies the resolved outbound proxy at the JVM level (JGit Transport system properties/Authenticator/JAAS) and to
+     * the shared HC5 client used by provider REST API calls. Call once at startup, before any outbound connection is
+     * made. The Jetty HttpClient path is wired separately per-servlet via {@link #getResolvedOutboundProxy()}.
+     */
+    public void applyOutboundProxySystemWiring() {
+        var resolved = getResolvedOutboundProxy();
+        OutboundProxySystemProperties.apply(resolved);
+        FogwallHttpExecutor.configure(resolved);
     }
 
     /**

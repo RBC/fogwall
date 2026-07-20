@@ -88,6 +88,13 @@ public class ServerConfig {
     private SshConfig ssh = new SshConfig();
 
     /**
+     * Outbound proxy configuration for connections fogwall itself makes (upstream pushes, transparent-proxy forwarding,
+     * provider API calls). Omit entirely to rely on {@code HTTP_PROXY}/{@code HTTPS_PROXY}/{@code NO_PROXY} environment
+     * variables with no auth, or unset to disable outbound proxying altogether.
+     */
+    private OutboundProxyConfig outboundProxy = new OutboundProxyConfig();
+
+    /**
      * HTTP session persistence backend. Values:
      *
      * <ul>

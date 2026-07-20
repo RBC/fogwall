@@ -1,5 +1,6 @@
 package com.rbc.fogwall.provider;
 
+import com.rbc.fogwall.net.FogwallHttpExecutor;
 import com.rbc.fogwall.ssh.SshKeyUtils;
 import java.net.URI;
 import java.util.Arrays;
@@ -67,7 +68,7 @@ public class GitLabProvider extends AbstractFogwallProvider implements HttpToken
         try {
             var response = Request.get(getApiUrl() + "/user")
                     .addHeader("Authorization", "Bearer " + token)
-                    .execute()
+                    .execute(FogwallHttpExecutor.instance())
                     .returnContent()
                     .asString();
             var info = new JsonMapper().readValue(response, GitLabUserInfo.class);
@@ -100,7 +101,9 @@ public class GitLabProvider extends AbstractFogwallProvider implements HttpToken
             if (apiToken != null && !apiToken.isBlank()) {
                 userReq = userReq.addHeader("Authorization", "Bearer " + apiToken);
             }
-            var userResponse = userReq.execute().returnContent().asString();
+            var userResponse = userReq.execute(FogwallHttpExecutor.instance())
+                    .returnContent()
+                    .asString();
             var users = new JsonMapper().readValue(userResponse, GitLabUserSearchResult[].class);
             if (users.length == 0) {
                 log.warn("GitLab user '{}' not found", login);
@@ -115,7 +118,9 @@ public class GitLabProvider extends AbstractFogwallProvider implements HttpToken
             if (apiToken != null && !apiToken.isBlank()) {
                 keysReq = keysReq.addHeader("Authorization", "Bearer " + apiToken);
             }
-            var keysResponse = keysReq.execute().returnContent().asString();
+            var keysResponse = keysReq.execute(FogwallHttpExecutor.instance())
+                    .returnContent()
+                    .asString();
             var keys = new JsonMapper().readValue(keysResponse, GitLabPublicKey[].class);
             return Arrays.stream(keys)
                     .map(k -> {
