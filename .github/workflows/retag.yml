@@ -8,6 +8,14 @@ name: Retag Image
 on:
   workflow_dispatch:
     inputs:
+      image:
+        description: "Which image to retag"
+        required: true
+        type: choice
+        options:
+          - dashboard
+          - server
+        default: dashboard
       source-digest:
         description: "Source image digest (e.g. sha256:abc123...)"
         required: true
@@ -39,7 +47,9 @@ jobs:
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # ratchet:docker/setup-buildx-action@v4
 
       - name: Set image name
-        run: echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+        run: |
+          SUFFIX="${{ inputs.image == 'server' && '-server' || '' }}"
+          echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')${SUFFIX}" >> "$GITHUB_ENV"
 
       - name: Retag
         run: |
