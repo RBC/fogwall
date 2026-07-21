@@ -75,13 +75,16 @@ public class SshGitServer {
         sshd.setAgentFactory(agentFactory);
         sshd.setForwardingFilter(new AgentOnlyForwardingFilter());
 
+        Path knownHostsFile = UpstreamKnownHosts.assemble(config.getKnownHostsPath(), config.getExtraKnownHosts());
+
         sshd.setCommandFactory(new SshGitCommandFactory(
                 provider,
                 cache,
                 receivePackFactory,
                 agentFactory,
                 urlRuleRegistry,
-                config.isInsecureUpstreamHostKey()));
+                knownHostsFile,
+                config.isTrustOnFirstUse()));
 
         return new SshGitServer(sshd);
     }

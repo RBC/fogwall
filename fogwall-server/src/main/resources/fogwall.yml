@@ -48,6 +48,12 @@ server:
 #    enabled: true
 #    port: 2222
 #    host-key-path: .ssh/fogwall_host_key    # generated on first start if absent
+#    # Upstream host-key verification is fail-closed by default. fogwall ships pinned keys for its built-in hosts
+#    # (github.com, gitlab.com, codeberg.org, bitbucket.org, gitea.com); regenerate with scripts/pin-ssh-host-keys.sh.
+#    known-hosts-path: /etc/fogwall/known_hosts   # mount/override to add or rotate host keys without upgrading fogwall
+#    extra-known-hosts:                            # pin a custom/internal provider's host key (most secure option)
+#      - "git.internal.example.com ssh-ed25519 AAAA..."
+#    trust-on-first-use: false                     # true = pin an unknown host on first connect (logged); trusted networks only
 
 # Outbound proxy for connections fogwall itself makes: store-and-forward upstream pushes,
 # transparent-proxy forwarding, and provider REST API calls (identity resolution, SSH key listing).
@@ -89,40 +95,36 @@ database:
 # By default, the app supports proxying to GitHub, GitLab, codeberg.org & gitea.com out of the box
 # Private or alternative providers can be added (e.g. internal GitHub Enterprise or GitLab EE) by adding a new entry
 providers:
+  # Enabled by default: the three FOSS-friendly public hosts. fogwall ships pinned SSH host keys for every built-in
+  # host below (see the server.ssh notes above) whether or not it is enabled here.
   github:
     enabled: true
   gitlab:
     enabled: true
   codeberg:
     enabled: true
-  # default ForgejoProvider with https://gitea.com uri - disabled because there are more projects hosted on Codeberg
-  # than on gitea.com which is fine for demonstrative purposes. Enable if you want to allow pushes to gitea.com.
+  # ---- built-in exemplars (disabled by default — set enabled: true to allow) ----
+  # gitea.com — off by default because Codeberg hosts more FOSS projects; enable to allow pushes to gitea.com.
   gitea:
     enabled: false
-  # bitbucket.org support is added here for completeness. Access to bitbucket.org for FOSS is less common than other
-  # providers. Signup is not free or guaranteed and is reviewed by Atlassian via https://www.atlassian.com/software/views/open-source-license-request#/
-  # Therefore, it is disabled by default. Bitbucket (self-hosted or cloud for enterprise use) is supported.
+  # bitbucket.org — FOSS access needs an Atlassian-reviewed license request, so it's off by default. Self-hosted or
+  # enterprise-cloud Bitbucket is fully supported.
   bitbucket:
     enabled: false
-  # Generic git repository provider
-  sourcehut:
-    enabled: true
-    type: generic
-    uri: https://git.sr.ht/
-# Custom GitLab example
-  debian-gitlab:
-    enabled: true
-    type: gitlab
-    # Custom servlet path. By default, the servlet path is /{push,proxy}/{hostname}/{repo-url}.git.
-    # Note that /push & /proxy are always prepended to the path. This is only useful if you wish to obscure or otherwise
-    # customize the path for Fogwall to proxy requests to.
-    path-suffix: /debian
-    uri: https://salsa.debian.org/
-# Custom self-hosted GitHub Enterprise example
-  internal-github:
-    enabled: false
-    type: github
-    uri: https://github.internal.example.com
+  # ---- custom-provider exemplars (uncomment and adapt for a private / self-hosted SCM) ----
+  # sourcehut:                       # generic git host
+  #   enabled: true
+  #   type: generic
+  #   uri: https://git.sr.ht/
+  # debian-gitlab:                   # custom GitLab instance with a custom servlet path
+  #   enabled: true
+  #   type: gitlab
+  #   path-suffix: /debian           # servlet path becomes /{push,proxy}/debian/...
+  #   uri: https://salsa.debian.org/
+  # internal-github:                 # self-hosted GitHub Enterprise
+  #   enabled: true
+  #   type: github
+  #   uri: https://github.internal.example.com
 
 
 # Global attestation questions shown to reviewers in the dashboard approval form before they can

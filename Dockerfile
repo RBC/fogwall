@@ -81,6 +81,11 @@ COPY --from=builder \
     /workspace/build/notices/server/THIRD-PARTY-NOTICES.txt \
     /app/
 
+# Bundled upstream SSH host keys, baked at a stable path so operators can mount their own to add or rotate host
+# keys without upgrading fogwall (point server.ssh.known-hosts-path here to use it).
+COPY --from=builder \
+    /workspace/fogwall-core/src/main/resources/ssh/known_hosts /etc/fogwall/known_hosts
+
 # Create the conf directory; mount a fogwall-{profile}.yml here to override config.
 RUN mkdir -p /app/conf
 
@@ -124,6 +129,11 @@ COPY --from=builder \
     /workspace/build/notices/dashboard/THIRD-PARTY-NOTICES.json \
     /workspace/build/notices/dashboard/THIRD-PARTY-NOTICES.txt \
     /app/
+
+# Bundled upstream SSH host keys, baked at a stable path so operators can mount their own to add or rotate host
+# keys without upgrading fogwall (point server.ssh.known-hosts-path here to use it).
+COPY --from=builder \
+    /workspace/fogwall-core/src/main/resources/ssh/known_hosts /etc/fogwall/known_hosts
 
 # Create the conf directory; mount a fogwall-{profile}.yml here to override config.
 # Example: -v ./docker/fogwall-local.yml:/app/conf/fogwall-local.yml:ro

@@ -908,6 +908,38 @@ users:
 This is separate from any HTTP provider identity because the provider IDs are different. A user pushing via both HTTP
 and SSH will have two identity entries — one for the HTTP provider, one for the SSH provider.
 
+### Upstream host key verification
+
+When fogwall forwards an SSH push it authenticates to the upstream SCM using the developer's **forwarded SSH agent**. The
+upstream host key is what binds that agent to the genuine provider, so fogwall verifies it and **fails closed by
+default**: an unknown or changed upstream host key aborts the forward. (Without this, an attacker able to redirect the
+upstream connection would receive the developer's forwarded agent — an account-takeover primitive.)
+
+Trust is resolved in this order:
+
+1. **Bundled defaults.** fogwall ships pinned host keys for its built-in hosts — github.com, gitlab.com, codeberg.org,
+   bitbucket.org, gitea.com — so they work out of the box. Regenerate with `scripts/pin-ssh-host-keys.sh` when a
+   provider rotates its key.
+2. **Pinned in config (recommended for custom providers).** Pin a private/internal SCM's host key with a standard
+   `known_hosts` line:
+
+   ```yaml
+   server:
+     ssh:
+       extra-known-hosts:
+         - "git.internal.example.com ssh-ed25519 AAAA..."
+   ```
+
+3. **Operator-supplied file.** Point `server.ssh.known-hosts-path` at a `known_hosts` file. The container image bakes
+   the bundled keys at `/etc/fogwall/known_hosts`; mount your own file there (or anywhere, and set the path) to add or
+   rotate host keys **without upgrading fogwall**.
+4. **Trust on first use (opt-in).** `server.ssh.trust-on-first-use: true` pins an otherwise-unknown host's key on the
+   first connection — logged loudly with its fingerprint — and rejects a later change. Convenient for internal providers
+   on a trusted network whose key can't be pinned ahead of time; it is **not** a substitute for pinning across an
+   untrusted network. Default is `false` (unknown key rejected).
+
+Effective trust is the union of the bundled/configured file, the inline `extra-known-hosts`, and any TOFU-pinned keys.
+
 ### The `api-token` requirement
 
 The provider REST API is called to fetch SSH public keys for registered SCM identities. GitHub's endpoint
