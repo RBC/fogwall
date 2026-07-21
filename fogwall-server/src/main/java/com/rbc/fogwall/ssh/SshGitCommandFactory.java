@@ -25,6 +25,9 @@ public class SshGitCommandFactory implements CommandFactory {
     private final FogwallProxyAgentFactory agentFactory;
     private final UrlRuleRegistry urlRuleRegistry;
 
+    /** Test/dev only — see {@link com.rbc.fogwall.config.SshConfig#isInsecureUpstreamHostKey()}. */
+    private final boolean insecureUpstreamHostKey;
+
     @Override
     public Command createCommand(ChannelSession channel, String command) throws IOException {
         log.debug("SSH command received: {}", command);
@@ -32,13 +35,15 @@ public class SshGitCommandFactory implements CommandFactory {
         if (command.startsWith("git-receive-pack ")) {
             String repoPath =
                     stripQuotes(command.substring("git-receive-pack ".length()).trim());
-            return new SshGitReceiveCommand(repoPath, provider, cache, receivePackFactory, agentFactory);
+            return new SshGitReceiveCommand(
+                    repoPath, provider, cache, receivePackFactory, agentFactory, insecureUpstreamHostKey);
         }
 
         if (command.startsWith("git-upload-pack ")) {
             String repoPath =
                     stripQuotes(command.substring("git-upload-pack ".length()).trim());
-            return new SshGitUploadCommand(repoPath, provider, cache, agentFactory, urlRuleRegistry);
+            return new SshGitUploadCommand(
+                    repoPath, provider, cache, agentFactory, urlRuleRegistry, insecureUpstreamHostKey);
         }
 
         log.warn("Unsupported SSH git command: {}", command);

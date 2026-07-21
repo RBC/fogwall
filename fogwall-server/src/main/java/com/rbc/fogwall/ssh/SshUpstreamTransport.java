@@ -37,8 +37,15 @@ final class SshUpstreamTransport {
 
     private SshUpstreamTransport() {}
 
-    /** Builds a per-connection {@link TransportConfigCallback} backed by the given forwarded agent. */
-    static TransportConfigCallback forwardedAgent(SshAgent agent) {
+    /**
+     * Builds a per-connection {@link TransportConfigCallback} backed by the given forwarded agent.
+     *
+     * @param agent the client's forwarded SSH agent used to authenticate to upstream
+     * @param allowUnknownHostKey when {@code false} (production default), an upstream host key not present in the proxy
+     *     user's {@code known_hosts} aborts the connection; when {@code true} (test/dev only), an unknown key is
+     *     accepted with a warning. See {@code server.ssh.insecure-upstream-host-key}.
+     */
+    static TransportConfigCallback forwardedAgent(SshAgent agent, boolean allowUnknownHostKey) {
         SshdSessionFactory factory = new SshdSessionFactory(new JGitKeyCache(), new DefaultProxyDataFactory()) {
             @Override
             protected ConnectorFactory getConnectorFactory() {
@@ -82,7 +89,8 @@ final class SshUpstreamTransport {
 
             @Override
             protected ServerKeyDatabase getServerKeyDatabase(File homeDir, File sshDir) {
-                return new AcceptAllKnownServerKeyDatabase(super.getServerKeyDatabase(homeDir, sshDir));
+                return new KnownHostsServerKeyDatabase(
+                        super.getServerKeyDatabase(homeDir, sshDir), allowUnknownHostKey);
             }
 
             @Override
@@ -188,15 +196,22 @@ final class SshUpstreamTransport {
     }
 
     /**
-     * Wraps a delegate {@link ServerKeyDatabase} but never blocks waiting for user interaction. If the upstream host
-     * key is not in known_hosts, it is accepted with a warning rather than hanging on a TTY prompt.
+     * Verifies the upstream SCM's SSH host key against the proxy user's {@code known_hosts} (via the delegate
+     * {@link ServerKeyDatabase}) without ever blocking on an interactive TTY prompt.
+     *
+     * <p>A matching known key is accepted. An unknown or mismatched key is <b>rejected</b> by default — this is the
+     * MITM protection for the agent-forwarded upstream leg. When {@code allowUnknown} is {@code true} (test/dev only,
+     * via {@code server.ssh.insecure-upstream-host-key}), an unknown key is accepted with a warning so that ephemeral
+     * upstreams which regenerate their host key don't break local testing.
      */
-    private static final class AcceptAllKnownServerKeyDatabase implements ServerKeyDatabase {
+    private static final class KnownHostsServerKeyDatabase implements ServerKeyDatabase {
 
         private final ServerKeyDatabase delegate;
+        private final boolean allowUnknown;
 
-        AcceptAllKnownServerKeyDatabase(ServerKeyDatabase delegate) {
+        KnownHostsServerKeyDatabase(ServerKeyDatabase delegate, boolean allowUnknown) {
             this.delegate = delegate;
+            this.allowUnknown = allowUnknown;
         }
 
         @Override
@@ -218,10 +233,18 @@ final class SshUpstreamTransport {
                     return true;
                 }
             }
-            log.warn(
-                    "SSH upstream: accepting UNKNOWN host key for {} — add to ~/.ssh/known_hosts to suppress",
+            if (allowUnknown) {
+                log.warn(
+                        "SSH upstream: accepting UNKNOWN host key for {} — insecure-upstream-host-key is enabled "
+                                + "(test/dev only; MUST NOT be used in production)",
+                        connectAddress);
+                return true;
+            }
+            log.error(
+                    "SSH upstream: REJECTING unknown or mismatched host key for {} — add the upstream host key to the "
+                            + "proxy user's known_hosts, or set server.ssh.insecure-upstream-host-key=true for testing",
                     connectAddress);
-            return true;
+            return false;
         }
     }
 }

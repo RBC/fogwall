@@ -42,6 +42,7 @@ public class SshGitUploadCommand implements Command {
     private final LocalRepositoryCache cache;
     private final FogwallProxyAgentFactory agentFactory;
     private final UrlRuleRegistry urlRuleRegistry;
+    private final boolean insecureUpstreamHostKey;
 
     private InputStream in;
     private OutputStream out;
@@ -53,12 +54,14 @@ public class SshGitUploadCommand implements Command {
             FogwallProvider provider,
             LocalRepositoryCache cache,
             FogwallProxyAgentFactory agentFactory,
-            UrlRuleRegistry urlRuleRegistry) {
+            UrlRuleRegistry urlRuleRegistry,
+            boolean insecureUpstreamHostKey) {
         this.repoPath = repoPath;
         this.provider = provider;
         this.cache = cache;
         this.agentFactory = agentFactory;
         this.urlRuleRegistry = urlRuleRegistry;
+        this.insecureUpstreamHostKey = insecureUpstreamHostKey;
     }
 
     @Override
@@ -137,7 +140,8 @@ public class SshGitUploadCommand implements Command {
 
             log.info("SSH git-upload-pack: user='{}' path={} -> {}", sshUser, repoPath, upstreamUrl);
 
-            TransportConfigCallback transportConfig = SshUpstreamTransport.forwardedAgent(agent);
+            TransportConfigCallback transportConfig =
+                    SshUpstreamTransport.forwardedAgent(agent, insecureUpstreamHostKey);
             Repository localRepo = cache.getOrClone(upstreamUrl, null, transportConfig);
             localRepo.getConfig().setString("fogwall", null, "upstreamUrl", upstreamUrl);
             localRepo.getConfig().save();

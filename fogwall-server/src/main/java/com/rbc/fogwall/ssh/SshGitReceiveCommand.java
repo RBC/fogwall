@@ -37,6 +37,7 @@ public class SshGitReceiveCommand implements Command {
     private final LocalRepositoryCache cache;
     private final StoreAndForwardReceivePackFactory receivePackFactory;
     private final FogwallProxyAgentFactory agentFactory;
+    private final boolean insecureUpstreamHostKey;
 
     private InputStream in;
     private OutputStream out;
@@ -48,12 +49,14 @@ public class SshGitReceiveCommand implements Command {
             FogwallProvider provider,
             LocalRepositoryCache cache,
             StoreAndForwardReceivePackFactory receivePackFactory,
-            FogwallProxyAgentFactory agentFactory) {
+            FogwallProxyAgentFactory agentFactory,
+            boolean insecureUpstreamHostKey) {
         this.repoPath = repoPath;
         this.provider = provider;
         this.cache = cache;
         this.receivePackFactory = receivePackFactory;
         this.agentFactory = agentFactory;
+        this.insecureUpstreamHostKey = insecureUpstreamHostKey;
     }
 
     @Override
@@ -165,7 +168,8 @@ public class SshGitReceiveCommand implements Command {
 
             log.info("SSH git-receive-pack: user='{}' path={} -> {}", sshUser, repoPath, upstreamUrl);
 
-            TransportConfigCallback transportConfig = SshUpstreamTransport.forwardedAgent(agent);
+            TransportConfigCallback transportConfig =
+                    SshUpstreamTransport.forwardedAgent(agent, insecureUpstreamHostKey);
             var pushTransport = new PushTransport.Ssh(resolvedUser, connectingFingerprint, transportConfig, liveness);
 
             Repository localRepo = cache.getOrClone(upstreamUrl, null, transportConfig);
