@@ -25,7 +25,9 @@ class SshGitCommandFactoryTest {
                 mock(LocalRepositoryCache.class),
                 mock(StoreAndForwardReceivePackFactory.class),
                 mock(FogwallProxyAgentFactory.class),
-                mock(UrlRuleRegistry.class));
+                mock(UrlRuleRegistry.class),
+                null,
+                false);
         channel = mock(ChannelSession.class);
     }
 

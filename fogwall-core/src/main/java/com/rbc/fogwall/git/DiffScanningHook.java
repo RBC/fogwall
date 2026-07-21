@@ -104,12 +104,25 @@ public class DiffScanningHook implements FogwallHook {
                             anyFailed.set(true);
                         }
                     } catch (IOException e) {
-                        log.warn("Per-commit diff format failed for {}, skipping", commit.getSha(), e);
-                        logs.add("WARN: " + shortSha + " - diff failed, skipped");
+                        // Fail closed: this commit's content could not be scanned — block rather than skip.
+                        log.warn("Per-commit diff format failed for {}", commit.getSha(), e);
+                        validationContext.addError(
+                                STEP_NAME,
+                                "content scan could not complete for commit " + shortSha,
+                                "commit " + shortSha + ": diff scan error: " + e.getMessage());
+                        logs.add("ERROR: " + shortSha + " - diff scan could not run");
+                        anyFailed.set(true);
                     }
                 });
             } catch (IOException | GitAPIException e) {
+                // Fail closed: the per-commit scan could not run for this ref — block rather than skip.
                 log.warn("Could not enumerate commits for per-commit scan on {}", cmd.getRefName(), e);
+                validationContext.addError(
+                        STEP_NAME,
+                        "content scan could not complete for " + cmd.getRefName(),
+                        "diff scan error: " + e.getMessage());
+                logs.add("ERROR: " + cmd.getRefName() + " - diff scan could not run");
+                anyFailed.set(true);
             }
         }
 

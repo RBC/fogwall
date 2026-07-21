@@ -12,9 +12,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.sshd.common.session.Session;
 import org.apache.sshd.server.SshServer;
 import org.apache.sshd.server.auth.pubkey.PublickeyAuthenticator;
-import org.apache.sshd.server.forward.AcceptAllForwardingFilter;
+import org.apache.sshd.server.forward.StaticDecisionForwardingFilter;
 import org.apache.sshd.server.keyprovider.SimpleGeneratorHostKeyProvider;
 import org.apache.sshd.server.session.ServerSession;
 
@@ -67,15 +68,42 @@ public class SshGitServer {
 
         sshd.setPublickeyAuthenticator(buildAuthenticator(userStore));
 
-        // Enable inbound SSH agent forwarding — clients must connect with ssh -A.
+        // Enable inbound SSH agent forwarding — clients must connect with ssh -A. Agent forwarding is required to
+        // relay the client's agent for upstream auth; TCP/IP and X11 forwarding are denied so an authenticated client
+        // cannot use the proxy as a network pivot.
         FogwallProxyAgentFactory agentFactory = new FogwallProxyAgentFactory();
         sshd.setAgentFactory(agentFactory);
-        sshd.setForwardingFilter(AcceptAllForwardingFilter.INSTANCE);
+        sshd.setForwardingFilter(new AgentOnlyForwardingFilter());
 
-        sshd.setCommandFactory(
-                new SshGitCommandFactory(provider, cache, receivePackFactory, agentFactory, urlRuleRegistry));
+        Path knownHostsFile = UpstreamKnownHosts.assemble(config.getKnownHostsPath(), config.getExtraKnownHosts());
+
+        sshd.setCommandFactory(new SshGitCommandFactory(
+                provider,
+                cache,
+                receivePackFactory,
+                agentFactory,
+                urlRuleRegistry,
+                knownHostsFile,
+                config.isTrustOnFirstUse()));
 
         return new SshGitServer(sshd);
+    }
+
+    /**
+     * Permits SSH agent forwarding (required to relay the client's agent for upstream authentication) but denies TCP/IP
+     * port forwarding ({@code -L}/{@code -R}/{@code -D}) and X11 forwarding, so an authenticated client cannot tunnel
+     * arbitrary connections through the proxy host into the internal network.
+     */
+    static final class AgentOnlyForwardingFilter extends StaticDecisionForwardingFilter {
+
+        AgentOnlyForwardingFilter() {
+            super(false); // deny direct/local/remote TCP forwarding and X11 by default
+        }
+
+        @Override
+        public boolean canForwardAgent(Session session, String requestType) {
+            return true;
+        }
     }
 
     public void start() throws IOException {

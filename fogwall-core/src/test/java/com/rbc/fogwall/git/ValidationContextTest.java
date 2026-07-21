@@ -39,7 +39,7 @@ class ValidationContextTest {
         ctx.addIssue("Hook", "Summary", "Detail");
         assertThrows(
                 UnsupportedOperationException.class,
-                () -> ctx.getIssues().add(new ValidationContext.ValidationIssue("X", "Y", "Z")));
+                () -> ctx.getIssues().add(new ValidationContext.ValidationIssue("X", "Y", "Z", false)));
     }
 
     @Test

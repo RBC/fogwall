@@ -153,6 +153,10 @@ class SshProxyFixture implements AutoCloseable {
         sshConfig.setHostKeyPath(Files.createTempDirectory("fogwall-ssh-e2e-hostkey-")
                 .resolve("host_key")
                 .toString());
+        // The Gitea test container regenerates its SSH host key on each start, so it can't be pinned ahead of time.
+        // Trust-on-first-use pins whatever key the container presents on the first upstream connect — the same
+        // mechanism operators opt into for internal providers (see SshConfig#isTrustOnFirstUse).
+        sshConfig.setTrustOnFirstUse(true);
 
         sshServer = SshGitServer.create(sshConfig, provider, cache, receivePackFactory, userStore, urlRuleRegistry);
         sshServer.start();

@@ -8,6 +8,7 @@ import java.security.PublicKey;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.sshd.agent.SshAgent;
 import org.apache.sshd.agent.SshAgentConstants;
@@ -37,8 +38,17 @@ final class SshUpstreamTransport {
 
     private SshUpstreamTransport() {}
 
-    /** Builds a per-connection {@link TransportConfigCallback} backed by the given forwarded agent. */
-    static TransportConfigCallback forwardedAgent(SshAgent agent) {
+    /**
+     * Builds a per-connection {@link TransportConfigCallback} backed by the given forwarded agent.
+     *
+     * @param agent the client's forwarded SSH agent used to authenticate to upstream
+     * @param knownHostsFile the assembled {@code known_hosts} file to verify upstream host keys against (see
+     *     {@link UpstreamKnownHosts}); {@code null} falls back to the proxy user's {@code ~/.ssh/known_hosts}
+     * @param trustOnFirstUse when {@code true}, an upstream host key not in {@code knownHostsFile} is pinned on first
+     *     use (and logged) rather than rejected; a later change to that host's key is still rejected. See
+     *     {@code server.ssh.trust-on-first-use}.
+     */
+    static TransportConfigCallback forwardedAgent(SshAgent agent, Path knownHostsFile, boolean trustOnFirstUse) {
         SshdSessionFactory factory = new SshdSessionFactory(new JGitKeyCache(), new DefaultProxyDataFactory()) {
             @Override
             protected ConnectorFactory getConnectorFactory() {
@@ -82,7 +92,10 @@ final class SshUpstreamTransport {
 
             @Override
             protected ServerKeyDatabase getServerKeyDatabase(File homeDir, File sshDir) {
-                return new AcceptAllKnownServerKeyDatabase(super.getServerKeyDatabase(homeDir, sshDir));
+                File effectiveSshDir =
+                        knownHostsFile != null ? knownHostsFile.getParent().toFile() : sshDir;
+                return new KnownHostsServerKeyDatabase(
+                        super.getServerKeyDatabase(homeDir, effectiveSshDir), trustOnFirstUse);
             }
 
             @Override
@@ -188,15 +201,29 @@ final class SshUpstreamTransport {
     }
 
     /**
-     * Wraps a delegate {@link ServerKeyDatabase} but never blocks waiting for user interaction. If the upstream host
-     * key is not in known_hosts, it is accepted with a warning rather than hanging on a TTY prompt.
+     * Verifies the upstream SCM's SSH host key against the assembled {@code known_hosts} (via the delegate
+     * {@link ServerKeyDatabase}) without ever blocking on an interactive TTY prompt.
+     *
+     * <p>A key already present in known_hosts is accepted. Otherwise, when {@code trustOnFirstUse} is enabled, the key
+     * is pinned for the process lifetime and accepted (logged loudly with its fingerprint); a later change to that
+     * host's key is then rejected — standard trust-on-first-use. When {@code trustOnFirstUse} is disabled (default), an
+     * unknown key is <b>rejected</b> — the MITM protection for the agent-forwarded upstream leg.
      */
-    private static final class AcceptAllKnownServerKeyDatabase implements ServerKeyDatabase {
+    private static final class KnownHostsServerKeyDatabase implements ServerKeyDatabase {
+
+        /**
+         * Host keys pinned via trust-on-first-use, shared across all per-connection instances so a key seen on one
+         * connection is verified (and a mismatch rejected) on the next. Persists for the JVM lifetime; a restart
+         * re-establishes trust on first use.
+         */
+        private static final Map<String, PublicKey> TOFU_PINNED = new ConcurrentHashMap<>();
 
         private final ServerKeyDatabase delegate;
+        private final boolean trustOnFirstUse;
 
-        AcceptAllKnownServerKeyDatabase(ServerKeyDatabase delegate) {
+        KnownHostsServerKeyDatabase(ServerKeyDatabase delegate, boolean trustOnFirstUse) {
             this.delegate = delegate;
+            this.trustOnFirstUse = trustOnFirstUse;
         }
 
         @Override
@@ -212,16 +239,39 @@ final class SshUpstreamTransport {
                 PublicKey serverKey,
                 ServerKeyDatabase.Configuration config,
                 CredentialsProvider provider) {
-            List<PublicKey> known = delegate.lookup(connectAddress, remoteAddress, config);
-            for (PublicKey k : known) {
+            for (PublicKey k : delegate.lookup(connectAddress, remoteAddress, config)) {
                 if (KeyUtils.compareKeys(k, serverKey)) {
                     return true;
                 }
             }
-            log.warn(
-                    "SSH upstream: accepting UNKNOWN host key for {} — add to ~/.ssh/known_hosts to suppress",
+
+            PublicKey pinned = TOFU_PINNED.get(connectAddress);
+            if (pinned != null) {
+                if (KeyUtils.compareKeys(pinned, serverKey)) {
+                    return true;
+                }
+                log.error(
+                        "SSH upstream: REJECTING host key for {} — it CHANGED since it was trusted on first use "
+                                + "(possible MITM, or the upstream rotated its key: pin the new key to accept it)",
+                        connectAddress);
+                return false;
+            }
+
+            if (trustOnFirstUse) {
+                TOFU_PINNED.put(connectAddress, serverKey);
+                log.warn(
+                        "SSH upstream: trust-on-first-use — pinning host key for {} (fingerprint {}). Verify this "
+                                + "against the provider's published fingerprint; pin it to remove this warning.",
+                        connectAddress,
+                        KeyUtils.getFingerPrint(serverKey));
+                return true;
+            }
+
+            log.error(
+                    "SSH upstream: REJECTING unknown host key for {} — pin it via server.ssh.extra-known-hosts or "
+                            + "server.ssh.known-hosts-path, or enable server.ssh.trust-on-first-use",
                     connectAddress);
-            return true;
+            return false;
         }
     }
 }

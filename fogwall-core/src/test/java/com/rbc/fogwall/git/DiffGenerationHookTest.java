@@ -54,7 +54,7 @@ class DiffGenerationHookTest {
         ReceiveCommand cmd = new ReceiveCommand(c1, c2, "refs/heads/main", ReceiveCommand.Type.UPDATE);
         PushContext ctx = new PushContext();
 
-        new DiffGenerationHook(ctx).onPreReceive(rp, List.of(cmd));
+        new DiffGenerationHook(new ValidationContext(), ctx).onPreReceive(rp, List.of(cmd));
 
         boolean hasDiff =
                 ctx.getSteps().stream().anyMatch(s -> DiffGenerationHook.STEP_NAME_PUSH_DIFF.equals(s.getStepName()));
@@ -67,7 +67,7 @@ class DiffGenerationHookTest {
         ReceiveCommand cmd = new ReceiveCommand(ObjectId.zeroId(), c2, "refs/tags/v1.0.0");
         PushContext ctx = new PushContext();
 
-        new DiffGenerationHook(ctx).onPreReceive(rp, List.of(cmd));
+        new DiffGenerationHook(new ValidationContext(), ctx).onPreReceive(rp, List.of(cmd));
 
         boolean hasDiff =
                 ctx.getSteps().stream().anyMatch(s -> DiffGenerationHook.STEP_NAME_PUSH_DIFF.equals(s.getStepName()));
@@ -80,7 +80,7 @@ class DiffGenerationHookTest {
         ReceiveCommand cmd = new ReceiveCommand(c1, ObjectId.zeroId(), "refs/heads/main", ReceiveCommand.Type.DELETE);
         PushContext ctx = new PushContext();
 
-        new DiffGenerationHook(ctx).onPreReceive(rp, List.of(cmd));
+        new DiffGenerationHook(new ValidationContext(), ctx).onPreReceive(rp, List.of(cmd));
 
         assertTrue(ctx.getSteps().isEmpty(), "delete command must not generate any steps");
     }
@@ -101,7 +101,7 @@ class DiffGenerationHookTest {
         // PriorPushEnrichmentHook would have set effectiveFromId = c1 (last forwarded)
         ctx.setEffectiveFromId("refs/heads/main", c1.name());
 
-        new DiffGenerationHook(ctx).onPreReceive(rp, List.of(cmd));
+        new DiffGenerationHook(new ValidationContext(), ctx).onPreReceive(rp, List.of(cmd));
 
         var diffStep = ctx.getSteps().stream()
                 .filter(s -> DiffGenerationHook.STEP_NAME_PUSH_DIFF.equals(s.getStepName()))
@@ -125,7 +125,7 @@ class DiffGenerationHookTest {
         // Enrichment hook sets zero base when nothing was ever forwarded for this branch
         ctx.setEffectiveFromId("refs/heads/feature", ObjectId.zeroId().name());
 
-        new DiffGenerationHook(ctx).onPreReceive(rp, List.of(cmd));
+        new DiffGenerationHook(new ValidationContext(), ctx).onPreReceive(rp, List.of(cmd));
 
         // A diff step should still be generated
         boolean hasDiff =

@@ -9,6 +9,7 @@ import com.rbc.fogwall.user.UserEntry;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.Path;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.sshd.agent.SshAgent;
 import org.apache.sshd.common.Closeable;
@@ -37,6 +38,8 @@ public class SshGitReceiveCommand implements Command {
     private final LocalRepositoryCache cache;
     private final StoreAndForwardReceivePackFactory receivePackFactory;
     private final FogwallProxyAgentFactory agentFactory;
+    private final Path knownHostsFile;
+    private final boolean trustOnFirstUse;
 
     private InputStream in;
     private OutputStream out;
@@ -48,12 +51,16 @@ public class SshGitReceiveCommand implements Command {
             FogwallProvider provider,
             LocalRepositoryCache cache,
             StoreAndForwardReceivePackFactory receivePackFactory,
-            FogwallProxyAgentFactory agentFactory) {
+            FogwallProxyAgentFactory agentFactory,
+            Path knownHostsFile,
+            boolean trustOnFirstUse) {
         this.repoPath = repoPath;
         this.provider = provider;
         this.cache = cache;
         this.receivePackFactory = receivePackFactory;
         this.agentFactory = agentFactory;
+        this.knownHostsFile = knownHostsFile;
+        this.trustOnFirstUse = trustOnFirstUse;
     }
 
     @Override
@@ -165,7 +172,8 @@ public class SshGitReceiveCommand implements Command {
 
             log.info("SSH git-receive-pack: user='{}' path={} -> {}", sshUser, repoPath, upstreamUrl);
 
-            TransportConfigCallback transportConfig = SshUpstreamTransport.forwardedAgent(agent);
+            TransportConfigCallback transportConfig =
+                    SshUpstreamTransport.forwardedAgent(agent, knownHostsFile, trustOnFirstUse);
             var pushTransport = new PushTransport.Ssh(resolvedUser, connectingFingerprint, transportConfig, liveness);
 
             Repository localRepo = cache.getOrClone(upstreamUrl, null, transportConfig);

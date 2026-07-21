@@ -8,6 +8,7 @@ import com.rbc.fogwall.servlet.filter.UrlRuleEvaluator;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.Path;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.sshd.agent.SshAgent;
 import org.apache.sshd.common.channel.exception.SshChannelClosedException;
@@ -42,6 +43,8 @@ public class SshGitUploadCommand implements Command {
     private final LocalRepositoryCache cache;
     private final FogwallProxyAgentFactory agentFactory;
     private final UrlRuleRegistry urlRuleRegistry;
+    private final Path knownHostsFile;
+    private final boolean trustOnFirstUse;
 
     private InputStream in;
     private OutputStream out;
@@ -53,12 +56,16 @@ public class SshGitUploadCommand implements Command {
             FogwallProvider provider,
             LocalRepositoryCache cache,
             FogwallProxyAgentFactory agentFactory,
-            UrlRuleRegistry urlRuleRegistry) {
+            UrlRuleRegistry urlRuleRegistry,
+            Path knownHostsFile,
+            boolean trustOnFirstUse) {
         this.repoPath = repoPath;
         this.provider = provider;
         this.cache = cache;
         this.agentFactory = agentFactory;
         this.urlRuleRegistry = urlRuleRegistry;
+        this.knownHostsFile = knownHostsFile;
+        this.trustOnFirstUse = trustOnFirstUse;
     }
 
     @Override
@@ -137,7 +144,8 @@ public class SshGitUploadCommand implements Command {
 
             log.info("SSH git-upload-pack: user='{}' path={} -> {}", sshUser, repoPath, upstreamUrl);
 
-            TransportConfigCallback transportConfig = SshUpstreamTransport.forwardedAgent(agent);
+            TransportConfigCallback transportConfig =
+                    SshUpstreamTransport.forwardedAgent(agent, knownHostsFile, trustOnFirstUse);
             Repository localRepo = cache.getOrClone(upstreamUrl, null, transportConfig);
             localRepo.getConfig().setString("fogwall", null, "upstreamUrl", upstreamUrl);
             localRepo.getConfig().save();

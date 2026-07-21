@@ -16,12 +16,22 @@ public class ValidationContext {
 
     private final List<ValidationIssue> issues = new ArrayList<>();
 
-    /** Record an issue found by a validation hook. */
+    /** Record a policy violation found by a validation hook (the check ran and the push breaks a rule). */
     public void addIssue(String hookName, String summary, String detail) {
-        issues.add(new ValidationIssue(hookName, summary, detail));
+        issues.add(new ValidationIssue(hookName, summary, detail, false));
     }
 
-    /** Whether any validation hook reported an issue. */
+    /**
+     * Record that a validation check could not complete (an internal error, not a policy decision). Like a violation,
+     * this blocks the push — a security control that cannot run must fail closed, not silently pass — but it is flagged
+     * as an error so the audit trail and operators can tell "the check found a problem" apart from "the check itself
+     * failed and needs intervention".
+     */
+    public void addError(String hookName, String summary, String detail) {
+        issues.add(new ValidationIssue(hookName, summary, detail, true));
+    }
+
+    /** Whether any validation hook reported an issue (a violation or an error). */
     public boolean hasIssues() {
         return !issues.isEmpty();
     }
@@ -31,6 +41,9 @@ public class ValidationContext {
         return Collections.unmodifiableList(issues);
     }
 
-    /** A single validation issue reported by a hook. */
-    public record ValidationIssue(String hookName, String summary, String detail) {}
+    /**
+     * A single issue reported by a hook. {@code error} distinguishes a check that could not complete ({@code true})
+     * from a policy violation ({@code false}); both block the push.
+     */
+    public record ValidationIssue(String hookName, String summary, String detail, boolean error) {}
 }

@@ -83,8 +83,14 @@ public class BinaryBlobDetectionHook implements FogwallHook {
                     anyFailed.set(true);
                 }
             } catch (IOException e) {
-                log.warn("Binary blob detection failed for {}, skipping", cmd.getRefName(), e);
-                logs.add("WARN: " + cmd.getRefName() + " - diff failed, skipped");
+                // Fail closed: the blob scan could not run for this ref — block rather than skip.
+                log.warn("Binary blob detection failed for {}", cmd.getRefName(), e);
+                validationContext.addError(
+                        STEP_NAME,
+                        "binary blob scan could not complete for " + cmd.getRefName(),
+                        "binary blob scan error: " + e.getMessage());
+                logs.add("ERROR: " + cmd.getRefName() + " - binary blob scan could not run");
+                anyFailed.set(true);
             }
 
             // Pass 2: per-commit scan — catches blobs introduced in intermediate commits
@@ -105,7 +111,14 @@ public class BinaryBlobDetectionHook implements FogwallHook {
                     }
                 });
             } catch (IOException | GitAPIException e) {
+                // Fail closed: the per-commit blob scan could not run for this ref — block rather than skip.
                 log.warn("Could not enumerate commits for per-commit binary blob scan on {}", cmd.getRefName(), e);
+                validationContext.addError(
+                        STEP_NAME,
+                        "binary blob scan could not complete for " + cmd.getRefName(),
+                        "binary blob scan error: " + e.getMessage());
+                logs.add("ERROR: " + cmd.getRefName() + " - per-commit binary blob scan could not run");
+                anyFailed.set(true);
             }
         }
 

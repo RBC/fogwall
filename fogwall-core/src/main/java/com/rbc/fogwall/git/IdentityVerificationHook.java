@@ -105,6 +105,7 @@ public class IdentityVerificationHook implements FogwallHook {
         Repository repo = rp.getRepository();
         List<String> blockingViolations = new ArrayList<>();
         List<String> warnViolations = new ArrayList<>();
+        boolean hadError = false;
 
         for (ReceiveCommand cmd : commands) {
             if (cmd.getType() == ReceiveCommand.Type.DELETE) continue;
@@ -140,13 +141,22 @@ public class IdentityVerificationHook implements FogwallHook {
                     }
                 }
             } catch (Exception e) {
+                // Fail closed: identity verification that cannot run must block the push, not silently pass.
                 log.error("Failed to verify identity for {}", cmd.getRefName(), e);
+                validationContext.addError(
+                        STEP_NAME,
+                        "identity verification could not complete for " + cmd.getRefName(),
+                        "Identity verification error: " + e.getMessage());
+                hadError = true;
             }
         }
 
         if (blockingViolations.isEmpty() && warnViolations.isEmpty()) {
-            log.debug("Identity verification passed for push user '{}'", user.getUsername());
-            recordPass();
+            if (!hadError) {
+                log.debug("Identity verification passed for push user '{}'", user.getUsername());
+                recordPass();
+            }
+            // else: an error was recorded to the validation context, which blocks the push — do not record PASS.
             return;
         }
 
