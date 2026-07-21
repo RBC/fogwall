@@ -58,7 +58,7 @@ class ContentPatternDiffHookTest {
         ReceivePack rp = new ReceivePack(repo);
         ReceiveCommand cmd = new ReceiveCommand(oldId, newId, "refs/heads/main", ReceiveCommand.Type.UPDATE);
 
-        new DiffGenerationHook(pushCtx).onPreReceive(rp, List.of(cmd));
+        new DiffGenerationHook(new ValidationContext(), pushCtx).onPreReceive(rp, List.of(cmd));
         new ContentPatternDiffHook(config, pushCtx).onPreReceive(rp, List.of(cmd));
     }
 
