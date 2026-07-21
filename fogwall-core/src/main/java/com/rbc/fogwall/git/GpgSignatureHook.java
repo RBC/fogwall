@@ -39,6 +39,7 @@ public class GpgSignatureHook implements FogwallHook {
         var check = new GpgSignatureCheck(config);
         Repository repo = rp.getRepository();
         List<Violation> allViolations = new ArrayList<>();
+        boolean hadError = false;
 
         for (ReceiveCommand cmd : commands) {
             if (cmd.getType() == ReceiveCommand.Type.DELETE) continue;
@@ -50,12 +51,18 @@ public class GpgSignatureHook implements FogwallHook {
                     allViolations.add(v);
                 }
             } catch (Exception e) {
+                // Fail closed: a signature control that cannot run must block the push, not silently pass.
                 log.error("Failed to check GPG signatures for {}", cmd.getRefName(), e);
                 rp.sendMessage(color(YELLOW, "" + sym(WARNING) + "  Could not check GPG signature: " + e.getMessage()));
+                validationContext.addError(
+                        "GpgSignatureHook",
+                        "GPG signature verification could not complete for " + cmd.getRefName(),
+                        "Signature check error: " + e.getMessage());
+                hadError = true;
             }
         }
 
-        if (allViolations.isEmpty()) {
+        if (allViolations.isEmpty() && !hadError) {
             pushContext.addStep(PushStep.builder()
                     .stepName("checkSignatures")
                     .stepOrder(ORDER)

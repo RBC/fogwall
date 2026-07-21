@@ -174,14 +174,34 @@ public class PushStorePersistenceHook {
                         if (!summary.isBlank()) {
                             rp.sendMessage(summary);
                         }
-                        // Compact rejection block with actionable detail per violation
+                        // Compact rejection block. Policy violations and internal check errors are surfaced
+                        // separately so a developer can tell "my commit broke a rule" apart from "a control
+                        // could not run and an operator needs to look".
+                        var allIssues = validationContext.getIssues();
+                        var violations =
+                                allIssues.stream().filter(i -> !i.error()).toList();
+                        var errors = allIssues.stream()
+                                .filter(ValidationContext.ValidationIssue::error)
+                                .toList();
+
                         rp.sendMessage("────────────────────────────────────────");
-                        rp.sendMessage(color(
-                                RED,
-                                "" + sym(NO_ENTRY) + "  Push Blocked - "
-                                        + validationContext.getIssues().size() + " validation issue(s)"));
-                        for (var issue : validationContext.getIssues()) {
-                            rp.sendMessage("  " + issue.detail());
+                        if (!violations.isEmpty()) {
+                            rp.sendMessage(color(
+                                    RED,
+                                    "" + sym(NO_ENTRY) + "  Push Blocked - " + violations.size()
+                                            + " validation issue(s)"));
+                            for (var issue : violations) {
+                                rp.sendMessage("  " + issue.detail());
+                            }
+                        }
+                        if (!errors.isEmpty()) {
+                            rp.sendMessage(color(
+                                    YELLOW,
+                                    "" + sym(WARNING) + "  Push Blocked - " + errors.size()
+                                            + " validation check(s) could not complete (operator attention needed)"));
+                            for (var issue : errors) {
+                                rp.sendMessage("  " + issue.detail());
+                            }
                         }
                         rp.sendMessage("────────────────────────────────────────");
 

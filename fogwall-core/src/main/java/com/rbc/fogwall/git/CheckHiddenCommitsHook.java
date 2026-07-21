@@ -85,7 +85,15 @@ public class CheckHiddenCommitsHook implements FogwallHook {
             }
 
         } catch (Exception e) {
+            // Fail closed: if the hidden-commit check itself cannot run, block the push rather than allow
+            // potentially-unreferenced pack history through unchecked.
             log.error("Failed to check hidden commits", e);
+            rp.sendMessage(color(RED, "" + sym(NO_ENTRY) + "  Push blocked - hidden-commit check could not complete"));
+            for (ReceiveCommand cmd : commands) {
+                if (cmd.getResult() == ReceiveCommand.Result.NOT_ATTEMPTED) {
+                    cmd.setResult(ReceiveCommand.Result.REJECTED_OTHER_REASON, "Hidden-commit check error");
+                }
+            }
         }
     }
 
