@@ -1,6 +1,7 @@
 package com.rbc.fogwall.e2e;
 
 import com.rbc.fogwall.approval.AutoApprovalGateway;
+import com.rbc.fogwall.config.ContentPatternConfig;
 import com.rbc.fogwall.config.GpgConfig;
 import com.rbc.fogwall.config.SshConfig;
 import com.rbc.fogwall.db.PushStore;
@@ -134,6 +135,7 @@ class SshProxyFixture implements AutoCloseable {
                 null,
                 null,
                 null,
+                ContentPatternConfig.defaultConfig(),
                 GpgConfig.defaultConfig(),
                 permissionService,
                 null,

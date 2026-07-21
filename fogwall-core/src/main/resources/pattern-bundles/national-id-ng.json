@@ -1,0 +1,21 @@
+{
+  "name": "national-id-ng",
+  "jurisdiction": "NG",
+  "rules": [
+    {
+      "dataType": "National Identification Number",
+      "regex": "\\b\\d{11}\\b",
+      "contextKeywords": [
+        "nin",
+        "national identification number",
+        "national identity number",
+        "nimc",
+        "national identity",
+        "nigeria id",
+        "nigerian identification"
+      ],
+      "contextWindow": 40,
+      "validator": "ng-nin"
+    }
+  ]
+}

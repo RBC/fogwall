@@ -1,0 +1,23 @@
+{
+  "name": "national-id-tr",
+  "jurisdiction": "TR",
+  "rules": [
+    {
+      "dataType": "National ID Number",
+      "regex": "\\b[1-9][0-9]{10}\\b",
+      "contextKeywords": [
+        "tc kimlik",
+        "kimlik no",
+        "kimlik numarası",
+        "tckn",
+        "tc no",
+        "nüfus cüzdanı",
+        "national id",
+        "turkish id",
+        "türk kimlik"
+      ],
+      "contextWindow": 60,
+      "validator": "tr-national-id"
+    }
+  ]
+}

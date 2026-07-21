@@ -1,0 +1,13 @@
+{
+  "name": "national-id-fi",
+  "jurisdiction": "FI",
+  "rules": [
+    {
+      "dataType": "Personal Identity Code",
+      "regex": "\\b(\\d{6})([-+ABCDEFYXWVU])(\\d{3})([0123456789ABCDEFHJKLMNPRSTUVWXY])\\b",
+      "contextKeywords": ["hetu", "henkilötunnus", "personbeteckningen", "personal identity code"],
+      "contextWindow": 60,
+      "validator": "fi-personal-identity-code"
+    }
+  ]
+}

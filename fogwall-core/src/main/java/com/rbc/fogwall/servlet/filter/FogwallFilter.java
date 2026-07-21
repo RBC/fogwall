@@ -162,6 +162,7 @@ public interface FogwallFilter extends Filter {
                 httpResponse.setContentType(GitSmartHttpTools.getResponseContentType(httpRequest));
                 httpResponse.setContentLength(buf.size());
             }
+            runPersistCallback(httpRequest);
             try (OutputStream os = httpResponse.getOutputStream()) {
                 buf.writeTo(os);
             }
@@ -190,8 +191,20 @@ public interface FogwallFilter extends Filter {
             httpResponse.setContentType("application/x-git-receive-pack-result");
             httpResponse.setContentLength(buf.size());
         }
+        // Persist BEFORE writing to the real output stream below - closing that stream flushes bytes to the git
+        // client immediately, and the client may act on them (e.g. a test querying the push store) before this
+        // thread would otherwise get back around to persisting in PushStoreAuditFilter's outer finally block. See
+        // FogwallServlet#PERSIST_CALLBACK_ATTR.
+        runPersistCallback(httpRequest);
         try (OutputStream os = httpResponse.getOutputStream()) {
             buf.writeTo(os);
+        }
+    }
+
+    /** Runs the persist-push-record callback set by {@code PushStoreAuditFilter}, if any is present on the request. */
+    private void runPersistCallback(HttpServletRequest httpRequest) {
+        if (httpRequest.getAttribute(PERSIST_CALLBACK_ATTR) instanceof Runnable persist) {
+            persist.run();
         }
     }
 

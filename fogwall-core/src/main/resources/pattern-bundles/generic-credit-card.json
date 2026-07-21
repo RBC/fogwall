@@ -1,0 +1,22 @@
+{
+  "name": "generic-credit-card",
+  "jurisdiction": "Generic",
+  "rules": [
+    {
+      "dataType": "Credit Card Number",
+      "regex": "\\b(?:\\d[ -]?){13,19}\\b",
+      "contextKeywords": [
+        "credit card",
+        "card number",
+        "visa",
+        "mastercard",
+        "amex",
+        "american express",
+        "discover card",
+        "cvv"
+      ],
+      "contextWindow": 60,
+      "validator": "luhn"
+    }
+  ]
+}

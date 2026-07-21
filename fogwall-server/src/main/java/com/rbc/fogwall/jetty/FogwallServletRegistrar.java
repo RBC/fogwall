@@ -5,6 +5,7 @@ import static org.eclipse.jgit.transport.HttpTransport.setConnectionFactory;
 import com.rbc.fogwall.approval.ApprovalGateway;
 import com.rbc.fogwall.config.BinaryBlobConfig;
 import com.rbc.fogwall.config.CommitConfig;
+import com.rbc.fogwall.config.ContentPatternConfig;
 import com.rbc.fogwall.config.DiffScanConfig;
 import com.rbc.fogwall.config.GpgConfig;
 import com.rbc.fogwall.config.JettyConfigurationBuilder;
@@ -79,6 +80,7 @@ public final class FogwallServletRegistrar {
         Supplier<DiffScanConfig> diffScanConfigSupplier = configHolder::getDiffScanConfig;
         Supplier<SecretScanConfig> secretScanConfigSupplier = configHolder::getSecretScanConfig;
         Supplier<BinaryBlobConfig> binaryBlobConfigSupplier = configHolder::getBinaryBlobConfig;
+        ContentPatternConfig contentPatternConfig = configBuilder.buildContentPatternConfig();
 
         // Seed config rules once — registry is the single source of truth for all rule evaluation
         fogwallContext.urlRuleRegistry().seedFromConfig(configBuilder.buildConfigRules());
@@ -94,6 +96,7 @@ public final class FogwallServletRegistrar {
                         diffScanConfigSupplier,
                         secretScanConfigSupplier,
                         binaryBlobConfigSupplier,
+                        contentPatternConfig,
                         fogwallContext.pushStore(),
                         fogwallContext.serviceUrl(),
                         fogwallContext.approvalGateway(),
@@ -121,6 +124,7 @@ public final class FogwallServletRegistrar {
                         diffScanConfigSupplier,
                         secretScanConfigSupplier,
                         binaryBlobConfigSupplier,
+                        contentPatternConfig,
                         fogwallContext.pushStore(),
                         fogwallContext.serviceUrl(),
                         fogwallContext.approvalGateway(),
@@ -156,6 +160,7 @@ public final class FogwallServletRegistrar {
                 configHolder::getDiffScanConfig,
                 configHolder::getSecretScanConfig,
                 configHolder::getBinaryBlobConfig,
+                configBuilder.buildContentPatternConfig(),
                 GpgConfig.defaultConfig(),
                 fogwallContext.repoPermissionService(),
                 fogwallContext.pushIdentityResolver(),
@@ -180,6 +185,7 @@ public final class FogwallServletRegistrar {
             Supplier<DiffScanConfig> diffScanConfigSupplier,
             Supplier<SecretScanConfig> secretScanConfigSupplier,
             Supplier<BinaryBlobConfig> binaryBlobConfigSupplier,
+            ContentPatternConfig contentPatternConfig,
             PushStore pushStore,
             String serviceUrl,
             ApprovalGateway approvalGateway,
@@ -199,6 +205,7 @@ public final class FogwallServletRegistrar {
                 diffScanConfigSupplier,
                 secretScanConfigSupplier,
                 binaryBlobConfigSupplier,
+                contentPatternConfig,
                 GpgConfig.defaultConfig(),
                 repoPermissionService,
                 pushIdentityResolver,
@@ -278,6 +285,7 @@ public final class FogwallServletRegistrar {
             Supplier<DiffScanConfig> diffScanConfigSupplier,
             Supplier<SecretScanConfig> secretScanConfigSupplier,
             Supplier<BinaryBlobConfig> binaryBlobConfigSupplier,
+            ContentPatternConfig contentPatternConfig,
             PushStore pushStore,
             String serviceUrl,
             ApprovalGateway approvalGateway,
@@ -310,9 +318,11 @@ public final class FogwallServletRegistrar {
         filters.add(new CheckHiddenCommitsFilter());
         filters.add(new CheckAuthorEmailsFilter(commitConfigSupplier));
         filters.add(new CheckCommitMessagesFilter(commitConfigSupplier));
+        filters.add(new ContentPatternMessageFilter(contentPatternConfig));
         filters.add(new BinaryBlobFilter(binaryBlobConfigSupplier));
         filters.add(new ScanDiffFilter(diffScanConfigSupplier));
         filters.add(new SecretScanningFilter(secretScanConfigSupplier));
+        filters.add(new ContentPatternDiffFilter(contentPatternConfig));
         filters.add(new GpgSignatureFilter(GpgConfig.defaultConfig()));
         filters.add(new ValidationSummaryFilter());
         filters.add(new FetchFinalizerFilter());

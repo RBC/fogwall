@@ -29,6 +29,19 @@ public class FogwallServlet extends AsyncProxyServlet.Transparent {
     public static final String APPROVED_PUSH_ID_ATTR = "fogwall.approvedPushId";
 
     public static final String SERVICE_URL_ATTR = "fogwall.serviceUrl";
+
+    /**
+     * Request attribute holding a {@code Runnable} that persists the push record.
+     * {@link com.rbc.fogwall.servlet.filter.PushStoreAuditFilter} sets this before invoking the filter chain, and
+     * {@link com.rbc.fogwall.servlet.filter.FogwallFilter#sendGitError} runs it immediately before writing the response
+     * so the store write always happens before the client can observe (and act on) the response - see
+     * {@code PushStoreAuditFilter}'s javadoc for why that ordering matters. The callback is idempotent (safe to run
+     * more than once - only the first call does anything), since {@code PushStoreAuditFilter} also runs it
+     * unconditionally as a fallback for paths that never call {@code sendGitError} (e.g. an ALLOWED push forwarded
+     * upstream).
+     */
+    public static final String PERSIST_CALLBACK_ATTR = "fogwall.persistPushRecord";
+
     public static final String REQUEST_ID_HEADER = "X-Request-Id";
     public static final String GITHUB_REQUEST_ID_HEADER = "X-Github-Request-Id";
 

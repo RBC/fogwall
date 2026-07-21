@@ -1,5 +1,6 @@
 package com.rbc.fogwall.git;
 
+import com.rbc.fogwall.db.model.PushCommit;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStep;
 import java.util.LinkedHashSet;
@@ -7,10 +8,12 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Redacts raw secret values (from {@link GitleaksRunner.Finding#getSecret()}) out of a {@link PushRecord}'s step
- * content before it is persisted, so gitleaks findings never sit verbatim in the stored audit log. Called synchronously
- * before {@code pushStore.save(record)} in both proxy modes - see {@code PushStorePersistenceHook} (store-and-forward)
- * and {@code PushStoreAuditFilter} (transparent proxy).
+ * Redacts raw sensitive values out of a {@link PushRecord} before it is persisted, so findings never sit verbatim in
+ * the stored audit log. Originally built for {@link GitleaksRunner.Finding#getSecret()} values; also used for
+ * content-pattern findings (SIN/SSN/NINO, etc. - see {@code ContentPatternFinding}), which is why commit messages are
+ * redacted here too, not just step content - a content-pattern match against a commit message is exactly as likely as
+ * one against diff content. Called synchronously before {@code pushStore.save(record)} in both proxy modes - see
+ * {@code PushStorePersistenceHook} (store-and-forward) and {@code PushStoreAuditFilter} (transparent proxy).
  *
  * <p>A unified diff interleaves a {@code +}/{@code -}/space prefix between every original line, so a multi-line secret
  * (e.g. a PEM key) never appears contiguously in stored diff text - it has to be redacted line-by-line. Each secret is
@@ -37,6 +40,12 @@ public final class SecretRedactor {
             step.setBlockedMessage(redactText(step.getBlockedMessage(), secretLines));
         }
         record.setBlockedMessage(redactText(record.getBlockedMessage(), secretLines));
+
+        if (record.getCommits() != null) {
+            for (PushCommit commit : record.getCommits()) {
+                commit.setMessage(redactText(commit.getMessage(), secretLines));
+            }
+        }
     }
 
     /** Splits every secret into individual, trimmed, non-blank lines. */

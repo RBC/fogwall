@@ -1,0 +1,19 @@
+{
+  "name": "generic-iban",
+  "jurisdiction": "Generic",
+  "rules": [
+    {
+      "dataType": "IBAN",
+      "regex": "\\b[A-Z]{2}\\d{2}[A-Z0-9]{11,30}\\b",
+      "contextKeywords": [
+        "iban",
+        "bank account",
+        "account number",
+        "wire transfer",
+        "bank transfer"
+      ],
+      "contextWindow": 60,
+      "validator": "iban"
+    }
+  ]
+}

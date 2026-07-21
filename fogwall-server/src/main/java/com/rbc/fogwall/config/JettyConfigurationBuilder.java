@@ -416,6 +416,24 @@ public class JettyConfigurationBuilder {
         return cfg;
     }
 
+    /** Builds the {@link ContentPatternConfig} from {@code content-patterns:} in fogwall.yml. */
+    public ContentPatternConfig buildContentPatternConfig() {
+        ContentPatternSettings cp = config.getContentPatterns();
+        ContentPatternConfig cfg = ContentPatternConfig.builder()
+                .enabled(cp.isEnabled())
+                .bundles(new ArrayList<>(cp.getBundles()))
+                .scanDiff(cp.isScanDiff())
+                .scanCommitMessages(cp.isScanCommitMessages())
+                .build();
+        log.info(
+                "Loaded content-patterns config: enabled={}, bundles={}, scanDiff={}, scanCommitMessages={}",
+                cfg.isEnabled(),
+                cfg.getBundles(),
+                cfg.isScanDiff(),
+                cfg.isScanCommitMessages());
+        return cfg;
+    }
+
     /** Builds the {@link SecretScanConfig} from {@code secret-scan:} in fogwall.yml. */
     public SecretScanConfig buildSecretScanConfig() {
         SecretScanSettings ss = config.getSecretScan();

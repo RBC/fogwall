@@ -1,0 +1,27 @@
+{
+  "name": "national-id-au",
+  "jurisdiction": "AU",
+  "rules": [
+    {
+      "dataType": "Tax File Number",
+      "regex": "\\b\\d{3}\\s\\d{3}\\s\\d{3}\\b",
+      "contextKeywords": ["tax file number", "tfn"],
+      "contextWindow": 60,
+      "validator": "au-tfn"
+    },
+    {
+      "dataType": "Australian Business Number",
+      "regex": "\\b\\d{2}\\s?\\d{3}\\s?\\d{3}\\s?\\d{3}\\b",
+      "contextKeywords": ["abn", "australian business number"],
+      "contextWindow": 60,
+      "validator": "au-abn"
+    },
+    {
+      "dataType": "Australian Company Number",
+      "regex": "\\b\\d{3}\\s?\\d{3}\\s?\\d{3}\\b",
+      "contextKeywords": ["acn", "australian company number"],
+      "contextWindow": 60,
+      "validator": "au-acn"
+    }
+  ]
+}

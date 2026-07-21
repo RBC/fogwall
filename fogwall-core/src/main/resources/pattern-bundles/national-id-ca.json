@@ -1,0 +1,22 @@
+{
+  "name": "national-id-ca",
+  "jurisdiction": "CA",
+  "rules": [
+    {
+      "dataType": "Social Insurance Number",
+      "regex": "\\b[1-79]\\d{2}([- ])\\d{3}\\1\\d{3}\\b",
+      "contextKeywords": [
+        "sin",
+        "sin number",
+        "social insurance",
+        "social insurance number",
+        "nas",
+        "numéro nas",
+        "numéro d'assurance sociale",
+        "assurance sociale"
+      ],
+      "contextWindow": 60,
+      "validator": "luhn"
+    }
+  ]
+}

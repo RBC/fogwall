@@ -2,6 +2,7 @@ package com.rbc.fogwall.git;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.rbc.fogwall.db.model.PushCommit;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStep;
 import java.util.ArrayList;
@@ -104,6 +105,34 @@ class SecretRedactorTest {
 
         assertFalse(record.getBlockedMessage().contains("sk_test_abc123"));
         assertTrue(record.getBlockedMessage().contains("[REDACTED]"));
+    }
+
+    // ---- commit message redaction (content-pattern findings, not just secrets) ----
+
+    @Test
+    void commitMessage_containingMatch_redacted() {
+        PushRecord record = PushRecord.builder().build();
+        record.setSteps(new ArrayList<>());
+        PushCommit commit = PushCommit.builder()
+                .message("Fixed bug reported by customer, SIN 123456782 was affected")
+                .build();
+        record.setCommits(new ArrayList<>(List.of(commit)));
+
+        SecretRedactor.redact(record, List.of("123456782"));
+
+        String message = record.getCommits().get(0).getMessage();
+        assertFalse(message.contains("123456782"));
+        assertTrue(message.contains("[REDACTED]"));
+        assertTrue(message.startsWith("Fixed bug reported by customer, SIN"), "surrounding text must survive");
+    }
+
+    @Test
+    void nullCommits_doesNotThrow() {
+        PushRecord record = PushRecord.builder().build();
+        record.setSteps(new ArrayList<>());
+        record.setCommits(null);
+
+        assertDoesNotThrow(() -> SecretRedactor.redact(record, List.of("123456782")));
     }
 
     // ---- no-ops ----

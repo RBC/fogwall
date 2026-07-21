@@ -3,6 +3,7 @@ package com.rbc.fogwall.git;
 import com.rbc.fogwall.approval.ApprovalGateway;
 import com.rbc.fogwall.config.BinaryBlobConfig;
 import com.rbc.fogwall.config.CommitConfig;
+import com.rbc.fogwall.config.ContentPatternConfig;
 import com.rbc.fogwall.config.DiffScanConfig;
 import com.rbc.fogwall.config.GpgConfig;
 import com.rbc.fogwall.config.SecretScanConfig;
@@ -47,6 +48,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
     private final Supplier<DiffScanConfig> diffScanConfigSupplier;
     private final Supplier<SecretScanConfig> secretScanConfigSupplier;
     private final Supplier<BinaryBlobConfig> binaryBlobConfigSupplier;
+    private final ContentPatternConfig contentPatternConfig;
     private final GpgConfig gpgConfig;
     private final RepoPermissionService repoPermissionService;
     private final PushIdentityResolver pushIdentityResolver;
@@ -100,6 +102,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
                 DiffScanConfig::defaultConfig,
                 SecretScanConfig::defaultConfig,
                 BinaryBlobConfig::defaultConfig,
+                ContentPatternConfig.defaultConfig(),
                 GpgConfig.defaultConfig(),
                 null,
                 null,
@@ -126,6 +129,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
                 DiffScanConfig::defaultConfig,
                 SecretScanConfig::defaultConfig,
                 BinaryBlobConfig::defaultConfig,
+                ContentPatternConfig.defaultConfig(),
                 gpgConfig,
                 repoPermissionService,
                 pushIdentityResolver,
@@ -142,6 +146,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
             Supplier<DiffScanConfig> diffScanConfigSupplier,
             Supplier<SecretScanConfig> secretScanConfigSupplier,
             Supplier<BinaryBlobConfig> binaryBlobConfigSupplier,
+            ContentPatternConfig contentPatternConfig,
             GpgConfig gpgConfig,
             RepoPermissionService repoPermissionService,
             PushIdentityResolver pushIdentityResolver,
@@ -158,6 +163,8 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
                 secretScanConfigSupplier != null ? secretScanConfigSupplier : SecretScanConfig::defaultConfig;
         this.binaryBlobConfigSupplier =
                 binaryBlobConfigSupplier != null ? binaryBlobConfigSupplier : BinaryBlobConfig::defaultConfig;
+        this.contentPatternConfig =
+                contentPatternConfig != null ? contentPatternConfig : ContentPatternConfig.defaultConfig();
         this.gpgConfig = gpgConfig != null ? gpgConfig : GpgConfig.defaultConfig();
         this.repoPermissionService = repoPermissionService;
         this.pushIdentityResolver = pushIdentityResolver;
@@ -245,11 +252,13 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
         //   CheckHiddenCommitsHook          (220) - reject if pack contains commits outside push range
         //   AuthorEmailValidationHook       (250) - validates emails
         //   CommitMessageValidationHook     (260) - validates messages
+        //   ContentPatternCommitMessageHook (265) - WARN-only PII/identifier scan of commit messages
         //   ProxyPreReceiveHook             (270) - commit inspection
         //   DiffGenerationHook              (280) - generates diffs for scanning and persistence
         //   DiffScanningHook                (300) - scans diff added-lines for blocked content
         //   GpgSignatureHook                (320) - checks GPG signatures
         //   SecretScanningHook              (340) - pipes diff to gitleaks
+        //   ContentPatternDiffHook          (345) - WARN-only PII/identifier scan of the diff
         //
         // Pinned lifecycle hooks (not orderable):
         //   [pre]  PushStorePersistenceHook.preReceive      - record RECEIVED
@@ -288,12 +297,14 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
                 new CheckHiddenCommitsHook(pushContext),
                 new AuthorEmailValidationHook(commitConfig, validationContext, pushContext),
                 new CommitMessageValidationHook(commitConfig, validationContext, pushContext),
+                new ContentPatternCommitMessageHook(contentPatternConfig, pushContext),
                 new ProxyPreReceiveHook(pushContext),
                 new DiffGenerationHook(pushContext),
                 new BinaryBlobDetectionHook(binaryBlobConfig, validationContext, pushContext),
                 new DiffScanningHook(diffScanConfig, validationContext, pushContext),
                 new GpgSignatureHook(gpgConfig, validationContext, pushContext),
-                new SecretScanningHook(secretScanConfig, validationContext, pushContext)));
+                new SecretScanningHook(secretScanConfig, validationContext, pushContext),
+                new ContentPatternDiffHook(contentPatternConfig, pushContext)));
         if (provider instanceof BitbucketProvider bitbucketProvider) {
             validationHooks.add(new BitbucketCredentialRewriteHook(bitbucketProvider, pushContext));
         }

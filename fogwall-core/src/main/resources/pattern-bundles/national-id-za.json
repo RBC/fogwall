@@ -1,0 +1,22 @@
+{
+  "name": "national-id-za",
+  "jurisdiction": "ZA",
+  "rules": [
+    {
+      "dataType": "South African ID Number",
+      "regex": "\\b\\d{10}[0-2][89]\\d\\b",
+      "contextKeywords": [
+        "id",
+        "identity",
+        "identity number",
+        "id number",
+        "south african id",
+        "rsa id",
+        "smart id",
+        "national id"
+      ],
+      "contextWindow": 60,
+      "validator": "za-id"
+    }
+  ]
+}

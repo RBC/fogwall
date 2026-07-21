@@ -1,0 +1,13 @@
+{
+  "name": "national-id-es",
+  "jurisdiction": "ES",
+  "rules": [
+    {
+      "dataType": "NIF Number",
+      "regex": "\\b[0-9]?[0-9]{7}[-]?[A-Z]\\b",
+      "contextKeywords": ["documento nacional de identidad", "dni", "nif", "identificación"],
+      "contextWindow": 60,
+      "validator": "es-nif"
+    }
+  ]
+}
