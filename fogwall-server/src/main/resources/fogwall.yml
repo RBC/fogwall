@@ -230,6 +230,31 @@ binary-blob:
 #      - application/x-executable
 #      - application/x-msdownload
 
+# Content-pattern scanning — flags structured national ID/identifier numbers in both the push diff and commit
+# messages, using fogwall's built-in pattern bundles (hand-ported from data-privacy-stack/presidio, see
+# PROVENANCE.md alongside the bundle resources). WARN-only: a match is recorded as a WARN step for the reviewer
+# to see, it never blocks the push — these patterns have a real false-positive rate and there's no override path
+# for a wrongly-blocked push yet. Enabled by default with every jurisdiction fogwall currently ships a bundle
+# for — remove entries below to scope this down. See docs/CONFIGURATION.md#content-pattern-scanning for what
+# each bundle detects.
+# generic-* bundles are grouped by checksum strength rather than all-or-nothing:
+#   - generic-iban (mod-97) and generic-crypto-wallet (SHA-256d/BCH/Keccak-256 checksums, all far stronger than a
+#     mod-10 check) are enabled below - false-positive risk is low enough to be on by default alongside the
+#     national-ID bundles.
+#   - generic-credit-card and generic-us-bank-routing use Luhn-strength mod-10 checksums (~1-in-10 chance a random
+#     digit string passes by coincidence) - noisier, so they're opt-in only. Add them here, or use the generic-all
+#     alias for all four.
+content-patterns:
+  enabled: true
+  bundles:
+    - national-id-all-geos
+    - generic-iban
+    - generic-crypto-wallet
+  # scan-diff / scan-commit-messages independently gate the two content sources - both default true. Set either
+  # to false to skip that half without touching the other (e.g. skip commit-message scanning if it's noisy).
+  scan-diff: true
+  scan-commit-messages: true
+
 # User accounts for authentication and push authorization.
 # When this list is non-empty, only listed users may authenticate to the dashboard
 # and only commits whose author email matches a registered user are permitted.

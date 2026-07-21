@@ -1,0 +1,19 @@
+{
+  "name": "national-id-se",
+  "jurisdiction": "SE",
+  "rules": [
+    {
+      "dataType": "Personnummer",
+      "regex": "\\b(\\d{6,8})([-+]?)\\d{4}\\b",
+      "contextKeywords": [
+        "personnummer",
+        "svenskt personnummer",
+        "svensk id",
+        "personal identity number",
+        "samordningsnummer"
+      ],
+      "contextWindow": 60,
+      "validator": "se-personnummer"
+    }
+  ]
+}

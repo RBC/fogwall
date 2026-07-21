@@ -247,9 +247,11 @@ public class GitClientUtils {
                 Map.entry("checkHiddenCommits", "Checking for hidden commits"),
                 Map.entry("checkAuthorEmails", "Checking author emails"),
                 Map.entry("checkCommitMessages", "Checking commit messages"),
+                Map.entry("scanContentPatternsMessages", "Scanning commit messages for PII/identifiers"),
                 Map.entry("scanDiff", "Scanning diff content"),
                 Map.entry("checkSignatures", "Checking GPG signatures"),
                 Map.entry("scanSecrets", "Scanning for secrets"),
+                Map.entry("scanContentPatternsDiff", "Scanning diff for PII/identifiers"),
                 Map.entry("binaryBlob", "Scanning for binary blobs")));
 
         // Short pass-result text shown on the second line
@@ -261,9 +263,11 @@ public class GitClientUtils {
                 Map.entry("checkHiddenCommits", "no hidden commits"),
                 Map.entry("checkAuthorEmails", "emails OK"),
                 Map.entry("checkCommitMessages", "messages OK"),
+                Map.entry("scanContentPatternsMessages", "no PII/identifiers detected"),
                 Map.entry("scanDiff", "clean"),
                 Map.entry("checkSignatures", "signatures OK"),
                 Map.entry("scanSecrets", "no secrets detected"),
+                Map.entry("scanContentPatternsDiff", "no PII/identifiers detected"),
                 Map.entry("binaryBlob", "no blocked binary content")));
 
         List<PushStep> relevant = steps.stream()

@@ -5,6 +5,7 @@ import com.rbc.fogwall.approval.AutoApprovalGateway;
 import com.rbc.fogwall.approval.UiApprovalGateway;
 import com.rbc.fogwall.config.BinaryBlobConfig;
 import com.rbc.fogwall.config.CommitConfig;
+import com.rbc.fogwall.config.ContentPatternConfig;
 import com.rbc.fogwall.config.DiffScanConfig;
 import com.rbc.fogwall.config.GpgConfig;
 import com.rbc.fogwall.config.SecretScanConfig;
@@ -175,6 +176,7 @@ class JettyProxyFixture implements AutoCloseable {
                 DiffScanConfig::defaultConfig,
                 SecretScanConfig::defaultConfig,
                 BinaryBlobConfig::defaultConfig,
+                ContentPatternConfig.defaultConfig(),
                 GpgConfig.defaultConfig(),
                 null,
                 null,

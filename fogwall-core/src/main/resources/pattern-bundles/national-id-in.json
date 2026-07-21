@@ -1,0 +1,13 @@
+{
+  "name": "national-id-in",
+  "jurisdiction": "IN",
+  "rules": [
+    {
+      "dataType": "Aadhaar Number",
+      "regex": "\\b[0-9]{4}[- :][0-9]{4}[- :][0-9]{4}\\b",
+      "contextKeywords": ["aadhaar", "uidai"],
+      "contextWindow": 60,
+      "validator": "in-aadhaar"
+    }
+  ]
+}

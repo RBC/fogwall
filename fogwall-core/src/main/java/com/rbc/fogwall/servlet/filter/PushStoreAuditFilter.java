@@ -1,6 +1,7 @@
 package com.rbc.fogwall.servlet.filter;
 
 import static com.rbc.fogwall.servlet.FogwallServlet.GIT_REQUEST_ATTR;
+import static com.rbc.fogwall.servlet.FogwallServlet.PERSIST_CALLBACK_ATTR;
 import static com.rbc.fogwall.servlet.FogwallServlet.PRE_APPROVED_ATTR;
 
 import com.rbc.fogwall.db.PushRecordMapper;
@@ -12,6 +13,7 @@ import com.rbc.fogwall.git.SecretRedactor;
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -21,6 +23,17 @@ import lombok.extern.slf4j.Slf4j;
  * response early (e.g., via {@code sendGitError}).
  *
  * <p>This filter should be registered BEFORE all other filters so its {@code finally} block executes after them.
+ *
+ * <p>Persistence is exposed to the rest of the chain as a callback under
+ * {@link com.rbc.fogwall.servlet.FogwallServlet#PERSIST_CALLBACK_ATTR}: {@code sendGitError} (see
+ * {@link FogwallFilter}) runs it immediately before writing the real response, so the store write always happens before
+ * the response bytes reach the git client. Relying solely on the outer {@code finally} below would leave a window where
+ * the client has already received (and can act on) a push ID that isn't queryable in the store yet - a client polling
+ * right after the response, or a server crash in that window, would see the push as missing even though it was in fact
+ * handled. The callback is idempotent ({@link AtomicBoolean}-guarded), so this filter's own {@code finally} can still
+ * call it unconditionally as the fallback for paths that never call {@code sendGitError} at all (e.g. an ALLOWED push
+ * forwarded upstream, whose record is instead updated later by
+ * {@code FogwallServlet#onProxyResponseSuccess}/{@code onProxyResponseFailure}).
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -31,14 +44,21 @@ public class PushStoreAuditFilter implements Filter {
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
             throws IOException, ServletException {
+        AtomicBoolean persisted = new AtomicBoolean(false);
+        Runnable persistOnce = () -> {
+            if (persisted.compareAndSet(false, true)) {
+                persistIfPush(request);
+            }
+        };
+        request.setAttribute(PERSIST_CALLBACK_ATTR, persistOnce);
         try {
             chain.doFilter(request, response);
         } finally {
-            persistIfPush(request, response);
+            persistOnce.run();
         }
     }
 
-    private void persistIfPush(ServletRequest request, ServletResponse response) {
+    private void persistIfPush(ServletRequest request) {
         if (!(request instanceof HttpServletRequest httpRequest)) return;
 
         var requestDetails = (GitRequestDetails) httpRequest.getAttribute(GIT_REQUEST_ATTR);

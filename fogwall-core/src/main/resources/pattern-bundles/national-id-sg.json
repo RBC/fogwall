@@ -1,0 +1,13 @@
+{
+  "name": "national-id-sg",
+  "jurisdiction": "SG",
+  "rules": [
+    {
+      "dataType": "NRIC/FIN Number",
+      "regex": "(?i)\\b[STFGM][0-9]{7}[A-Z]\\b",
+      "contextKeywords": ["fin", "fin#", "nric", "nric#"],
+      "contextWindow": 60,
+      "validator": null
+    }
+  ]
+}

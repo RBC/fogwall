@@ -1,0 +1,19 @@
+{
+  "name": "national-id-us",
+  "jurisdiction": "US",
+  "rules": [
+    {
+      "dataType": "Social Security Number",
+      "regex": "\\b([0-9]{3})[- .]([0-9]{2})[- .]([0-9]{4})\\b",
+      "contextKeywords": [
+        "social",
+        "security",
+        "ssn",
+        "ssns",
+        "ssid"
+      ],
+      "contextWindow": 60,
+      "validator": "us-ssn-structural"
+    }
+  ]
+}

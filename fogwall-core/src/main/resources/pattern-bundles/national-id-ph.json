@@ -1,0 +1,24 @@
+{
+  "name": "national-id-ph",
+  "jurisdiction": "PH",
+  "rules": [
+    {
+      "dataType": "UMID Number",
+      "regex": "\\b\\d{4}-\\d{7}-\\d\\b",
+      "contextKeywords": [
+        "umid",
+        "unified multi-purpose id",
+        "crn",
+        "common reference number",
+        "sss",
+        "gsis",
+        "philhealth",
+        "pag-ibig",
+        "umid number",
+        "umid card"
+      ],
+      "contextWindow": 60,
+      "validator": null
+    }
+  ]
+}

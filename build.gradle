@@ -360,6 +360,25 @@ def coreProject = project(':fogwall-core')
 def serverProject = project(':fogwall-server')
 def dashboardProject = project(':fogwall-dashboard')
 
+// Content hand-ported into fogwall-core resources from a third-party source, rather than pulled in as a build
+// dependency - the Maven/npm license-report tasks above only see the actual dependency graph, so this needs to be
+// listed by hand. Currently just the pattern-bundles regex/context data ported from data-privacy-stack/presidio (MIT); add
+// further entries here if fogwall ever vendors another source's content the same way.
+def vendoredContentModules = {
+    def licenseFile = coreProject.file('src/main/resources/pattern-bundles/UPSTREAM-LICENSE-presidio.txt')
+    [[
+            ecosystem         : 'vendored-content',
+            name              : 'data-privacy-stack/presidio (pattern-bundles regex/context data)',
+            version           : '517d13eee659794ed3a55d188752d014be574c2a',
+            url               : 'https://github.com/data-privacy-stack/presidio',
+            declaredLicense   : 'MIT License',
+            declaredLicenseUrl: null,
+            licenseText       : licenseFile.exists() ? licenseFile.text : null,
+            noticeText        : null,
+            licenseTextSource : licenseFile.exists() ? 'embedded' : 'declared-only'
+    ]]
+}
+
 tasks.register('generateThirdPartyNotices') {
     group = 'build'
     description = 'Generates THIRD-PARTY-NOTICES files for the server and dashboard Docker image variants'
@@ -372,11 +391,12 @@ tasks.register('generateThirdPartyNotices') {
 
     doLast {
         def overrides = parseOverrides()
+        def vendored = vendoredContentModules()
 
-        writeNotices('server', mergeMavenModules([coreProject, serverProject], overrides))
+        writeNotices('server', mergeMavenModules([coreProject, serverProject], overrides) + vendored)
 
         def dashboardModules = mergeMavenModules([coreProject, serverProject, dashboardProject], overrides)
         def npmModules = mergeNpmModules(dashboardProject.file('frontend/notices/npm-licenses.json'))
-        writeNotices('dashboard', dashboardModules + npmModules)
+        writeNotices('dashboard', dashboardModules + npmModules + vendored)
     }
 }

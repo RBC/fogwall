@@ -1,0 +1,28 @@
+{
+  "name": "national-id-gb",
+  "jurisdiction": "GB",
+  "rules": [
+    {
+      "dataType": "National Insurance Number",
+      "regex": "\\b(?!bg|gb|nk|kn|nt|tn|zz|BG|GB|NK|KN|NT|TN|ZZ)([A-CEGHJ-PR-TW-Za-ceghj-pr-tw-z]{1}[A-CEGHJ-NPR-TW-Za-ceghj-npr-tw-z]{1}) ?([0-9]{2}) ?([0-9]{2}) ?([0-9]{2}) ?([A-Da-d]{1})\\b",
+      "contextKeywords": [
+        "national insurance",
+        "ni number",
+        "nino"
+      ],
+      "contextWindow": 60,
+      "validator": null
+    },
+    {
+      "dataType": "NHS Number",
+      "regex": "\\b\\d{3}[- ]?\\d{3}[- ]?\\d{4}\\b",
+      "contextKeywords": [
+        "nhs number",
+        "nhs no",
+        "national health service"
+      ],
+      "contextWindow": 60,
+      "validator": "uk-nhs-number"
+    }
+  ]
+}

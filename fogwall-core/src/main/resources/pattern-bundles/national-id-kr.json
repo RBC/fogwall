@@ -1,0 +1,13 @@
+{
+  "name": "national-id-kr",
+  "jurisdiction": "KR",
+  "rules": [
+    {
+      "dataType": "Resident Registration Number",
+      "regex": "(?<!\\d)\\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\\d|3[01])(-?)[1-4]\\d{6}(?!\\d)",
+      "contextKeywords": ["korean rrn", "korean resident registration number", "resident registration number", "rrn"],
+      "contextWindow": 60,
+      "validator": "kr-rrn"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "national-id-th",
+  "jurisdiction": "TH",
+  "rules": [
+    {
+      "dataType": "National ID Number",
+      "regex": "\\b[1-9](?:[134][0-9]|2[0-7]|5[0-8]|[67][01234567]|[89][0123456])\\d{10}\\b",
+      "contextKeywords": ["thai national id", "thai id number", "tnin"],
+      "contextWindow": 60,
+      "validator": "th-tnin"
+    }
+  ]
+}

@@ -46,6 +46,8 @@ const STEP_DISPLAY_NAMES: Record<string, string> = {
   GpgSignatureHook: 'GPG signatures',
   scanSecrets: 'Secret scanning',
   SecretScanningFilter: 'Secret scanning',
+  scanContentPatternsDiff: 'PII/identifier scan (diff)',
+  scanContentPatternsMessages: 'PII/identifier scan (commit messages)',
   identityVerification: 'Identity verification',
   IdentityVerificationFilter: 'Identity verification',
   IdentityVerificationHook: 'Identity verification',

@@ -1,0 +1,27 @@
+{
+  "name": "generic-crypto-wallet",
+  "jurisdiction": "Generic",
+  "rules": [
+    {
+      "dataType": "Bitcoin Address (Legacy)",
+      "regex": "\\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\\b",
+      "contextKeywords": ["bitcoin", "btc", "wallet address", "crypto wallet"],
+      "contextWindow": 60,
+      "validator": "btc-address"
+    },
+    {
+      "dataType": "Bitcoin Address (SegWit/Taproot)",
+      "regex": "\\bbc1[a-z0-9]{11,71}\\b",
+      "contextKeywords": ["bitcoin", "btc", "wallet address", "crypto wallet"],
+      "contextWindow": 60,
+      "validator": "btc-bech32-address"
+    },
+    {
+      "dataType": "Ethereum Address",
+      "regex": "\\b0x[0-9a-fA-F]{40}\\b",
+      "contextKeywords": ["ethereum", "eth", "wallet address", "crypto wallet", "metamask"],
+      "contextWindow": 60,
+      "validator": "eth-address"
+    }
+  ]
+}

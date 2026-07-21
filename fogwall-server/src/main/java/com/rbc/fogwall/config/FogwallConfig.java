@@ -20,6 +20,7 @@ import lombok.Data;
  * diff-scan:       → {@link DiffScanSettings} (push-level: blocked patterns in diff content)
  * secret-scan:     → {@link SecretScanSettings} (push-level: gitleaks integration)
  * binary-blob:     → {@link BinaryBlobSettings} (push-level: blob size / extension / MIME denylist)
+ * content-patterns: → {@link ContentPatternSettings} (push-level: built-in PII/identifier bundle scanning, WARN-only)
  * attestations:    → List&lt;{@link AttestationQuestion}&gt; (global reviewer prompts)
  * rules:           → {@link RulesConfig}
  * </pre>
@@ -34,6 +35,7 @@ public class FogwallConfig {
     private DiffScanSettings diffScan = new DiffScanSettings();
     private SecretScanSettings secretScan = new SecretScanSettings();
     private BinaryBlobSettings binaryBlob = new BinaryBlobSettings();
+    private ContentPatternSettings contentPatterns = new ContentPatternSettings();
     private RulesConfig rules = new RulesConfig();
 
     /**

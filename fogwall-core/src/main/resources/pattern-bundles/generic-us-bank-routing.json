@@ -1,0 +1,13 @@
+{
+  "name": "generic-us-bank-routing",
+  "jurisdiction": "Generic",
+  "rules": [
+    {
+      "dataType": "US Bank Routing Number (ABA)",
+      "regex": "\\b\\d{9}\\b",
+      "contextKeywords": ["routing number", "aba number", "aba routing"],
+      "contextWindow": 60,
+      "validator": "us-bank-routing"
+    }
+  ]
+}

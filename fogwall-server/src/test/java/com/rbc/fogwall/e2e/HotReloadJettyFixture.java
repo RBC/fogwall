@@ -1,6 +1,7 @@
 package com.rbc.fogwall.e2e;
 
 import com.rbc.fogwall.approval.AutoApprovalGateway;
+import com.rbc.fogwall.config.ContentPatternConfig;
 import com.rbc.fogwall.config.FogwallConfigLoader;
 import com.rbc.fogwall.config.GpgConfig;
 import com.rbc.fogwall.config.JettyConfigurationBuilder;
@@ -89,6 +90,7 @@ class HotReloadJettyFixture implements AutoCloseable {
                 configHolder::getDiffScanConfig,
                 configHolder::getSecretScanConfig,
                 configHolder::getBinaryBlobConfig,
+                ContentPatternConfig.defaultConfig(),
                 GpgConfig.defaultConfig(),
                 null,
                 null,
