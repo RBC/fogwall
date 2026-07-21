@@ -34,6 +34,7 @@ public class AuthorEmailValidationHook implements FogwallHook {
         var check = new AuthorEmailCheck(commitConfig);
         Repository repo = rp.getRepository();
         List<Violation> allViolations = new ArrayList<>();
+        boolean hadError = false;
 
         for (ReceiveCommand cmd : commands) {
             if (cmd.getType() == ReceiveCommand.Type.DELETE) continue;
@@ -44,11 +45,23 @@ public class AuthorEmailValidationHook implements FogwallHook {
                     allViolations.add(v);
                 }
             } catch (Exception e) {
+                // Fail closed: a validation control that cannot run must block the push, not silently pass.
                 log.error("Failed to validate author emails for {}", cmd.getRefName(), e);
+                validationContext.addError(
+                        "checkAuthorEmails",
+                        "author email validation could not complete for " + cmd.getRefName(),
+                        "Validation error: " + e.getMessage());
+                pushContext.addStep(PushStep.builder()
+                        .stepName("checkAuthorEmails")
+                        .stepOrder(ORDER)
+                        .status(StepStatus.FAIL)
+                        .errorMessage("Validation error: " + e.getMessage())
+                        .build());
+                hadError = true;
             }
         }
 
-        if (allViolations.isEmpty()) {
+        if (allViolations.isEmpty() && !hadError) {
             pushContext.addStep(PushStep.builder()
                     .stepName("checkAuthorEmails")
                     .stepOrder(ORDER)

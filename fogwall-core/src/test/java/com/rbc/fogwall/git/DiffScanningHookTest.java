@@ -65,7 +65,7 @@ class DiffScanningHookTest {
         ReceivePack rp = new ReceivePack(repo);
         ReceiveCommand cmd = new ReceiveCommand(oldId, newId, ref, ReceiveCommand.Type.UPDATE);
 
-        new DiffGenerationHook(pushCtx).onPreReceive(rp, List.of(cmd));
+        new DiffGenerationHook(ctx, pushCtx).onPreReceive(rp, List.of(cmd));
         new DiffScanningHook(config, ctx, pushCtx).onPreReceive(rp, List.of(cmd));
     }
 

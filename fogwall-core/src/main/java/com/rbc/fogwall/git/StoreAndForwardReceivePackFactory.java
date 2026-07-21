@@ -289,7 +289,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
                 new AuthorEmailValidationHook(commitConfig, validationContext, pushContext),
                 new CommitMessageValidationHook(commitConfig, validationContext, pushContext),
                 new ProxyPreReceiveHook(pushContext),
-                new DiffGenerationHook(pushContext),
+                new DiffGenerationHook(validationContext, pushContext),
                 new BinaryBlobDetectionHook(binaryBlobConfig, validationContext, pushContext),
                 new DiffScanningHook(diffScanConfig, validationContext, pushContext),
                 new GpgSignatureHook(gpgConfig, validationContext, pushContext),

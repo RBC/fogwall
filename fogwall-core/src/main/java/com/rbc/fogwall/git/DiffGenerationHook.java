@@ -38,6 +38,7 @@ public class DiffGenerationHook implements FogwallHook {
     public static final String STEP_NAME_PUSH_DIFF = "diff";
     public static final String STEP_NAME_BRANCH_DIFF = "diff:default-branch";
 
+    private final ValidationContext validationContext;
     private final PushContext pushContext;
 
     @Override
@@ -95,8 +96,20 @@ public class DiffGenerationHook implements FogwallHook {
             step.getLogs().add("type: auto");
             pushContext.addStep(step);
         } catch (IOException e) {
+            // Fail closed: the push diff feeds the blocked-content and secret scanners. If it can't be produced,
+            // block the push rather than let an unscanned change through (the aggregate scan would otherwise be
+            // silently skipped downstream).
             log.error("Failed to generate push diff for {}", refName, e);
-            log.warn("Could not generate push diff for {}: {}", refName, e.getMessage());
+            validationContext.addError(
+                    "diff",
+                    "diff generation could not complete for " + refName,
+                    "Diff generation error: " + e.getMessage());
+            pushContext.addStep(PushStep.builder()
+                    .stepName(STEP_NAME_PUSH_DIFF)
+                    .stepOrder(ORDER)
+                    .status(StepStatus.FAIL)
+                    .errorMessage("Diff generation error: " + e.getMessage())
+                    .build());
         }
     }
 

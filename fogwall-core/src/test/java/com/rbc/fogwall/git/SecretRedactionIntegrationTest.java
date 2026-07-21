@@ -139,7 +139,7 @@ class SecretRedactionIntegrationTest {
         ReceiveCommand cmd =
                 new ReceiveCommand(base.getId(), clean.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
 
-        new DiffGenerationHook(pushContext).onPreReceive(rp, List.of(cmd));
+        new DiffGenerationHook(validationContext, pushContext).onPreReceive(rp, List.of(cmd));
         new SecretScanningHook(config, validationContext, pushContext, runner).onPreReceive(rp, List.of(cmd));
 
         assertFalse(validationContext.hasIssues(), "clean push must not be flagged");
@@ -172,7 +172,7 @@ class SecretRedactionIntegrationTest {
         persistenceHook.setPushContext(pushContext);
 
         // Real hook chain order: diff generation, then secret scanning, then persistence of the result.
-        new DiffGenerationHook(pushContext).onPreReceive(rp, List.of(cmd));
+        new DiffGenerationHook(validationContext, pushContext).onPreReceive(rp, List.of(cmd));
         new SecretScanningHook(config, validationContext, pushContext, runner).onPreReceive(rp, List.of(cmd));
 
         assertTrue(
