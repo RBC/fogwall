@@ -115,6 +115,11 @@ public class JettyConfigurationBuilder {
         return config.getServer().isFailFast();
     }
 
+    /** Returns the virtual-thread admission limit (0 = virtual-thread dispatch disabled). */
+    public int getMaxConcurrentRequests() {
+        return config.getServer().getMaxConcurrentRequests();
+    }
+
     /** Returns the S&amp;F upstream connect timeout in seconds (0 = no timeout). */
     public int getUpstreamConnectTimeoutSeconds() {
         return config.getServer().getUpstreamConnectTimeoutSeconds();

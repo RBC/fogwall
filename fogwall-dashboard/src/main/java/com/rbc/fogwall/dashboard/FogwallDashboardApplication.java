@@ -63,6 +63,8 @@ public class FogwallDashboardApplication {
         threadPool.setName("fogwall-dashboard");
 
         var server = new Server(threadPool);
+        FogwallJettyApplication.enableVirtualThreads(
+                server, threadPool, "fogwall-dashboard", configBuilder.getMaxConcurrentRequests());
         var connector = new ServerConnector(server);
         connector.setPort(configBuilder.getServerPort());
         server.addConnector(connector);

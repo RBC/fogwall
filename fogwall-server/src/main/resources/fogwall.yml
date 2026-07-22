@@ -13,6 +13,11 @@ server:
   # Maximum time in seconds a store-and-forward push waits for human review before the record is marked
   # timed out (and canceled). Only applies to 'ui'/'servicenow' approval modes.
   approval-timeout-seconds: 1800
+  # Maximum number of requests handled concurrently on virtual threads. Requests over the limit wait for a
+  # slot. Each in-flight push holds its buffered pack data in memory until the request completes, so size this
+  # to heap capacity and typical pack size — prefer adding instances over raising this limit when scaling out.
+  # Set to 0 to disable virtual-thread dispatch (requests then run directly on the platform thread pool).
+  max-concurrent-requests: 512
   # HTTP session persistence backend. Options:
   #   none   — in-memory sessions (default); sessions are lost on restart and not shared across instances
   #   jdbc   — persisted to the configured JDBC database (h2-file or postgres);

@@ -18,6 +18,7 @@ import org.eclipse.jetty.server.SslConnectionFactory;
 import org.eclipse.jetty.util.component.LifeCycle;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
+import org.eclipse.jetty.util.thread.VirtualThreadPool;
 
 /**
  * Standalone Jetty server application for the JGit proxy. Registers two servlets per provider:
@@ -50,6 +51,7 @@ public class FogwallJettyApplication {
         threadPool.setName("fogwall-server");
 
         var server = new Server(threadPool);
+        enableVirtualThreads(server, threadPool, "fogwall-server", configBuilder.getMaxConcurrentRequests());
         var connector = new ServerConnector(server);
         connector.setPort(configBuilder.getServerPort());
         server.addConnector(connector);
@@ -112,6 +114,31 @@ public class FogwallJettyApplication {
         }
 
         server.join();
+    }
+
+    /**
+     * Dispatches request handling to virtual threads, bounded by {@code maxConcurrentRequests}. The platform pool keeps
+     * running selectors and acceptors; blocking application work (validation hooks, approval waits, upstream forwards)
+     * parks cheaply on virtual threads instead of holding platform threads. The bound replaces platform pool size as
+     * the admission limit — without it, virtual threads would accept unlimited concurrent pushes, each holding its
+     * buffered pack bytes until the request completes.
+     *
+     * <p>The executor is registered as a {@link Server} bean because {@link VirtualThreadPool} is a lifecycle component
+     * that must be started before use. A limit of 0 (or lower) leaves the platform pool handling requests directly, as
+     * an operational escape hatch.
+     */
+    public static void enableVirtualThreads(
+            Server server, QueuedThreadPool threadPool, String name, int maxConcurrentRequests) {
+        if (maxConcurrentRequests <= 0) {
+            log.info("Virtual-thread dispatch disabled (server.max-concurrent-requests: 0)");
+            return;
+        }
+        var virtualExecutor = new VirtualThreadPool();
+        virtualExecutor.setName(name + "-virtual");
+        virtualExecutor.setMaxConcurrentTasks(maxConcurrentRequests);
+        threadPool.setVirtualThreadsExecutor(virtualExecutor);
+        server.addBean(virtualExecutor);
+        log.info("Virtual-thread dispatch enabled (max {} concurrent requests)", maxConcurrentRequests);
     }
 
     public static ServerConnector buildHttpsConnector(Server server, TlsConfig tls) throws Exception {
