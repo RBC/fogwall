@@ -43,6 +43,63 @@ class ProviderTest {
     }
 
     @Test
+    void gitHub_sshUri_apiUrlsDeriveFromDefaultHost() {
+        // ssh://git@github.com is a valid SSH-transport provider entry for the built-in host — the API base must
+        // still resolve to api.github.com even though the scheme no longer equals DEFAULT_URI exactly.
+        var p = GitHubProvider.builder().uri(URI.create("ssh://git@github.com")).build();
+        assertEquals("https://api.github.com", p.getApiUrl());
+        assertEquals("https://api.github.com/graphql", p.getGraphqlUrl());
+    }
+
+    @Test
+    void gitHub_selfHostedSshUri_apiUrlsDeriveFromHostOnStandardPort() {
+        var p = GitHubProvider.builder()
+                .uri(URI.create("ssh://git@ghes.corp.example.com"))
+                .build();
+        assertEquals("https://ghes.corp.example.com/api/v3", p.getApiUrl());
+        assertEquals("https://ghes.corp.example.com/api/graphql", p.getGraphqlUrl());
+    }
+
+    @Test
+    void gitHub_selfHostedSshUri_withNonStandardPort_dropsSshPortRatherThanGuessing() {
+        // The SSH port has no fixed relationship to the HTTPS port, so it must not be carried over — api-uri is
+        // required when HTTPS isn't on the standard port (documented in ADMIN_GUIDE.md for the same reason).
+        var p = GitHubProvider.builder()
+                .uri(URI.create("ssh://git@ghes.corp.example.com:2222"))
+                .build();
+        assertEquals("https://ghes.corp.example.com/api/v3", p.getApiUrl());
+    }
+
+    @Test
+    void gitHub_sshUri_withExplicitApiUri_honorsOverride() {
+        var p = GitHubProvider.builder()
+                .uri(URI.create("ssh://git@github.corp.example.com"))
+                .apiUri(URI.create("https://github.corp.example.com/api/v3"))
+                .build();
+        assertEquals("https://github.corp.example.com/api/v3", p.getApiUrl());
+    }
+
+    @Test
+    void gitHub_gheDataResidencyUri_apiUrls() {
+        // GitHub Enterprise Cloud with data residency (*.ghe.com) uses api.<host> instead of <host>/api/v3.
+        var p = GitHubProvider.builder()
+                .uri(URI.create("https://corpo-example.ghe.com"))
+                .build();
+        assertEquals("https://api.corpo-example.ghe.com", p.getApiUrl());
+        assertEquals("https://api.corpo-example.ghe.com/graphql", p.getGraphqlUrl());
+    }
+
+    @Test
+    void gitHub_gheDataResidencySshUri_apiUrls() {
+        // Same *.ghe.com derivation must hold for an SSH-transport provider entry.
+        var p = GitHubProvider.builder()
+                .uri(URI.create("ssh://git@corpo-example.ghe.com"))
+                .build();
+        assertEquals("https://api.corpo-example.ghe.com", p.getApiUrl());
+        assertEquals("https://api.corpo-example.ghe.com/graphql", p.getGraphqlUrl());
+    }
+
+    @Test
     void gitHub_getName() {
         assertEquals("github", new GitHubProvider("/proxy").getName());
     }

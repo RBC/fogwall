@@ -3,13 +3,12 @@ package com.rbc.fogwall.ssh;
 import com.rbc.fogwall.config.SshConfig;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.git.LocalRepositoryCache;
-import com.rbc.fogwall.git.StoreAndForwardReceivePackFactory;
-import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
 import com.rbc.fogwall.user.UserEntry;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.sshd.common.session.Session;
@@ -32,7 +31,9 @@ import org.apache.sshd.server.session.ServerSession;
  * looked up in the user store at connection time to resolve their {@link UserEntry}, which is then stored on the MINA
  * session for use by {@link SshGitReceiveCommand}.
  *
- * <p>MVP constraint: only a single provider is supported per server instance.
+ * <p>A single server instance can serve multiple upstream providers — {@link SshGitCommandFactory} routes each command
+ * to the right one using the {@link SshProviderTarget} map keyed by {@code servletPath()} (see
+ * {@link com.rbc.fogwall.jetty.SshServerRegistrar}).
  */
 @Slf4j
 public class SshGitServer {
@@ -51,9 +52,8 @@ public class SshGitServer {
 
     public static SshGitServer create(
             SshConfig config,
-            FogwallProvider provider,
+            Map<String, SshProviderTarget> routes,
             LocalRepositoryCache cache,
-            StoreAndForwardReceivePackFactory receivePackFactory,
             ReadOnlyUserStore userStore,
             UrlRuleRegistry urlRuleRegistry)
             throws IOException {
@@ -78,13 +78,7 @@ public class SshGitServer {
         Path knownHostsFile = UpstreamKnownHosts.assemble(config.getKnownHostsPath(), config.getExtraKnownHosts());
 
         sshd.setCommandFactory(new SshGitCommandFactory(
-                provider,
-                cache,
-                receivePackFactory,
-                agentFactory,
-                urlRuleRegistry,
-                knownHostsFile,
-                config.isTrustOnFirstUse()));
+                routes, cache, agentFactory, urlRuleRegistry, knownHostsFile, config.isTrustOnFirstUse()));
 
         return new SshGitServer(sshd);
     }

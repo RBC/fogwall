@@ -9,6 +9,7 @@ import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.git.StoreAndForwardReceivePackFactory;
 import com.rbc.fogwall.provider.FogwallProvider;
 import java.io.IOException;
+import java.util.Map;
 import org.apache.sshd.server.channel.ChannelSession;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,10 +21,12 @@ class SshGitCommandFactoryTest {
 
     @BeforeEach
     void setUp() {
+        FogwallProvider provider = mock(FogwallProvider.class);
+        Map<String, SshProviderTarget> routes = Map.of(
+                "/localhost:3022", new SshProviderTarget(provider, mock(StoreAndForwardReceivePackFactory.class)));
         factory = new SshGitCommandFactory(
-                mock(FogwallProvider.class),
+                routes,
                 mock(LocalRepositoryCache.class),
-                mock(StoreAndForwardReceivePackFactory.class),
                 mock(FogwallProxyAgentFactory.class),
                 mock(UrlRuleRegistry.class),
                 null,

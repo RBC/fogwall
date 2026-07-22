@@ -4,15 +4,20 @@ import com.rbc.fogwall.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.config.SshConfig;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.ssh.SshGitServer;
+import com.rbc.fogwall.ssh.SshProviderTarget;
 import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 
 /**
  * Starts and stops the MINA SSHD server. Symmetric to {@link FogwallServletRegistrar} for the HTTP path.
  *
- * <p>SSH providers are identified by an {@code ssh://} URI scheme. The current MVP supports only a single SSH provider;
- * if more than one is configured a warning is logged and the first is used.
+ * <p>SSH providers are identified by an {@code ssh://} URI scheme. Every configured SSH provider is routed by its
+ * {@link FogwallProvider#servletPath()} (the same host/port/path-suffix key the HTTP path uses), so a single SSH server
+ * instance can serve multiple upstream providers on one port — the client selects which one with the path segment in
+ * the SSH command, e.g. {@code ssh://fogwall:2222/github.com/owner/repo.git}.
  */
 @Slf4j
 public class SshServerRegistrar {
@@ -43,17 +48,29 @@ public class SshServerRegistrar {
             return null;
         }
 
-        if (sshProviders.size() > 1) {
-            log.warn(
-                    "SSH transport MVP supports only a single provider; using '{}' (others ignored)",
-                    sshProviders.get(0).getName());
-        }
+        Map<String, SshProviderTarget> routes = buildRoutes(sshProviders, ctx, configBuilder);
 
-        FogwallProvider sshProvider = sshProviders.get(0);
-        var factory = FogwallServletRegistrar.buildReceivePackFactory(ctx, configBuilder, sshProvider);
-        SshGitServer server = SshGitServer.create(
-                sshConfig, sshProvider, ctx.storeForwardCache(), factory, ctx.userStore(), ctx.urlRuleRegistry());
+        SshGitServer server =
+                SshGitServer.create(sshConfig, routes, ctx.storeForwardCache(), ctx.userStore(), ctx.urlRuleRegistry());
         server.start();
         return server;
+    }
+
+    private static Map<String, SshProviderTarget> buildRoutes(
+            List<FogwallProvider> sshProviders, FogwallContext ctx, JettyConfigurationBuilder configBuilder) {
+        Map<String, SshProviderTarget> routes = new LinkedHashMap<>();
+        for (FogwallProvider provider : sshProviders) {
+            String key = provider.servletPath();
+            SshProviderTarget existing = routes.get(key);
+            if (existing != null) {
+                throw new IllegalStateException("Duplicate SSH provider path '" + key + "' for providers '"
+                        + existing.provider().getName() + "' and '" + provider.getName()
+                        + "' — configure distinct hosts or pathSuffix values");
+            }
+            var factory = FogwallServletRegistrar.buildReceivePackFactory(ctx, configBuilder, provider);
+            routes.put(key, new SshProviderTarget(provider, factory));
+            log.info("Routing SSH path '{}' -> provider '{}'", key, provider.getName());
+        }
+        return routes;
     }
 }

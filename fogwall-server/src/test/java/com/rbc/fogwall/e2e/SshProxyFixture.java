@@ -15,10 +15,12 @@ import com.rbc.fogwall.git.StoreAndForwardReceivePackFactory;
 import com.rbc.fogwall.permission.InMemoryRepoPermissionStore;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.permission.RepoPermissionService;
+import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.ForgejoProvider;
 import com.rbc.fogwall.service.SshScmIdentityEnricher;
 import com.rbc.fogwall.ssh.SshGitServer;
 import com.rbc.fogwall.ssh.SshKeyUtils;
+import com.rbc.fogwall.ssh.SshProviderTarget;
 import com.rbc.fogwall.user.ScmIdentity;
 import com.rbc.fogwall.user.SshKeyEntry;
 import com.rbc.fogwall.user.StaticUserStore;
@@ -29,7 +31,9 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -80,16 +84,25 @@ class SshProxyFixture implements AutoCloseable {
 
         // Provider name is also the providerId used when matching scm_identities in the enricher.
         String providerId = "gitea-ssh-e2e";
+        // Second provider entry, same Gitea backend but routed under a distinct pathSuffix instead of host:port —
+        // exercises real multi-provider SSH routing (issue #447) without standing up a second upstream container.
+        String aliasProviderId = "gitea-ssh-e2e-alias";
 
         // The test key is registered in Gitea under ADMIN_USER — link the test user's SCM identity accordingly
-        // so the enricher can verify the connecting fingerprint against ADMIN_USER's Gitea keys.
+        // so the enricher can verify the connecting fingerprint against ADMIN_USER's Gitea keys. One identity per
+        // provider entry, since identity resolution is keyed by providerId.
         var testUser = UserEntry.builder()
                 .username(TEST_USER)
                 .emails(List.of(GiteaContainer.VALID_AUTHOR_EMAIL))
-                .scmIdentities(List.of(ScmIdentity.builder()
-                        .provider(providerId)
-                        .username(GiteaContainer.ADMIN_USER)
-                        .build()))
+                .scmIdentities(List.of(
+                        ScmIdentity.builder()
+                                .provider(providerId)
+                                .username(GiteaContainer.ADMIN_USER)
+                                .build(),
+                        ScmIdentity.builder()
+                                .provider(aliasProviderId)
+                                .username(GiteaContainer.ADMIN_USER)
+                                .build()))
                 .sshKeys(List.of(sshKeyEntry))
                 .build();
 
@@ -101,6 +114,13 @@ class SshProxyFixture implements AutoCloseable {
         var provider = ForgejoProvider.builder()
                 .name(providerId)
                 .uri(giteaSshUri)
+                .apiUri(URI.create(gitea.getBaseUrl()))
+                .apiToken(giteaApiToken)
+                .build();
+        var aliasProvider = ForgejoProvider.builder()
+                .name(aliasProviderId)
+                .uri(giteaSshUri)
+                .pathSuffix(ALIAS_PATH_SUFFIX)
                 .apiUri(URI.create(gitea.getBaseUrl()))
                 .apiToken(giteaApiToken)
                 .build();
@@ -118,33 +138,39 @@ class SshProxyFixture implements AutoCloseable {
                 .matchType(MatchType.GLOB)
                 .build());
 
-        // Seed a catch-all PUSH permission for the test user so CheckUserPushPermissionHook passes.
+        // Seed a catch-all PUSH permission for the test user against both provider entries.
         var permissionStore = new InMemoryRepoPermissionStore();
-        permissionStore.save(RepoPermission.builder()
-                .username(TEST_USER)
-                .provider(provider.getProviderId())
-                .value("/**")
-                .matchType(MatchType.GLOB)
-                .grant(RepoPermission.Grant.PUSH)
-                .build());
+        for (FogwallProvider p : List.of(provider, aliasProvider)) {
+            permissionStore.save(RepoPermission.builder()
+                    .username(TEST_USER)
+                    .provider(p.getProviderId())
+                    .value("/**")
+                    .matchType(MatchType.GLOB)
+                    .grant(RepoPermission.Grant.PUSH)
+                    .build());
+        }
         var permissionService = new RepoPermissionService(permissionStore);
 
-        var receivePackFactory = new StoreAndForwardReceivePackFactory(
-                provider,
-                JettyProxyFixture::buildCommitConfig,
-                null,
-                null,
-                null,
-                ContentPatternConfig.defaultConfig(),
-                GpgConfig.defaultConfig(),
-                permissionService,
-                null,
-                pushStore,
-                new AutoApprovalGateway(pushStore),
-                null,
-                Duration.ofSeconds(10),
-                urlRuleRegistry);
-        receivePackFactory.setSshScmIdentityEnricher(new SshScmIdentityEnricher());
+        Map<String, SshProviderTarget> routes = new LinkedHashMap<>();
+        for (FogwallProvider p : List.of(provider, aliasProvider)) {
+            var receivePackFactory = new StoreAndForwardReceivePackFactory(
+                    p,
+                    JettyProxyFixture::buildCommitConfig,
+                    null,
+                    null,
+                    null,
+                    ContentPatternConfig.defaultConfig(),
+                    GpgConfig.defaultConfig(),
+                    permissionService,
+                    null,
+                    pushStore,
+                    new AutoApprovalGateway(pushStore),
+                    null,
+                    Duration.ofSeconds(10),
+                    urlRuleRegistry);
+            receivePackFactory.setSshScmIdentityEnricher(new SshScmIdentityEnricher());
+            routes.put(p.servletPath(), new SshProviderTarget(p, receivePackFactory));
+        }
 
         sshPort = findFreePort();
         var sshConfig = new SshConfig();
@@ -158,18 +184,30 @@ class SshProxyFixture implements AutoCloseable {
         // mechanism operators opt into for internal providers (see SshConfig#isTrustOnFirstUse).
         sshConfig.setTrustOnFirstUse(true);
 
-        sshServer = SshGitServer.create(sshConfig, provider, cache, receivePackFactory, userStore, urlRuleRegistry);
+        sshServer = SshGitServer.create(sshConfig, routes, cache, userStore, urlRuleRegistry);
         sshServer.start();
     }
+
+    /** Path suffix the second (alias) provider entry is routed under — see the multi-provider routing note above. */
+    private static final String ALIAS_PATH_SUFFIX = "/gitea-alias";
 
     /** The host port the fogwall SSH server is listening on. */
     int getSshPort() {
         return sshPort;
     }
 
-    /** The push URL for a repository, targeting this SSH fixture. */
+    /** The push URL for a repository, targeting this SSH fixture's primary (host:port-routed) provider entry. */
     String pushUrl(String owner, String repo) {
         return "ssh://localhost:" + sshPort + "/" + giteaSshHostPort + "/" + owner + "/" + repo + ".git";
+    }
+
+    /**
+     * The push URL for a repository, targeting this SSH fixture's second provider entry (routed by
+     * {@link #ALIAS_PATH_SUFFIX} instead of host:port) — same upstream Gitea backend, different provider entry, used to
+     * verify multi-provider SSH routing (issue #447).
+     */
+    String aliasPushUrl(String owner, String repo) {
+        return "ssh://localhost:" + sshPort + ALIAS_PATH_SUFFIX + "/" + owner + "/" + repo + ".git";
     }
 
     PushStore getPushStore() {

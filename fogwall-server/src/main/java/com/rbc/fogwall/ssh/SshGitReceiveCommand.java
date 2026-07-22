@@ -10,6 +10,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Path;
+import java.util.Comparator;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.sshd.agent.SshAgent;
 import org.apache.sshd.common.Closeable;
@@ -34,9 +36,8 @@ import org.eclipse.jgit.transport.ReceivePack;
 public class SshGitReceiveCommand implements Command {
 
     private final String repoPath;
-    private final FogwallProvider provider;
+    private final Map<String, SshProviderTarget> routes;
     private final LocalRepositoryCache cache;
-    private final StoreAndForwardReceivePackFactory receivePackFactory;
     private final FogwallProxyAgentFactory agentFactory;
     private final Path knownHostsFile;
     private final boolean trustOnFirstUse;
@@ -48,16 +49,14 @@ public class SshGitReceiveCommand implements Command {
 
     SshGitReceiveCommand(
             String repoPath,
-            FogwallProvider provider,
+            Map<String, SshProviderTarget> routes,
             LocalRepositoryCache cache,
-            StoreAndForwardReceivePackFactory receivePackFactory,
             FogwallProxyAgentFactory agentFactory,
             Path knownHostsFile,
             boolean trustOnFirstUse) {
         this.repoPath = repoPath;
-        this.provider = provider;
+        this.routes = routes;
         this.cache = cache;
-        this.receivePackFactory = receivePackFactory;
         this.agentFactory = agentFactory;
         this.knownHostsFile = knownHostsFile;
         this.trustOnFirstUse = trustOnFirstUse;
@@ -108,35 +107,47 @@ public class SshGitReceiveCommand implements Command {
     }
 
     /**
-     * Parses an SSH git path and validates it against the configured provider.
+     * Parses an SSH git path and resolves which configured provider it targets.
      *
-     * <p>Path format: {@code /{host}:{port}/{owner}/{repo}.git} — mirrors the HTTP
-     * {@code /push/{host}:{port}/{owner}/{repo}.git} convention.
+     * <p>Path format: {@code /{providerPath}/{owner}/{repo}.git}, where {@code providerPath} is a provider's
+     * {@link FogwallProvider#servletPath()} (typically {@code {host}} or {@code {host}:{port}}, or a configured
+     * {@code pathSuffix}) — mirrors the HTTP {@code /push/{providerPath}/{owner}/{repo}.git} convention. Matching is by
+     * longest-prefix so a multi-segment {@code pathSuffix} still resolves correctly.
      *
-     * @return a {@link RepoRoute} if the path is valid and matches the provider
-     * @throws IllegalArgumentException if the path is malformed or doesn't match the provider
+     * @return a {@link RepoRoute} if the path is valid and matches a configured provider
+     * @throws IllegalArgumentException if the path is malformed or doesn't match any configured provider
      */
-    static RepoRoute resolveRoute(String repoPath, java.net.URI providerUri) {
-        String normalised = repoPath.startsWith("/") ? repoPath : "/" + repoPath;
-        String[] segments = normalised.replaceAll("\\.git$", "").split("/", 4);
-        if (segments.length < 4) {
-            throw new IllegalArgumentException(
-                    "Invalid repository path: " + repoPath + " (expected /{host}:{port}/{owner}/{repo}.git)");
-        }
-        String providerSegment = segments[1];
-        String owner = segments[2];
-        String repo = segments[3];
+    static RepoRoute resolveRoute(String repoPath, Map<String, SshProviderTarget> routes) {
+        String normalised = (repoPath.startsWith("/") ? repoPath : "/" + repoPath).replaceAll("\\.git$", "");
 
-        int uriPort = providerUri.getPort();
-        String expectedSegment = uriPort > 0 ? providerUri.getHost() + ":" + uriPort : providerUri.getHost();
-        if (!providerSegment.equals(expectedSegment)) {
-            throw new IllegalArgumentException("Unknown provider host '" + providerSegment + "' in path: " + repoPath
-                    + " (expected " + expectedSegment + ")");
+        Map.Entry<String, SshProviderTarget> match = routes.entrySet().stream()
+                .filter(e -> normalised.equals(e.getKey()) || normalised.startsWith(e.getKey() + "/"))
+                .max(Comparator.comparingInt(e -> e.getKey().length()))
+                .orElseThrow(() -> new IllegalArgumentException("Unknown provider path in: " + repoPath
+                        + " (configured provider paths: " + routes.keySet() + ")"));
+
+        String remainder = normalised.substring(match.getKey().length()).replaceFirst("^/", "");
+        String[] ownerRepo = remainder.split("/", 2);
+        if (ownerRepo.length < 2 || ownerRepo[0].isBlank() || ownerRepo[1].isBlank()) {
+            throw new IllegalArgumentException(
+                    "Invalid repository path: " + repoPath + " (expected " + match.getKey() + "/{owner}/{repo}.git)");
         }
-        return new RepoRoute(owner, repo, providerUri + "/" + owner + "/" + repo + ".git", "/" + owner + "/" + repo);
+        String owner = ownerRepo[0];
+        String repo = ownerRepo[1];
+        SshProviderTarget target = match.getValue();
+        String upstreamUrl = target.provider().getUri() + "/" + owner + "/" + repo + ".git";
+        return new RepoRoute(target, owner, repo, upstreamUrl, "/" + owner + "/" + repo);
     }
 
-    record RepoRoute(String owner, String repo, String upstreamUrl, String repoSlug) {}
+    record RepoRoute(SshProviderTarget target, String owner, String repo, String upstreamUrl, String repoSlug) {
+        FogwallProvider provider() {
+            return target.provider();
+        }
+
+        StoreAndForwardReceivePackFactory receivePackFactory() {
+            return target.receivePackFactory();
+        }
+    }
 
     private void runReceivePack(
             String sshUser,
@@ -149,7 +160,7 @@ public class SshGitReceiveCommand implements Command {
         try {
             RepoRoute route;
             try {
-                route = resolveRoute(repoPath, provider.getUri());
+                route = resolveRoute(repoPath, routes);
             } catch (IllegalArgumentException e) {
                 writeError(e.getMessage());
                 exitCode = 128;
@@ -180,7 +191,7 @@ public class SshGitReceiveCommand implements Command {
             localRepo.getConfig().setString("fogwall", null, "upstreamUrl", upstreamUrl);
             localRepo.getConfig().save();
 
-            ReceivePack rp = receivePackFactory.createForSsh(localRepo, sshUser, repoSlug, pushTransport);
+            ReceivePack rp = route.receivePackFactory().createForSsh(localRepo, sshUser, repoSlug, pushTransport);
             rp.setBiDirectionalPipe(true); // factory defaults to false for HTTP; SSH is bidirectional
             rp.receive(in, out, err);
 

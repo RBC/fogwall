@@ -304,6 +304,24 @@ class JettyConfigurationBuilderTest {
     }
 
     @Test
+    void createProvider_githubType_sshUriWithApiUri_wiresApiUriThrough() {
+        var providerConfig = new ProviderConfig();
+        providerConfig.setEnabled(true);
+        providerConfig.setType("github");
+        providerConfig.setUri("ssh://git@github.corp.example.com");
+        providerConfig.setApiUri("https://github.corp.example.com/api/v3");
+
+        var providers =
+                new JettyConfigurationBuilder(configWithSingleProvider("github-ssh", providerConfig)).buildProviders();
+
+        assertEquals(1, providers.size());
+        assertInstanceOf(GitHubProvider.class, providers.get(0));
+        var github = (GitHubProvider) providers.get(0);
+        assertEquals(URI.create("ssh://git@github.corp.example.com"), github.getUri());
+        assertEquals("https://github.corp.example.com/api/v3", github.getApiUrl());
+    }
+
+    @Test
     void createProvider_gitlabKey_inferredAsGitLabProvider() {
         var providers = new JettyConfigurationBuilder(configWithSingleProvider("gitlab", new ProviderConfig()))
                 .buildProviders();
