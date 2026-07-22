@@ -1021,6 +1021,7 @@ public class JettyConfigurationBuilder {
                         .name(name)
                         .uri(parsedUri)
                         .pathSuffix(pathSuffix)
+                        .apiUri(parsedApiUri)
                         .build());
             }
             case "gitlab" -> {

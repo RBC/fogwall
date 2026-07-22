@@ -23,34 +23,50 @@ public class GitHubProvider extends AbstractFogwallProvider implements HttpToken
     public static final URI DEFAULT_URI = URI.create("https://github.com");
 
     @Builder
-    public GitHubProvider(String name, URI uri, String pathSuffix) {
+    public GitHubProvider(String name, URI uri, String pathSuffix, URI apiUri) {
         super(name != null ? name : NAME, NAME, uri != null ? uri : DEFAULT_URI, pathSuffix);
+        this.apiUri = apiUri;
     }
 
     public GitHubProvider(String pathSuffix) {
-        this(NAME, DEFAULT_URI, pathSuffix);
+        this(NAME, DEFAULT_URI, pathSuffix, null);
     }
 
     public String getApiUrl() {
-        if (uri.equals(DEFAULT_URI)) {
+        if (apiUri != null) {
+            return apiUri.toString();
+        }
+        if (isDefaultHost()) {
             return "https://api.github.com";
         }
         if (isGhe()) {
             return String.format("https://api.%s", uri.getHost());
         }
-        // fallback to self-hosted GHES
-        return String.format("%s/api/v3", uri);
+        // Self-hosted GHES: assumes the API is reachable on the same host over HTTPS on the standard port — true for
+        // most deployments. Set api-uri explicitly when that doesn't hold (e.g. local dev where SSH and HTTPS run on
+        // different non-standard ports on the same host).
+        return String.format("%s/api/v3", selfHostedHttpsBase());
     }
 
     public String getGraphqlUrl() {
-        if (uri.equals(DEFAULT_URI)) {
+        if (apiUri != null) {
+            return apiUri + "/graphql";
+        }
+        if (isDefaultHost()) {
             return "https://api.github.com/graphql";
         }
         if (isGhe()) {
             return String.format("https://api.%s/graphql", uri.getHost());
         }
-        // fallback to self-hosted GHES
-        return String.format("%s/api/graphql", uri);
+        return String.format("%s/api/graphql", selfHostedHttpsBase());
+    }
+
+    /** {@link #uri} as an {@code https://} base URL, converting from {@code ssh://} if needed. */
+    private String selfHostedHttpsBase() {
+        if ("ssh".equals(uri.getScheme())) {
+            return "https://" + uri.getHost();
+        }
+        return uri.toString();
     }
 
     /**
@@ -131,6 +147,15 @@ public class GitHubProvider extends AbstractFogwallProvider implements HttpToken
      */
     private boolean isGhe() {
         return uri.getHost().endsWith(".ghe.com");
+    }
+
+    /**
+     * Whether {@link #uri} points at github.com itself, regardless of scheme — {@code https://github.com} (the HTTP
+     * default) and {@code ssh://git@github.com} (an SSH-transport provider entry) both derive the same
+     * {@code api.github.com} API base, mirroring how {@link ForgejoProvider} derives its API URL from an SSH URI.
+     */
+    private boolean isDefaultHost() {
+        return DEFAULT_URI.getHost().equals(uri.getHost());
     }
 }
 

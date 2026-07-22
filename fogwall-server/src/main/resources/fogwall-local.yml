@@ -21,6 +21,18 @@ providers:
     api-uri: http://localhost:3000  # needed for SCM identity enrichment — SSH URI can't be used for HTTP API calls
     # api-token: <PAT>  # required when Gitea is configured with REQUIRE_SIGNIN_VIEW=true
     #                    # no env var override — set via external config file or FOGWALL_CONFIG_PROFILES
+  # Second SSH provider, to exercise multi-provider SSH routing (#447) against a real host — GitHub's SSH key
+  # listing endpoint (GET /users/{login}/keys) is public, so no api-token is needed here.
+  github-ssh:
+    enabled: true
+    type: github
+    uri: ssh://git@github.com
+    # To actually push/fetch through this provider you need your OWN github.com SSH key loaded in ssh-agent
+    # (fogwall relays your forwarded agent — it never holds credentials itself). Steps:
+    #   1. Add your real public key under dev's ssh-keys below (replace the placeholder test key, or add a second entry).
+    #   2. Add your GitHub username under dev's scm-identities for provider: github-ssh (see below).
+    #   3. Add an allow rule + permission for a repo you actually control (see rules/permissions below).
+    #   4. Push via: ssh://localhost:2222/github.com/<your-org>/<your-repo>.git (agent forwarding required: ssh -A)
 # Three users for local development:
 #   admin    — full dashboard access, can approve any push
 #   dev      — a developer account; add your SCM identity here to push through the proxy
@@ -50,10 +62,17 @@ users:
         username: test-user
       - provider: gitea-ssh
         username: test-user
+      # Uncomment and set to your real GitHub username to test the github-ssh provider above:
+      # - provider: github-ssh
+      #   username: your-gh-handle
     emails:
       - dev@example.com
     ssh-keys:
         - public-key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILZutQPsqDrByIRlmp6JgAK8DSGzf7+SoKBzjCy+av2J fogwall-test@local"
+        # Add your own real key here (the one loaded in your ssh-agent, already registered on github.com)
+        # to authenticate against the github-ssh provider — the placeholder key above only works for gitea-ssh
+        # since it's pre-registered with the local Gitea test container, not with GitHub.
+        # - public-key: "ssh-ed25519 AAAA... you@yourhost"
 
   - username: reviewer
     password-hash: "{noop}password"
@@ -136,6 +155,14 @@ permissions:
   #     value: /your-org/your-repo
   #     type: LITERAL
   #   operation: PUSH
+  # For github-ssh (see providers above), scope this to a repo you actually control:
+  # - username: dev
+  #   provider: github-ssh
+  #   match:
+  #     target: SLUG
+  #     value: /your-org/your-repo
+  #     type: LITERAL
+  #   grant: PUSH
 
 rules:
   # Evaluated like firewall rules: all allow and deny rules merged into a single list
@@ -175,6 +202,16 @@ rules:
     #   order: 110
     #   operation: BOTH
     #   provider: github
+    #   match:
+    #     target: SLUG
+    #     value: /your-org/your-repo
+    #     type: LITERAL
+
+    # For github-ssh (see providers above), scope this to a repo you actually control:
+    # - enabled: true
+    #   order: 111
+    #   operation: BOTH
+    #   provider: github-ssh
     #   match:
     #     target: SLUG
     #     value: /your-org/your-repo

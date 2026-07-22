@@ -3,12 +3,12 @@ package com.rbc.fogwall.ssh;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.git.HttpOperation;
 import com.rbc.fogwall.git.LocalRepositoryCache;
-import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.servlet.filter.UrlRuleEvaluator;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Path;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.sshd.agent.SshAgent;
 import org.apache.sshd.common.channel.exception.SshChannelClosedException;
@@ -39,7 +39,7 @@ import org.eclipse.jgit.transport.UploadPack;
 public class SshGitUploadCommand implements Command {
 
     private final String repoPath;
-    private final FogwallProvider provider;
+    private final Map<String, SshProviderTarget> routes;
     private final LocalRepositoryCache cache;
     private final FogwallProxyAgentFactory agentFactory;
     private final UrlRuleRegistry urlRuleRegistry;
@@ -53,14 +53,14 @@ public class SshGitUploadCommand implements Command {
 
     SshGitUploadCommand(
             String repoPath,
-            FogwallProvider provider,
+            Map<String, SshProviderTarget> routes,
             LocalRepositoryCache cache,
             FogwallProxyAgentFactory agentFactory,
             UrlRuleRegistry urlRuleRegistry,
             Path knownHostsFile,
             boolean trustOnFirstUse) {
         this.repoPath = repoPath;
-        this.provider = provider;
+        this.routes = routes;
         this.cache = cache;
         this.agentFactory = agentFactory;
         this.urlRuleRegistry = urlRuleRegistry;
@@ -105,7 +105,7 @@ public class SshGitUploadCommand implements Command {
         try {
             SshGitReceiveCommand.RepoRoute route;
             try {
-                route = SshGitReceiveCommand.resolveRoute(repoPath, provider.getUri());
+                route = SshGitReceiveCommand.resolveRoute(repoPath, routes);
             } catch (IllegalArgumentException e) {
                 writeError(e.getMessage());
                 exitCode = 128;
@@ -117,7 +117,7 @@ public class SshGitUploadCommand implements Command {
 
             // Mirrors UrlRuleAggregateFilter's fetch-side gate — the only enforcement point for URL allow/deny
             // rules on this transport, since SSH has no servlet filter chain.
-            var evaluator = new UrlRuleEvaluator(urlRuleRegistry, provider);
+            var evaluator = new UrlRuleEvaluator(urlRuleRegistry, route.provider());
             String slug = owner + "/" + repo;
             UrlRuleEvaluator.Result result = evaluator.evaluate(slug, owner, repo, HttpOperation.FETCH);
             if (!(result instanceof UrlRuleEvaluator.Result.Allowed allowed)) {

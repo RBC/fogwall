@@ -226,6 +226,57 @@ class SshE2ETest {
 
     @Test
     @Order(6)
+    void secondProvider_pushIsRoutedAndForwarded_notSilentlyDropped() throws Exception {
+        // Regression test for #447: a second SSH provider entry (same Gitea backend, routed under a distinct
+        // pathSuffix — see SshProxyFixture.ALIAS_PATH_SUFFIX) must actually be reachable, not silently ignored in
+        // favor of the first configured provider.
+        var git = sshGit();
+        Path repo = git.clone(
+                gitea.getBaseUrl() + "/" + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO + ".git",
+                "ssh-second-provider");
+        git.setRemoteUrl(repo, "origin", proxy.aliasPushUrl(GiteaContainer.TEST_ORG, GiteaContainer.TEST_REPO));
+        git.setAuthor(repo, GiteaContainer.VALID_AUTHOR_NAME, GiteaContainer.VALID_AUTHOR_EMAIL);
+        git.writeAndStage(repo, "ssh-second-provider.txt", "pushed via the second SSH provider entry");
+        git.commit(repo, "test: push via second SSH provider (issue #447)");
+
+        var result = git.pushWithResult(repo);
+        assertTrue(result.succeeded(), "Expected push via the second provider to succeed\n" + result.output());
+
+        var records = proxy.getPushStore().find(PushQuery.builder().limit(200).build());
+        assertTrue(
+                records.stream()
+                        .anyMatch(r -> PushStatus.FORWARDED.equals(r.getStatus())
+                                && "gitea-ssh-e2e-alias".equals(r.getProvider())),
+                "Expected a FORWARDED record attributed to the second provider entry");
+    }
+
+    @Test
+    @Order(7)
+    void unknownProviderPath_isRejectedWithClearError() throws Exception {
+        // A path segment that doesn't match any configured provider must fail cleanly, not fall back to the
+        // first-configured provider (the exact silent-drop behavior #447 fixes).
+        var git = sshGit();
+        Path repo = git.clone(
+                gitea.getBaseUrl() + "/" + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO + ".git",
+                "ssh-unknown-provider");
+        git.setRemoteUrl(
+                repo,
+                "origin",
+                "ssh://localhost:" + proxy.getSshPort() + "/no-such-provider/" + GiteaContainer.TEST_ORG + "/"
+                        + GiteaContainer.TEST_REPO + ".git");
+        git.setAuthor(repo, GiteaContainer.VALID_AUTHOR_NAME, GiteaContainer.VALID_AUTHOR_EMAIL);
+        git.writeAndStage(repo, "unknown-provider.txt", "should not reach any provider");
+        git.commit(repo, "test: unknown provider path should be rejected cleanly");
+
+        var result = git.pushWithResult(repo);
+        assertFalse(result.succeeded(), "Expected push to an unconfigured provider path to fail");
+        assertTrue(
+                result.output().contains("Unknown provider path"),
+                "Expected a clear routing error in output:\n" + result.output());
+    }
+
+    @Test
+    @Order(8)
     void fetchViaSsh_deniedByUrlRule_isRejected() throws Exception {
         // Lower ruleOrder than the fixture's catch-all allow (order 1), so this is evaluated first.
         // Last test in the class by design — no cleanup needed for a rule that outlives this method.
