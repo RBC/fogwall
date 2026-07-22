@@ -129,6 +129,14 @@ server:
   # long steps (secret scanning, approval polling). Set to 0 to disable.
   heartbeat-interval-seconds: 10
 
+  # Maximum number of requests handled concurrently on virtual threads. Requests over
+  # the limit wait for a slot. Each in-flight push holds its buffered pack data in
+  # memory until the request completes, so size this to heap capacity and typical pack
+  # size — prefer adding instances over raising this limit when scaling out.
+  # Set to 0 to disable virtual-thread dispatch (requests then run directly on the
+  # platform thread pool, capped by its own size).
+  max-concurrent-requests: 512
+
   # Base URL of the dashboard, used in links sent to clients via sideband messages.
   # Should include the /dashboard path prefix.
   # Defaults to http://localhost:<port>/dashboard if not set.

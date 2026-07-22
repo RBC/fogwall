@@ -20,6 +20,7 @@ import com.rbc.fogwall.git.StoreAndForwardReceivePackFactory;
 import com.rbc.fogwall.git.StoreAndForwardRepositoryResolver;
 import com.rbc.fogwall.git.StoreAndForwardUploadPackFactory;
 import com.rbc.fogwall.jetty.BlockingContentHandler;
+import com.rbc.fogwall.jetty.FogwallJettyApplication;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.GenericProxyProvider;
 import com.rbc.fogwall.service.PushIdentityResolver;
@@ -41,6 +42,7 @@ import org.eclipse.jetty.ee11.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee11.servlet.ServletHolder;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.eclipse.jgit.http.server.GitServlet;
 
 /**
@@ -133,7 +135,11 @@ class JettyProxyFixture implements AutoCloseable {
             CommitConfig.IdentityVerificationConfig identityVerificationConfig,
             List<AccessRule> configRules)
             throws Exception {
-        server = new Server();
+        // Same thread model as production: bounded virtual-thread dispatch on top of the platform pool.
+        var threadPool = new QueuedThreadPool();
+        threadPool.setName("e2e-fixture");
+        server = new Server(threadPool);
+        FogwallJettyApplication.enableVirtualThreads(server, threadPool, "e2e-fixture", 512);
         var connector = new ServerConnector(server);
         connector.setPort(0); // ephemeral
         server.addConnector(connector);

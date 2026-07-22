@@ -107,6 +107,27 @@ subprojects {
     apply plugin: 'jacoco-report-aggregation'
     apply plugin: 'com.github.jk1.dependency-license-report'
 
+    // Estate-wide CVE pins for transitive-only dependencies (none of these are declared anywhere; they arrive
+    // via other libraries and ship in the container images that grype scans). One rule table so pins are
+    // auditable in one place — a rule is a no-op in modules where the group never appears.
+    configurations.configureEach {
+        resolutionStrategy.eachDependency { details ->
+            def r = details.requested
+            // Netty — pulled in by lettuce-core via spring-session-data-redis (dashboard).
+            if (r.group == 'io.netty') {
+                details.useVersion '4.1.135.Final'
+                details.because 'CVE fix: GHSA-3qp7-7mw8-wx86, GHSA-x4gw-5cx5-pgmh, GHSA-5pvg-856g-cp85, GHSA-676x-f7gg-47vc, GHSA-xmv7-r254-6q78'
+            }
+            // Jackson 2.x core/databind — pulled in by gestalt-yaml (server); the app itself is on the
+            // Jackson 3.x line (group tools.jackson), untouched here. Only these two artifacts get 2.22.1
+            // patch releases — sibling modules (annotations, dataformats) stay on 2.22.0 and are compatible.
+            if (r.group == 'com.fasterxml.jackson.core' && r.name in ['jackson-core', 'jackson-databind']) {
+                details.useVersion '2.22.1'
+                details.because 'CVE fix: GHSA-r7wm-3cxj-wff9, GHSA-5gvw-p9qm-jgwh, GHSA-5jmj-h7xm-6q6v'
+            }
+        }
+    }
+
     licenseReport {
         allowedLicensesFile = rootProject.file('gradle-allowed-licenses.json')
         configurations = ['runtimeClasspath']

@@ -99,11 +99,10 @@ public class SshGitReceiveCommand implements Command {
         ClientLivenessCheck liveness = serverSession instanceof Closeable closeable
                 ? () -> !closeable.isClosing()
                 : ClientLivenessCheck.alwaysConnected();
-        Thread worker = new Thread(
-                () -> runReceivePack(sshUser, resolvedUser, connectingFingerprint, authSocket, liveness),
-                "ssh-git-receive-" + repoPath);
-        worker.setDaemon(true);
-        worker.start();
+        // Virtual thread: the worker can park for the full approval wait without holding a platform thread.
+        Thread.ofVirtual()
+                .name("ssh-git-receive-" + repoPath)
+                .start(() -> runReceivePack(sshUser, resolvedUser, connectingFingerprint, authSocket, liveness));
     }
 
     /**

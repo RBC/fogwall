@@ -63,7 +63,8 @@ dependencies {
     implementation "org.apache.sshd:sshd-core:${minaSshdVersion}"
     implementation "org.eclipse.jgit:org.eclipse.jgit.ssh.apache:${jgitVersion}"
 
-    // Gestalt config (YAML source brings SnakeYAML transitively)
+    // Gestalt config (YAML source brings SnakeYAML transitively; also pulls Jackson 2.x — CVE-pinned in the
+    // root build.gradle)
     implementation "com.github.gestalt-config:gestalt-core:${gestaltVersion}"
     implementation "com.github.gestalt-config:gestalt-yaml:${gestaltVersion}"
 

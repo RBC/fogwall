@@ -48,6 +48,16 @@ public class ServerConfig {
     private boolean failFast = false;
 
     /**
+     * Maximum number of requests handled concurrently on virtual threads. Request handling is dispatched to virtual
+     * threads so that pushes blocked on approval waits or slow upstreams park cheaply instead of exhausting the
+     * platform thread pool; this bound is the admission limit that replaces pool size as backpressure. Each in-flight
+     * push holds its buffered pack bytes until the request completes, so the safe value depends on heap size and
+     * typical pack size — prefer raising instance count over raising this limit when scaling out. Set to 0 to disable
+     * virtual-thread dispatch and handle requests directly on the platform thread pool.
+     */
+    private int maxConcurrentRequests = 512;
+
+    /**
      * Connection timeout in seconds for store-and-forward upstream pushes
      * ({@link org.eclipse.jgit.transport.Transport#setTimeout}). Set to 0 to use JGit's default (no timeout).
      * Enterprises with slow or inspecting middleboxes should set this to a generous value (e.g. 120) rather than
