@@ -910,8 +910,8 @@ and SSH will have two identity entries — one for the HTTP provider, one for th
 
 ### Upstream host key verification
 
-When fogwall forwards an SSH push it authenticates to the upstream SCM using the developer's **forwarded SSH agent**. The
-upstream host key is what binds that agent to the genuine provider, so fogwall verifies it and **fails closed by
+When fogwall forwards an SSH push it authenticates to the upstream SCM using the developer's **forwarded SSH agent**.
+The upstream host key is what binds that agent to the genuine provider, so fogwall verifies it and **fails closed by
 default**: an unknown or changed upstream host key aborts the forward. (Without this, an attacker able to redirect the
 upstream connection would receive the developer's forwarded agent — an account-takeover primitive.)
 
