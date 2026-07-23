@@ -178,4 +178,27 @@ class GitleaksRunnerTest {
         assertTrue(result.isPresent(), "Scanner must return a result");
         assertTrue(result.get().isEmpty(), "Clean diff must produce no findings");
     }
+
+    @Test
+    void findChecksumEntry_matchesExactFilename() {
+        String content = """
+                1111111111111111111111111111111111111111111111111111111111111111  gitleaks_8.30.1_linux_arm64.tar.gz
+                2222222222222222222222222222222222222222222222222222222222222222  gitleaks_8.30.1_linux_x64.tar.gz
+                3333333333333333333333333333333333333333333333333333333333333333  gitleaks_8.30.1_darwin_x64.tar.gz
+                """;
+
+        assertEquals(
+                "2222222222222222222222222222222222222222222222222222222222222222",
+                GitleaksRunner.findChecksumEntry(content, "gitleaks_8.30.1_linux_x64.tar.gz"));
+        assertNull(GitleaksRunner.findChecksumEntry(content, "gitleaks_8.30.1_windows_x64.zip"));
+        assertNull(GitleaksRunner.findChecksumEntry("", "gitleaks_8.30.1_linux_x64.tar.gz"));
+    }
+
+    @Test
+    void sha256Hex_computesKnownDigest(@TempDir Path dir) throws Exception {
+        Path f = dir.resolve("data");
+        Files.writeString(f, "hello");
+
+        assertEquals("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824", GitleaksRunner.sha256Hex(f));
+    }
 }
