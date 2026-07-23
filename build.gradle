@@ -3,6 +3,12 @@ buildscript {
         resolutionStrategy {
             force 'org.codehaus.plexus:plexus-utils:3.6.1'
             force 'org.bouncycastle:bcpg-jdk18on:1.85'
+            // Jackson 2.x on the *plugin* classpath (gradle-node-plugin, cyclonedx-gradle-plugin).
+            // The runtime pin in the subprojects eachDependency table does not reach this
+            // configuration, and the dependency graph submitted to GitHub includes it.
+            // CVE fix: GHSA-r7wm-3cxj-wff9, GHSA-5gvw-p9qm-jgwh, GHSA-5jmj-h7xm-6q6v
+            force 'com.fasterxml.jackson.core:jackson-core:2.22.1'
+            force 'com.fasterxml.jackson.core:jackson-databind:2.22.1'
         }
     }
 }
