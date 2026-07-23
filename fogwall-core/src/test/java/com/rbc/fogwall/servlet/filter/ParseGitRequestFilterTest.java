@@ -379,4 +379,50 @@ class ParseGitRequestFilterTest {
         assertNotEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
         assertEquals("refs/tags/v1.0", details.getBranch());
     }
+    // ---- invalid repository path segments (rejected before any body parsing) ----
+
+    @Test
+    void parse_traversalOwnerSegment_isRejected() throws Exception {
+        byte[] body = loadResource("push-sample-01-body.bin");
+        RequestBodyWrapper wrapper = wrapBody(body, "/../repo.git/git-receive-pack");
+
+        GitRequestDetails details = makeFilter().parse(wrapper);
+
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+        assertTrue(details.getReason().contains("owner and name"), "Reason should describe the allowed characters");
+        assertNull(details.getCommitFrom(), "Body must not be parsed for a rejected path");
+    }
+
+    @Test
+    void parse_dotGitStrippedNameCollapsingToTraversal_isRejected() throws Exception {
+        byte[] body = loadResource("push-sample-01-body.bin");
+        // "...git" passes a naive charset check but strips to "." — the semantic value must be validated
+        RequestBodyWrapper wrapper = wrapBody(body, "/owner/...git/git-receive-pack");
+
+        GitRequestDetails details = makeFilter().parse(wrapper);
+
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+    }
+
+    @Test
+    void parse_controlCharactersInOwner_isRejected() throws Exception {
+        byte[] body = loadResource("push-sample-01-body.bin");
+        RequestBodyWrapper wrapper = wrapBody(body, "/own\r\ner/repo.git/git-receive-pack");
+
+        GitRequestDetails details = makeFilter().parse(wrapper);
+
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+    }
+
+    @Test
+    void parse_validPath_isNotRejectedByPathValidation() throws Exception {
+        byte[] body = loadResource("push-sample-01-body.bin");
+        RequestBodyWrapper wrapper = wrapBody(body, "/my-org/my.repo_2.git/git-receive-pack");
+
+        GitRequestDetails details = makeFilter().parse(wrapper);
+
+        assertNotEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+        assertEquals("my-org", details.getRepoRef().getOwner());
+        assertEquals("my.repo_2", details.getRepoRef().getName());
+    }
 }

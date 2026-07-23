@@ -39,6 +39,15 @@ public class StoreAndForwardRepositoryResolver implements RepositoryResolver<Htt
         // JGit passes name as the path after the servlet mapping, e.g. "owner/repo.git"
         String cleanName = name.replaceAll("\\.git$", "");
 
+        // Reject malformed segments before constructing the upstream URL — the servlet container's
+        // URI normalization must not be the only defense against traversal in the repository path.
+        for (String segment : cleanName.split("/")) {
+            if (!RepoSlugValidator.isValidSegment(segment)) {
+                log.warn("Rejecting store-and-forward open with invalid repository path: {}", name);
+                throw new RepositoryNotFoundException(name);
+            }
+        }
+
         // Construct the clean upstream URL (no credentials, ever)
         String cleanUpstreamUrl = provider.getUri() + "/" + cleanName + ".git";
 

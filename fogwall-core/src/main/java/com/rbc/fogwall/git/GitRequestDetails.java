@@ -55,6 +55,7 @@ public class GitRequestDetails {
     private List<PushStep> steps = new ArrayList<>(); // Filter/hook results for audit trail
     private GitResult result = GitResult.PENDING;
     private String reason;
+    private String rejectionTitle; // client-facing title shown when result == REJECTED; generic fallback if unset
 
     // Raw secret values found by SecretScanningFilter, for redacting stored step content before persistence.
     // Never logged and never included in any user-facing message - see SecretRedactor.
