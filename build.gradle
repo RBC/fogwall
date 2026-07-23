@@ -115,8 +115,8 @@ subprojects {
             def r = details.requested
             // Netty — pulled in by lettuce-core via spring-session-data-redis (dashboard).
             if (r.group == 'io.netty') {
-                details.useVersion '4.1.135.Final'
-                details.because 'CVE fix: GHSA-3qp7-7mw8-wx86, GHSA-x4gw-5cx5-pgmh, GHSA-5pvg-856g-cp85, GHSA-676x-f7gg-47vc, GHSA-xmv7-r254-6q78'
+                details.useVersion '4.1.136.Final'
+                details.because 'CVE fix: GHSA-3qp7-7mw8-wx86, GHSA-x4gw-5cx5-pgmh, GHSA-5pvg-856g-cp85, GHSA-676x-f7gg-47vc, GHSA-xmv7-r254-6q78, GHSA-558v-64gr-wgg4'
             }
             // Jackson 2.x core/databind — pulled in by gestalt-yaml (server); the app itself is on the
             // Jackson 3.x line (group tools.jackson), untouched here. Only these two artifacts get 2.22.1

@@ -12,10 +12,14 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.PosixFilePermission;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -57,6 +61,9 @@ public class GitleaksRunner {
 
     /** Classpath resource prefix for bundled gitleaks binaries; full path is {@code gitleaks/<os>_<arch>}. */
     private static final String BUNDLED_BINARY_RESOURCE_PREFIX = "gitleaks/";
+
+    /** Base URL for gitleaks release assets; the version tag is appended (e.g. {@code ...download/v8.30.1}). */
+    private static final String RELEASE_DOWNLOAD_BASE = "https://github.com/gitleaks/gitleaks/releases/download/v";
 
     /** Exit code gitleaks returns when findings are present (distinct from error exit codes). */
     private static final int FINDINGS_EXIT_CODE = 2;
@@ -317,7 +324,7 @@ public class GitleaksRunner {
         }
 
         String tarName = "gitleaks_" + version + "_" + tarSuffix + ".tar.gz";
-        String downloadUrl = "https://github.com/gitleaks/gitleaks/releases/download/v" + version + "/" + tarName;
+        String downloadUrl = RELEASE_DOWNLOAD_BASE + version + "/" + tarName;
         // Name the binary with the version so different versions can coexist in the cache dir
         Path binary = installDir.resolve("gitleaks-" + version);
 
@@ -327,7 +334,12 @@ public class GitleaksRunner {
 
             log.info("Auto-installing gitleaks {} to {} ...", version, installDir);
             try (InputStream in = URI.create(downloadUrl).toURL().openStream()) {
-                Files.copy(in, tarFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                Files.copy(in, tarFile, StandardCopyOption.REPLACE_EXISTING);
+            }
+
+            if (!verifyReleaseChecksum(tarFile, tarName, version)) {
+                Files.deleteIfExists(tarFile);
+                return null;
             }
 
             // Extract with Ant-style untar via the JVM's built-in zip/tar support isn't available,
@@ -346,7 +358,7 @@ public class GitleaksRunner {
             // tar extracts the binary as plain "gitleaks"; rename to versioned name
             Path extracted = installDir.resolve("gitleaks");
             if (!binary.equals(extracted) && Files.exists(extracted)) {
-                Files.move(extracted, binary, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                Files.move(extracted, binary, StandardCopyOption.REPLACE_EXISTING);
             }
 
             makeExecutable(binary);
@@ -360,6 +372,71 @@ public class GitleaksRunner {
                     e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Verifies the downloaded tarball against the SHA-256 published in the release's {@code checksums.txt}. Anything
+     * that cannot be positively verified — unreachable checksum file, missing entry, digest mismatch — is refused; the
+     * tarball must never be extracted or executed unverified.
+     */
+    private static boolean verifyReleaseChecksum(Path tarFile, String tarName, String version) {
+        String checksumsUrl = RELEASE_DOWNLOAD_BASE + version + "/gitleaks_" + version + "_checksums.txt";
+        try {
+            String checksums;
+            try (InputStream in = URI.create(checksumsUrl).toURL().openStream()) {
+                checksums = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            String expected = findChecksumEntry(checksums, tarName);
+            if (expected == null) {
+                log.error("gitleaks auto-install: no entry for {} in {} - refusing to install", tarName, checksumsUrl);
+                return false;
+            }
+            String actual = sha256Hex(tarFile);
+            if (!expected.equalsIgnoreCase(actual)) {
+                log.error(
+                        "gitleaks auto-install: checksum mismatch for {} (expected {}, actual {}) - refusing to install",
+                        tarName,
+                        expected,
+                        actual);
+                return false;
+            }
+            log.debug("gitleaks auto-install: verified {} against release checksums.txt", tarName);
+            return true;
+        } catch (Exception e) {
+            log.error(
+                    "gitleaks auto-install: could not verify checksum for {} - refusing to install: {}",
+                    tarName,
+                    e.getMessage());
+            return false;
+        }
+    }
+
+    /** Returns the hex digest listed for {@code fileName} in goreleaser-style checksum content, or null if absent. */
+    static String findChecksumEntry(String checksumsContent, String fileName) {
+        for (String line : checksumsContent.split("\n")) {
+            String[] parts = line.trim().split("\\s+");
+            if (parts.length == 2 && parts[1].equals(fileName)) {
+                return parts[0];
+            }
+        }
+        return null;
+    }
+
+    static String sha256Hex(Path file) throws IOException {
+        MessageDigest md;
+        try {
+            md = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e); // SHA-256 is a mandatory JCA algorithm
+        }
+        try (InputStream in = Files.newInputStream(file)) {
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) {
+                md.update(buf, 0, n);
+            }
+        }
+        return HexFormat.of().formatHex(md.digest());
     }
 
     /** Detects the current platform and returns the gitleaks tarball suffix, or null if unsupported. */
