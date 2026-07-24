@@ -118,10 +118,18 @@ attestations:
     type: checkbox
     label: "I have reviewed the diff and it contains no sensitive or proprietary information"
     required: true
+    links:
+      - text: "Data classification policy"
+        url: "https://policies.corp.example.com/data-classification"
   - id: policy-compliance
     type: checkbox
     label: "This push complies with our open source contribution policy"
     required: true
+    links:
+      - text: "Open source contribution policy"
+        url: "https://policies.corp.example.com/open-source-contribution"
+      - text: "Approved license list"
+        url: "https://policies.corp.example.com/approved-licenses"
   - id: ticket-ref
     type: text
     label: "Internal ticket or justification reference"

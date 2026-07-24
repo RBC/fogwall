@@ -58,14 +58,17 @@ else
   exit 1
 fi
 
-ARGS=(-f docker-compose.yml)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+COMPOSE_DIR="${SCRIPT_DIR}/docker"
+
+ARGS=(-f "${COMPOSE_DIR}/docker-compose.yml")
 
 if [[ -n "$AUTH" ]]; then
-  ARGS+=(-f "docker-compose.${AUTH}.yml")
+  ARGS+=(-f "${COMPOSE_DIR}/docker-compose.${AUTH}.yml")
 fi
 
 if [[ -n "$DB" ]]; then
-  ARGS+=(--profile "$DB" -f "docker-compose.${DB}.yml")
+  ARGS+=(--profile "$DB" -f "${COMPOSE_DIR}/docker-compose.${DB}.yml")
 fi
 
 $COMPOSE "${ARGS[@]}" "$@"

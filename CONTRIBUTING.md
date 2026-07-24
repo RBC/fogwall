@@ -16,6 +16,18 @@ If you prefer to manage tools yourself, you need:
 
 Gradle itself is included via the wrapper — no separate installation needed.
 
+## Project structure
+
+Multi-module Gradle project; dependencies flow upward (`core` → `server` → `dashboard`):
+
+| Module              | Purpose                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------ |
+| `fogwall-core`      | Shared library: filter chain, JGit hooks, push store, provider model, approval abstraction |
+| `fogwall-server`    | Standalone proxy-only server — no dashboard, no Spring                                     |
+| `fogwall-dashboard` | Dashboard + REST API — Spring MVC, approval UI, depends on `fogwall-server`                |
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the modules fit together at runtime.
+
 ## Build
 
 ```shell
@@ -261,21 +273,21 @@ provider, one for the database backend. They can be combined freely.
 
 **Auth overlays** — each mounts a different `fogwall-local.yml` config into the container:
 
-| File                      | Auth provider                      | Default database |
-| ------------------------- | ---------------------------------- | ---------------- |
-| _(none)_                  | Static (password hashes in config) | H2 in-memory     |
-| `docker-compose.ldap.yml` | OpenLDAP                           | H2 in-memory     |
-| `docker-compose.oidc.yml` | OIDC (mock-oauth2-server)          | H2 in-memory     |
+| File                             | Auth provider                      | Default database |
+| -------------------------------- | ---------------------------------- | ---------------- |
+| _(none)_                         | Static (password hashes in config) | H2 in-memory     |
+| `docker/docker-compose.ldap.yml` | OpenLDAP                           | H2 in-memory     |
+| `docker/docker-compose.oidc.yml` | OIDC (mock-oauth2-server)          | H2 in-memory     |
 
 **Database overlays** — each sets `FOGWALL_DATABASE_*` environment variables; no config file swap needed:
 
-| File                          | Backend      | Profile flag         | UI                     |
-| ----------------------------- | ------------ | -------------------- | ---------------------- |
-| _(none)_                      | H2 in-memory | —                    | —                      |
-| `docker-compose.postgres.yml` | PostgreSQL   | `--profile postgres` | Adminer at :8082       |
-| `docker-compose.mysql.yml`    | MySQL        | `--profile mysql`    | Adminer at :8082       |
-| `docker-compose.mariadb.yml`  | MariaDB      | `--profile mariadb`  | Adminer at :8082       |
-| `docker-compose.mongo.yml`    | MongoDB      | `--profile mongo`    | Mongo Express at :8081 |
+| File                                 | Backend      | Profile flag         | UI                     |
+| ------------------------------------ | ------------ | -------------------- | ---------------------- |
+| _(none)_                             | H2 in-memory | —                    | —                      |
+| `docker/docker-compose.postgres.yml` | PostgreSQL   | `--profile postgres` | Adminer at :8082       |
+| `docker/docker-compose.mysql.yml`    | MySQL        | `--profile mysql`    | Adminer at :8082       |
+| `docker/docker-compose.mariadb.yml`  | MariaDB      | `--profile mariadb`  | Adminer at :8082       |
+| `docker/docker-compose.mongo.yml`    | MongoDB      | `--profile mongo`    | Mongo Express at :8081 |
 
 Any auth overlay can be combined with any database overlay (or none, to keep H2). Use the `compose.sh` wrapper rather
 than bare `docker compose` — it assembles the right `-f`/`--profile` flags and auto-detects docker vs podman:

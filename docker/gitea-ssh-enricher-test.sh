@@ -60,7 +60,7 @@ PUB_KEY2="$(cat "${KEY2_PATH}.pub")"
 # ---------------------------------------------------------------------------
 
 echo "==> Creating Gitea user 'otheruser'..."
-docker compose -f "${REPO_ROOT}/docker-compose.yml" exec gitea \
+docker compose -f "${REPO_ROOT}/docker/docker-compose.yml" exec gitea \
     /sbin/su-exec git gitea admin user create \
     --username otheruser \
     --password "Other1234!" \
@@ -68,7 +68,7 @@ docker compose -f "${REPO_ROOT}/docker-compose.yml" exec gitea \
     --must-change-password=false 2>&1 || echo "    (already exists, continuing)"
 
 # Generate an API token for otheruser so we can register the SSH key
-OTHERUSER_TOKEN=$(docker compose -f "${REPO_ROOT}/docker-compose.yml" exec gitea \
+OTHERUSER_TOKEN=$(docker compose -f "${REPO_ROOT}/docker/docker-compose.yml" exec gitea \
     /sbin/su-exec git gitea admin user generate-access-token \
     --username otheruser \
     --token-name "enricher-test" \

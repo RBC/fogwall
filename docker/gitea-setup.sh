@@ -14,7 +14,7 @@ COMPOSE="${COMPOSE:-docker compose}"
 # Always pass the compose file explicitly so podman-compose finds it when the
 # script is run from any directory (podman-compose doesn't auto-discover like
 # Docker Compose v2 does).
-COMPOSE_FILE="$(dirname "${BASH_SOURCE[0]}")/../docker-compose.yml"
+COMPOSE_FILE="$(dirname "${BASH_SOURCE[0]}")/docker-compose.yml"
 GITEA_URL="http://localhost:3000"
 
 # Gitea admin — owns orgs/repos; NOT mapped in fogwall (tests identity-not-linked)

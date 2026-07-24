@@ -2,13 +2,13 @@ services:
 
   # ── fogwall ───────────────────────────────────────────────────────────────────
   fogwall:
-    build: .
+    build: ..
     ports:
       - "8080:8080"
     volumes:
-      - ./docker/fogwall-docker-default.yml:/app/conf/fogwall-docker-default.yml:ro
+      - ./fogwall-docker-default.yml:/app/conf/fogwall-docker-default.yml:ro
       # Uncomment to enable debug logging (see docker/log4j2-debug.xml):
-#      - ./docker/log4j2-debug.xml:/app/conf/log4j2-debug.xml:ro
+#      - ./log4j2-debug.xml:/app/conf/log4j2-debug.xml:ro
     depends_on:
       gitea:
         condition: service_healthy

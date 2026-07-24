@@ -242,6 +242,30 @@ records a self-certification in the audit log and forwards without waiting for a
 
 If Bob also needs to review others' pushes to that repo, add a third entry with `grant: REVIEW`.
 
+### Permission groups
+
+_Available since v1.3.0._
+
+For teams larger than a handful of users, granting permissions one entry per user gets unwieldy. A `groups:` block
+grants the same target/match model to every member at once:
+
+```yaml
+groups:
+  - name: platform-team
+    description: Platform engineering
+    members: [alice, bob, carol]
+    grants:
+      - provider: github/github.com
+        path: /myorg/*
+        path-type: GLOB
+        grant: PUSH
+```
+
+A member's effective access is the union of their direct `permissions:` entries and every group they belong to — groups
+are additive, not a replacement for per-user grants. Groups defined in YAML are read-only in the dashboard (config is
+the source of truth); groups created via the dashboard UI are DB-backed and fully editable there. Both kinds show up
+together in the **Groups** admin page.
+
 ### Path matching
 
 Paths default to exact (`LITERAL`) matching. Use `path-type` for wildcards:
@@ -301,6 +325,28 @@ Rules are evaluated in `order` number order (lower = earlier). Deny rules overri
 The proxy is **default-deny**: if no allow rule matches, the request is rejected.
 
 `operation` scopes a rule to `PUSH`, `FETCH`, or both. A repo can be open for fetch but restricted for push.
+
+### Dry-run testing rules and permissions
+
+_Available since v1.3.0._
+
+Before rolling out a new access rule or permission grant, verify the outcome against the live configuration without
+waiting for a real push:
+
+```
+POST /api/repos/rules/test
+{ "provider": "github/github.com", "owner": "myorg", "name": "myrepo", "operation": "PUSH" }
+→ { "decision": "ALLOW", "matchedRuleId": 110, "steps": [...] }
+
+POST /api/users/{username}/permissions/test
+{ "provider": "github/github.com", "path": "/myorg/myrepo", "grant": "PUSH" }
+→ { "allowed": true, "source": "GROUP", "groupName": "platform-team" }
+```
+
+Both endpoints are read-only evaluations against whatever rules, permissions, and groups are currently loaded — no push
+is created. `source` on the permission check distinguishes a direct per-user grant (`DIRECT`) from one inherited via a
+[permission group](#permission-groups) (`GROUP`). These endpoints are dashboard-only (`fogwall-dashboard`); the
+standalone server has no REST API.
 
 ---
 
@@ -503,6 +549,14 @@ bundled binary.
 
 fogwall follows 12-factor config principles: the application ships with safe defaults baked into the JAR, and operators
 layer environment-specific values on top without modifying the image.
+
+Both `fogwall-server` and `fogwall-dashboard` load config through [Gestalt](https://gestalt-config.github.io/gestalt/),
+a lightweight Java config library rather than Spring's `@ConfigurationProperties`/`Environment` stack — same reasoning
+as [not using Spring Boot](ARCHITECTURE.md#proxy--dashboard-fogwall-dashboard) — fogwall needs config loading to work
+identically in `fogwall-server`, which has no Spring on its classpath at all. Gestalt is a much smaller dependency that
+covers the same core need (typed config binding, layered sources, environment variable overrides) without pulling in a
+DI container. The profile mechanism below is directly modeled on Spring profiles — the concept of named, composable
+config overlays activated by name is worth keeping even without the rest of Spring's config machinery.
 
 ### How config is loaded
 
@@ -724,9 +778,17 @@ database:
 database:
   type: h2-file
   path: /app/.data/fogwall
+
+# MySQL / MariaDB — same config shape, different type
+database:
+  type: mysql # or mariadb
+  url: jdbc:mysql://db.internal:3306/fogwall
+  username: fogwall
+  password: secret
 ```
 
-Schema is applied automatically via Flyway on startup.
+`database.type` accepts `h2-mem` (default), `h2-file`, `postgres`, `mysql`, `mariadb`, or `mongo`. Schema is applied
+automatically via Flyway on startup for the JDBC backends.
 
 ### TLS
 

@@ -53,19 +53,19 @@ override everything.
 ### Docker Compose
 
 The Docker Compose setup uses overlay files to compose the stack. See
-[docker-compose.ldap.yml](../docker-compose.ldap.yml) and [docker-compose.oidc.yml](../docker-compose.oidc.yml) for
-examples of how profiles are combined.
+[docker/docker-compose.ldap.yml](../docker/docker-compose.ldap.yml) and
+[docker/docker-compose.oidc.yml](../docker/docker-compose.oidc.yml) for examples of how profiles are combined.
 
 ```bash
 # Default (local auth, h2 database)
 docker compose up -d
 
 # LDAP auth
-docker compose -f docker-compose.yml -f docker-compose.ldap.yml up -d
+docker compose -f docker/docker-compose.yml -f docker/docker-compose.ldap.yml up -d
 
 # OIDC auth + PostgreSQL
 docker compose --profile postgres \
-  -f docker-compose.yml -f docker-compose.oidc.yml -f docker-compose.postgres.yml up -d
+  -f docker/docker-compose.yml -f docker/docker-compose.oidc.yml -f docker/docker-compose.postgres.yml up -d
 ```
 
 ## Environment variable overrides
@@ -123,6 +123,12 @@ server:
   #   servicenow — delegates to a ServiceNow approval workflow
   # Note: FogwallDashboardApplication always uses 'ui' regardless of this setting.
   approval-mode: auto
+
+  # How long a store-and-forward push waits for a review decision while the client
+  # connection is held open (approval-mode: ui or servicenow). On expiry the push is
+  # marked CANCELED and rejected — the developer must re-push and re-review. This is a
+  # live-session bound, not a durable queue; hold it short. Default 1800 (30 minutes).
+  approval-timeout-seconds: 1800
 
   # Sideband keepalive interval in seconds for store-and-forward operations.
   # Sends periodic progress packets to prevent idle-timeout disconnects during
