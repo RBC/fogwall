@@ -15,7 +15,7 @@ for arg in "$@"; do
 done
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-COMPOSE="docker compose --profile mongo -f ${REPO_ROOT}/docker-compose.yml -f ${REPO_ROOT}/docker-compose.mongo.yml"
+COMPOSE="docker compose --profile mongo -f ${REPO_ROOT}/docker/docker-compose.yml -f ${REPO_ROOT}/docker/docker-compose.mongo.yml"
 
 # Credentials set by docker/gitea-setup.sh
 ADMIN_USER="fogwalladmin"

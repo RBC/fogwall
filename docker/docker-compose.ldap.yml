@@ -1,7 +1,7 @@
 # Docker Compose overlay — LDAP authentication profile.
 #
 # Start the full stack with LDAP auth:
-#   docker compose -f docker-compose.yml -f docker-compose.ldap.yml up -d
+#   docker compose -f docker/docker-compose.yml -f docker/docker-compose.ldap.yml up -d
 #   bash docker/gitea-setup.sh    # (first time only — creates Gitea admin + test repo)
 #
 # Log in at http://localhost:8080 with:
@@ -19,7 +19,7 @@ services:
       LDAP_ADMIN_PASSWORD: adminpassword
       LDAP_TLS: "false"
     volumes:
-      - ./docker/ldap-bootstrap.ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom/01-users.ldif:ro
+      - ./ldap-bootstrap.ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom/01-users.ldif:ro
     # --copy-service is required for osixia/openldap to pick up custom LDIF files.
     command: ["--loglevel", "warning", "--copy-service"]
     ports:
@@ -34,7 +34,7 @@ services:
 
   fogwall:
     volumes:
-      - ./docker/fogwall-ldap.yml:/app/conf/fogwall-ldap.yml:ro
+      - ./fogwall-ldap.yml:/app/conf/fogwall-ldap.yml:ro
     environment:
       FOGWALL_CONFIG_PROFILES: docker-default,ldap
     depends_on:

@@ -13,7 +13,7 @@
 # ──────────────────────────────────────────────────────────────────────────────
 #
 # Start the full stack with OIDC auth:
-#   docker compose -f docker-compose.yml -f docker-compose.oidc.yml up -d
+#   docker compose -f docker/docker-compose.yml -f docker/docker-compose.oidc.yml up -d
 #   bash docker/gitea-setup.sh    # (first time only — creates Gitea admin + test repo)
 #
 # Open http://localhost:8080 — log in with any username (no password).
@@ -32,7 +32,7 @@ services:
       # so that auth.role-mappings can grant ROLE_ADMIN automatically.
       JSON_CONFIG_PATH: /app/mock-oauth2-config.json
     volumes:
-      - ./docker/mock-oauth2-config.json:/app/mock-oauth2-config.json:ro
+      - ./mock-oauth2-config.json:/app/mock-oauth2-config.json:ro
     ports:
       - "9090:9090"
     healthcheck:
@@ -44,7 +44,7 @@ services:
 
   fogwall:
     volumes:
-      - ./docker/fogwall-oidc.yml:/app/conf/fogwall-oidc.yml:ro
+      - ./fogwall-oidc.yml:/app/conf/fogwall-oidc.yml:ro
     environment:
       FOGWALL_CONFIG_PROFILES: docker-default,oidc
       FOGWALL_AUTH_OIDC_CLIENT__ID: fogwall-client

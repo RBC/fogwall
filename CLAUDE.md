@@ -94,7 +94,12 @@ source of truth for exact commands, since it's written for human contributors an
 ## Commit conventions
 
 - Always squash related commits into one before pushing — use `git reset --soft` to squash, not `git rebase -i`
-  (requires TTY).
+  (requires TTY). Before computing the squash base with `git merge-base`, run `git fetch origin main` and diff/reset
+  against `origin/main`, not the local `main` ref — local `main` can be stale (e.g. in a multi-worktree setup where
+  another worktree has `main` checked out and nobody fast-forwarded it), silently pulling already-merged commits back
+  into the squash.
+- Always start a new feature branch from an up-to-date `origin/main` — `git fetch origin main` first, branch from
+  `origin/main`, not a possibly-stale local `main`.
 - Always include a `Co-Authored-By` trailer crediting the Claude model that did the work (e.g.
   `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>` — use the current model's name, not this example, if it
   differs). This is a project transparency requirement.
@@ -127,6 +132,20 @@ migration instead."
 
 Refer to [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for detailed docs on YAML config structure, environment variable
 overrides, and provider-specific settings.
+
+## Documentation upkeep
+
+When a PR introduces or materially changes a user-facing feature, check whether it needs a docs update as part of that
+PR — don't let doc drift accumulate to be reconciled later in a big batch:
+
+- [docs/USER_GUIDE.md](docs/USER_GUIDE.md) — anything a developer pushing through the proxy would need to know
+- [docs/ADMIN_GUIDE.md](docs/ADMIN_GUIDE.md) — anything an operator configuring/running fogwall would need to know
+- [docs/CONFIGURATION.md](docs/CONFIGURATION.md) — any new or changed config key
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — any new abstraction, pipeline step, or design rationale worth
+  explaining for contributors
+
+Not every change needs all four — use judgment — but check rather than skip the check. Letting several features land
+undocumented and refreshing docs in one large pass later is more error-prone than keeping them current per-PR.
 
 ## Roadmap & architecture
 

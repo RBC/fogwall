@@ -1,87 +1,79 @@
-[![CI](https://github.com/RBC/fogwall/actions/workflows/ci.yml/badge.svg)](https://github.com/RBC/fogwall/actions/workflows/ci.yml)
-[![CVE Scanning](https://github.com/RBC/fogwall/actions/workflows/cve.yml/badge.svg)](https://github.com/RBC/fogwall/actions/workflows/cve.yml)
+# fogwall
+
+[![Latest release](https://img.shields.io/github/v/release/RBC/fogwall)](https://github.com/RBC/fogwall/releases/latest)
+[![Container: ghcr.io](https://img.shields.io/badge/container-ghcr.io-blue?logo=docker&logoColor=white)](https://github.com/RBC/fogwall/pkgs/container/fogwall)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/RBC/fogwall/badge)](https://scorecard.dev/viewer/?uri=github.com/RBC/fogwall)
 [![License](https://img.shields.io/github/license/RBC/fogwall)](https://github.com/RBC/fogwall/blob/main/LICENSE)
 
-# fogwall
-
-A policy-enforcing git push proxy for enterprises. fogwall sits between the developer's `git push` and the upstream host
-(GitHub, GitLab, Bitbucket, Forgejo), enforcing commit policies, scanning for secrets, verifying identities, and gating
-pushes behind a review workflow — with real-time feedback directly in the developer's terminal.
+A git-aware gateway that sits between developers and the upstream host (GitHub, GitLab, Bitbucket, Forgejo). Every push
+— any branch, any tag — is policy-checked, content-scanned, identity-verified, and gated behind review before it reaches
+upstream; every fetch is audited. Feedback streams to the developer's terminal, over HTTP(S) or SSH.
 
 Built on [JGit](https://github.com/eclipse-jgit/jgit) for native git protocol handling,
-[Jetty](https://github.com/jetty/jetty.project) for the HTTP layer, and [Spring](https://spring.io/),
-[React](https://react.dev/) & [Tailwind](https://tailwindcss.com/) for the dashboard.
+[Jetty](https://github.com/jetty/jetty.project) for the HTTP layer,
+[Apache MINA SSHD](https://mina.apache.org/sshd-project/) for the SSH server, and Spring
+([Web](https://docs.spring.io/spring-framework/reference/web/webmvc.html),
+[Security](https://spring.io/projects/spring-security)) with [React](https://react.dev/) &
+[Tailwind](https://tailwindcss.com/) for the dashboard.
 
-![Store-and-forward push demo](demos/demo.gif)
+![fogwall demo](demos/demo-push-fail-then-fix.gif)
+
+## Getting Started
+
+fogwall is distributed as a container image.
+
+```shell
+docker pull ghcr.io/rbc/fogwall:latest
+docker run -p 8080:8080 ghcr.io/rbc/fogwall:latest
+```
+
+`fogwall` is the dashboard + REST API image; `fogwall-server` is the standalone proxy-only variant (no dashboard, no
+Spring) — swap the image name to use it instead.
+
+| Tag       | What it is                                                                            |
+| --------- | ------------------------------------------------------------------------------------- |
+| `:latest` | The most recent tagged release. Use this unless you have a reason not to.             |
+| `:vX.Y.Z` | A specific pinned release.                                                            |
+| `:edge`   | Built from `main` on every merge — newer, less battle-tested. Not for production use. |
+
+See the [Configuration Reference](docs/CONFIGURATION.md) for YAML config, environment variable overrides, and provider
+settings. If you'd rather build and run from source (or need the Docker Compose dev environment, test scripts, or to
+contribute), see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Validation Features
 
 Both proxy modes enforce the same set of configurable validation rules:
 
+- 🪪 Identity linkage — internal corporate identity bound to upstream SCM identity, verified on every push (token over
+  HTTPS, SSH key fingerprint over SSH)
+- 🛡️ Governance per persona — per-repo push permissions (RBAC), self-certify for trusted maintainers, peer review by
+  default, or unattended auto-approve on the standalone server
 - 🔒 Repository URL allow/deny rules (literal, glob, and regex)
+- 🕵️ Git history integrity (prevent hidden commits and empty branch pushes)
+- ✍️ GPG commit signature verification
+- 🔑 Secret scanning ([gitleaks](https://github.com/gitleaks/gitleaks)); findings redacted at rest
+- 🔍 Diff content scanning — custom patterns plus built-in PII bundles (national ID patterns are warning-only)
+- 🧊 Binary blob detection by magic-byte signature, with MIME-type allow/deny
 - ✉️ Author email domain allow/block list
 - 📝 Commit message validation (literal + regex)
-- 🔍 Diff generation and content scanning
-- 🔑 Secret scanning ([gitleaks](https://github.com/gitleaks/gitleaks))
-- 🪪 SCM identity verification (resolve token → SCM user)
-- 🛡️ User push permissions (per-repo RBAC)
-- 🕵️ Git history integrity (prevent hidden commits and empty branch pushes)
-- ✍️ GPG/SSH commit signature verification
-- ✅ Approval gate with configurable mode (auto-approve or manual review via dashboard)
-- 📋 Aggregate failure reporting (all errors surfaced at once)
-- 📡 Real-time terminal feedback during `git push` as validation runs (store-and-forward)
 - 📊 Fetch auditing
 
 ## Dashboard
 
-![Push detail — timeline and review](demos/demo-ui2.png)
-
-![Push detail — diff and attestation](demos/demo-ui1.png)
+![Push detail — timeline, diff, and attestation](demos/demo-ui-stack.png)
 
 The web dashboard provides push management, approval workflows, and operational tooling:
 
-- 📜 Push lifecycle timeline (received → validated → approved → forwarded)
-- ✅ Attestation questionnaire with approve/reject/cancel and audit trail
-- 🔓 Self-certify grant for trusted contributors (IdP group-backed)
+- 🔒 Allow/deny URL rules (literal, glob, regex) scoped by provider and operation
+- 👤 Per-user and per-group push permissions with the same target/match model as URL rules
 - 🛡️ Admin override with explicit opt-in and separate audit logging
-- 🔒 Allow/deny access rules (literal, glob, regex) scoped by provider and operation
-- 👤 Per-user push permissions with the same target/match model as access rules
+- 🧪 Dry-run test endpoints for rules and permissions before rollout
+- 📜 Push lifecycle timeline (received → validated → approved → forwarded)
+- ✅ Attestation questionnaire (with linkable policy references) and approve/reject/cancel audit trail
 - 📄 Inline diff viewer with side-by-side toggle; large diffs (>1000 lines) on a dedicated page
 - 📦 Repository discovery with push/fetch traffic counts and one-click clone URL
 - 🔌 Provider connectivity diagnostics (TCP, TLS, HTTP, git-specific probe)
 - 🔄 Live config reload without server restart
-
-## Proxy Modes
-
-Two modes, both active for every provider:
-
-- **Transparent proxy** (`/proxy/<host>/...`) — forwards the push to upstream via Jetty `ProxyServlet`. A servlet filter
-  chain validates commits inline and rejects before the push reaches upstream. Developers re-push after fixing any
-  validation failures and/or after a push is approved.
-- **Store-and-forward** (`/push/<host>/...`) — runs as a live git server to receive the push locally, runs validation
-  with real-time terminal feedback, then forwards upstream on approval. The push session stays open while a reviewer
-  acts on the dashboard — no need to re-push after approval.
-
-```shell
-git remote add proxy http://localhost:8080/push/github.com/owner/repo.git
-git push proxy main
-```
-
-See the [User Guide](docs/USER_GUIDE.md) for URL scheme details, push modes, and the approval workflow.
-
-## Getting Started
-
-```shell
-mise install                       # Java 25 + Node 26 (or install manually)
-git clone https://github.com/RBC/fogwall.git && cd fogwall
-./gradlew build                    # compile + unit tests
-./gradlew :fogwall-dashboard:run   # proxy + dashboard at http://localhost:8080
-```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed build instructions, Docker Compose setup, test scripts, and
-development workflow. See the [Configuration Reference](docs/CONFIGURATION.md) for YAML config, environment variable
-overrides, and provider settings.
 
 ## Supported Providers
 
@@ -93,7 +85,9 @@ overrides, and provider settings.
 | Forgejo / Gitea | Token → user        | Any Forgejo or Gitea instance                 |
 
 Each provider can be pointed at a self-hosted instance via the `uri` config property. Multiple instances of the same
-provider type are supported.
+provider type are supported. Pushes over both HTTPS and SSH (opt-in) are supported — see the
+[User Guide](docs/USER_GUIDE.md) for choosing a proxy mode and setting up a remote, and the
+[Administrator Guide](docs/ADMIN_GUIDE.md#ssh-transport) for SSH setup.
 
 ## Authentication
 
@@ -106,8 +100,21 @@ The dashboard supports multiple authentication backends:
 | Active Directory | UPN bind via Spring's `ActiveDirectoryLdapAuthenticationProvider` |
 | OIDC             | OpenID Connect authorization code flow                            |
 
-See the [Configuration Reference](docs/CONFIGURATION.md#authentication) for setup details. Docker Compose overlays are
-provided for [LDAP](docker-compose.ldap.yml) and [OIDC](docker-compose.oidc.yml).
+LDAP, Active Directory, and OIDC backends can optionally run in open-access mode — any authenticated user gets default
+role access when no group/role mapping is configured, rather than being locked out. See the
+[Configuration Reference](docs/CONFIGURATION.md#authentication) for setup details. Docker Compose overlays are provided
+for [LDAP](docker/docker-compose.ldap.yml) and [OIDC](docker/docker-compose.oidc.yml).
+
+## Deployment
+
+- [Outbound corporate proxy](docs/CONFIGURATION.md#outbound-proxy) support (Basic and Kerberos auth)
+- [Custom upstream CA trust](docs/CONFIGURATION.md#custom-upstream-ca-trust); optional
+  [HTTPS listener](docs/CONFIGURATION.md#server-https-listener)
+- [Helm chart](charts/fogwall/README.md), including L4 passthrough for the SSH listener
+- [Redis-backed sessions](docs/CONFIGURATION.md#session-persistence-for-multi-instance-deployments) for multi-replica
+  dashboards
+
+See the full [Configuration Reference](docs/CONFIGURATION.md) and [Administrator Guide](docs/ADMIN_GUIDE.md).
 
 ## Push Audit Database
 
@@ -119,19 +126,11 @@ FORWARDED, or BLOCKED/ERROR) is written as a separate row, enabling full push hi
 | H2 in-memory | `h2-mem`     | SQL schema, data lost on restart. Default. |
 | H2 file      | `h2-file`    | Persistent, zero external dependencies     |
 | PostgreSQL   | `postgres`   | Production-grade                           |
-| MongoDB      | `mongo`      | Compatible with finos/git-proxy data model |
+| MySQL        | `mysql`      | MySQL 8.0+                                 |
+| MariaDB      | `mariadb`    | MariaDB 10.5+                              |
+| MongoDB      | `mongo`      | —                                          |
 
 See the [Configuration Reference](docs/CONFIGURATION.md#database) for connection settings and Docker Compose profiles.
-
-## Project Structure
-
-This is a multi-module Gradle project:
-
-| Module              | Purpose                                                                                    |
-| ------------------- | ------------------------------------------------------------------------------------------ |
-| `fogwall-core`      | Shared library: filter chain, JGit hooks, push store, provider model, approval abstraction |
-| `fogwall-server`    | Standalone proxy-only server — no dashboard, no Spring                                     |
-| `fogwall-dashboard` | Dashboard + REST API — Spring MVC, approval UI, depends on `fogwall-server`                |
 
 ## Documentation
 
@@ -143,7 +142,6 @@ This is a multi-module Gradle project:
 | [Architecture](docs/ARCHITECTURE.md)                         | How the proxy works: two proxy modes, validation pipeline, core abstractions, advanced use cases                 |
 | [JGit Infrastructure](docs/internals/JGIT_INFRASTRUCTURE.md) | Store-and-forward internals: ReceivePackFactory, hook chain, forwarding, credential flow (contributor reference) |
 | [Git Internals](docs/internals/GIT_INTERNALS.md)             | Wire-protocol edge cases: tags, new branches, force pushes, pack parsing (contributor reference)                 |
-| [Helm Chart](charts/fogwall/README.md)                       | Deploying fogwall on Kubernetes: values reference, secrets, multi-replica setup, standalone server image         |
 
 ## Roadmap
 

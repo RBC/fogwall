@@ -17,41 +17,40 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "=========================================================="
-echo "  PUSH: Commit message validation failure and fix"
-echo "  URL: http://localhost:8080/push/${GIT_REPO}"
-echo "=========================================================="
-sleep 2
-
-echo "→ Cloning repository (${PUSH_URL//${GIT_PASSWORD}/***}) via fogwall..."
+xdotool type --delay 50 "#→ Cloning repository (${PUSH_URL//${GIT_PASSWORD}/***}) via fogwall..."
+echo ""
 git clone "${PUSH_URL}" "${REPO_DIR}"
-sleep 2
+sleep 1
 
 cd "${REPO_DIR}"
-echo "→ Creating feature branch..."
+xdotool type --delay 50 "#→ Creating feature branch..."
+echo ""
 git checkout -b "${TEST_BRANCH}"
 sleep 1
 
 git config user.name "${GIT_AUTHOR_NAME}"
 git config user.email "${GIT_EMAIL}"
 
-echo "→ Making a commit with INVALID message (WIP flag)..."
+xdotool type --delay 50 "#→ Making a commit with INVALID message (WIP flag)..."
+echo ""
 echo "wip work - $(date)" >> test-file.txt
 git add test-file.txt
 git commit -m "WIP: still working on this"
-sleep 1
-
-echo "→ Attempting push (will REJECT invalid message)..."
-git push origin "${TEST_BRANCH}" 2>&1 || true
 sleep 2
 
-echo "→ Fixing the commit message..."
+xdotool type --delay 50 "#→ Attempting push (will REJECT invalid message)..."
+echo ""
+git push origin "${TEST_BRANCH}" 2>&1 || true
+sleep 5
+clear
+
+xdotool type --delay 50 "#→ Fixing the commit message..."
+echo ""
 git commit --amend -m "feat: complete implementation"
 sleep 1
 
-echo "→ Re-pushing with valid message..."
-git push origin "${TEST_BRANCH}" --force-with-lease
-sleep 2
-
+xdotool type --delay 50 "#→ Re-pushing with valid message..."
 echo ""
-echo "✓ PASSED: invalid message caught, fixed, and push succeeded"
+git push origin "${TEST_BRANCH}" --force-with-lease
+sleep 5
+

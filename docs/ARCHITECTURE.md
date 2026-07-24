@@ -147,18 +147,25 @@ order.
 
 | Order   | What it checks                                                                        |
 | ------- | ------------------------------------------------------------------------------------- |
-| 100     | URL allow/deny rules (config + DB-sourced)                                            |
+| 50–199  | URL allow/deny rules (config + DB-sourced)                                            |
 | 150     | User identity — developer must have a proxy account and push permission for this repo |
 | 160     | Author attribution — git commit author must match the authenticated proxy user        |
 | 210     | Non-empty push — at least one new commit                                              |
 | 220     | Hidden commits — pack must not contain commits outside the declared push range        |
-| 240–260 | Author email and commit message patterns (allow/block regex)                          |
-| 280     | Diff content scan (blocked literals and patterns)                                     |
-| 290     | Secret scanning (gitleaks)                                                            |
-| 310     | GPG signature validation                                                              |
+| 250–260 | Author email and commit message patterns (allow/block regex)                          |
+| 265     | Content pattern scan — commit messages (national ID/PII bundles) — **WARN-only**      |
+| 290     | Binary blob detection — magic-byte signature sniffing, with MIME-type allow/deny      |
+| 300     | Diff content scan (blocked literals and patterns)                                     |
+| 320     | GPG commit signature validation                                                       |
+| 340     | Secret scanning (gitleaks)                                                            |
+| 345     | Content pattern scan — diff (national ID/PII bundles) — **WARN-only**                 |
 
-Each step records a `PushStep` in the push record. All steps always run (fail-fast is configurable); issues accumulate
-and are reported together.
+Each step records a `PushStep` in the push record with a `StepStatus` of `PASS`, `WARN`, `FAIL`, `BLOCKED`, or
+`SKIPPED`. `WARN` is a first-class outcome, not a lesser form of `FAIL` — a WARN step never blocks the push, it only
+surfaces a finding on the push record for the reviewer's attention. The content-pattern (PII/national-ID) filters are
+WARN-only by design. `IdentityVerificationFilter` (order 160, commit-email attribution) can also run in `warn` mode via
+`commit.identity-verification: warn`. All steps always run (fail-fast is configurable); issues accumulate and are
+reported together.
 
 ---
 
@@ -188,7 +195,7 @@ ordered list of `PushStep` entries (one per validation step) and a list of commi
 The push store is the integration point for the approval workflow: the dashboard reads push records from it, writes
 approvals/rejections to it, and the proxy polls it.
 
-Backends: H2 (dev), PostgreSQL, MongoDB, in-memory (testing).
+Backends: H2 (dev), PostgreSQL, MySQL, MariaDB, MongoDB, in-memory (testing).
 
 ### Approval gateway (`ApprovalGateway`)
 
@@ -257,6 +264,15 @@ environments, or setups where an external system like ServiceNow handles approva
 on a Spring MVC `DispatcherServlet` at `/*`. Jetty's servlet path-matching rules give the more-specific git paths
 (`/push/*`, `/proxy/*`) precedence, so the Spring servlet only handles `/api/*`, `/dashboard/*`, `/login`, and static
 assets.
+
+This is Spring MVC and Spring Security directly on a Jetty `Server` we construct and configure ourselves — not Spring
+Boot. Boot's auto-configuration assumes it owns the embedded servlet container: it wants to build the `Server`, wire the
+connectors, and register its own default servlet mappings. fogwall needs the opposite — the JGit `ReceivePack` servlets
+and the git-protocol filter chain must be registered on that same Jetty instance with precise path and order control
+(see [Two proxy modes](#two-proxy-modes) above), and `fogwall-server` needs to run the identical servlet setup with zero
+Spring on the classpath at all. Wiring Spring MVC onto a Jetty server we already built is straightforward; carving a
+Boot application apart to let something else own the container is fighting the framework. So the dashboard module adds
+Spring as a set of servlets/filters registered onto fogwall's Jetty server, not the other way around.
 
 Spring Security is registered as a filter chain on a narrow set of paths (`/api/**`, `/login`, `/logout`, `/`,
 `/oauth2/**`) — deliberately not on git paths, to avoid interfering with async streaming. Four auth providers are

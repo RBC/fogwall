@@ -322,7 +322,9 @@ approval on the existing push record rather than creating a new one.
 
 The administrator may configure attestation questions that you must answer before a push is approved. These appear in
 the dashboard push record view, not in the terminal. A reviewer (or yourself, if you have `SELF_CERTIFY` permission for
-the repo) answers them as part of the approval step.
+the repo) answers them as part of the approval step. A question may carry one or more linked references (e.g. a link to
+the internal policy the attestation is checking against) — these render as clickable links alongside the question so
+reviewers can check the source policy before attesting.
 
 ---
 
