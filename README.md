@@ -5,9 +5,9 @@
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/RBC/fogwall/badge)](https://scorecard.dev/viewer/?uri=github.com/RBC/fogwall)
 [![License](https://img.shields.io/github/license/RBC/fogwall)](https://github.com/RBC/fogwall/blob/main/LICENSE)
 
-A policy-enforcing git push proxy. fogwall sits between `git push` and the upstream host (GitHub, GitLab, Bitbucket,
-Forgejo), enforcing commit policy, scanning content, verifying identity, and gating pushes behind review — with feedback
-in the developer's terminal, over HTTP(S) or SSH.
+A git-aware gateway that sits between developers and the upstream host (GitHub, GitLab, Bitbucket, Forgejo). Every push
+— any branch, any tag — is policy-checked, content-scanned, identity-verified, and gated behind review before it reaches
+upstream; every fetch is audited. Feedback streams to the developer's terminal, over HTTP(S) or SSH.
 
 Built on [JGit](https://github.com/eclipse-jgit/jgit) for native git protocol handling,
 [Jetty](https://github.com/jetty/jetty.project) for the HTTP layer,
