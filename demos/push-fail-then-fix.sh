@@ -40,6 +40,8 @@ sleep 2
 
 xdotool type --delay 50 "#→ Attempting push (will REJECT invalid message)..."
 echo ""
+sleep 1
+clear
 git push origin "${TEST_BRANCH}" 2>&1 || true
 sleep 5
 clear
