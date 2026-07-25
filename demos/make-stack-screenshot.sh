@@ -11,7 +11,10 @@
 #   bash demos/make-stack-screenshot.sh <back.png> <front.png> <output.png>
 #
 # Example (regenerating the current README image):
-#   bash demos/make-stack-screenshot.sh demos/demo-ui1.png demos/demo-ui2.png demos/demo-ui-stack.png
+#   bash demos/make-stack-screenshot.sh demos/demo-ui1-source.png demos/demo-ui2-source.png demos/demo-ui-stack.png
+#
+# To refresh with new screenshots: retake the push-detail and diff/attestation screenshots,
+# overwrite demo-ui1-source.png / demo-ui2-source.png, then re-run the command above.
 #
 # Requires ImageMagick (`magick` on PATH). Tune the variables below if screenshot
 # dimensions or content layout change significantly — values here were tuned by eye
