@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, NavLink, Route, Routes } from 'react-router'
 import { fetchConfig, fetchMe } from './api'
 import { Nav } from './components/Nav'
 import { useDarkMode } from './hooks/useDarkMode'
