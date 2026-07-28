@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { approvePush, fetchPushCounts, fetchPushes, rejectPush } from '../api'
 import { StatusBadge } from '../components/StatusBadge'
 import type { CurrentUser, PushRecord, PushStatus } from '../types'

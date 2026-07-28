@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { createUser, fetchUsers } from '../api'
 import type { PushStatus, UserSummary } from '../types'
 

@@ -2,7 +2,7 @@ import { Diff2HtmlUI } from 'diff2html/lib/ui/js/diff2html-ui-slim'
 import { ColorSchemeType } from 'diff2html/lib/types'
 import 'diff2html/bundles/css/diff2html.min.css'
 import { useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router'
 import { fetchDiff, fetchPush } from '../api'
 
 function diffStats(raw: string): { files: number; insertions: number; deletions: number } {
