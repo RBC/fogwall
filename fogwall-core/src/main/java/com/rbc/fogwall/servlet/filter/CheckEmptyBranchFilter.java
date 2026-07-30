@@ -57,6 +57,13 @@ public class CheckEmptyBranchFilter extends AbstractFogwallFilter {
             return;
         }
 
+        // An earlier filter (e.g. EnrichPushCommitsFilter) already failed and set a specific
+        // reason for why pushedCommits is empty — don't clobber it with a generic message here.
+        if (requestDetails.getResult() == GitRequestDetails.GitResult.ERROR) {
+            log.debug("Push already in ERROR state — skipping empty branch check");
+            return;
+        }
+
         var commits = requestDetails.getPushedCommits();
         if (commits != null && !commits.isEmpty()) {
             return;

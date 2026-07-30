@@ -1,5 +1,9 @@
 package com.rbc.fogwall.servlet.filter;
 
+import static com.rbc.fogwall.git.GitClientUtils.AnsiColor.RED;
+import static com.rbc.fogwall.git.GitClientUtils.SymbolCodes.NO_ENTRY;
+import static com.rbc.fogwall.git.GitClientUtils.format;
+import static com.rbc.fogwall.git.GitClientUtils.sym;
 import static com.rbc.fogwall.servlet.FogwallServlet.GIT_REQUEST_ATTR;
 
 import com.rbc.fogwall.git.Commit;
@@ -13,6 +17,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.util.Base64;
 import java.util.List;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
@@ -20,8 +25,10 @@ import org.eclipse.jgit.lib.NullProgressMonitor;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectInserter;
 import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.transport.CredentialsProvider;
 import org.eclipse.jgit.transport.PackParser;
 import org.eclipse.jgit.transport.PacketLineIn;
+import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 
 /**
  * Filter that enriches push requests with full commit information. Replicates fogwall's {@code writePack} approach:
@@ -76,8 +83,11 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
             log.info("Enriching push commits from repository: {}", remoteUrl);
 
             // Step 1: Get or clone the upstream repo, then publish it on the request so downstream
-            // filters can use it without needing their own LocalRepositoryCache reference.
-            Repository repository = repositoryCache.getOrClone(remoteUrl);
+            // filters can use it without needing their own LocalRepositoryCache reference. The
+            // pushing client's own credentials are reused for the upstream clone/fetch so that
+            // private repos can be inspected — without them this silently degrades to an
+            // anonymous clone/fetch, which fails for any private repo.
+            Repository repository = repositoryCache.getOrClone(remoteUrl, extractCredentials(request));
             requestDetails.setLocalRepository(repository);
 
             // Step 2: Unpack the inflight push's pack data into the local clone.
@@ -100,16 +110,22 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
                             requestDetails.getBranch(),
                             toCommit,
                             e.getMessage());
-                    requestDetails.setResult(GitRequestDetails.GitResult.ERROR);
-                    requestDetails.setReason("Push rejected: tag object could not be resolved."
-                            + " Ensure the tag object is included in the push.");
+                    errorAndSendError(
+                            requestDetails,
+                            request,
+                            response,
+                            "Push rejected: tag object could not be resolved. Ensure the tag object is included in"
+                                    + " the push.");
                     return;
                 }
                 if (peeled == null) {
                     log.warn("Tag push ({}) — {} did not resolve to a commit", requestDetails.getBranch(), toCommit);
-                    requestDetails.setResult(GitRequestDetails.GitResult.ERROR);
-                    requestDetails.setReason("Push rejected: tag object could not be resolved."
-                            + " Ensure the tag object is included in the push.");
+                    errorAndSendError(
+                            requestDetails,
+                            request,
+                            response,
+                            "Push rejected: tag object could not be resolved. Ensure the tag object is included in"
+                                    + " the push.");
                     return;
                 }
                 String peeledSha = peeled.getName();
@@ -120,9 +136,12 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
                             "Tag push {} introduces {} unvalidated commit(s) — rejecting",
                             requestDetails.getBranch(),
                             commits.size());
-                    requestDetails.setResult(GitRequestDetails.GitResult.ERROR);
-                    requestDetails.setReason("Push rejected: the tag references commits that were not validated through"
-                            + " a branch push. Push the branch first, then re-create the tag.");
+                    errorAndSendError(
+                            requestDetails,
+                            request,
+                            response,
+                            "Push rejected: the tag references commits that were not validated through a branch"
+                                    + " push. Push the branch first, then re-create the tag.");
                 }
                 return;
             }
@@ -133,9 +152,12 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
 
             if (commits.isEmpty()) {
                 log.warn("No commits found in range {}..{} — erroring push", fromCommit, toCommit);
-                requestDetails.setResult(GitRequestDetails.GitResult.ERROR);
-                requestDetails.setReason("Push error: the proxy could not inspect any commits in this push. "
-                        + "Please retry or contact your administrator.");
+                errorAndSendError(
+                        requestDetails,
+                        request,
+                        response,
+                        "Push error: the proxy could not inspect any commits in this push. Please retry or contact"
+                                + " your administrator.");
                 return;
             }
 
@@ -144,10 +166,28 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
 
         } catch (Exception e) {
             log.error("Failed to enrich push commits", e);
-            requestDetails.setResult(GitRequestDetails.GitResult.ERROR);
-            requestDetails.setReason("Push error: commit inspection failed (" + e.getMessage() + "). "
-                    + "Please retry or contact your administrator.");
+            errorAndSendError(
+                    requestDetails,
+                    request,
+                    response,
+                    "Push error: commit inspection failed (" + e.getMessage() + "). Please retry or contact your"
+                            + " administrator.");
         }
+    }
+
+    /**
+     * Mark the push as {@link GitRequestDetails.GitResult#ERROR} and commit an error response to the client. Without
+     * sending the response here, downstream filters that only short-circuit on {@code REJECTED} would let the push fall
+     * through the rest of the chain uncommitted — and {@link PushFinalizerFilter} would then forward it upstream, since
+     * it only skips forwarding when the response is already committed.
+     */
+    private void errorAndSendError(
+            GitRequestDetails requestDetails, HttpServletRequest request, HttpServletResponse response, String reason)
+            throws IOException {
+        requestDetails.setResult(GitRequestDetails.GitResult.ERROR);
+        requestDetails.setReason(reason);
+        String title = sym(NO_ENTRY) + "  Push Blocked - Commit Inspection Failed";
+        sendGitError(request, response, format(title, reason, RED, null));
     }
 
     /**
@@ -230,6 +270,21 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
             return pos;
         }
         return -1;
+    }
+
+    /** Extract the pushing client's Basic Auth credentials, for reuse against the upstream provider. */
+    private static CredentialsProvider extractCredentials(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Basic ")) return null;
+        try {
+            String decoded = new String(Base64.getDecoder()
+                    .decode(authHeader.substring("Basic ".length()).trim()));
+            int colon = decoded.indexOf(':');
+            if (colon < 0) return null;
+            return new UsernamePasswordCredentialsProvider(decoded.substring(0, colon), decoded.substring(colon + 1));
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     private String constructRemoteUrl(GitRequestDetails requestDetails) {
