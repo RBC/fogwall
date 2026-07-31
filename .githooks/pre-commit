@@ -11,16 +11,7 @@ if command -v mise &>/dev/null; then
     eval "$(mise activate bash --shims)"
 fi
 
-echo "[pre-commit] Running spotlessApply..."
-./gradlew spotlessApply --quiet
-git diff --name-only -- '*.java' | xargs -r git add
-echo "[pre-commit] Spotless: OK"
-
-echo "[pre-commit] Running Prettier..."
-./gradlew :fogwall-dashboard:npmFormat :fogwall-dashboard:prettierDocs --quiet --no-daemon
-git diff --name-only -- fogwall-dashboard/frontend/src '*.md' | xargs -r git add
-echo "[pre-commit] Prettier: OK"
-
-echo "[pre-commit] Running ESLint..."
-./gradlew :fogwall-dashboard:npmLint --quiet --no-daemon
-echo "[pre-commit] ESLint: OK"
+echo "[pre-commit] Running formatAll (spotless, prettier, eslint)..."
+./gradlew formatAll --quiet --no-daemon
+git diff --name-only -- '*.java' fogwall-dashboard/frontend/src '*.md' | xargs -r git add
+echo "[pre-commit] formatAll: OK"
