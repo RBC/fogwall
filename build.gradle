@@ -104,8 +104,22 @@ tasks.register('installGitHooks') {
     description = 'Configures git to use the .githooks/ directory (run once after cloning).'
     doLast {
         ['git', 'config', 'core.hooksPath', '.githooks'].execute(null, rootDir).waitFor()
-        println 'Git hooks installed — .githooks/pre-commit will run spotlessApply before each commit.'
+        println 'Git hooks installed — .githooks/pre-commit will run formatAll before each commit.'
     }
+}
+
+// Single entry point for every formatter and linter, so .githooks/pre-commit needs one
+// Gradle invocation instead of three. Each tool keeps its own semantics: spotless and
+// prettier rewrite in place, eslint verifies and fails on violations it cannot fix.
+tasks.register('formatAll') {
+    group = 'formatting'
+    description = 'Runs all formatters (spotless, prettier) and linters (eslint) across the project.'
+    // spotless is applied per-subproject (see the subprojects block below), so there is no
+    // root-project spotlessApply to depend on — collect each module's task instead.
+    dependsOn subprojects.collect { ":${it.name}:spotlessApply" }
+    dependsOn ':fogwall-dashboard:npmFormat',
+            ':fogwall-dashboard:prettierDocs',
+            ':fogwall-dashboard:npmLint'
 }
 
 subprojects {
