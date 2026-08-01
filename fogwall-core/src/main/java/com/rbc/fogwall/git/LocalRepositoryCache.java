@@ -108,7 +108,15 @@ public class LocalRepositoryCache {
     }
 
     /**
-     * Get or create a local clone of a remote repository.
+     * Get or create a local clone of a remote repository <b>as an anonymous caller</b> — no credentials, no principal.
+     *
+     * <p>Only appropriate when the repository is expected to be publicly readable. All anonymous callers share a single
+     * cache identity, which is safe precisely because an anonymous cache hit can only ever reuse a previous anonymous
+     * fetch, and that fetch succeeded without credentials. If you have credentials, you also have an identity: use
+     * {@link #getOrClone(String, CredentialsProvider, TransportConfigCallback, String)} and pass both. There is
+     * deliberately no overload that accepts credentials without a principal — supplying one and not the other means
+     * authenticating the fetch while leaving the cooldown anonymous, which silently makes one caller's access reusable
+     * by the next.
      *
      * @param remoteUrl The URL of the remote repository
      * @return The local repository
@@ -116,30 +124,7 @@ public class LocalRepositoryCache {
      * @throws IOException If I/O operations fail
      */
     public Repository getOrClone(String remoteUrl) throws GitAPIException, IOException {
-        return getOrClone(remoteUrl, null);
-    }
-
-    /**
-     * Get or create a local clone of a remote repository, using the supplied credentials for clone and fetch.
-     * Credentials are passed transiently to JGit — they are never written to disk.
-     *
-     * <p>On a cache hit, re-fetches from upstream to keep the local mirror fresh. The re-fetch is serialized via a
-     * per-repository lock and skipped if the mirror was already refreshed within {@code fetchCooldownMs}.
-     */
-    public Repository getOrClone(String remoteUrl, CredentialsProvider credentials)
-            throws GitAPIException, IOException {
-        return getOrClone(remoteUrl, credentials, null);
-    }
-
-    /**
-     * Get or create a local clone of a remote repository, with an optional {@link TransportConfigCallback} applied to
-     * every clone and fetch operation. Use this overload when per-request transport configuration is needed (e.g. SSH
-     * agent forwarding) — the callback is scoped to this call and never stored globally.
-     */
-    public Repository getOrClone(
-            String remoteUrl, CredentialsProvider credentials, TransportConfigCallback transportConfig)
-            throws GitAPIException, IOException {
-        return getOrClone(remoteUrl, credentials, transportConfig, null);
+        return getOrClone(remoteUrl, null, null, null);
     }
 
     /**
