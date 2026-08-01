@@ -66,6 +66,11 @@ public class UrlRuleAggregateFilter extends ProviderAwareFogwallFilter<FogwallPr
     }
 
     @Override
+    public boolean skipWhenPreApproved() {
+        return false; // Re-pushes must still match an allow rule
+    }
+
+    @Override
     public void doHttpFilter(HttpServletRequest request, HttpServletResponse response) throws IOException {
         var operation = determineOperation(request);
 

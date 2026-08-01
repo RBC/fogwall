@@ -8,6 +8,7 @@ import lombok.Data;
 @Builder
 public class PushQuery {
     private PushStatus status;
+    private String provider;
     private String project;
     private String repoName;
     private String branch;
