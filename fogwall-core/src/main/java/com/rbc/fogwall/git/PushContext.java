@@ -31,6 +31,10 @@ public class PushContext {
     private String pushToken;
     private String repoSlug;
 
+    // Where this push forwards to, resolved when the request opened its repository. Not read back off the mirror's
+    // own config at forward time — that config is shared with every concurrent request using the same mirror.
+    private String upstreamUrl;
+
     /**
      * Transport context for this push — carries pre-authenticated identity (SSH) and upstream transport configuration.
      * Defaults to {@link PushTransport#http()} so HTTP pushes need not set it explicitly.

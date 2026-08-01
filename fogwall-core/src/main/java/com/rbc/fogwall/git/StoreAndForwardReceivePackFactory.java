@@ -200,16 +200,19 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
             repoSlug = slug;
         }
 
-        return buildReceivePack(db, creds, pushUser, pushToken, repoSlug, PushTransport.http());
+        String upstreamUrl = (String) req.getAttribute(StoreAndForwardRepositoryResolver.UPSTREAM_URL_ATTRIBUTE);
+
+        return buildReceivePack(db, creds, pushUser, pushToken, repoSlug, upstreamUrl, PushTransport.http());
     }
 
     /**
      * Builds a {@link ReceivePack} for an SSH push. The {@code transport} carries the {@link UserEntry} identified
      * during public-key authentication and the per-push SSH session factory for upstream forwarding.
      */
-    public ReceivePack createForSsh(Repository db, String pushUser, String repoSlug, PushTransport.Ssh transport)
+    public ReceivePack createForSsh(
+            Repository db, String pushUser, String repoSlug, String upstreamUrl, PushTransport.Ssh transport)
             throws ServiceNotEnabledException, ServiceNotAuthorizedException {
-        return buildReceivePack(db, null, pushUser, null, repoSlug, transport);
+        return buildReceivePack(db, null, pushUser, null, repoSlug, upstreamUrl, transport);
     }
 
     private ReceivePack buildReceivePack(
@@ -218,6 +221,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
             String pushUser,
             String pushToken,
             String repoSlug,
+            String upstreamUrl,
             PushTransport transport)
             throws ServiceNotEnabledException, ServiceNotAuthorizedException {
 
@@ -231,6 +235,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
         pushContext.setPushUser(pushUser);
         pushContext.setPushToken(pushToken);
         pushContext.setRepoSlug(repoSlug);
+        pushContext.setUpstreamUrl(upstreamUrl);
         pushContext.setTransport(transport);
 
         // Persistence hook (records push to database)

@@ -423,8 +423,11 @@ public class PushStorePersistenceHook {
             pushContext.getTransport().auditMethod().ifPresent(builder::method);
         }
 
-        // Extract upstream URL and repo name from repo config (set by StoreAndForwardRepositoryResolver)
-        String upstreamUrl = repo.getConfig().getString("fogwall", null, "upstreamUrl");
+        // Upstream URL and repo name, taken from this request's context and falling back to the shared mirror config.
+        String upstreamUrl = pushContext != null ? pushContext.getUpstreamUrl() : null;
+        if (upstreamUrl == null) {
+            upstreamUrl = repo.getConfig().getString("fogwall", null, "upstreamUrl");
+        }
         if (upstreamUrl != null) {
             builder.upstreamUrl(upstreamUrl);
             // Parse repo name from upstream URL (e.g., "https://github.com/owner/repo.git" -> "repo")

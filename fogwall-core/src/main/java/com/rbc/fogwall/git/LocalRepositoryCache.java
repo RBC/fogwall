@@ -389,23 +389,57 @@ public class LocalRepositoryCache {
     /**
      * Generate a cache key from a remote URL.
      *
+     * <p>One cache instance is shared by every configured provider, so the key must cover the whole remote and not just
+     * the path — otherwise {@code github.com/acme/app.git} and {@code gitea.internal/acme/app.git} are the same mirror.
+     * The readable prefix is for identifying the directory on disk; the digest of the full URL is what guarantees
+     * distinct remotes get distinct keys.
+     *
      * @param remoteUrl The remote URL
      * @return A safe cache key
      */
-    private String getCacheKey(String remoteUrl) {
+    String getCacheKey(String remoteUrl) {
         try {
             URIish uri = new URIish(remoteUrl);
-            String path = uri.getPath();
+            String path = uri.getPath() != null ? uri.getPath() : "";
             if (path.startsWith("/")) {
                 path = path.substring(1);
             }
             if (path.endsWith(".git")) {
                 path = path.substring(0, path.length() - 4);
             }
-            return path.replace("/", "_").replace("\\", "_");
+
+            StringBuilder readable = new StringBuilder();
+            if (uri.getHost() != null) {
+                readable.append(uri.getHost());
+                if (uri.getPort() > 0) {
+                    readable.append('-').append(uri.getPort());
+                }
+                readable.append('_');
+            }
+            readable.append(path);
+
+            return sanitizeKeySegment(readable.toString()) + "-" + shortDigest(remoteUrl);
         } catch (Exception e) {
             log.warn("Failed to parse remote URL, using hash as cache key: {}", remoteUrl);
-            return String.valueOf(remoteUrl.hashCode());
+            return "unparsed-" + shortDigest(remoteUrl);
+        }
+    }
+
+    /** Reduce a key to characters that are safe as a single directory name on every supported platform. */
+    private static String sanitizeKeySegment(String raw) {
+        String safe = raw.replaceAll("[^A-Za-z0-9._-]", "_");
+        return safe.length() > 100 ? safe.substring(0, 100) : safe;
+    }
+
+    /** First 12 hex chars of the SHA-256 of {@code value} — enough to keep distinct remotes in distinct directories. */
+    private static String shortDigest(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of()
+                    .formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)))
+                    .substring(0, 12);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 not available", e);
         }
     }
 

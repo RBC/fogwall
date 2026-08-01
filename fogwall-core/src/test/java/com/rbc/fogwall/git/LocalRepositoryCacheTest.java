@@ -232,4 +232,61 @@ class LocalRepositoryCacheTest {
         assertNull(cache.getCached(remoteUrl2));
         assertFalse(cacheTempDir.toFile().exists(), "Cache directory should be deleted after clear");
     }
+
+    @Test
+    void sameRepoPathOnDifferentProviders_getsSeparateMirrors() throws Exception {
+        LocalRepositoryCache cache = new LocalRepositoryCache(cacheTempDir, false);
+
+        String github = cache.getCacheKey("https://github.com/acme/app.git");
+        String internal = cache.getCacheKey("https://gitea.internal/acme/app.git");
+
+        assertNotEquals(
+                internal,
+                github,
+                "One cache is shared by every provider, so two providers hosting acme/app must not share a mirror");
+    }
+
+    @Test
+    void sameHostOnDifferentPortsOrSchemes_getsSeparateMirrors() throws Exception {
+        LocalRepositoryCache cache = new LocalRepositoryCache(cacheTempDir, false);
+
+        assertNotEquals(
+                cache.getCacheKey("https://scm.example.com:8443/acme/app.git"),
+                cache.getCacheKey("https://scm.example.com/acme/app.git"),
+                "Port is part of the remote's identity");
+        assertNotEquals(
+                cache.getCacheKey("ssh://scm.example.com/acme/app.git"),
+                cache.getCacheKey("https://scm.example.com/acme/app.git"),
+                "Scheme is part of the remote's identity");
+    }
+
+    @Test
+    void sameUrl_getsTheSameKey() throws Exception {
+        LocalRepositoryCache cache = new LocalRepositoryCache(cacheTempDir, false);
+
+        assertEquals(
+                cache.getCacheKey("https://github.com/acme/app.git"),
+                cache.getCacheKey("https://github.com/acme/app.git"),
+                "Key must be stable, or a warm mirror is never reused");
+    }
+
+    @Test
+    void cacheKey_isAlwaysASingleDirectoryName() throws Exception {
+        LocalRepositoryCache cache = new LocalRepositoryCache(cacheTempDir, false);
+
+        for (String url : new String[] {
+            "https://github.com/acme/app.git",
+            "https://github.com/acme/../../etc/passwd.git",
+            "https://github.com/acme/deeply/nested/group/app.git",
+            "not a url at all"
+        }) {
+            String key = cache.getCacheKey(url);
+            assertFalse(key.contains("/"), "Key must not contain a path separator: " + key);
+            assertFalse(key.contains("\\"), "Key must not contain a path separator: " + key);
+            assertEquals(
+                    key,
+                    new File(cacheTempDir.toFile(), key).getName(),
+                    "Key must resolve to a direct child of the cache directory: " + key);
+        }
+    }
 }

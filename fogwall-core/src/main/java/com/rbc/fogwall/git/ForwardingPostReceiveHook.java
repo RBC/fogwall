@@ -89,7 +89,12 @@ public class ForwardingPostReceiveHook implements PostReceiveHook {
             log.debug("Using Bitbucket upstream username '{}' for forwarding credentials", upstreamUser);
         }
 
-        String upstreamUrl = repo.getConfig().getString("fogwall", null, "upstreamUrl");
+        // Prefer the URL this request resolved to. The mirror's own config is shared with every other request
+        // using the same mirror, so it is only a fallback for callers that never populated the push context.
+        String upstreamUrl = pushContext.getUpstreamUrl();
+        if (upstreamUrl == null) {
+            upstreamUrl = repo.getConfig().getString("fogwall", null, "upstreamUrl");
+        }
 
         if (upstreamUrl == null) {
             rp.sendMessage(color(RED, sym(NO_ENTRY) + "  ERROR - no upstream URL configured, cannot forward"));
