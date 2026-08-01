@@ -72,6 +72,9 @@ public class MongoPushStore implements PushStore {
         if (query.getStatus() != null) {
             filters.add(Filters.eq("status", query.getStatus().name()));
         }
+        if (query.getProvider() != null) {
+            filters.add(Filters.eq("provider", query.getProvider()));
+        }
         if (query.getProject() != null) {
             filters.add(Filters.eq("project", query.getProject()));
         }

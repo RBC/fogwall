@@ -258,6 +258,10 @@ public class JdbcPushStore implements PushStore {
             sql.append(" AND status = :status");
             params.addValue("status", query.getStatus().name());
         }
+        if (query.getProvider() != null) {
+            sql.append(" AND provider = :provider");
+            params.addValue("provider", query.getProvider());
+        }
         if (query.getProject() != null) {
             sql.append(" AND project = :project");
             params.addValue("project", query.getProject());

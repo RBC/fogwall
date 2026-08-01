@@ -54,6 +54,11 @@ public class CheckUserPushPermissionFilter extends AbstractFogwallFilter {
     }
 
     @Override
+    public boolean skipWhenPreApproved() {
+        return false; // Whoever re-pushes approved content still has to be allowed to write here
+    }
+
+    @Override
     public void doHttpFilter(HttpServletRequest request, HttpServletResponse response) throws IOException {
         var requestDetails = (GitRequestDetails) request.getAttribute(GIT_REQUEST_ATTR);
         if (requestDetails == null) {
