@@ -16,6 +16,7 @@ import org.apache.sshd.server.Environment;
 import org.apache.sshd.server.ExitCallback;
 import org.apache.sshd.server.channel.ChannelSession;
 import org.apache.sshd.server.command.Command;
+import org.apache.sshd.server.session.ServerSession;
 import org.eclipse.jgit.api.TransportConfigCallback;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.transport.UploadPack;
@@ -91,15 +92,21 @@ public class SshGitUploadCommand implements Command {
     @Override
     public void start(ChannelSession channel, Environment env) {
         String sshUser = channel.getSession().getUsername();
+        // Resolved during public-key auth. This is the session's authenticated identity, and so the principal
+        // for the mirror cache's per-principal fetch cooldown.
+        String connectingFingerprint = (channel.getSession() instanceof ServerSession serverSession)
+                ? SshGitServer.getConnectingFingerprint(serverSession).orElse(null)
+                : null;
         // SSH_AUTH_SOCK is set on the channel env by MINA SSHD when the client's ssh -A forwarding
         // channel is established. Capture it here before handing off to the worker thread.
         String authSocket = env.getEnv().get(SshAgent.SSH_AUTHSOCKET_ENV_NAME);
-        Thread worker = new Thread(() -> runUploadPack(sshUser, authSocket), "ssh-git-upload-" + repoPath);
+        Thread worker = new Thread(
+                () -> runUploadPack(sshUser, connectingFingerprint, authSocket), "ssh-git-upload-" + repoPath);
         worker.setDaemon(true);
         worker.start();
     }
 
-    private void runUploadPack(String sshUser, String authSocket) {
+    private void runUploadPack(String sshUser, String connectingFingerprint, String authSocket) {
         int exitCode = 0;
         SshAgent agent = null;
         try {
@@ -146,7 +153,7 @@ public class SshGitUploadCommand implements Command {
 
             TransportConfigCallback transportConfig =
                     SshUpstreamTransport.forwardedAgent(agent, knownHostsFile, trustOnFirstUse);
-            Repository localRepo = cache.getOrClone(upstreamUrl, null, transportConfig);
+            Repository localRepo = cache.getOrClone(upstreamUrl, null, transportConfig, connectingFingerprint);
             localRepo.getConfig().setString("fogwall", null, "upstreamUrl", upstreamUrl);
             localRepo.getConfig().save();
 

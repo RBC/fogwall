@@ -2,9 +2,13 @@ package com.rbc.fogwall.git;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
@@ -44,6 +48,12 @@ public class LocalRepositoryCache {
      * from each triggering a separate fetch when the mirror is already fresh.
      */
     private static final long DEFAULT_FETCH_COOLDOWN_MS = 5_000;
+
+    /**
+     * Identity used when a caller supplies no principal. Not a hash, so it can never collide with a real hashed
+     * principal — an unauthenticated caller only ever shares a cooldown with other unauthenticated callers.
+     */
+    private static final String ANONYMOUS_PRINCIPAL = "anonymous";
 
     private final Path cacheDirectory;
     private final Map<String, CachedRepository> cache = new ConcurrentHashMap<>();
@@ -98,7 +108,15 @@ public class LocalRepositoryCache {
     }
 
     /**
-     * Get or create a local clone of a remote repository.
+     * Get or create a local clone of a remote repository <b>as an anonymous caller</b> — no credentials, no principal.
+     *
+     * <p>Only appropriate when the repository is expected to be publicly readable. All anonymous callers share a single
+     * cache identity, which is safe precisely because an anonymous cache hit can only ever reuse a previous anonymous
+     * fetch, and that fetch succeeded without credentials. If you have credentials, you also have an identity: use
+     * {@link #getOrClone(String, CredentialsProvider, TransportConfigCallback, String)} and pass both. There is
+     * deliberately no overload that accepts credentials without a principal — supplying one and not the other means
+     * authenticating the fetch while leaving the cooldown anonymous, which silently makes one caller's access reusable
+     * by the next.
      *
      * @param remoteUrl The URL of the remote repository
      * @return The local repository
@@ -106,41 +124,61 @@ public class LocalRepositoryCache {
      * @throws IOException If I/O operations fail
      */
     public Repository getOrClone(String remoteUrl) throws GitAPIException, IOException {
-        return getOrClone(remoteUrl, null);
+        return getOrClone(remoteUrl, null, null, null);
     }
 
     /**
-     * Get or create a local clone of a remote repository, using the supplied credentials for clone and fetch.
-     * Credentials are passed transiently to JGit — they are never written to disk.
+     * Get or create a local clone, recording which principal's credentials last successfully reached upstream.
      *
-     * <p>On a cache hit, re-fetches from upstream to keep the local mirror fresh. The re-fetch is serialized via a
-     * per-repository lock and skipped if the mirror was already refreshed within {@code fetchCooldownMs}.
-     */
-    public Repository getOrClone(String remoteUrl, CredentialsProvider credentials)
-            throws GitAPIException, IOException {
-        return getOrClone(remoteUrl, credentials, null);
-    }
-
-    /**
-     * Get or create a local clone of a remote repository, with an optional {@link TransportConfigCallback} applied to
-     * every clone and fetch operation. Use this overload when per-request transport configuration is needed (e.g. SSH
-     * agent forwarding) — the callback is scoped to this call and never stored globally.
+     * <p><b>Why the principal matters.</b> The fetch cooldown exists to avoid redundant network round-trips, but the
+     * upstream fetch it skips is also the only thing that proves the caller may access the repository — there is no
+     * separate read-authorization check on this path. Keyed on the repository alone, the cooldown therefore made one
+     * principal's authorization transferable to any other principal who asked within the window: the mirror would be
+     * handed back without their credentials ever being sent anywhere. Keying it on {@code (repository, principal)}
+     * means an unrecognised principal always forces a real upstream fetch with their own credentials, so an
+     * unauthorized caller fails closed instead of inheriting someone else's access.
+     *
+     * @param principal opaque identity of the caller — HTTP Basic {@code user:token}, an SSH key fingerprint, or
+     *     {@code null} for an unauthenticated caller (all of which share a single anonymous identity). Hashed before
+     *     use; the raw value is never retained.
      */
     public Repository getOrClone(
-            String remoteUrl, CredentialsProvider credentials, TransportConfigCallback transportConfig)
+            String remoteUrl,
+            CredentialsProvider credentials,
+            TransportConfigCallback transportConfig,
+            String principal)
             throws GitAPIException, IOException {
         String cacheKey = getCacheKey(remoteUrl);
+        String principalKey = hashPrincipal(principal);
 
         CachedRepository cached = cache.get(cacheKey);
         if (cached != null && cached.isValid()) {
             log.debug("Using cached repository for: {}", remoteUrl);
-            refreshIfStale(cached, cacheKey, credentials, transportConfig);
+            refreshIfStale(cached, cacheKey, credentials, transportConfig, principalKey);
             cached.repository.incrementOpen();
             return cached.repository;
         }
 
         log.info("Cloning repository from: {}", remoteUrl);
-        return cloneOrFetch(remoteUrl, cacheKey, credentials, transportConfig);
+        return cloneOrFetch(remoteUrl, cacheKey, credentials, transportConfig, principalKey);
+    }
+
+    /**
+     * Hashes a caller-supplied principal so raw credentials never live in the cache's keys or heap dumps. Mirrors the
+     * SCM token cache, which likewise stores only a digest. A blank or absent principal collapses to a single shared
+     * anonymous identity — safe because an anonymous caller can only ever benefit from a previous *anonymous* fetch,
+     * which by definition succeeded without credentials and so implies the repository is publicly readable.
+     */
+    private static String hashPrincipal(String principal) {
+        if (principal == null || principal.isBlank()) {
+            return ANONYMOUS_PRINCIPAL;
+        }
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(principal.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 unavailable — cannot key the mirror cache by principal", e);
+        }
     }
 
     /**
@@ -155,18 +193,23 @@ public class LocalRepositoryCache {
             CachedRepository cached,
             String cacheKey,
             CredentialsProvider credentials,
-            TransportConfigCallback transportConfig)
+            TransportConfigCallback transportConfig,
+            String principalKey)
             throws GitAPIException, IOException {
         cached.fetchLock.lock();
         try {
-            if (System.currentTimeMillis() - cached.lastFetchedAt <= fetchCooldownMs) {
+            cached.purgeExpiredPrincipals(fetchCooldownMs);
+            Long lastFetched = cached.lastFetchedByPrincipal.get(principalKey);
+            if (lastFetched != null && System.currentTimeMillis() - lastFetched <= fetchCooldownMs) {
                 log.debug(
-                        "Skipping re-fetch for {} — mirror refreshed {}ms ago",
+                        "Skipping re-fetch for {} — this principal refreshed the mirror {}ms ago",
                         cacheKey,
-                        System.currentTimeMillis() - cached.lastFetchedAt);
+                        System.currentTimeMillis() - lastFetched);
                 return;
             }
-            log.debug("Re-fetching upstream for cached repository: {}", cacheKey);
+            log.debug(
+                    "Re-fetching upstream for cached repository: {} — principal not verified within cooldown",
+                    cacheKey);
             try (Git git = Git.open(new File(cacheDirectory.toFile(), cacheKey))) {
                 var fetch = git.fetch()
                         .setRemote("origin")
@@ -175,7 +218,10 @@ public class LocalRepositoryCache {
                 if (transportConfig != null) fetch.setTransportConfigCallback(transportConfig);
                 fetch.call();
             }
-            cached.lastFetchedAt = System.currentTimeMillis();
+            // Recorded only after the fetch succeeds: reaching upstream with these credentials IS the
+            // authorization proof. A failed fetch throws, so an unauthorized principal is never recorded
+            // and never gets to skip the check on a subsequent request.
+            cached.lastFetchedByPrincipal.put(principalKey, System.currentTimeMillis());
         } finally {
             cached.fetchLock.unlock();
         }
@@ -186,7 +232,11 @@ public class LocalRepositoryCache {
      * multiple threads race on first access for the same URL.
      */
     private synchronized Repository cloneOrFetch(
-            String remoteUrl, String cacheKey, CredentialsProvider credentials, TransportConfigCallback transportConfig)
+            String remoteUrl,
+            String cacheKey,
+            CredentialsProvider credentials,
+            TransportConfigCallback transportConfig,
+            String principalKey)
             throws GitAPIException, IOException {
         // Double-check after acquiring lock — another thread may have cloned while we waited
         CachedRepository cached = cache.get(cacheKey);
@@ -222,7 +272,8 @@ public class LocalRepositoryCache {
         }
 
         var newCached = new CachedRepository(repository, remoteUrl);
-        newCached.lastFetchedAt = System.currentTimeMillis();
+        // The clone/fetch above succeeded with this principal's credentials, so record them as verified.
+        newCached.lastFetchedByPrincipal.put(principalKey, System.currentTimeMillis());
         cache.put(cacheKey, newCached);
         return repository;
     }
@@ -335,16 +386,27 @@ public class LocalRepositoryCache {
         final ReentrantLock fetchLock = new ReentrantLock();
 
         /**
-         * Timestamp of the last successful upstream fetch. Compared against {@code fetchCooldownMs} to avoid redundant
-         * re-fetches when multiple concurrent requests arrive for the same mirror. Volatile so that the write from the
-         * thread holding {@code fetchLock} is visible to all other threads after the lock is released.
+         * Timestamp of the last successful upstream fetch, <b>per principal</b>. Compared against
+         * {@code fetchCooldownMs} to avoid redundant re-fetches when the same caller makes several requests in quick
+         * succession.
+         *
+         * <p>Keyed by principal rather than globally because a successful upstream fetch doubles as this path's only
+         * proof that the caller may access the repository. A single shared timestamp would let any caller skip that
+         * proof for {@code fetchCooldownMs} after someone else established it. Entries are purged once older than the
+         * cooldown, so the map is bounded by the number of distinct principals active within one cooldown window.
          */
-        volatile long lastFetchedAt = 0;
+        final Map<String, Long> lastFetchedByPrincipal = new ConcurrentHashMap<>();
 
         CachedRepository(Repository repository, String remoteUrl) {
             this.repository = repository;
             this.remoteUrl = remoteUrl;
             this.cachedAt = System.currentTimeMillis();
+        }
+
+        /** Drops principals whose verification has aged past the cooldown; they must re-prove access on next use. */
+        void purgeExpiredPrincipals(long cooldownMs) {
+            long now = System.currentTimeMillis();
+            lastFetchedByPrincipal.entrySet().removeIf(e -> now - e.getValue() > cooldownMs);
         }
 
         boolean isValid() {
