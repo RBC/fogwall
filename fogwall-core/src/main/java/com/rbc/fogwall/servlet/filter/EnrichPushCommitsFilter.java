@@ -163,13 +163,15 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
             List<Commit> commits = CommitInspectionService.getCommitRange(repository, fromCommit, toCommit);
 
             if (commits.isEmpty()) {
-                log.warn("No commits found in range {}..{} — erroring push", fromCommit, toCommit);
-                errorAndSendError(
-                        requestDetails,
-                        request,
-                        response,
-                        "Push error: the proxy could not inspect any commits in this push. Please retry or contact"
-                                + " your administrator.");
+                // Not an inspection failure: the walk succeeded and the range is genuinely empty, which is
+                // what a branch pushed with no new commits looks like. Leave the result untouched and let
+                // CheckEmptyBranchFilter report it — it names the condition accurately and its rejection
+                // carries the push-record link. Claiming it here as an error would replace a precise
+                // message with a vague one and drop that link.
+                log.debug(
+                        "No commits in range {}..{} — leaving the empty-branch check to report it",
+                        fromCommit,
+                        toCommit);
                 return;
             }
 
