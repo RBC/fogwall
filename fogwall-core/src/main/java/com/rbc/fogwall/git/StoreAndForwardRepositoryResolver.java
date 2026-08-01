@@ -55,8 +55,13 @@ public class StoreAndForwardRepositoryResolver implements RepositoryResolver<Htt
         // Credentials are held in memory only and never written to disk.
         String[] userPass = extractCredentials(req);
         CredentialsProvider creds = null;
+        // Identity for the mirror cache's per-principal fetch cooldown. Built from the full credential, not
+        // the username: providers such as GitHub ignore the HTTP Basic username entirely, so the token is the
+        // only part that actually identifies the caller. Hashed inside the cache; never retained raw.
+        String principal = null;
         if (userPass != null) {
             creds = new UsernamePasswordCredentialsProvider(userPass[0], userPass[1]);
+            principal = userPass[0] + ":" + userPass[1];
             req.setAttribute(CREDENTIALS_ATTRIBUTE, creds);
             req.setAttribute("com.rbc.fogwall.pushUser", userPass[0]);
         }
@@ -64,7 +69,7 @@ public class StoreAndForwardRepositoryResolver implements RepositoryResolver<Htt
         log.info("Opening store-and-forward repository: {} -> {}", name, cleanUpstreamUrl);
 
         try {
-            Repository repo = cache.getOrClone(cleanUpstreamUrl, creds);
+            Repository repo = cache.getOrClone(cleanUpstreamUrl, creds, null, principal);
 
             // Store the upstream URL so PostReceiveHook can find it
             repo.getConfig().setString("fogwall", null, "upstreamUrl", cleanUpstreamUrl);

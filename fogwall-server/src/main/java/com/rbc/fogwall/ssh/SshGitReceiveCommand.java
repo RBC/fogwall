@@ -186,7 +186,10 @@ public class SshGitReceiveCommand implements Command {
                     SshUpstreamTransport.forwardedAgent(agent, knownHostsFile, trustOnFirstUse);
             var pushTransport = new PushTransport.Ssh(resolvedUser, connectingFingerprint, transportConfig, liveness);
 
-            Repository localRepo = cache.getOrClone(upstreamUrl, null, transportConfig);
+            // The connecting key fingerprint is this session's authenticated identity, and so is the principal
+            // for the mirror cache's per-principal fetch cooldown — the forwarded agent is what authorizes
+            // upstream, and a different key must not inherit another key's verification.
+            Repository localRepo = cache.getOrClone(upstreamUrl, null, transportConfig, connectingFingerprint);
             localRepo.getConfig().setString("fogwall", null, "upstreamUrl", upstreamUrl);
             localRepo.getConfig().save();
 

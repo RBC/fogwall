@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.PersonIdent;
 import org.eclipse.jgit.lib.Repository;
 import org.junit.jupiter.api.BeforeEach;
@@ -100,6 +101,105 @@ class LocalRepositoryCacheTest {
 
         assertNull(cache.getCached(remoteUrl), "Entry should be gone from cache");
         assertFalse(cloneDir.exists(), "Clone directory should be deleted from disk");
+    }
+
+    /**
+     * The fetch cooldown must not let one principal's upstream verification carry over to another. A successful
+     * upstream fetch is this path's only proof that the caller may access the repository, so an unrecognised principal
+     * has to trigger a real fetch with its own credentials rather than being served the warm mirror.
+     *
+     * <p>Observed indirectly: a commit added upstream after the first call only reaches the mirror if a fetch actually
+     * happened.
+     */
+    @Test
+    void cooldown_isNotSharedBetweenPrincipals() throws Exception {
+        // Long cooldown so any re-fetch is attributable to the principal changing, not to elapsed time.
+        LocalRepositoryCache cache = new LocalRepositoryCache(cacheTempDir, 0, false, 60_000);
+
+        Repository first = cache.getOrClone(remoteUrl, null, null, "alice:token-a");
+        first.close();
+
+        String newSha = addUpstreamCommit("second commit");
+
+        Repository sameAgain = cache.getOrClone(remoteUrl, null, null, "alice:token-a");
+        assertFalse(
+                hasObject(sameAgain, newSha),
+                "Same principal inside the cooldown should reuse the mirror without re-fetching");
+        sameAgain.close();
+
+        Repository other = cache.getOrClone(remoteUrl, null, null, "bob:token-b");
+        assertTrue(
+                hasObject(other, newSha),
+                "A different principal must force a real upstream fetch — that fetch is the authorization check");
+        other.close();
+    }
+
+    /** All callers without a principal share one anonymous identity, so they do share a cooldown with each other. */
+    @Test
+    void cooldown_isSharedAmongAnonymousCallers() throws Exception {
+        LocalRepositoryCache cache = new LocalRepositoryCache(cacheTempDir, 0, false, 60_000);
+
+        Repository first = cache.getOrClone(remoteUrl);
+        first.close();
+
+        String newSha = addUpstreamCommit("second commit");
+
+        Repository second = cache.getOrClone(remoteUrl);
+        assertFalse(hasObject(second, newSha), "Anonymous callers share one identity and therefore one cooldown");
+        second.close();
+    }
+
+    /** An anonymous warm-up must not satisfy the cooldown for an identified principal, or vice versa. */
+    @Test
+    void anonymousWarmUp_doesNotSatisfyIdentifiedPrincipal() throws Exception {
+        LocalRepositoryCache cache = new LocalRepositoryCache(cacheTempDir, 0, false, 60_000);
+
+        Repository anon = cache.getOrClone(remoteUrl);
+        anon.close();
+
+        String newSha = addUpstreamCommit("second commit");
+
+        Repository identified = cache.getOrClone(remoteUrl, null, null, "alice:token-a");
+        assertTrue(hasObject(identified, newSha), "An identified principal must not inherit an anonymous verification");
+        identified.close();
+    }
+
+    /** Once the cooldown lapses, even the same principal must re-verify against upstream. */
+    @Test
+    void cooldown_expiresForSamePrincipal() throws Exception {
+        LocalRepositoryCache cache = new LocalRepositoryCache(cacheTempDir, 0, false, 0);
+
+        Repository first = cache.getOrClone(remoteUrl, null, null, "alice:token-a");
+        first.close();
+
+        String newSha = addUpstreamCommit("second commit");
+
+        Repository again = cache.getOrClone(remoteUrl, null, null, "alice:token-a");
+        assertTrue(hasObject(again, newSha), "With the cooldown elapsed the same principal must re-fetch");
+        again.close();
+    }
+
+    /**
+     * True when the object is physically present in the mirror. {@code Repository.resolve} is unsuitable here: given a
+     * full 40-character SHA it simply parses it and returns an ObjectId without consulting the object database, so it
+     * answers "is this a well-formed id", not "was this fetched".
+     */
+    private static boolean hasObject(Repository repo, String sha) throws Exception {
+        return repo.getObjectDatabase().has(ObjectId.fromString(sha));
+    }
+
+    /** Adds a commit to the upstream test repo and returns its SHA. */
+    private String addUpstreamCommit(String message) throws Exception {
+        File f = new File(remoteTempDir.toFile(), message.replace(' ', '-') + ".txt");
+        Files.writeString(f.toPath(), message);
+        remoteGit.add().addFilepattern(".").call();
+        return remoteGit
+                .commit()
+                .setAuthor(new PersonIdent("Dev", "dev@example.com"))
+                .setCommitter(new PersonIdent("Dev", "dev@example.com"))
+                .setMessage(message)
+                .call()
+                .getName();
     }
 
     @Test
