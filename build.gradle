@@ -182,6 +182,24 @@ subprojects {
             finalizedBy jacocoTestReport
         }
 
+        // Print the full failure — message, cause chain and stack trace — to the console.
+        // Gradle's default prints only the exception type and line, so the assertion message is
+        // lost and the reason has to be recovered by parsing the XML or HTML report (or, in CI,
+        // downloading the report artifact). Applied via withType(Test) so it covers e2eTest as
+        // well as test, since e2e failures are the ones most often diagnosed from CI logs alone.
+        //
+        // showStandardStreams stays off deliberately: e2e tests emit hundreds of lines of
+        // application logging per test, which would bury the failure this is meant to surface.
+        tasks.withType(Test).configureEach {
+            testLogging {
+                events 'failed', 'skipped'
+                exceptionFormat 'full'
+                showCauses true
+                showExceptions true
+                showStackTraces true
+            }
+        }
+
         // Best-effort extraction of embedded META-INF/LICENSE, META-INF/NOTICE, and root
         // LICENSE/NOTICE file contents from this module's runtime dependency jars, keyed by
         // module coordinates. Maven POM metadata only gives a license *name* + a generic URL —

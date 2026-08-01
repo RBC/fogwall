@@ -9,10 +9,12 @@ import java.util.Collections;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.LogCommand;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.diff.DiffEntry;
 import org.eclipse.jgit.diff.DiffFormatter;
 import org.eclipse.jgit.diff.RenameDetector;
+import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectReader;
 import org.eclipse.jgit.lib.PersonIdent;
@@ -78,16 +80,11 @@ public class CommitInspectionService {
             if (fromId != null && !isNullCommit(fromCommit)) {
                 revCommits = git.log().addRange(fromId, toId).call();
             } else {
-                // New branch - exclude commits reachable from any existing ref so we only
+                // New branch or new tag - exclude commits reachable from any existing ref so we only
                 // validate commits that are genuinely new in this push.  The local cache is a
                 // bare clone, so existing branch tips live under refs/heads/ (not refs/remotes/).
                 var logCmd = git.log().add(toId);
-                Collection<Ref> existingRefs = repository.getRefDatabase().getRefsByPrefix("refs/heads/");
-                for (Ref ref : existingRefs) {
-                    if (ref.getObjectId() != null) {
-                        logCmd.not(ref.getObjectId());
-                    }
-                }
+                excludeExistingRefs(repository, logCmd);
                 revCommits = logCmd.call();
             }
 
@@ -97,6 +94,27 @@ public class CommitInspectionService {
         }
 
         return commits;
+    }
+
+    /**
+     * Marks every commit already reachable from an existing ref as uninteresting, so the walk returns only what this
+     * push genuinely introduces.
+     *
+     * <p>Covers {@code refs/tags/*} as well as {@code refs/heads/*}. A commit reachable only from an existing tag is
+     * just as much "already upstream" as one on a branch — nothing new arrives by referencing it again — but excluding
+     * only branches made such a commit look new, so re-tagging it was reported as smuggled history. Annotated tags are
+     * peeled to their target commit; a tag pointing at a blob or tree has no commit to exclude and is skipped.
+     */
+    private static void excludeExistingRefs(Repository repository, LogCommand logCmd) throws IOException {
+        for (String prefix : new String[] {Constants.R_HEADS, Constants.R_TAGS}) {
+            for (Ref ref : repository.getRefDatabase().getRefsByPrefix(prefix)) {
+                if (ref.getObjectId() == null) continue;
+                ObjectId commitId = repository.resolve(ref.getName() + "^{commit}");
+                if (commitId != null) {
+                    logCmd.not(commitId);
+                }
+            }
+        }
     }
 
     /**

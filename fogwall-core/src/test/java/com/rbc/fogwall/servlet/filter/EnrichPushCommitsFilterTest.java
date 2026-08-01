@@ -13,21 +13,27 @@ import com.rbc.fogwall.provider.GitHubProvider;
 import com.rbc.fogwall.servlet.RequestBodyWrapper;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletInputStream;
+import jakarta.servlet.ServletOutputStream;
+import jakarta.servlet.WriteListener;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.Set;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.internal.storage.pack.PackWriter;
 import org.eclipse.jgit.lib.*;
+import org.eclipse.jgit.transport.CredentialsProvider;
 import org.eclipse.jgit.transport.PacketLineOut;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 
 /**
  * Integration tests for {@link EnrichPushCommitsFilter}.
@@ -85,6 +91,27 @@ class EnrichPushCommitsFilterTest {
      * what {@link EnrichPushCommitsFilter} expects: it reads the body via {@code getBody()} and the request details via
      * {@code getAttribute(GIT_REQUEST_ATTR)}.
      */
+    /** A response mock that can actually receive {@code sendGitError}'s output — mirrors CheckEmptyBranchFilterTest. */
+    private static HttpServletResponse fakeResponse() throws IOException {
+        HttpServletResponse mock = mock(HttpServletResponse.class);
+        when(mock.getOutputStream()).thenReturn(new ServletOutputStream() {
+            @Override
+            public void write(int b) {}
+
+            @Override
+            public void write(byte[] b, int off, int len) {}
+
+            @Override
+            public boolean isReady() {
+                return true;
+            }
+
+            @Override
+            public void setWriteListener(WriteListener l) {}
+        });
+        return mock;
+    }
+
     private RequestBodyWrapper wrapRequest(byte[] body, GitRequestDetails details) throws IOException {
         HttpServletRequest inner = mock(HttpServletRequest.class);
         when(inner.getMethod()).thenReturn("POST");
@@ -149,6 +176,69 @@ class EnrichPushCommitsFilterTest {
     }
 
     /**
+     * The client's credentials must reach the upstream clone/fetch — without them a private repository fails with an
+     * upstream 404 that surfaces to the developer as "repository not found".
+     *
+     * <p>Just as importantly, a <b>principal</b> must be passed alongside them. The mirror cache keys its fetch
+     * cooldown by {@code (repository, principal)}; supplying credentials while leaving the principal null would put
+     * every proxy caller on the shared anonymous entry, letting one user's successful fetch satisfy the next user's
+     * request. The principal is built from the whole credential rather than the username because providers such as
+     * GitHub ignore the HTTP Basic username entirely.
+     */
+    @Test
+    void doHttpFilter_passesClientCredentialsAndPrincipalToCache() throws Exception {
+        Repository cacheRepo =
+                Git.init().setBare(true).setDirectory(cacheDir.toFile()).call().getRepository();
+        String toSha = insertCommit(cacheRepo);
+
+        LocalRepositoryCache mockCache = mock(LocalRepositoryCache.class);
+        when(mockCache.getOrClone(any(), any(), any(), any())).thenReturn(cacheRepo);
+
+        GitRequestDetails details = makeDetails(ObjectId.zeroId().name(), toSha);
+        RequestBodyWrapper request = wrapRequest(new byte[0], details);
+        String basic = Base64.getEncoder().encodeToString("alice:ghp_secrettoken".getBytes(StandardCharsets.UTF_8));
+        when(((HttpServletRequest) request.getRequest()).getHeader("Authorization"))
+                .thenReturn("Basic " + basic);
+
+        new EnrichPushCommitsFilter(new GitHubProvider("/proxy"), mockCache)
+                .doHttpFilter(request, mock(HttpServletResponse.class));
+
+        ArgumentCaptor<CredentialsProvider> creds = ArgumentCaptor.forClass(CredentialsProvider.class);
+        ArgumentCaptor<String> principal = ArgumentCaptor.forClass(String.class);
+        verify(mockCache).getOrClone(any(), creds.capture(), any(), principal.capture());
+
+        assertNotNull(creds.getValue(), "Client credentials must be forwarded to the upstream clone/fetch");
+        assertEquals(
+                "alice:ghp_secrettoken",
+                principal.getValue(),
+                "Principal must be the full credential, so the cooldown cannot be shared between callers");
+    }
+
+    /** With no Authorization header the caller is genuinely anonymous — no credentials and no principal. */
+    @Test
+    void doHttpFilter_withoutAuthHeader_passesNoCredentialsOrPrincipal() throws Exception {
+        Repository cacheRepo =
+                Git.init().setBare(true).setDirectory(cacheDir.toFile()).call().getRepository();
+        String toSha = insertCommit(cacheRepo);
+
+        LocalRepositoryCache mockCache = mock(LocalRepositoryCache.class);
+        when(mockCache.getOrClone(any(), any(), any(), any())).thenReturn(cacheRepo);
+
+        GitRequestDetails details = makeDetails(ObjectId.zeroId().name(), toSha);
+        RequestBodyWrapper request = wrapRequest(new byte[0], details);
+
+        new EnrichPushCommitsFilter(new GitHubProvider("/proxy"), mockCache)
+                .doHttpFilter(request, mock(HttpServletResponse.class));
+
+        ArgumentCaptor<CredentialsProvider> creds = ArgumentCaptor.forClass(CredentialsProvider.class);
+        ArgumentCaptor<String> principal = ArgumentCaptor.forClass(String.class);
+        verify(mockCache).getOrClone(any(), creds.capture(), any(), principal.capture());
+
+        assertNull(creds.getValue());
+        assertNull(principal.getValue());
+    }
+
+    /**
      * Happy path (no pack): commit objects are already in the bare cache (e.g. the cache was recently cloned). The
      * filter skips pack unpack because the request body is empty, but can still walk the commit range.
      */
@@ -160,7 +250,7 @@ class EnrichPushCommitsFilterTest {
         String fromSha = ObjectId.zeroId().name();
 
         LocalRepositoryCache mockCache = mock(LocalRepositoryCache.class);
-        when(mockCache.getOrClone(any())).thenReturn(cacheRepo);
+        when(mockCache.getOrClone(any(), any(), any(), any())).thenReturn(cacheRepo);
 
         GitRequestDetails details = makeDetails(fromSha, toSha);
 
@@ -206,7 +296,7 @@ class EnrichPushCommitsFilterTest {
         Repository cacheRepo =
                 Git.init().setBare(true).setDirectory(cacheDir2.toFile()).call().getRepository();
         LocalRepositoryCache mockCache = mock(LocalRepositoryCache.class);
-        when(mockCache.getOrClone(any())).thenReturn(cacheRepo);
+        when(mockCache.getOrClone(any(), any(), any(), any())).thenReturn(cacheRepo);
 
         GitRequestDetails details = makeDetails(fromSha, toSha);
 
@@ -290,7 +380,7 @@ class EnrichPushCommitsFilterTest {
         Repository cacheRepo =
                 Git.init().setBare(true).setDirectory(cacheDir2.toFile()).call().getRepository();
         LocalRepositoryCache mockCache = mock(LocalRepositoryCache.class);
-        when(mockCache.getOrClone(any())).thenReturn(cacheRepo);
+        when(mockCache.getOrClone(any(), any(), any(), any())).thenReturn(cacheRepo);
 
         GitRequestDetails details = makeDetails(fromSha, toSha);
 
@@ -330,7 +420,7 @@ class EnrichPushCommitsFilterTest {
 
             // The push packet reports the tag object SHA as toCommit.
             LocalRepositoryCache mockCache = mock(LocalRepositoryCache.class);
-            when(mockCache.getOrClone(any())).thenReturn(cacheRepo);
+            when(mockCache.getOrClone(any(), any(), any(), any())).thenReturn(cacheRepo);
 
             GitRequestDetails details = makeDetails(ObjectId.zeroId().name(), tagId.getName());
             details.setBranch("refs/tags/v1.0.0");
@@ -363,7 +453,7 @@ class EnrichPushCommitsFilterTest {
         String commitSha = insertCommitAsUpstream(cacheRepo);
 
         LocalRepositoryCache mockCache = mock(LocalRepositoryCache.class);
-        when(mockCache.getOrClone(any())).thenReturn(cacheRepo);
+        when(mockCache.getOrClone(any(), any(), any(), any())).thenReturn(cacheRepo);
 
         // Lightweight tag: toCommit is the commit SHA directly (no tag object).
         GitRequestDetails details = makeDetails(ObjectId.zeroId().name(), commitSha);
@@ -411,7 +501,7 @@ class EnrichPushCommitsFilterTest {
         Repository cacheRepo =
                 Git.init().setBare(true).setDirectory(cacheDir2.toFile()).call().getRepository();
         LocalRepositoryCache mockCache = mock(LocalRepositoryCache.class);
-        when(mockCache.getOrClone(any())).thenReturn(cacheRepo);
+        when(mockCache.getOrClone(any(), any(), any(), any())).thenReturn(cacheRepo);
 
         // Lightweight tag pointing directly at the new commit.
         GitRequestDetails details = makeDetails(ObjectId.zeroId().name(), commitSha);
@@ -419,8 +509,7 @@ class EnrichPushCommitsFilterTest {
 
         RequestBodyWrapper request = wrapRequest(packOut.toByteArray(), details);
 
-        new EnrichPushCommitsFilter(new GitHubProvider("/proxy"), mockCache)
-                .doHttpFilter(request, mock(HttpServletResponse.class));
+        new EnrichPushCommitsFilter(new GitHubProvider("/proxy"), mockCache).doHttpFilter(request, fakeResponse());
 
         assertEquals(
                 GitRequestDetails.GitResult.ERROR, details.getResult(), "Tag push with new commits must be rejected");
@@ -440,7 +529,7 @@ class EnrichPushCommitsFilterTest {
         Repository emptyRepo =
                 Git.init().setBare(true).setDirectory(cacheDir3.toFile()).call().getRepository();
         LocalRepositoryCache mockCache = mock(LocalRepositoryCache.class);
-        when(mockCache.getOrClone(any())).thenReturn(emptyRepo);
+        when(mockCache.getOrClone(any(), any(), any(), any())).thenReturn(emptyRepo);
 
         // A tag SHA that does not exist in the cache — simulates a missing/omitted tag object.
         GitRequestDetails details = makeDetails(ObjectId.zeroId().name(), "07697092d36d3323eaaf4be18b3a5b1f276ab0dc");
@@ -448,8 +537,7 @@ class EnrichPushCommitsFilterTest {
 
         RequestBodyWrapper request = wrapRequest(new byte[0], details);
 
-        new EnrichPushCommitsFilter(new GitHubProvider("/proxy"), mockCache)
-                .doHttpFilter(request, mock(HttpServletResponse.class));
+        new EnrichPushCommitsFilter(new GitHubProvider("/proxy"), mockCache).doHttpFilter(request, fakeResponse());
 
         assertEquals(
                 GitRequestDetails.GitResult.ERROR, details.getResult(), "Unresolvable tag object must be rejected");
@@ -479,14 +567,13 @@ class EnrichPushCommitsFilterTest {
     @Test
     void doHttpFilter_cacheThrows_errorsRequest() throws Exception {
         LocalRepositoryCache mockCache = mock(LocalRepositoryCache.class);
-        when(mockCache.getOrClone(any())).thenThrow(new RuntimeException("network unreachable"));
+        when(mockCache.getOrClone(any(), any(), any(), any())).thenThrow(new RuntimeException("network unreachable"));
 
         GitRequestDetails details = makeDetails(ObjectId.zeroId().name(), "abc1234abc1234abc1234abc1234abc1234abc123");
 
         RequestBodyWrapper request = wrapRequest(new byte[0], details);
-        HttpServletResponse response = mock(HttpServletResponse.class);
 
-        new EnrichPushCommitsFilter(new GitHubProvider("/proxy"), mockCache).doHttpFilter(request, response);
+        new EnrichPushCommitsFilter(new GitHubProvider("/proxy"), mockCache).doHttpFilter(request, fakeResponse());
 
         assertEquals(GitRequestDetails.GitResult.ERROR, details.getResult());
         assertNotNull(details.getReason());
@@ -500,15 +587,14 @@ class EnrichPushCommitsFilterTest {
         Repository emptyRepo =
                 Git.init().setBare(true).setDirectory(cacheDir.toFile()).call().getRepository();
         LocalRepositoryCache mockCache = mock(LocalRepositoryCache.class);
-        when(mockCache.getOrClone(any())).thenReturn(emptyRepo);
+        when(mockCache.getOrClone(any(), any(), any(), any())).thenReturn(emptyRepo);
 
         String toSha = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
         GitRequestDetails details = makeDetails(ObjectId.zeroId().name(), toSha);
 
         RequestBodyWrapper request = wrapRequest(new byte[0], details);
-        HttpServletResponse response = mock(HttpServletResponse.class);
 
-        new EnrichPushCommitsFilter(new GitHubProvider("/proxy"), mockCache).doHttpFilter(request, response);
+        new EnrichPushCommitsFilter(new GitHubProvider("/proxy"), mockCache).doHttpFilter(request, fakeResponse());
 
         assertEquals(GitRequestDetails.GitResult.ERROR, details.getResult());
         assertNotNull(details.getReason());

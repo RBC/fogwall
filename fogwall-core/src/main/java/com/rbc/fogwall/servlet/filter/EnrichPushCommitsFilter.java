@@ -1,5 +1,9 @@
 package com.rbc.fogwall.servlet.filter;
 
+import static com.rbc.fogwall.git.GitClientUtils.AnsiColor.RED;
+import static com.rbc.fogwall.git.GitClientUtils.SymbolCodes.NO_ENTRY;
+import static com.rbc.fogwall.git.GitClientUtils.format;
+import static com.rbc.fogwall.git.GitClientUtils.sym;
 import static com.rbc.fogwall.servlet.FogwallServlet.GIT_REQUEST_ATTR;
 
 import com.rbc.fogwall.git.Commit;
@@ -13,6 +17,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
@@ -20,8 +26,10 @@ import org.eclipse.jgit.lib.NullProgressMonitor;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectInserter;
 import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.transport.CredentialsProvider;
 import org.eclipse.jgit.transport.PackParser;
 import org.eclipse.jgit.transport.PacketLineIn;
+import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 
 /**
  * Filter that enriches push requests with full commit information. Replicates fogwall's {@code writePack} approach:
@@ -76,8 +84,22 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
             log.info("Enriching push commits from repository: {}", remoteUrl);
 
             // Step 1: Get or clone the upstream repo, then publish it on the request so downstream
-            // filters can use it without needing their own LocalRepositoryCache reference.
-            Repository repository = repositoryCache.getOrClone(remoteUrl);
+            // filters can use it without needing their own LocalRepositoryCache reference. The
+            // pushing client's own credentials are reused for the upstream clone/fetch so that
+            // private repos can be inspected — without them this silently degrades to an
+            // anonymous clone/fetch, which fails for any private repo.
+            //
+            // The principal must be supplied alongside the credentials: the cache's fetch cooldown is
+            // keyed by (repository, principal), and passing credentials without an identity would leave
+            // every proxy caller sharing the anonymous entry — making one user's successful fetch
+            // satisfy the next user's request, which is the transferability the cooldown keying exists
+            // to prevent. Built from the full credential, not the username, because providers such as
+            // GitHub ignore the HTTP Basic username entirely.
+            String[] userPass = extractBasicAuth(request);
+            CredentialsProvider credentials =
+                    userPass == null ? null : new UsernamePasswordCredentialsProvider(userPass[0], userPass[1]);
+            String principal = userPass == null ? null : userPass[0] + ":" + userPass[1];
+            Repository repository = repositoryCache.getOrClone(remoteUrl, credentials, null, principal);
             requestDetails.setLocalRepository(repository);
 
             // Step 2: Unpack the inflight push's pack data into the local clone.
@@ -100,29 +122,54 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
                             requestDetails.getBranch(),
                             toCommit,
                             e.getMessage());
-                    requestDetails.setResult(GitRequestDetails.GitResult.ERROR);
-                    requestDetails.setReason("Push rejected: tag object could not be resolved."
-                            + " Ensure the tag object is included in the push.");
+                    errorAndSendError(
+                            requestDetails,
+                            request,
+                            response,
+                            "Push rejected: tag object could not be resolved. Ensure the tag object is included in"
+                                    + " the push.");
                     return;
                 }
                 if (peeled == null) {
                     log.warn("Tag push ({}) — {} did not resolve to a commit", requestDetails.getBranch(), toCommit);
-                    requestDetails.setResult(GitRequestDetails.GitResult.ERROR);
-                    requestDetails.setReason("Push rejected: tag object could not be resolved."
-                            + " Ensure the tag object is included in the push.");
+                    errorAndSendError(
+                            requestDetails,
+                            request,
+                            response,
+                            "Push rejected: tag object could not be resolved. Ensure the tag object is included in"
+                                    + " the push.");
                     return;
                 }
                 String peeledSha = peeled.getName();
                 log.info("Tag push ({}) — peeled {} to commit {}", requestDetails.getBranch(), toCommit, peeledSha);
                 List<Commit> commits = CommitInspectionService.getCommitRange(repository, fromCommit, peeledSha);
                 if (!commits.isEmpty()) {
+                    // A non-empty range has three possible explanations, and only one of them is smuggling:
+                    //   1. the commits really did arrive via this tag, bypassing branch validation;
+                    //   2. the mirror has not re-fetched since they were forwarded upstream (fetch cooldown);
+                    //   3. the mirror is a shallow clone and they sit beyond its boundary.
+                    // The walk excludes commits reachable from refs/heads/* *in the mirror*, so (2) and (3) look
+                    // exactly like (1). Tagging a commit that has been upstream for months is an ordinary release
+                    // action and must not be reported as smuggling, so eliminate (2) and (3) — refresh and deepen —
+                    // before concluding (1). This costs a fetch only on the path that was about to reject.
+                    log.info(
+                            "Tag push ({}) — {} commit(s) look unvalidated; refreshing mirror before deciding",
+                            requestDetails.getBranch(),
+                            commits.size());
+                    repositoryCache.refreshNow(remoteUrl, credentials, null, principal);
+                    commits = CommitInspectionService.getCommitRange(repository, fromCommit, peeledSha);
+                }
+                if (!commits.isEmpty()) {
                     log.warn(
                             "Tag push {} introduces {} unvalidated commit(s) — rejecting",
                             requestDetails.getBranch(),
                             commits.size());
-                    requestDetails.setResult(GitRequestDetails.GitResult.ERROR);
-                    requestDetails.setReason("Push rejected: the tag references commits that were not validated through"
-                            + " a branch push. Push the branch first, then re-create the tag.");
+                    errorAndSendError(
+                            requestDetails,
+                            request,
+                            response,
+                            "Push rejected: the tag references commits that were not validated through a branch"
+                                    + " push. Push the branch first, then re-create the tag.");
                 }
                 return;
             }
@@ -132,10 +179,15 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
             List<Commit> commits = CommitInspectionService.getCommitRange(repository, fromCommit, toCommit);
 
             if (commits.isEmpty()) {
-                log.warn("No commits found in range {}..{} — erroring push", fromCommit, toCommit);
-                requestDetails.setResult(GitRequestDetails.GitResult.ERROR);
-                requestDetails.setReason("Push error: the proxy could not inspect any commits in this push. "
-                        + "Please retry or contact your administrator.");
+                // Not an inspection failure: the walk succeeded and the range is genuinely empty, which is
+                // what a branch pushed with no new commits looks like. Leave the result untouched and let
+                // CheckEmptyBranchFilter report it — it names the condition accurately and its rejection
+                // carries the push-record link. Claiming it here as an error would replace a precise
+                // message with a vague one and drop that link.
+                log.debug(
+                        "No commits in range {}..{} — leaving the empty-branch check to report it",
+                        fromCommit,
+                        toCommit);
                 return;
             }
 
@@ -144,10 +196,32 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
 
         } catch (Exception e) {
             log.error("Failed to enrich push commits", e);
-            requestDetails.setResult(GitRequestDetails.GitResult.ERROR);
-            requestDetails.setReason("Push error: commit inspection failed (" + e.getMessage() + "). "
-                    + "Please retry or contact your administrator.");
+            errorAndSendError(
+                    requestDetails,
+                    request,
+                    response,
+                    "Push error: commit inspection failed (" + e.getMessage() + "). Please retry or contact your"
+                            + " administrator.");
         }
+    }
+
+    /**
+     * Mark the push as {@link GitRequestDetails.GitResult#ERROR} and commit an error response to the client.
+     *
+     * <p>Forwarding is not the risk here: {@link PushFinalizerFilter} returns early on {@code ERROR} without changing
+     * the result, and {@code FogwallServlet.service()} proxies only when the result is {@code ALLOWED}, so an errored
+     * push is never sent upstream whether or not a response was written. The reason for committing a response is that
+     * nothing else will — the remaining filters skip an errored push, the finalizer returns without writing, and the
+     * proxy servlet declines to run — leaving the client with an empty reply and no explanation of why the push failed.
+     * Writing it here is what turns a silent failure into a diagnosable one.
+     */
+    private void errorAndSendError(
+            GitRequestDetails requestDetails, HttpServletRequest request, HttpServletResponse response, String reason)
+            throws IOException {
+        requestDetails.setResult(GitRequestDetails.GitResult.ERROR);
+        requestDetails.setReason(reason);
+        String title = sym(NO_ENTRY) + "  Push Blocked - Commit Inspection Failed";
+        sendGitError(request, response, format(title, reason, RED, null));
     }
 
     /**
@@ -230,6 +304,30 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
             return pos;
         }
         return -1;
+    }
+
+    /**
+     * Extract the pushing client's HTTP Basic credentials as {@code [username, secret]}, or {@code null} when the
+     * request carries none. Returns the parts rather than a {@link CredentialsProvider} so the caller can derive both
+     * the provider and the cache principal from a single parse of the header.
+     *
+     * <p>Decoded as UTF-8 explicitly: the platform default charset would make the outcome of authentication depend on
+     * the JVM's locale for any non-ASCII byte in the secret.
+     */
+    private static String[] extractBasicAuth(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Basic ")) return null;
+        try {
+            String decoded = new String(
+                    Base64.getDecoder()
+                            .decode(authHeader.substring("Basic ".length()).trim()),
+                    StandardCharsets.UTF_8);
+            int colon = decoded.indexOf(':');
+            if (colon < 0) return null;
+            return new String[] {decoded.substring(0, colon), decoded.substring(colon + 1)};
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     private String constructRemoteUrl(GitRequestDetails requestDetails) {
