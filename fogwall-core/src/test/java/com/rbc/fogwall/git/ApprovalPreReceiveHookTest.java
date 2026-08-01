@@ -59,9 +59,14 @@ class ApprovalPreReceiveHookTest {
                 .call();
     }
 
+    /**
+     * No validationRecordId means the push record was never written — the initial create failed, or
+     * {@code validationResultHook} could not save. The hook cannot establish that this push was approved, so it must
+     * reject. Returning normally would forward it upstream unapproved on nothing more than a transient store failure,
+     * and the missing record is also the audit evidence, so the bypass would leave no trace but a log line.
+     */
     @Test
-    void noValidationRecordId_skipsApprovalGate() throws Exception {
-        // No fogwall.validationRecordId set in repo config → hook is a no-op
+    void noValidationRecordId_rejectsPush() throws Exception {
         RevCommit c1 = createCommit("init");
         RevCommit c2 = createCommit("second");
         ReceivePack rp = new ReceivePack(repo);
@@ -69,12 +74,16 @@ class ApprovalPreReceiveHookTest {
 
         new ApprovalPreReceiveHook(pushStore, approvalGateway).onPreReceive(rp, List.of(cmd));
 
-        assertEquals(ReceiveCommand.Result.NOT_ATTEMPTED, cmd.getResult());
-        verifyNoInteractions(pushStore, approvalGateway);
+        assertEquals(
+                ReceiveCommand.Result.REJECTED_OTHER_REASON,
+                cmd.getResult(),
+                "a push whose approval state cannot be established must be rejected, not forwarded");
+        verifyNoInteractions(approvalGateway);
     }
 
+    /** Same reasoning when the id exists but the record cannot be read back — e.g. the store is unavailable. */
     @Test
-    void validationRecordNotInStore_skipsApprovalGate() throws Exception {
+    void validationRecordNotInStore_rejectsPush() throws Exception {
         String recordId = UUID.randomUUID().toString();
         PushContext pushContext = new PushContext();
         pushContext.setValidationRecordId(recordId);
@@ -88,7 +97,10 @@ class ApprovalPreReceiveHookTest {
         new ApprovalPreReceiveHook(pushStore, approvalGateway, Duration.ofMinutes(30), null, null, pushContext)
                 .onPreReceive(rp, List.of(cmd));
 
-        assertEquals(ReceiveCommand.Result.NOT_ATTEMPTED, cmd.getResult());
+        assertEquals(
+                ReceiveCommand.Result.REJECTED_OTHER_REASON,
+                cmd.getResult(),
+                "an unreadable approval record must block the push, not let it through");
         verifyNoInteractions(approvalGateway);
     }
 

@@ -103,7 +103,14 @@ public class PushStorePersistenceHook {
     public PreReceiveHook validationResultHook(ValidationContext validationContext) {
         return (ReceivePack rp, Collection<ReceiveCommand> commands) -> {
             String pushId = pushContext != null ? pushContext.getPushId() : null;
-            if (pushId == null) return;
+            if (pushId == null) {
+                // The initial RECEIVED record was never created, so there is nothing to update and
+                // validationRecordId stays unset. ApprovalPreReceiveHook rejects the push on that basis —
+                // see its fail-closed guard — so this is logged loudly rather than passed over in silence.
+                log.error("No pushId in push context - validation result cannot be recorded; approval gate will"
+                        + " reject this push");
+                return;
+            }
 
             // Read resolvedUser and scmUsername from pushContext — both are set by CheckUserPushPermissionHook
             // (order 150) after preReceiveHook() ran, so they were not available when the RECEIVED record
@@ -252,7 +259,12 @@ public class PushStorePersistenceHook {
                             "Saved validation result record: id={}, status=PENDING (awaiting review)", record.getId());
                 });
             } catch (Exception e) {
-                log.error("Failed to save validation result record", e);
+                // Swallowed deliberately: this hook must not abort the chain mid-way. The security
+                // consequence is handled downstream — the failure leaves validationRecordId unset, and
+                // ApprovalPreReceiveHook fails closed on that, so the push is rejected rather than
+                // forwarded unapproved. Logged at error because the operator needs to see it: the record
+                // that failed to write is also the audit evidence of what happened.
+                log.error("Failed to save validation result record - approval gate will reject this push", e);
             }
         };
     }

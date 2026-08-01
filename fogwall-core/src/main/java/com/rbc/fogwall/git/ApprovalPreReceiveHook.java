@@ -124,15 +124,27 @@ public class ApprovalPreReceiveHook implements PreReceiveHook {
     public void onPreReceive(ReceivePack rp, Collection<ReceiveCommand> commands) {
         OutputStream msgOut = rp.getMessageOutputStream();
 
+        // Fail closed on missing approval state. Both branches below mean the same thing: this hook cannot
+        // establish that the push was approved. Returning without rejecting would forward it upstream
+        // unapproved — silently disabling the control fogwall exists to provide, on nothing more than a
+        // transient store failure. The condition is self-concealing, because the record that failed to write
+        // is also the audit evidence of what happened, so the only trace would be a log line.
         String validationRecordId = pushContext != null ? pushContext.getValidationRecordId() : null;
         if (validationRecordId == null) {
-            log.warn("No validationRecordId in push context - skipping approval gate");
+            log.error("No validationRecordId in push context - rejecting push, approval state cannot be established");
+            sendAndFlush(
+                    rp, msgOut, color(RED, sym(NO_ENTRY) + "  Push blocked - approval state could not be recorded"));
+            rejectAll(commands, "Approval state unavailable - push record was not created");
             return;
         }
 
         var record = pushStore.findById(validationRecordId).orElse(null);
         if (record == null) {
-            log.warn("Validation record not found: {} - skipping approval gate", validationRecordId);
+            log.error(
+                    "Validation record not found: {} - rejecting push, approval state cannot be established",
+                    validationRecordId);
+            sendAndFlush(rp, msgOut, color(RED, sym(NO_ENTRY) + "  Push blocked - approval record could not be read"));
+            rejectAll(commands, "Approval state unavailable - push record " + validationRecordId + " not found");
             return;
         }
 
