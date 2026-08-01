@@ -17,6 +17,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
 import java.util.Set;
@@ -87,7 +88,18 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
             // pushing client's own credentials are reused for the upstream clone/fetch so that
             // private repos can be inspected — without them this silently degrades to an
             // anonymous clone/fetch, which fails for any private repo.
-            Repository repository = repositoryCache.getOrClone(remoteUrl, extractCredentials(request));
+            //
+            // The principal must be supplied alongside the credentials: the cache's fetch cooldown is
+            // keyed by (repository, principal), and passing credentials without an identity would leave
+            // every proxy caller sharing the anonymous entry — making one user's successful fetch
+            // satisfy the next user's request, which is the transferability the cooldown keying exists
+            // to prevent. Built from the full credential, not the username, because providers such as
+            // GitHub ignore the HTTP Basic username entirely.
+            String[] userPass = extractBasicAuth(request);
+            CredentialsProvider credentials =
+                    userPass == null ? null : new UsernamePasswordCredentialsProvider(userPass[0], userPass[1]);
+            String principal = userPass == null ? null : userPass[0] + ":" + userPass[1];
+            Repository repository = repositoryCache.getOrClone(remoteUrl, credentials, null, principal);
             requestDetails.setLocalRepository(repository);
 
             // Step 2: Unpack the inflight push's pack data into the local clone.
@@ -176,10 +188,14 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
     }
 
     /**
-     * Mark the push as {@link GitRequestDetails.GitResult#ERROR} and commit an error response to the client. Without
-     * sending the response here, downstream filters that only short-circuit on {@code REJECTED} would let the push fall
-     * through the rest of the chain uncommitted — and {@link PushFinalizerFilter} would then forward it upstream, since
-     * it only skips forwarding when the response is already committed.
+     * Mark the push as {@link GitRequestDetails.GitResult#ERROR} and commit an error response to the client.
+     *
+     * <p>Forwarding is not the risk here: {@link PushFinalizerFilter} returns early on {@code ERROR} without changing
+     * the result, and {@code FogwallServlet.service()} proxies only when the result is {@code ALLOWED}, so an errored
+     * push is never sent upstream whether or not a response was written. The reason for committing a response is that
+     * nothing else will — the remaining filters skip an errored push, the finalizer returns without writing, and the
+     * proxy servlet declines to run — leaving the client with an empty reply and no explanation of why the push failed.
+     * Writing it here is what turns a silent failure into a diagnosable one.
      */
     private void errorAndSendError(
             GitRequestDetails requestDetails, HttpServletRequest request, HttpServletResponse response, String reason)
@@ -272,16 +288,25 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
         return -1;
     }
 
-    /** Extract the pushing client's Basic Auth credentials, for reuse against the upstream provider. */
-    private static CredentialsProvider extractCredentials(HttpServletRequest request) {
+    /**
+     * Extract the pushing client's HTTP Basic credentials as {@code [username, secret]}, or {@code null} when the
+     * request carries none. Returns the parts rather than a {@link CredentialsProvider} so the caller can derive both
+     * the provider and the cache principal from a single parse of the header.
+     *
+     * <p>Decoded as UTF-8 explicitly: the platform default charset would make the outcome of authentication depend on
+     * the JVM's locale for any non-ASCII byte in the secret.
+     */
+    private static String[] extractBasicAuth(HttpServletRequest request) {
         String authHeader = request.getHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Basic ")) return null;
         try {
-            String decoded = new String(Base64.getDecoder()
-                    .decode(authHeader.substring("Basic ".length()).trim()));
+            String decoded = new String(
+                    Base64.getDecoder()
+                            .decode(authHeader.substring("Basic ".length()).trim()),
+                    StandardCharsets.UTF_8);
             int colon = decoded.indexOf(':');
             if (colon < 0) return null;
-            return new UsernamePasswordCredentialsProvider(decoded.substring(0, colon), decoded.substring(colon + 1));
+            return new String[] {decoded.substring(0, colon), decoded.substring(colon + 1)};
         } catch (IllegalArgumentException e) {
             return null;
         }
