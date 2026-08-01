@@ -29,6 +29,11 @@ public class StoreAndForwardRepositoryResolver implements RepositoryResolver<Htt
 
     public static final String CREDENTIALS_ATTRIBUTE = "com.rbc.fogwall.credentials";
 
+    /**
+     * Upstream URL this request resolved to, read by {@link StoreAndForwardReceivePackFactory} onto its PushContext.
+     */
+    public static final String UPSTREAM_URL_ATTRIBUTE = "com.rbc.fogwall.upstreamUrl";
+
     private final LocalRepositoryCache cache;
     private final FogwallProvider provider;
 
@@ -68,14 +73,10 @@ public class StoreAndForwardRepositoryResolver implements RepositoryResolver<Htt
 
         log.info("Opening store-and-forward repository: {} -> {}", name, cleanUpstreamUrl);
 
+        req.setAttribute(UPSTREAM_URL_ATTRIBUTE, cleanUpstreamUrl);
+
         try {
-            Repository repo = cache.getOrClone(cleanUpstreamUrl, creds, null, principal);
-
-            // Store the upstream URL so PostReceiveHook can find it
-            repo.getConfig().setString("fogwall", null, "upstreamUrl", cleanUpstreamUrl);
-            repo.getConfig().save();
-
-            return repo;
+            return cache.getOrClone(cleanUpstreamUrl, creds, null, principal);
         } catch (Exception e) {
             log.error("Failed to open repository: {} from upstream {}", name, cleanUpstreamUrl, e);
             throw new RepositoryNotFoundException(name, e);

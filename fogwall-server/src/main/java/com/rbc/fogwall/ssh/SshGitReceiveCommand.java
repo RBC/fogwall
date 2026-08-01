@@ -190,10 +190,9 @@ public class SshGitReceiveCommand implements Command {
             // for the mirror cache's per-principal fetch cooldown — the forwarded agent is what authorizes
             // upstream, and a different key must not inherit another key's verification.
             Repository localRepo = cache.getOrClone(upstreamUrl, null, transportConfig, connectingFingerprint);
-            localRepo.getConfig().setString("fogwall", null, "upstreamUrl", upstreamUrl);
-            localRepo.getConfig().save();
 
-            ReceivePack rp = route.receivePackFactory().createForSsh(localRepo, sshUser, repoSlug, pushTransport);
+            ReceivePack rp =
+                    route.receivePackFactory().createForSsh(localRepo, sshUser, repoSlug, upstreamUrl, pushTransport);
             rp.setBiDirectionalPipe(true); // factory defaults to false for HTTP; SSH is bidirectional
             rp.receive(in, out, err);
 
