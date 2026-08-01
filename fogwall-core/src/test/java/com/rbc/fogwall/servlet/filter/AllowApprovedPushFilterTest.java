@@ -12,6 +12,7 @@ import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.git.Commit;
 import com.rbc.fogwall.git.Contributor;
 import com.rbc.fogwall.git.GitRequestDetails;
+import com.rbc.fogwall.provider.GitHubProvider;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.UUID;
@@ -29,13 +30,19 @@ class AllowApprovedPushFilterTest {
     }
 
     private static GitRequestDetails pushDetailsFor(String commitTo, String branch, String repoName) {
+        return pushDetailsFor(commitTo, branch, repoName, "owner", "github");
+    }
+
+    private static GitRequestDetails pushDetailsFor(
+            String commitTo, String branch, String repoName, String owner, String providerName) {
         GitRequestDetails details = new GitRequestDetails();
         details.setCommitTo(commitTo);
         details.setBranch(branch);
+        details.setProvider(GitHubProvider.builder().name(providerName).build());
         details.setRepoRef(GitRequestDetails.RepoRef.builder()
-                .owner("owner")
+                .owner(owner)
                 .name(repoName)
-                .slug("/owner/" + repoName)
+                .slug("/" + owner + "/" + repoName)
                 .build());
         details.getPushedCommits()
                 .add(Commit.builder()
@@ -73,6 +80,8 @@ class AllowApprovedPushFilterTest {
         PushRecord approved = PushRecord.builder()
                 .commitTo("deadbeef")
                 .branch("refs/heads/main")
+                .provider("github")
+                .project("owner")
                 .repoName("my-repo")
                 .build();
         store.save(approved);
@@ -113,6 +122,8 @@ class AllowApprovedPushFilterTest {
         PushRecord approved = PushRecord.builder()
                 .commitTo("aaaaaa")
                 .branch("refs/heads/main")
+                .provider("github")
+                .project("owner")
                 .repoName("repo")
                 .build();
         store.save(approved);
@@ -142,6 +153,8 @@ class AllowApprovedPushFilterTest {
         PushRecord approved = PushRecord.builder()
                 .commitTo("tagsha123")
                 .branch("refs/tags/v1.0")
+                .provider("github")
+                .project("owner")
                 .repoName("my-repo")
                 .build();
         store.save(approved);
@@ -159,6 +172,7 @@ class AllowApprovedPushFilterTest {
         GitRequestDetails details = new GitRequestDetails();
         details.setCommitTo("tagsha123");
         details.setBranch("refs/tags/v1.0");
+        details.setProvider(GitHubProvider.builder().name("github").build());
         details.setRepoRef(GitRequestDetails.RepoRef.builder()
                 .owner("owner")
                 .name("my-repo")
@@ -171,6 +185,81 @@ class AllowApprovedPushFilterTest {
         filter.doHttpFilter(req, resp);
 
         verify(req).setAttribute(PRE_APPROVED_ATTR, Boolean.TRUE);
+    }
+
+    /**
+     * The approval belongs to one repository on one provider. Repo names recur across an estate, so matching on the
+     * bare name alone would let an approval for one org's repo carry a push to another org's same-named repo.
+     */
+    @Test
+    void approvedRecordForSameRepoNameInAnotherOrg_doesNotSetPreApproved() throws Exception {
+        PushStore store = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
+        PushRecord approved = PushRecord.builder()
+                .commitTo("deadbeef")
+                .branch("refs/heads/main")
+                .provider("github")
+                .project("acme")
+                .repoName("app")
+                .build();
+        store.save(approved);
+        store.approve(
+                approved.getId(),
+                Attestation.builder()
+                        .pushId(approved.getId())
+                        .type(Attestation.Type.APPROVAL)
+                        .reviewerUsername("admin")
+                        .build());
+
+        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080");
+        GitRequestDetails details = pushDetailsFor("deadbeef", "refs/heads/main", "app", "evil-org", "github");
+        HttpServletRequest req = mockPushRequest(details);
+
+        filter.doHttpFilter(req, mock(HttpServletResponse.class));
+
+        verify(req, never()).setAttribute(eq(PRE_APPROVED_ATTR), any());
+    }
+
+    /** Same owner and repo name, different configured provider — still a different repository. */
+    @Test
+    void approvedRecordOnAnotherProvider_doesNotSetPreApproved() throws Exception {
+        PushStore store = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
+        PushRecord approved = PushRecord.builder()
+                .commitTo("deadbeef")
+                .branch("refs/heads/main")
+                .provider("github")
+                .project("acme")
+                .repoName("app")
+                .build();
+        store.save(approved);
+        store.approve(
+                approved.getId(),
+                Attestation.builder()
+                        .pushId(approved.getId())
+                        .type(Attestation.Type.APPROVAL)
+                        .reviewerUsername("admin")
+                        .build());
+
+        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080");
+        GitRequestDetails details = pushDetailsFor("deadbeef", "refs/heads/main", "app", "acme", "internal-gitea");
+        HttpServletRequest req = mockPushRequest(details);
+
+        filter.doHttpFilter(req, mock(HttpServletResponse.class));
+
+        verify(req, never()).setAttribute(eq(PRE_APPROVED_ATTR), any());
+    }
+
+    /** Without a full repository identity the lookup cannot be scoped, so it must not run at all. */
+    @Test
+    void missingProvider_skipsLookup() throws Exception {
+        PushStore store = mock(PushStore.class);
+        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080");
+        GitRequestDetails details = pushDetailsFor("deadbeef", "refs/heads/main", "app");
+        details.setProvider(null);
+        HttpServletRequest req = mockPushRequest(details);
+
+        filter.doHttpFilter(req, mock(HttpServletResponse.class));
+
+        verify(store, never()).find(any());
     }
 
     @Test

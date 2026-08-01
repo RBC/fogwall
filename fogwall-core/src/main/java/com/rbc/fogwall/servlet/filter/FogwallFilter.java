@@ -89,6 +89,15 @@ public interface FogwallFilter extends Filter {
         return true;
     }
 
+    /**
+     * Whether a prior approval for this content lets this filter be skipped. True for content validation, whose verdict
+     * an approval already covers. Authorization filters must override this to {@code false} — an approval says the
+     * content was judged acceptable, not that whoever is pushing it now may write to this repository.
+     */
+    default boolean skipWhenPreApproved() {
+        return true;
+    }
+
     @Override
     default void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
             throws IOException, ServletException {
@@ -96,7 +105,7 @@ public interface FogwallFilter extends Filter {
         HttpServletResponse httpResponse = (HttpServletResponse) response;
 
         // Short-circuit if a prior filter pre-approved this push (e.g. AllowApprovedPushFilter)
-        if (Boolean.TRUE.equals(httpRequest.getAttribute(PRE_APPROVED_ATTR))) {
+        if (Boolean.TRUE.equals(httpRequest.getAttribute(PRE_APPROVED_ATTR)) && skipWhenPreApproved()) {
             chain.doFilter(request, response);
             return;
         }
