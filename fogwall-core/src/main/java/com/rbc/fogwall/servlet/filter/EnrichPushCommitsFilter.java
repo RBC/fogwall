@@ -144,6 +144,22 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
                 log.info("Tag push ({}) — peeled {} to commit {}", requestDetails.getBranch(), toCommit, peeledSha);
                 List<Commit> commits = CommitInspectionService.getCommitRange(repository, fromCommit, peeledSha);
                 if (!commits.isEmpty()) {
+                    // A non-empty range has three possible explanations, and only one of them is smuggling:
+                    //   1. the commits really did arrive via this tag, bypassing branch validation;
+                    //   2. the mirror has not re-fetched since they were forwarded upstream (fetch cooldown);
+                    //   3. the mirror is a shallow clone and they sit beyond its boundary.
+                    // The walk excludes commits reachable from refs/heads/* *in the mirror*, so (2) and (3) look
+                    // exactly like (1). Tagging a commit that has been upstream for months is an ordinary release
+                    // action and must not be reported as smuggling, so eliminate (2) and (3) — refresh and deepen —
+                    // before concluding (1). This costs a fetch only on the path that was about to reject.
+                    log.info(
+                            "Tag push ({}) — {} commit(s) look unvalidated; refreshing mirror before deciding",
+                            requestDetails.getBranch(),
+                            commits.size());
+                    repositoryCache.refreshNow(remoteUrl, credentials, null, principal);
+                    commits = CommitInspectionService.getCommitRange(repository, fromCommit, peeledSha);
+                }
+                if (!commits.isEmpty()) {
                     log.warn(
                             "Tag push {} introduces {} unvalidated commit(s) — rejecting",
                             requestDetails.getBranch(),

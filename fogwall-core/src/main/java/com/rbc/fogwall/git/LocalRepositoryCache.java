@@ -164,6 +164,59 @@ public class LocalRepositoryCache {
     }
 
     /**
+     * Fetches from upstream immediately, ignoring the cooldown, and deepens a shallow mirror to full history.
+     *
+     * <p>For callers that are about to make a decision a stale or truncated mirror would get <b>wrong</b>, rather than
+     * merely slightly out of date. The cooldown optimises for content freshness and the clone depth for clone cost;
+     * both are reasonable defaults that a reachability check cannot rely on, because "this commit is not reachable from
+     * any branch" is indistinguishable from "this mirror has not fetched recently" or "this mirror stops 100 commits
+     * back". Use this to remove those two explanations before concluding the third.
+     *
+     * <p>Unshallowing is not undone afterwards: the repository stays full for the rest of the process. That is
+     * deliberate — it makes the expense bounded per repository rather than repeatable on demand, so a caller cannot be
+     * induced into paying it over and over.
+     *
+     * <p>No-op when the repository is not cached yet; the next {@code getOrClone} will clone it fresh anyway.
+     *
+     * @return true if a fetch was performed
+     */
+    public boolean refreshNow(
+            String remoteUrl,
+            CredentialsProvider credentials,
+            TransportConfigCallback transportConfig,
+            String principal)
+            throws GitAPIException, IOException {
+        String cacheKey = getCacheKey(remoteUrl);
+        CachedRepository cached = cache.get(cacheKey);
+        if (cached == null || !cached.isValid()) {
+            return false;
+        }
+        cached.fetchLock.lock();
+        try {
+            log.info("Forcing upstream refresh for {} (cooldown bypassed, deepening to full history)", cacheKey);
+            try (Git git = Git.open(new File(cacheDirectory.toFile(), cacheKey))) {
+                var fetch = git.fetch()
+                        .setRemote("origin")
+                        .setRemoveDeletedRefs(true)
+                        .setCredentialsProvider(credentials);
+                if (transportConfig != null) fetch.setTransportConfigCallback(transportConfig);
+                if (cloneDepth > 0 && !cached.unshallowed) {
+                    // Only meaningful on a mirror that was cloned shallow; harmless but pointless otherwise.
+                    fetch.setUnshallow(true);
+                }
+                fetch.call();
+            }
+            cached.unshallowed = true;
+            // The fetch reached upstream with these credentials, so this principal is verified — same
+            // contract as refreshIfStale.
+            cached.lastFetchedByPrincipal.put(hashPrincipal(principal), System.currentTimeMillis());
+            return true;
+        } finally {
+            cached.fetchLock.unlock();
+        }
+    }
+
+    /**
      * Hashes a caller-supplied principal so raw credentials never live in the cache's keys or heap dumps. Mirrors the
      * SCM token cache, which likewise stores only a digest. A blank or absent principal collapses to a single shared
      * anonymous identity — safe because an anonymous caller can only ever benefit from a previous *anonymous* fetch,
@@ -396,6 +449,12 @@ public class LocalRepositoryCache {
          * cooldown, so the map is bounded by the number of distinct principals active within one cooldown window.
          */
         final Map<String, Long> lastFetchedByPrincipal = new ConcurrentHashMap<>();
+
+        /**
+         * Set once {@link #refreshNow} has deepened this mirror to full history, so the expense is paid at most once
+         * per repository per process rather than on every request that takes the deepening path.
+         */
+        volatile boolean unshallowed = false;
 
         CachedRepository(Repository repository, String remoteUrl) {
             this.repository = repository;
