@@ -103,12 +103,27 @@ class BasicAuthChallengeFilterTest {
         verify(resp, never()).sendError(anyInt());
     }
 
-    // ---- fetch (upload-pack) without auth → passes through (public repos) ----
+    // ---- fetch (upload-pack) without auth → 401 (store-and-forward clones upstream on every open,
+    // including fetches, so private repos need a chance to send credentials on this path too) ----
 
     @Test
-    void fetch_noAuth_passesThrough() throws Exception {
+    void fetch_noAuth_challenges() throws Exception {
         FilterChain chain = mock(FilterChain.class);
         HttpServletRequest req = fetchRequest(null);
+        HttpServletResponse resp = mock(HttpServletResponse.class);
+
+        filter.doFilter(req, resp, chain);
+
+        verify(resp).sendError(HttpServletResponse.SC_UNAUTHORIZED);
+        verifyNoInteractions(chain);
+    }
+
+    // ---- fetch (upload-pack) with auth → passes through ----
+
+    @Test
+    void fetch_withAuth_passesThrough() throws Exception {
+        FilterChain chain = mock(FilterChain.class);
+        HttpServletRequest req = fetchRequest(basicAuth("alice", "token123"));
         HttpServletResponse resp = mock(HttpServletResponse.class);
 
         filter.doFilter(req, resp, chain);
@@ -117,18 +132,18 @@ class BasicAuthChallengeFilterTest {
         verify(resp, never()).sendError(anyInt());
     }
 
-    // ---- info/refs for fetch (git-upload-pack) without auth → passes through ----
+    // ---- info/refs for fetch (git-upload-pack) without auth → 401 ----
 
     @Test
-    void infoRefs_fetch_noAuth_passesThrough() throws Exception {
+    void infoRefs_fetch_noAuth_challenges() throws Exception {
         FilterChain chain = mock(FilterChain.class);
         HttpServletRequest req = infoRefsFetchRequest();
         HttpServletResponse resp = mock(HttpServletResponse.class);
 
         filter.doFilter(req, resp, chain);
 
-        verify(chain).doFilter(req, resp);
-        verify(resp, never()).sendError(anyInt());
+        verify(resp).sendError(HttpServletResponse.SC_UNAUTHORIZED);
+        verifyNoInteractions(chain);
     }
 
     // ---- info/refs?service=git-receive-pack without auth → 401 ----

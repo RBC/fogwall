@@ -84,8 +84,9 @@ public class StoreAndForwardRepositoryResolver implements RepositoryResolver<Htt
     }
 
     /**
-     * Extract credentials from either the Authorization header or the URL userinfo. These are used only for the
-     * upstream push via {@link ForwardingPostReceiveHook}, never for cloning or caching.
+     * Extract credentials from either the Authorization header or the URL userinfo. These are reused for the upstream
+     * clone/fetch done by {@link #open} above, and stored as a request attribute so {@link ForwardingPostReceiveHook}
+     * can reuse the same credentials for the upstream push. They are held in memory only and never written to disk.
      */
     private String[] extractCredentials(HttpServletRequest req) {
         // Try Authorization header first
