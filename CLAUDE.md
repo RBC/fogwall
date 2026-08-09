@@ -36,6 +36,16 @@ isn't actually providing security.
   operating one feature requires understanding all of them. If a new capability would raise the baseline complexity for
   someone not using it, that's a signal to make it opt-in or a separate module rather than folding it into the core
   path.
+- **fogwall sits inline on every push at large-enterprise scale — the default path must stay cheap.** This is not a
+  side tool a developer invokes on demand; it's on the critical path of every clone/push/fetch across an org's whole
+  SCM estate, so a validation step that's merely "a bit slow" in isolation becomes a real latency and throughput
+  problem multiplied across that volume. Don't add a costly inline check (deep diff scanning, external API calls,
+  large-file/full-history inspection, heavyweight pattern matching, etc.) to a default hook chain or filter chain just
+  because it improves detection quality. Expensive work is opt-in, not opt-out: gate it behind explicit config an
+  operator turns on deliberately for their own repos/providers, default it off, and where practical make it
+  size/scope-bounded (e.g. skip binary blobs, cap diff size) so an operator who does opt in can still bound the cost.
+  When proposing a new validation feature, ask what it costs per push at high volume before asking whether it's a good
+  idea.
 
 ## Repository layout
 
@@ -59,6 +69,12 @@ Two proxy modes, both configurable per-provider:
 Virtually all core features (validation rules, approval model, provider abstraction) must be shared between the two
 modes. The main difference is that store-and-forward can stream progress messages live to the client via JGit hooks,
 while transparent proxy must buffer everything and send one response at the end of the filter chain.
+
+Store-and-forward also has an SSH transport (`fogwall-server`'s MINA SSHD-based `SshGitServer` /
+`SshGitReceiveCommand` / `SshGitUploadCommand`) alongside the HTTP one — it's the same mode, delegating to the same
+`StoreAndForwardReceivePackFactory` hook chain, just reached over `git-receive-pack`/`git-upload-pack` SSH commands
+instead of HTTP, with upstream auth via the client's forwarded SSH agent. Not a third proxy mode; a second transport
+for the same one.
 
 ## Client output — streaming constraint
 
@@ -90,6 +106,10 @@ source of truth for exact commands, since it's written for human contributors an
 - Gradle caches test results — pass `--rerun` when adding tests or touching coverage-relevant code, e.g.:
   `./gradlew :fogwall-core:test :fogwall-core:jacocoTestCoverageVerification --rerun`. Always verify the jacoco
   threshold locally before pushing — CI runs without cache and will catch it.
+- In Groovy DSL build files, use `=` assignment for setting properties (e.g. `exceptionFormat = 'full'`,
+  `showCauses = true`), not the old Gradle-generated `propName value` / `propName(value)` syntax. The old syntax is
+  deprecated and removed in Gradle 10 — run `./gradlew help --warning-mode all` if you see a "deprecated Gradle
+  features" warning during a build to find the offending line.
 
 ## Commit conventions
 
