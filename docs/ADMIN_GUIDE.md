@@ -758,6 +758,38 @@ proxy_request_buffering on;
 client_max_body_size 500m;
 ```
 
+### Sizing memory for pushes
+
+fogwall buffers each request body in memory for the life of the request, in both proxy modes — validation needs the
+whole pack before it can decide anything. Two settings bound that, and they multiply:
+
+| Setting                          | Default | Bounds                        |
+| -------------------------------- | ------- | ----------------------------- |
+| `server.max-push-bytes`          | 256 MiB | how large one push may be     |
+| `server.max-concurrent-requests` | 512     | how many run at the same time |
+
+The worst case is `max-push-bytes × concurrent large pushes`, so **raising `max-push-bytes` means raising the
+container's memory limit to match.** Do not set JVM heap flags to compensate: fogwall's image deliberately ships without
+`-Xmx` so the JVM sizes its heap from the container's cgroup limit (about 25% of it by default). Setting `-Xmx` yourself
+overrides that and pins the heap regardless of how the container is sized. Give the container more memory instead.
+
+A push over the limit is rejected before the body is read, so it costs no memory and the developer gets a clear message
+naming the limit rather than a timeout or a connection reset.
+
+**Interaction with `http.postBuffer`.** The client workaround above raises the threshold at which git switches to
+chunked encoding; it does not change how large a push may be. A push under `http.postBuffer` declares a
+`Content-Length`, which lets fogwall reject an over-size push without reading anything. Above it, the push is chunked
+and fogwall counts bytes as they arrive instead. Both paths enforce the same limit.
+
+**If 256 MiB is too small for your estate**, prefer these over raising the limit:
+
+- Seed one-off imports and repository migrations directly upstream, then let the proxy handle incremental pushes. A
+  migration is a coordinated, one-time event and does not need to be self-service.
+- Push large histories in stages — older commits first, then newer.
+- Keep large binaries out of git history in the first place. Note that **Git LFS is not currently supported through
+  fogwall** (see the User Guide); LFS uploads are refused because fogwall cannot inspect content that travels outside
+  the git protocol.
+
 ---
 
 ## Production checklist

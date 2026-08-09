@@ -536,6 +536,43 @@ time.
 
 Standard git error — the branch name in your push command does not match a local branch. Not a proxy issue.
 
+### Push blocked as too large
+
+fogwall accepts pushes up to a configured size — 256 MiB by default. Over that, the push is refused before any data is
+read:
+
+```text
+remote: ⛔  Push Blocked - Too Large
+remote: ❌  This push is 512 MiB; the limit is 256 MiB.
+```
+
+A push this large is usually one of three things: a binary or archive committed by mistake, generated build output that
+should be in `.gitignore`, or a large file's entire history still present after it was deleted in a later commit (git
+keeps every version). Check what is actually big:
+
+```shell
+git count-objects -vH
+git rev-list --objects --all | git cat-file --batch-check='%(objecttype) %(objectname) %(objectsize) %(rest)' \
+  | awk '$1=="blob" {print $3, $4}' | sort -rn | head
+```
+
+If the content genuinely belongs in the repository — a first push of a long-lived history, for example — talk to your
+administrator rather than trying to split it. A one-time import is normally seeded directly upstream instead of pushed
+through the proxy.
+
+### Git LFS pushes are rejected
+
+```text
+Git LFS is not supported through fogwall at this time.
+```
+
+Git LFS moves file content outside the git protocol, so fogwall never sees the bytes and cannot make any statement about
+them — secret scanning, content checks, and diff review would all inspect the small pointer file instead of the real
+content. Rather than pass content it cannot inspect, fogwall refuses the upload.
+
+Cloning and fetching repositories that already contain LFS objects is unaffected; only uploads are refused. If you need
+LFS for a repository, raise it with your administrator.
+
 ---
 
 ## Tips
