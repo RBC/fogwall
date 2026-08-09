@@ -192,11 +192,11 @@ subprojects {
         // application logging per test, which would bury the failure this is meant to surface.
         tasks.withType(Test).configureEach {
             testLogging {
-                events 'failed', 'skipped'
-                exceptionFormat 'full'
-                showCauses true
-                showExceptions true
-                showStackTraces true
+                events = ['failed', 'skipped']
+                exceptionFormat = 'full'
+                showCauses = true
+                showExceptions = true
+                showStackTraces = true
             }
         }
 
