@@ -63,8 +63,22 @@ public class AllowApprovedPushFilter extends AbstractFogwallFilter {
         String commitTo = details.getCommitTo();
         String branch = details.getBranch();
         String repoName = details.getRepoRef() != null ? details.getRepoRef().getName() : null;
+        String owner = details.getRepoRef() != null ? details.getRepoRef().getOwner() : null;
+        String provider = details.getProvider() != null ? details.getProvider().getProviderId() : null;
 
         if (commitTo == null || commitTo.isBlank()) {
+            return;
+        }
+
+        // An approval is granted for one repository on one provider, so the lookup must identify the
+        // repository the same way. Repo names like "app" and "common" recur across an estate; matching on
+        // the bare name would let an approval for acme/app satisfy a push to another org's app.
+        if (provider == null || owner == null || repoName == null) {
+            log.warn(
+                    "Not checking for prior approval: incomplete repository identity (provider={}, owner={}, repo={})",
+                    provider,
+                    owner,
+                    repoName);
             return;
         }
 
@@ -72,6 +86,8 @@ public class AllowApprovedPushFilter extends AbstractFogwallFilter {
         List<PushRecord> approved = pushStore.find(PushQuery.builder()
                 .commitTo(commitTo)
                 .branch(branch)
+                .provider(provider)
+                .project(owner)
                 .repoName(repoName)
                 .status(PushStatus.APPROVED)
                 .limit(1)
