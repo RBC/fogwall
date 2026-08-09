@@ -1048,8 +1048,9 @@ public class JettyConfigurationBuilder {
             case "codeberg" -> {
                 return Optional.of(ForgejoProvider.builder()
                         .name(name)
-                        .uri(ForgejoProvider.CODEBERG)
+                        .uri(parsedUri != null ? parsedUri : ForgejoProvider.CODEBERG)
                         .pathSuffix(pathSuffix)
+                        .apiUri(parsedApiUri)
                         .apiToken(apiToken)
                         .build());
             }
