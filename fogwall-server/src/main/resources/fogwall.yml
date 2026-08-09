@@ -18,6 +18,13 @@ server:
   # to heap capacity and typical pack size — prefer adding instances over raising this limit when scaling out.
   # Set to 0 to disable virtual-thread dispatch (requests then run directly on the platform thread pool).
   max-concurrent-requests: 512
+  # Largest request body fogwall will accept, in bytes (default 256MiB). Applies to both proxy modes. An
+  # over-size push is rejected with a git error before the body is read, so it costs no memory. Content this
+  # large is almost always binaries or generated output that shouldn't be in git history; a genuine one-off
+  # import is better seeded directly upstream than pushed through the proxy.
+  # Raising this needs a matching increase in container memory — see max-concurrent-requests above, since the
+  # real bound is heap divided by concurrent pushes. Set to 0 to disable the check (still bounded by heap).
+  max-push-bytes: 268435456
   # HTTP session persistence backend. Options:
   #   none   — in-memory sessions (default); sessions are lost on restart and not shared across instances
   #   jdbc   — persisted to the configured JDBC database (h2-file or postgres);

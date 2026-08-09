@@ -143,6 +143,15 @@ server:
   # platform thread pool, capped by its own size).
   max-concurrent-requests: 512
 
+  # Largest request body fogwall will accept, in bytes. Applies to both proxy modes.
+  # An over-size push is rejected with a git error before the body is read, so it
+  # costs no memory. Set to 0 to disable the check — note that "unlimited" is still
+  # bounded by heap in practice, and absolutely by ~2GiB, since the body is buffered
+  # as a single array.
+  # Raising this needs a matching increase in container memory: the real bound is heap
+  # divided by concurrent pushes. See "Sizing memory for pushes" in the Admin Guide.
+  max-push-bytes: 268435456 # 256MiB
+
   # Base URL of the dashboard, used in links sent to clients via sideband messages.
   # Should include the /dashboard path prefix.
   # Defaults to http://localhost:<port>/dashboard if not set.

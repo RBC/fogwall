@@ -11,6 +11,7 @@ import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
 import com.rbc.fogwall.git.RepoSlugValidator;
 import com.rbc.fogwall.provider.FogwallProvider;
+import com.rbc.fogwall.servlet.PushTooLargeException;
 import com.rbc.fogwall.servlet.RequestBodyWrapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -33,8 +34,16 @@ public class ParseGitRequestFilter extends ProviderAwareFogwallFilter<FogwallPro
 
     private static final int ORDER = Integer.MIN_VALUE + 1;
 
+    private final long maxPushBytes;
+
     public ParseGitRequestFilter(FogwallProvider provider) {
+        this(provider, 0);
+    }
+
+    /** @param maxPushBytes largest request body to accept, in bytes; 0 disables the check */
+    public ParseGitRequestFilter(FogwallProvider provider, long maxPushBytes) {
         super(ORDER, provider);
+        this.maxPushBytes = maxPushBytes;
     }
 
     @Override
@@ -42,8 +51,23 @@ public class ParseGitRequestFilter extends ProviderAwareFogwallFilter<FogwallPro
             throws IOException, ServletException {
         HttpServletRequest httpRequest = (HttpServletRequest) request;
 
+        // Cheap pre-check: reject a declared over-size body without reading it at all. Clients using chunked
+        // encoding declare no length, so this is an optimisation and the wrapper's counting read is the
+        // actual bound.
+        long declared = httpRequest.getContentLengthLong();
+        if (maxPushBytes > 0 && declared > maxPushBytes) {
+            sendTooLarge(httpRequest, (HttpServletResponse) response, maxPushBytes, declared);
+            return;
+        }
+
         // Create the wrapper to capture the body
-        RequestBodyWrapper wrapper = new RequestBodyWrapper(httpRequest);
+        RequestBodyWrapper wrapper;
+        try {
+            wrapper = new RequestBodyWrapper(httpRequest, maxPushBytes);
+        } catch (PushTooLargeException e) {
+            sendTooLarge(httpRequest, (HttpServletResponse) response, e.getLimitBytes(), -1);
+            return;
+        }
 
         // Parse the git request details
         GitRequestDetails requestDetails = parse(wrapper);
@@ -75,6 +99,38 @@ public class ParseGitRequestFilter extends ProviderAwareFogwallFilter<FogwallPro
     @Override
     public void doHttpFilter(HttpServletRequest request, HttpServletResponse response) throws IOException {
         // no-op
+    }
+
+    /**
+     * Reports an over-size body to the git client.
+     *
+     * <p>Sent via {@code sendGitError} rather than an HTTP 413 because git only surfaces protocol-level errors to the
+     * user; a bare status code produces an opaque failure. {@code declared} is the client's {@code Content-Length}, or
+     * -1 when the limit was hit mid-read and the true size is unknown.
+     */
+    private void sendTooLarge(HttpServletRequest request, HttpServletResponse response, long limitBytes, long declared)
+            throws IOException {
+        log.warn(
+                "Rejecting request body over the {}-byte limit (declared {}): {}",
+                limitBytes,
+                declared >= 0 ? declared : "unknown, chunked",
+                request.getRequestURI());
+        String title = sym(NO_ENTRY) + "  Push Blocked - Too Large";
+        String sizeLine = declared >= 0
+                ? sym(CROSS_MARK) + "  This push is " + humanReadable(declared) + "; the limit is "
+                        + humanReadable(limitBytes) + "."
+                : sym(CROSS_MARK) + "  This push exceeds the " + humanReadable(limitBytes) + " limit.";
+        String message = sizeLine + "\n\n"
+                + "Large files usually mean binaries or generated output that don't belong in git history.\n"
+                + "If the content is genuinely needed, contact an administrator — a one-off import is normally\n"
+                + "seeded directly upstream rather than pushed through the proxy.";
+        sendGitError(request, response, GitClientUtils.format(title, message, RED, null));
+    }
+
+    private static String humanReadable(long bytes) {
+        if (bytes >= 1024L * 1024L * 1024L) return String.format("%.1f GiB", bytes / (1024.0 * 1024 * 1024));
+        if (bytes >= 1024L * 1024L) return String.format("%.0f MiB", bytes / (1024.0 * 1024));
+        return bytes + " bytes";
     }
 
     /**

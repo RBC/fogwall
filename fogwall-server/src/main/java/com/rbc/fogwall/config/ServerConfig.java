@@ -58,6 +58,20 @@ public class ServerConfig {
     private int maxConcurrentRequests = 512;
 
     /**
+     * Maximum size in bytes of a request body fogwall will accept, applied to both proxy modes. Pushes over the limit
+     * are rejected with a git error before the body is read, so an over-size push costs no heap.
+     *
+     * <p>Defaults to 256 MiB. This is a resource bound rather than a policy check, so unlike the {@code *Settings}
+     * classes it defaults to an active value: a config that omits the key still gets protection. Set to 0 to disable
+     * the check, but note that "unlimited" is bounded by heap in practice and by {@code Integer.MAX_VALUE - 8}
+     * absolutely, since the body is held as a single {@code byte[]}.
+     *
+     * <p>The real bound on push size is heap divided by concurrent pushes, so raising this should come with a matching
+     * increase to the container memory limit — see {@link #getMaxConcurrentRequests()}.
+     */
+    private long maxPushBytes = 268435456L;
+
+    /**
      * Connection timeout in seconds for store-and-forward upstream pushes
      * ({@link org.eclipse.jgit.transport.Transport#setTimeout}). Set to 0 to use JGit's default (no timeout).
      * Enterprises with slow or inspecting middleboxes should set this to a generous value (e.g. 120) rather than

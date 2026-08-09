@@ -105,6 +105,7 @@ public final class FogwallServletRegistrar {
                         fogwallContext.heartbeatIntervalSeconds(),
                         fogwallContext.approvalTimeoutSeconds(),
                         fogwallContext.failFast(),
+                        fogwallContext.maxPushBytes(),
                         fogwallContext.upstreamConnectTimeoutSeconds(),
                         fogwallContext.urlRuleRegistry(),
                         fogwallContext.fetchStore());
@@ -194,6 +195,7 @@ public final class FogwallServletRegistrar {
             int heartbeatIntervalSeconds,
             int approvalTimeoutSeconds,
             boolean failFast,
+            long maxPushBytes,
             int connectTimeoutSeconds,
             UrlRuleRegistry urlRuleRegistry,
             FetchStore fetchStore) {
@@ -231,12 +233,15 @@ public final class FogwallServletRegistrar {
         holder.setName("git-" + provider.getName());
         context.addServlet(holder, pushMapping);
 
+        context.addFilter(new FilterHolder(new LfsRejectionFilter()), pushMapping, EnumSet.of(DispatcherType.REQUEST));
         context.addFilter(
                 new FilterHolder(new SmartHttpErrorFilter()), pushMapping, EnumSet.of(DispatcherType.REQUEST));
         context.addFilter(
                 new FilterHolder(new BasicAuthChallengeFilter()), pushMapping, EnumSet.of(DispatcherType.REQUEST));
         context.addFilter(
-                new FilterHolder(new ParseGitRequestFilter(provider)), pushMapping, EnumSet.of(DispatcherType.REQUEST));
+                new FilterHolder(new ParseGitRequestFilter(provider, maxPushBytes)),
+                pushMapping,
+                EnumSet.of(DispatcherType.REQUEST));
         context.addFilter(
                 new FilterHolder(new UrlRuleAggregateFilter(100, provider, fetchStore, urlRuleRegistry)),
                 pushMapping,
@@ -296,6 +301,12 @@ public final class FogwallServletRegistrar {
         String urlPattern = PROXY_PATH_PREFIX + provider.servletPath() + "/*";
 
         // PushStoreAuditFilter wraps the entire chain via try-finally; must be registered first.
+        // Ahead of everything, including PushStoreAuditFilter: an LFS upload is refused before any body is read
+        // and before a push record is opened for a request fogwall will not process.
+        var lfsRejectionHolder = new FilterHolder(new LfsRejectionFilter());
+        lfsRejectionHolder.setAsyncSupported(true);
+        context.addFilter(lfsRejectionHolder, urlPattern, EnumSet.of(DispatcherType.REQUEST));
+
         var pushStoreAuditFilterHolder = new FilterHolder(new PushStoreAuditFilter(pushStore));
         pushStoreAuditFilterHolder.setAsyncSupported(true);
         context.addFilter(pushStoreAuditFilterHolder, urlPattern, EnumSet.of(DispatcherType.REQUEST));
@@ -303,7 +314,7 @@ public final class FogwallServletRegistrar {
         // Build the orderable filter list. Sorted by getOrder() before registration so the Jetty chain
         // execution order matches the documented order ranges in fogwallFilter.
         List<FogwallFilter> filters = new ArrayList<>();
-        filters.add(new ParseGitRequestFilter(provider));
+        filters.add(new ParseGitRequestFilter(provider, configBuilder.getMaxPushBytes()));
         filters.add(new EnrichPushCommitsFilter(provider, repositoryCache));
         filters.add(new AllowApprovedPushFilter(pushStore, serviceUrl));
 

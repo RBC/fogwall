@@ -120,6 +120,11 @@ public class JettyConfigurationBuilder {
         return config.getServer().getMaxConcurrentRequests();
     }
 
+    /** Returns the maximum accepted request body size in bytes (0 = no configured limit). */
+    public long getMaxPushBytes() {
+        return config.getServer().getMaxPushBytes();
+    }
+
     /** Returns the S&amp;F upstream connect timeout in seconds (0 = no timeout). */
     public int getUpstreamConnectTimeoutSeconds() {
         return config.getServer().getUpstreamConnectTimeoutSeconds();
@@ -500,6 +505,7 @@ public class JettyConfigurationBuilder {
                 getHeartbeatIntervalSeconds(),
                 getApprovalTimeoutSeconds(),
                 isFailFast(),
+                getMaxPushBytes(),
                 getUpstreamConnectTimeoutSeconds(),
                 getProxyConnectTimeoutSeconds(),
                 storeForwardCache,
