@@ -349,6 +349,18 @@ class JettyConfigurationBuilderTest {
     }
 
     @Test
+    void createProvider_codebergKey_withSshUri_usesCustomUri() {
+        // Regression test: codeberg previously ignored any configured uri and hardcoded the HTTPS default, which
+        // meant codeberg could never be used as an SSH provider (isHttpProvider() would always see https://).
+        var pc = new ProviderConfig();
+        pc.setUri("ssh://git@codeberg.org");
+        var providers = new JettyConfigurationBuilder(configWithSingleProvider("codeberg", pc)).buildProviders();
+        assertEquals(1, providers.size());
+        assertInstanceOf(ForgejoProvider.class, providers.get(0));
+        assertEquals(URI.create("ssh://git@codeberg.org"), providers.get(0).getUri());
+    }
+
+    @Test
     void createProvider_giteaKey_noUri_defaultsToGiteaCom() {
         var providers =
                 new JettyConfigurationBuilder(configWithSingleProvider("gitea", new ProviderConfig())).buildProviders();
