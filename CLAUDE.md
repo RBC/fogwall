@@ -36,10 +36,10 @@ isn't actually providing security.
   operating one feature requires understanding all of them. If a new capability would raise the baseline complexity for
   someone not using it, that's a signal to make it opt-in or a separate module rather than folding it into the core
   path.
-- **fogwall sits inline on every push at large-enterprise scale — the default path must stay cheap.** This is not a
-  side tool a developer invokes on demand; it's on the critical path of every clone/push/fetch across an org's whole
-  SCM estate, so a validation step that's merely "a bit slow" in isolation becomes a real latency and throughput
-  problem multiplied across that volume. Don't add a costly inline check (deep diff scanning, external API calls,
+- **fogwall sits inline on every push at large-enterprise scale — the default path must stay cheap.** This is not a side
+  tool a developer invokes on demand; it's on the critical path of every clone/push/fetch across an org's whole SCM
+  estate, so a validation step that's merely "a bit slow" in isolation becomes a real latency and throughput problem
+  multiplied across that volume. Don't add a costly inline check (deep diff scanning, external API calls,
   large-file/full-history inspection, heavyweight pattern matching, etc.) to a default hook chain or filter chain just
   because it improves detection quality. Expensive work is opt-in, not opt-out: gate it behind explicit config an
   operator turns on deliberately for their own repos/providers, default it off, and where practical make it
@@ -70,11 +70,11 @@ Virtually all core features (validation rules, approval model, provider abstract
 modes. The main difference is that store-and-forward can stream progress messages live to the client via JGit hooks,
 while transparent proxy must buffer everything and send one response at the end of the filter chain.
 
-Store-and-forward also has an SSH transport (`fogwall-server`'s MINA SSHD-based `SshGitServer` /
-`SshGitReceiveCommand` / `SshGitUploadCommand`) alongside the HTTP one — it's the same mode, delegating to the same
+Store-and-forward also has an SSH transport (`fogwall-server`'s MINA SSHD-based `SshGitServer` / `SshGitReceiveCommand`
+/ `SshGitUploadCommand`) alongside the HTTP one — it's the same mode, delegating to the same
 `StoreAndForwardReceivePackFactory` hook chain, just reached over `git-receive-pack`/`git-upload-pack` SSH commands
-instead of HTTP, with upstream auth via the client's forwarded SSH agent. Not a third proxy mode; a second transport
-for the same one.
+instead of HTTP, with upstream auth via the client's forwarded SSH agent. Not a third proxy mode; a second transport for
+the same one.
 
 ## Client output — streaming constraint
 
