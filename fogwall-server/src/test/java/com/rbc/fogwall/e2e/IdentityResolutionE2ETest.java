@@ -11,7 +11,7 @@ import com.rbc.fogwall.permission.InMemoryRepoPermissionStore;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.service.PushIdentityResolver;
-import com.rbc.fogwall.servlet.filter.IdentityVerificationFilter;
+import com.rbc.fogwall.servlet.filter.CommitAttributionPolicyFilter;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
 import com.rbc.fogwall.user.StaticUserStore;
 import com.rbc.fogwall.user.UserEntry;
@@ -36,8 +36,8 @@ import org.junit.jupiter.api.*;
  *       rejected immediately with an "Identity Not Linked" error.
  * </ul>
  *
- * <p>A third scenario validates {@link IdentityVerificationFilter} in STRICT mode: commit email must match a registered
- * email for the push user, otherwise the push is rejected.
+ * <p>A third scenario validates {@link CommitAttributionPolicyFilter} in STRICT mode: commit email must match a
+ * registered email for the push user, otherwise the push is rejected.
  *
  * <p>Uses a simple username-lookup resolver (no external SCM API calls) to map HTTP Basic-auth usernames to proxy
  * users. Credentials in the clone URL must be valid Gitea credentials: the linked user is
@@ -195,8 +195,8 @@ class IdentityResolutionE2ETest {
                 UiApprovalGateway::new,
                 strictResolver,
                 new RepoPermissionService(strictPermissionStore),
-                CommitConfig.IdentityVerificationConfig.builder()
-                        .committer(CommitConfig.IdentityVerificationMode.STRICT)
+                CommitConfig.CommitAttributionPolicyConfig.builder()
+                        .committer(CommitConfig.CommitAttributionPolicyMode.STRICT)
                         .build())) {
 
             strictPermissionStore.save(RepoPermission.builder()
@@ -225,8 +225,8 @@ class IdentityResolutionE2ETest {
             var result = git.pushWithResult(repo);
             assertFalse(result.succeeded(), "push with mismatched commit email should be rejected in STRICT mode");
             assertTrue(
-                    result.output().toLowerCase().contains("identity"),
-                    "output should mention identity issue. Output:\n" + result.output());
+                    result.output().toLowerCase().contains("commit email"),
+                    "output should mention the commit attribution policy. Output:\n" + result.output());
         }
     }
 }

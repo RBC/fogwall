@@ -86,7 +86,7 @@ public class ConfigHolder {
      */
     public void update(CommitConfig newCommitConfig) {
         CommitConfig old = commitConfig.getAndSet(newCommitConfig);
-        log.info("CommitConfig reloaded: identityVerification={}", newCommitConfig.getIdentityVerification());
+        log.info("CommitConfig reloaded: attributionPolicy={}", newCommitConfig.getAttributionPolicy());
         log.debug("Previous CommitConfig replaced: {}", old);
     }
 

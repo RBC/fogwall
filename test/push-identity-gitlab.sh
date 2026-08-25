@@ -7,7 +7,7 @@
 # → identity resolved via SCM but email-level warning fires (warn mode).
 #
 # Expected: push succeeds (warn mode), resolved_user = admin on push record,
-#           identityVerification step = PASS with sideband warning about email.
+#           commitAttributionPolicy step = PASS with sideband warning about email.
 #
 # Override GIT_EMAIL to use your own unregistered address when adapting for
 # a different deployment.

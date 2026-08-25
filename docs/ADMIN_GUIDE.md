@@ -172,9 +172,9 @@ users:
 ```
 
 Until SCM identities are populated, pushes from that user will fail identity verification in `strict` mode. Use
-`identity-verification: warn` during rollout to let pushes through while identities are being registered. See
-[USER_GUIDE.md — Identity verification](USER_GUIDE.md#identity-verification) for the developer-facing view of what these
-checks look like at the terminal.
+`attribution-policy` with `committer: warn` during rollout to let pushes through while identities are being registered.
+See [USER_GUIDE.md — Identity verification](USER_GUIDE.md#identity-verification) for the developer-facing view of what
+these checks look like at the terminal.
 
 ### Disabling local admin when using an IdP
 
@@ -1113,8 +1113,8 @@ can approve.
 
 ### Push blocked: identity not linked
 
-The proxy cannot match the token to a registered proxy user. This check is always enforced — `identity-verification`
-mode does not affect it. Check:
+The proxy cannot match the token to a registered proxy user. This check is always enforced — `attribution-policy` mode
+does not affect it. Check:
 
 1. Does the user's profile have an `scm-identities` entry for the correct provider?
 2. Does the token have the required API scope to call `GET /user`?
@@ -1141,7 +1141,7 @@ providers is planned as a follow-up feature.
 ### Push blocked or warned: commit email mismatch
 
 One or more commit author/committer emails are not registered to the authenticated user. This is controlled by
-`identity-verification`:
+`attribution-policy`:
 
 - In `strict` mode the push is blocked. Check that the user's email list includes the address they commit with
   (`git config user.email`), and that the commits were not authored by someone else.

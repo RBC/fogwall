@@ -29,7 +29,7 @@ commit:
     email:
       domain:
         allow: ".*"
-  identity-verification:
+  attribution-policy:
     committer: off
     author: off
 

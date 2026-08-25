@@ -242,7 +242,7 @@ public class GitClientUtils {
         Map<String, String> labels = new HashMap<>(Map.ofEntries(
                 Map.entry("checkUrlRules", "Checking URL allow rules"),
                 Map.entry("checkUserPermission", "Checking user permission"),
-                Map.entry("identityVerification", "Verifying commit identity"),
+                Map.entry("commitAttributionPolicy", "Checking commit attribution policy"),
                 Map.entry("checkEmptyBranch", "Checking branch"),
                 Map.entry("checkHiddenCommits", "Checking for hidden commits"),
                 Map.entry("checkAuthorEmails", "Checking author emails"),
@@ -258,7 +258,7 @@ public class GitClientUtils {
         Map<String, String> passResults = new HashMap<>(Map.ofEntries(
                 Map.entry("checkUrlRules", "repository allowed"),
                 Map.entry("checkUserPermission", "user authorized"),
-                Map.entry("identityVerification", "identity verified"),
+                Map.entry("commitAttributionPolicy", "commit emails OK"),
                 Map.entry("checkEmptyBranch", "branch OK"),
                 Map.entry("checkHiddenCommits", "no hidden commits"),
                 Map.entry("checkAuthorEmails", "emails OK"),

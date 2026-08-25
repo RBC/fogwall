@@ -48,9 +48,13 @@ const STEP_DISPLAY_NAMES: Record<string, string> = {
   SecretScanningFilter: 'Secret scanning',
   scanContentPatternsDiff: 'PII/identifier scan (diff)',
   scanContentPatternsMessages: 'PII/identifier scan (commit messages)',
-  identityVerification: 'Identity verification',
-  IdentityVerificationFilter: 'Identity verification',
-  IdentityVerificationHook: 'Identity verification',
+  commitAttributionPolicy: 'Commit attribution policy',
+  CommitAttributionPolicyFilter: 'Commit attribution policy',
+  CommitAttributionPolicyHook: 'Commit attribution policy',
+  // Legacy names for push records created before the commit-attribution-policy rename
+  identityVerification: 'Commit attribution policy',
+  IdentityVerificationFilter: 'Commit attribution policy',
+  IdentityVerificationHook: 'Commit attribution policy',
   CheckUserPushPermissionFilter: 'Push permissions',
   CheckUserPushPermissionHook: 'Push permissions',
   checkUrlRules: 'URL allow rules',
@@ -60,7 +64,9 @@ const STEP_DISPLAY_NAMES: Record<string, string> = {
 
 function IdentityBadge({ record }: { record: PushRecord }) {
   if (record.resolvedUser) {
-    const idStep = (record.steps ?? []).find((s) => s.stepName === 'identityVerification')
+    const idStep = (record.steps ?? []).find(
+      (s) => s.stepName === 'commitAttributionPolicy' || s.stepName === 'identityVerification',
+    )
     const hasEmailWarning = idStep?.status === 'WARN'
     if (hasEmailWarning) {
       return (

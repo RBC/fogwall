@@ -127,7 +127,7 @@ git push → /proxy/<provider>/<owner>/<repo>.git
        AllowApprovedPushFilter    prior-approved? skip validation, proxy directly
        UrlRuleAggregateFilter     evaluate ALLOW/DENY rules
        CheckUserPushPermissionFilter   resolve identity; check repo permissions
-       IdentityVerificationFilter verify git author matches proxy user
+       CommitAttributionPolicyFilter  verify commit author/committer email
        [content validation filters — see below]
        ValidationSummaryFilter    collect all issues
        PushFinalizerFilter        save push record; wait for approval if required
@@ -163,9 +163,9 @@ order.
 Each step records a `PushStep` in the push record with a `StepStatus` of `PASS`, `WARN`, `FAIL`, `BLOCKED`, or
 `SKIPPED`. `WARN` is a first-class outcome, not a lesser form of `FAIL` — a WARN step never blocks the push, it only
 surfaces a finding on the push record for the reviewer's attention. The content-pattern (PII/national-ID) filters are
-WARN-only by design. `IdentityVerificationFilter` (order 160, commit-email attribution) can also run in `warn` mode via
-`commit.identity-verification: warn`. All steps always run (fail-fast is configurable); issues accumulate and are
-reported together.
+WARN-only by design. `CommitAttributionPolicyFilter` (order 160, commit-email attribution) can also run in `warn` mode
+via `commit.attribution-policy`. All steps always run (fail-fast is configurable); issues accumulate and are reported
+together.
 
 ---
 

@@ -159,6 +159,45 @@ class FogwallConfigLoaderTest {
     }
 
     @Test
+    void loadWithOverride_attributionPolicy_bindsNewKey() throws GestaltException, IOException {
+        Path override = writeYaml("""
+                commit:
+                  attribution-policy:
+                    committer: strict
+                    author: strict
+                """);
+        var config = FogwallConfigLoader.loadWithOverride(override);
+        assertEquals("strict", config.getCommit().getAttributionPolicy().getCommitter());
+        assertEquals("strict", config.getCommit().getAttributionPolicy().getAuthor());
+    }
+
+    @Test
+    void loadWithOverride_legacyIdentityVerificationKey_acceptedButIgnored() throws GestaltException, IOException {
+        // The renamed key must not crash startup on an unknown property, but its value is intentionally NOT applied —
+        // operators must migrate to commit.attribution-policy. JettyConfigurationBuilder logs a deprecation warning
+        // when the
+        // deprecated field is populated.
+        Path override = writeYaml("""
+                commit:
+                  identity-verification:
+                    committer: strict
+                    author: strict
+                """);
+        var config = FogwallConfigLoader.loadWithOverride(override);
+        // Accepted: binds to the deprecated field (so the builder can detect it and warn), no validation failure.
+        assertNotNull(
+                config.getCommit().getIdentityVerification(),
+                "legacy key should bind to the deprecated field so the migration warning can fire");
+        assertEquals("strict", config.getCommit().getIdentityVerification().getCommitter());
+        // Ignored: attribution-policy keeps its defaults — the legacy value has no effect.
+        assertEquals(
+                "warn",
+                config.getCommit().getAttributionPolicy().getCommitter(),
+                "legacy key must not change the effective attribution-policy");
+        assertEquals("off", config.getCommit().getAttributionPolicy().getAuthor());
+    }
+
+    @Test
     void loadWithOverride_baseValuesPreservedWhenNotOverridden() throws GestaltException, IOException {
         // An override that only touches one key must not wipe out other base defaults.
         Path override = writeYaml("""

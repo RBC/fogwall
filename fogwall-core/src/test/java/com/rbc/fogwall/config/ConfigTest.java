@@ -83,35 +83,37 @@ class ConfigTest {
         assertSame(p, config.getMessage().getBlock().getPatterns().get(0));
     }
 
-    // --- CommitConfig.IdentityVerificationMode ---
+    // --- CommitConfig.CommitAttributionPolicyMode ---
 
     @Test
-    void identityVerificationMode_fromString_null_returnsWarn() {
+    void commitAttributionPolicyMode_fromString_null_returnsWarn() {
         assertEquals(
-                CommitConfig.IdentityVerificationMode.WARN, CommitConfig.IdentityVerificationMode.fromString(null));
+                CommitConfig.CommitAttributionPolicyMode.WARN,
+                CommitConfig.CommitAttributionPolicyMode.fromString(null));
     }
 
     @Test
-    void identityVerificationMode_fromString_strict_returnsStrict() {
+    void commitAttributionPolicyMode_fromString_strict_returnsStrict() {
         assertEquals(
-                CommitConfig.IdentityVerificationMode.STRICT,
-                CommitConfig.IdentityVerificationMode.fromString("strict"));
+                CommitConfig.CommitAttributionPolicyMode.STRICT,
+                CommitConfig.CommitAttributionPolicyMode.fromString("strict"));
         assertEquals(
-                CommitConfig.IdentityVerificationMode.STRICT,
-                CommitConfig.IdentityVerificationMode.fromString("STRICT"));
+                CommitConfig.CommitAttributionPolicyMode.STRICT,
+                CommitConfig.CommitAttributionPolicyMode.fromString("STRICT"));
     }
 
     @Test
-    void identityVerificationMode_fromString_off_returnsOff() {
+    void commitAttributionPolicyMode_fromString_off_returnsOff() {
         assertEquals(
-                CommitConfig.IdentityVerificationMode.OFF, CommitConfig.IdentityVerificationMode.fromString("off"));
+                CommitConfig.CommitAttributionPolicyMode.OFF,
+                CommitConfig.CommitAttributionPolicyMode.fromString("off"));
     }
 
     @Test
-    void identityVerificationMode_fromString_unknown_returnsWarn() {
+    void commitAttributionPolicyMode_fromString_unknown_returnsWarn() {
         assertEquals(
-                CommitConfig.IdentityVerificationMode.WARN,
-                CommitConfig.IdentityVerificationMode.fromString("invalid"));
+                CommitConfig.CommitAttributionPolicyMode.WARN,
+                CommitConfig.CommitAttributionPolicyMode.fromString("invalid"));
     }
 
     // --- GpgConfig ---

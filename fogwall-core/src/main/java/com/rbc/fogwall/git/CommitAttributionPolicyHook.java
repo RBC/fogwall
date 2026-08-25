@@ -21,42 +21,46 @@ import org.eclipse.jgit.transport.ReceiveCommand;
 import org.eclipse.jgit.transport.ReceivePack;
 
 /**
- * Pre-receive hook that verifies commit author and committer emails match a registered email of the authenticated push
- * user. Runs in store-and-forward mode at order 160 — after {@link CheckUserPushPermissionHook} (150) has confirmed the
- * user exists and is authorised, but before content-validation hooks (200+).
+ * Pre-receive hook enforcing the <b>commit attribution policy</b>: each pushed commit's committer and/or author email
+ * must be a registered email of the resolved push identity. This inspects client-controlled commit metadata — it is a
+ * policy conformance check on commit provenance, <em>not</em> authentication of the pusher (that is
+ * {@link CheckUserPushPermissionHook} at order 150). Runs in store-and-forward mode at order 160, before
+ * content-validation hooks (200+).
  *
- * <p>Behaviour is controlled by {@link CommitConfig#getIdentityVerification()}:
+ * <p>Behaviour is controlled per field (committer, author) by {@link CommitConfig#getAttributionPolicy()}:
  *
  * <ul>
  *   <li>{@code STRICT} — blocks the push and reports all mismatching commits.
- *   <li>{@code WARN} — sends yellow sideband warnings but allows the push through (default).
- *   <li>{@code OFF} — skips the check entirely.
+ *   <li>{@code WARN} — sends yellow sideband warnings but allows the push through (committer default).
+ *   <li>{@code OFF} — skips the check entirely (author default, so rebased/imported commits are not blocked).
  * </ul>
  *
- * <p>When no {@link PushIdentityResolver} is configured (open/permissive mode) the hook is a no-op.
+ * <p>Applies to both transports: HTTP pushes resolve the identity from the token; SSH pushes use the public-key
+ * pre-authenticated identity. When no {@link PushIdentityResolver} is configured and the push is not pre-authenticated
+ * (open/permissive mode) the hook is a no-op.
  */
 @Slf4j
-public class IdentityVerificationHook implements FogwallHook {
+public class CommitAttributionPolicyHook implements FogwallHook {
 
     static final int ORDER = 160;
-    static final String STEP_NAME = "identityVerification";
+    static final String STEP_NAME = "commitAttributionPolicy";
 
     private final PushIdentityResolver identityResolver;
-    private final CommitConfig.IdentityVerificationConfig config;
+    private final CommitConfig.CommitAttributionPolicyConfig config;
     private final ValidationContext validationContext;
     private final PushContext pushContext;
     private final FogwallProvider provider;
 
-    public IdentityVerificationHook(
+    public CommitAttributionPolicyHook(
             PushIdentityResolver identityResolver,
-            CommitConfig.IdentityVerificationConfig config,
+            CommitConfig.CommitAttributionPolicyConfig config,
             ValidationContext validationContext,
             PushContext pushContext,
             FogwallProvider provider) {
         this.identityResolver = identityResolver;
         this.config = config != null
                 ? config
-                : CommitConfig.IdentityVerificationConfig.builder().build();
+                : CommitConfig.CommitAttributionPolicyConfig.builder().build();
         this.validationContext = validationContext;
         this.pushContext = pushContext;
         this.provider = provider;
@@ -65,42 +69,38 @@ public class IdentityVerificationHook implements FogwallHook {
     @Override
     public void onPreReceive(ReceivePack rp, Collection<ReceiveCommand> commands) {
         if (config.isEffectivelyOff()) {
-            log.debug("Identity verification disabled (committer=off, author=off)");
+            log.debug("Commit attribution policy disabled (committer=off, author=off)");
             recordPass();
             return;
         }
 
-        if (identityResolver == null) {
-            log.debug("No identity resolver configured — skipping identity verification (open mode)");
-            recordPass();
-            return;
+        // Resolve the push identity whose registered emails the commit emails are checked against. SSH pushes are
+        // pre-authenticated by public key at connection time (no token); HTTP pushes are resolved from the token. The
+        // check itself is transport-independent.
+        UserEntry user;
+        var preAuthenticated = pushContext.getTransport().preAuthenticatedUser();
+        if (preAuthenticated.isPresent()) {
+            user = preAuthenticated.get();
+        } else {
+            if (identityResolver == null) {
+                log.debug("No identity resolver configured — skipping commit attribution policy (open mode)");
+                recordPass();
+                return;
+            }
+            String pushUser = pushContext.getPushUser();
+            String pushToken = pushContext.getPushToken();
+            if (pushUser == null || pushUser.isEmpty()) {
+                log.debug("No push user in repo config — skipping commit attribution policy");
+                recordPass();
+                return;
+            }
+            Optional<UserEntry> resolved = identityResolver.resolve(provider, pushUser, pushToken);
+            if (resolved.isEmpty()) {
+                log.debug("Push user '{}' could not be resolved — skipping commit attribution policy", pushUser);
+                return;
+            }
+            user = resolved.get();
         }
-
-        // Transport pre-authenticated the user (SSH public key) — no token available for SCM verification.
-        if (pushContext.getTransport().preAuthenticatedUser().isPresent()) {
-            log.debug(
-                    "Pre-authenticated push ({}) — skipping token identity verification",
-                    pushContext.getTransport().name());
-            recordPass();
-            return;
-        }
-
-        String pushUser = pushContext.getPushUser();
-        String pushToken = pushContext.getPushToken();
-
-        if (pushUser == null || pushUser.isEmpty()) {
-            log.debug("No push user in repo config — skipping identity verification");
-            recordPass();
-            return;
-        }
-
-        Optional<UserEntry> resolved = identityResolver.resolve(provider, pushUser, pushToken);
-        if (resolved.isEmpty()) {
-            log.debug("Push user '{}' could not be resolved — skipping identity verification", pushUser);
-            return;
-        }
-
-        UserEntry user = resolved.get();
         List<String> registeredEmails = user.getEmails() != null ? user.getEmails() : List.of();
         Repository repo = rp.getRepository();
         List<String> blockingViolations = new ArrayList<>();
@@ -113,13 +113,13 @@ public class IdentityVerificationHook implements FogwallHook {
                 for (Commit commit : getCommits(repo, cmd)) {
                     String sha = abbrev(commit.getSha());
 
-                    if (config.getCommitter() != CommitConfig.IdentityVerificationMode.OFF
+                    if (config.getCommitter() != CommitConfig.CommitAttributionPolicyMode.OFF
                             && commit.getCommitter() != null) {
                         String email = commit.getCommitter().getEmail();
                         if (email != null && !registeredEmails.contains(email)) {
                             String msg = "Unrecognised committer email: <" + email + "> (commit " + sha
                                     + ") — not in proxy user registry";
-                            if (config.getCommitter() == CommitConfig.IdentityVerificationMode.STRICT) {
+                            if (config.getCommitter() == CommitConfig.CommitAttributionPolicyMode.STRICT) {
                                 blockingViolations.add(msg);
                             } else {
                                 warnViolations.add(msg);
@@ -127,12 +127,13 @@ public class IdentityVerificationHook implements FogwallHook {
                         }
                     }
 
-                    if (config.getAuthor() != CommitConfig.IdentityVerificationMode.OFF && commit.getAuthor() != null) {
+                    if (config.getAuthor() != CommitConfig.CommitAttributionPolicyMode.OFF
+                            && commit.getAuthor() != null) {
                         String email = commit.getAuthor().getEmail();
                         if (email != null && !registeredEmails.contains(email)) {
                             String msg = "Unrecognised author email: <" + email + "> (commit " + sha
                                     + ") — not in proxy user registry";
-                            if (config.getAuthor() == CommitConfig.IdentityVerificationMode.STRICT) {
+                            if (config.getAuthor() == CommitConfig.CommitAttributionPolicyMode.STRICT) {
                                 blockingViolations.add(msg);
                             } else {
                                 warnViolations.add(msg);
@@ -141,19 +142,20 @@ public class IdentityVerificationHook implements FogwallHook {
                     }
                 }
             } catch (Exception e) {
-                // Fail closed: identity verification that cannot run must block the push, not silently pass.
-                log.error("Failed to verify identity for {}", cmd.getRefName(), e);
+                // Fail closed: a commit attribution policy check that cannot run must block the push, not silently
+                // pass.
+                log.error("Failed to check commit attribution policy for {}", cmd.getRefName(), e);
                 validationContext.addError(
                         STEP_NAME,
-                        "identity verification could not complete for " + cmd.getRefName(),
-                        "Identity verification error: " + e.getMessage());
+                        "commit attribution policy could not complete for " + cmd.getRefName(),
+                        "Commit attribution policy error: " + e.getMessage());
                 hadError = true;
             }
         }
 
         if (blockingViolations.isEmpty() && warnViolations.isEmpty()) {
             if (!hadError) {
-                log.debug("Identity verification passed for push user '{}'", user.getUsername());
+                log.debug("Commit attribution policy passed for push user '{}'", user.getUsername());
                 recordPass();
             }
             // else: an error was recorded to the validation context, which blocks the push — do not record PASS.
@@ -164,19 +166,19 @@ public class IdentityVerificationHook implements FogwallHook {
             List<String> allViolations = new ArrayList<>(blockingViolations);
             allViolations.addAll(warnViolations);
             log.warn(
-                    "Identity verification failed for push user '{}': {} violation(s)",
+                    "Commit attribution policy failed for push user '{}': {} violation(s)",
                     user.getUsername(),
                     allViolations.size());
             String detail = GitClientUtils.format(
-                    sym(NO_ENTRY) + "  Push Blocked — Commit Identity Mismatch",
+                    sym(NO_ENTRY) + "  Push Blocked — Unrecognised Commit Email",
                     String.join("\n", allViolations),
                     RED,
                     null);
             validationContext.addIssue(
-                    STEP_NAME, "Commit identity does not match push user " + user.getUsername(), detail);
+                    STEP_NAME, "Commit email not registered to push user " + user.getUsername(), detail);
         } else {
             log.warn(
-                    "Identity verification warnings for push user '{}': {} mismatch(es)",
+                    "Commit attribution policy warnings for push user '{}': {} mismatch(es)",
                     user.getUsername(),
                     warnViolations.size());
             for (String v : warnViolations) {
@@ -220,6 +222,6 @@ public class IdentityVerificationHook implements FogwallHook {
 
     @Override
     public String getName() {
-        return "IdentityVerificationHook";
+        return "CommitAttributionPolicyHook";
     }
 }

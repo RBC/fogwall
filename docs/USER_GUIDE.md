@@ -39,7 +39,7 @@ You need the following from your administrator before you can push through the p
 5. **Your SCM identity registered** — the proxy verifies that your token resolves to the same person as your proxy
    account. Your administrator needs to add your upstream username (e.g. your GitHub login) to your proxy user profile.
 
-If the admin has configured `identity-verification: warn`, pushes will go through even without a registered SCM
+If the admin has configured `attribution-policy` in `warn` mode, pushes will go through even without a registered SCM
 identity, but you will see a warning in the push output. If it is set to `strict`, pushes will be blocked until your
 identity is registered.
 
@@ -456,7 +456,7 @@ The proxy confirms that the person pushing is who they say they are. The mechani
    SCM identity registered in your proxy user profile. This check is **always enforced** — a push is blocked immediately
    if your token cannot be matched to a registered proxy user, regardless of any other settings.
 2. **Commit emails → proxy user**: every author and committer email in the pushed commits must match an email address
-   registered on your proxy account. This check is controlled by `identity-verification` — in `warn` mode mismatches are
+   registered on your proxy account. This check is controlled by `attribution-policy` — in `warn` mode mismatches are
    logged but the push proceeds; in `strict` mode the push is blocked.
 
 **The HTTP Basic-auth username in your remote URL is not used for identity.** Use any value — `me`, `git`, your name —
