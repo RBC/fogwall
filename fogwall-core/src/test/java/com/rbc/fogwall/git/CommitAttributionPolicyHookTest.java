@@ -25,7 +25,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-class IdentityVerificationHookTest {
+class CommitAttributionPolicyHookTest {
 
     @TempDir
     Path tempDir;
@@ -56,31 +56,31 @@ class IdentityVerificationHookTest {
                 .call();
     }
 
-    private IdentityVerificationHook hook(
-            CommitConfig.IdentityVerificationConfig config, ValidationContext vc, PushContext pc) {
-        return new IdentityVerificationHook(resolver, config, vc, pc, GITHUB);
+    private CommitAttributionPolicyHook hook(
+            CommitConfig.CommitAttributionPolicyConfig config, ValidationContext vc, PushContext pc) {
+        return new CommitAttributionPolicyHook(resolver, config, vc, pc, GITHUB);
     }
 
-    private static CommitConfig.IdentityVerificationConfig committerOnly(
-            CommitConfig.IdentityVerificationMode committerMode) {
-        return CommitConfig.IdentityVerificationConfig.builder()
+    private static CommitConfig.CommitAttributionPolicyConfig committerOnly(
+            CommitConfig.CommitAttributionPolicyMode committerMode) {
+        return CommitConfig.CommitAttributionPolicyConfig.builder()
                 .committer(committerMode)
-                .author(CommitConfig.IdentityVerificationMode.OFF)
+                .author(CommitConfig.CommitAttributionPolicyMode.OFF)
                 .build();
     }
 
-    private static CommitConfig.IdentityVerificationConfig authorOnly(
-            CommitConfig.IdentityVerificationMode authorMode) {
-        return CommitConfig.IdentityVerificationConfig.builder()
-                .committer(CommitConfig.IdentityVerificationMode.OFF)
+    private static CommitConfig.CommitAttributionPolicyConfig authorOnly(
+            CommitConfig.CommitAttributionPolicyMode authorMode) {
+        return CommitConfig.CommitAttributionPolicyConfig.builder()
+                .committer(CommitConfig.CommitAttributionPolicyMode.OFF)
                 .author(authorMode)
                 .build();
     }
 
-    private static CommitConfig.IdentityVerificationConfig bothOff() {
-        return CommitConfig.IdentityVerificationConfig.builder()
-                .committer(CommitConfig.IdentityVerificationMode.OFF)
-                .author(CommitConfig.IdentityVerificationMode.OFF)
+    private static CommitConfig.CommitAttributionPolicyConfig bothOff() {
+        return CommitConfig.CommitAttributionPolicyConfig.builder()
+                .committer(CommitConfig.CommitAttributionPolicyMode.OFF)
+                .author(CommitConfig.CommitAttributionPolicyMode.OFF)
                 .build();
     }
 
@@ -122,7 +122,8 @@ class IdentityVerificationHookTest {
         PushContext pc = new PushContext();
         ValidationContext vc = new ValidationContext();
 
-        new IdentityVerificationHook(null, committerOnly(CommitConfig.IdentityVerificationMode.STRICT), vc, pc, GITHUB)
+        new CommitAttributionPolicyHook(
+                        null, committerOnly(CommitConfig.CommitAttributionPolicyMode.STRICT), vc, pc, GITHUB)
                 .onPreReceive(rp, List.of(cmd));
 
         assertFalse(vc.hasIssues());
@@ -141,7 +142,8 @@ class IdentityVerificationHookTest {
         PushContext pc = new PushContext();
         ValidationContext vc = new ValidationContext();
 
-        hook(committerOnly(CommitConfig.IdentityVerificationMode.WARN), vc, pc).onPreReceive(rp, List.of(cmd));
+        hook(committerOnly(CommitConfig.CommitAttributionPolicyMode.WARN), vc, pc)
+                .onPreReceive(rp, List.of(cmd));
 
         assertFalse(vc.hasIssues());
         assertFalse(pc.getSteps().isEmpty());
@@ -164,7 +166,7 @@ class IdentityVerificationHookTest {
         pc.setPushUser("alice-git");
         ValidationContext vc = new ValidationContext();
 
-        hook(committerOnly(CommitConfig.IdentityVerificationMode.STRICT), vc, pc)
+        hook(committerOnly(CommitConfig.CommitAttributionPolicyMode.STRICT), vc, pc)
                 .onPreReceive(rp, List.of(cmd));
 
         assertFalse(vc.hasIssues());
@@ -187,11 +189,12 @@ class IdentityVerificationHookTest {
         pc.setPushUser("alice-git");
         ValidationContext vc = new ValidationContext();
 
-        hook(committerOnly(CommitConfig.IdentityVerificationMode.STRICT), vc, pc)
+        hook(committerOnly(CommitConfig.CommitAttributionPolicyMode.STRICT), vc, pc)
                 .onPreReceive(rp, List.of(cmd));
 
         assertTrue(vc.hasIssues());
-        assertEquals(IdentityVerificationHook.STEP_NAME, vc.getIssues().get(0).hookName());
+        assertEquals(
+                CommitAttributionPolicyHook.STEP_NAME, vc.getIssues().get(0).hookName());
         assertTrue(vc.getIssues().get(0).summary().contains("alice"));
     }
 
@@ -210,7 +213,8 @@ class IdentityVerificationHookTest {
         pc.setPushUser("alice-git");
         ValidationContext vc = new ValidationContext();
 
-        hook(committerOnly(CommitConfig.IdentityVerificationMode.WARN), vc, pc).onPreReceive(rp, List.of(cmd));
+        hook(committerOnly(CommitConfig.CommitAttributionPolicyMode.WARN), vc, pc)
+                .onPreReceive(rp, List.of(cmd));
 
         assertFalse(vc.hasIssues(), "WARN mode should not block the push");
         assertFalse(pc.getSteps().isEmpty());
@@ -233,7 +237,7 @@ class IdentityVerificationHookTest {
         pc.setPushUser("alice-git");
         ValidationContext vc = new ValidationContext();
 
-        hook(committerOnly(CommitConfig.IdentityVerificationMode.STRICT), vc, pc)
+        hook(committerOnly(CommitConfig.CommitAttributionPolicyMode.STRICT), vc, pc)
                 .onPreReceive(rp, List.of(cmd));
 
         assertFalse(vc.hasIssues(), "DELETE commands should not trigger identity violation");
@@ -270,7 +274,7 @@ class IdentityVerificationHookTest {
         pc.setPushUser("alice-git");
         ValidationContext vc = new ValidationContext();
 
-        hook(committerOnly(CommitConfig.IdentityVerificationMode.STRICT), vc, pc)
+        hook(committerOnly(CommitConfig.CommitAttributionPolicyMode.STRICT), vc, pc)
                 .onPreReceive(rp, List.of(cmd));
 
         assertFalse(vc.hasIssues(), "Rebase should not be blocked when author check is off");
@@ -305,7 +309,8 @@ class IdentityVerificationHookTest {
         pc.setPushUser("alice-git");
         ValidationContext vc = new ValidationContext();
 
-        hook(authorOnly(CommitConfig.IdentityVerificationMode.STRICT), vc, pc).onPreReceive(rp, List.of(cmd));
+        hook(authorOnly(CommitConfig.CommitAttributionPolicyMode.STRICT), vc, pc)
+                .onPreReceive(rp, List.of(cmd));
 
         assertTrue(vc.hasIssues(), "Author strict should block external author email");
     }
@@ -325,13 +330,14 @@ class IdentityVerificationHookTest {
         pc.setPushUser("alice-git");
         ValidationContext vc = new ValidationContext();
 
-        hook(committerOnly(CommitConfig.IdentityVerificationMode.WARN), vc, pc).onPreReceive(rp, List.of(cmd));
+        hook(committerOnly(CommitConfig.CommitAttributionPolicyMode.WARN), vc, pc)
+                .onPreReceive(rp, List.of(cmd));
 
         assertFalse(vc.hasIssues());
         var step = pc.getSteps().stream()
-                .filter(s -> "identityVerification".equals(s.getStepName()))
+                .filter(s -> "commitAttributionPolicy".equals(s.getStepName()))
                 .findFirst();
-        assertTrue(step.isPresent(), "WARN mode should record an identityVerification step");
+        assertTrue(step.isPresent(), "WARN mode should record a commitAttributionPolicy step");
         assertNotNull(step.get().getContent(), "Step content should contain violation details");
         assertTrue(step.get().getContent().contains("not in proxy user registry"));
     }
@@ -350,10 +356,70 @@ class IdentityVerificationHookTest {
         pc.setPushUser("unknown");
         ValidationContext vc = new ValidationContext();
 
-        hook(committerOnly(CommitConfig.IdentityVerificationMode.STRICT), vc, pc)
+        hook(committerOnly(CommitConfig.CommitAttributionPolicyMode.STRICT), vc, pc)
                 .onPreReceive(rp, List.of(cmd));
 
         assertFalse(vc.hasIssues());
         assertTrue(pc.getSteps().isEmpty(), "No step should be recorded when user cannot be resolved");
+    }
+
+    // ---- SSH pre-authenticated transport → policy runs against the pre-authenticated identity, no token resolver ----
+
+    @Test
+    void sshPreAuthenticated_committerMismatch_warn_recordsWarn() throws Exception {
+        RevCommit c1 = createCommit("init", "other@example.com");
+        RevCommit c2 = createCommit("second", "other@example.com");
+        ReceivePack rp = new ReceivePack(repo);
+        ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
+        PushContext pc = new PushContext();
+        pc.setTransport(new PushTransport.Ssh(alice(), "SHA256:test", null, null));
+        ValidationContext vc = new ValidationContext();
+
+        hook(committerOnly(CommitConfig.CommitAttributionPolicyMode.WARN), vc, pc)
+                .onPreReceive(rp, List.of(cmd));
+
+        assertFalse(vc.hasIssues());
+        var step = pc.getSteps().stream()
+                .filter(s -> "commitAttributionPolicy".equals(s.getStepName()))
+                .findFirst();
+        assertTrue(step.isPresent(), "SSH push should run the commit attribution policy, not skip it");
+        assertEquals(StepStatus.WARN, step.get().getStatus());
+        verifyNoInteractions(resolver);
+    }
+
+    @Test
+    void sshPreAuthenticated_committerMatch_recordsPass() throws Exception {
+        RevCommit c1 = createCommit("init", "alice@example.com");
+        RevCommit c2 = createCommit("second", "alice@example.com");
+        ReceivePack rp = new ReceivePack(repo);
+        ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
+        PushContext pc = new PushContext();
+        pc.setTransport(new PushTransport.Ssh(alice(), "SHA256:test", null, null));
+        ValidationContext vc = new ValidationContext();
+
+        hook(committerOnly(CommitConfig.CommitAttributionPolicyMode.WARN), vc, pc)
+                .onPreReceive(rp, List.of(cmd));
+
+        assertFalse(vc.hasIssues());
+        assertFalse(pc.getSteps().isEmpty());
+        assertEquals(StepStatus.PASS, pc.getSteps().get(0).getStatus());
+        verifyNoInteractions(resolver);
+    }
+
+    @Test
+    void sshPreAuthenticated_committerMismatch_strict_blocks() throws Exception {
+        RevCommit c1 = createCommit("init", "other@example.com");
+        RevCommit c2 = createCommit("second", "other@example.com");
+        ReceivePack rp = new ReceivePack(repo);
+        ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
+        PushContext pc = new PushContext();
+        pc.setTransport(new PushTransport.Ssh(alice(), "SHA256:test", null, null));
+        ValidationContext vc = new ValidationContext();
+
+        hook(committerOnly(CommitConfig.CommitAttributionPolicyMode.STRICT), vc, pc)
+                .onPreReceive(rp, List.of(cmd));
+
+        assertTrue(vc.hasIssues(), "SSH push in strict mode should block a committer email mismatch");
+        verifyNoInteractions(resolver);
     }
 }

@@ -20,7 +20,7 @@ import lombok.Data;
 public class CommitConfig {
 
     /** Per-check mode for identity verification. */
-    public enum IdentityVerificationMode {
+    public enum CommitAttributionPolicyMode {
         /** Block the push when the email is not registered to the push user. */
         STRICT,
         /** Warn the push user but allow the push through. */
@@ -28,7 +28,7 @@ public class CommitConfig {
         /** Skip this check entirely. */
         OFF;
 
-        public static IdentityVerificationMode fromString(String value) {
+        public static CommitAttributionPolicyMode fromString(String value) {
             if (value == null) return WARN;
             return switch (value.trim().toLowerCase()) {
                 case "strict" -> STRICT;
@@ -45,19 +45,19 @@ public class CommitConfig {
      */
     @Data
     @Builder
-    public static class IdentityVerificationConfig {
+    public static class CommitAttributionPolicyConfig {
 
         /** Check that each commit's committer email is registered to the push user. Default: {@code WARN}. */
         @Builder.Default
-        private IdentityVerificationMode committer = IdentityVerificationMode.WARN;
+        private CommitAttributionPolicyMode committer = CommitAttributionPolicyMode.WARN;
 
         /** Check that each commit's author email is registered to the push user. Default: {@code OFF}. */
         @Builder.Default
-        private IdentityVerificationMode author = IdentityVerificationMode.OFF;
+        private CommitAttributionPolicyMode author = CommitAttributionPolicyMode.OFF;
 
         /** {@code true} when both checks are off — used to short-circuit resolver calls. */
         public boolean isEffectivelyOff() {
-            return committer == IdentityVerificationMode.OFF && author == IdentityVerificationMode.OFF;
+            return committer == CommitAttributionPolicyMode.OFF && author == CommitAttributionPolicyMode.OFF;
         }
     }
 
@@ -66,8 +66,8 @@ public class CommitConfig {
      * so rebase workflows (which preserve the original author email) are not blocked by default.
      */
     @Builder.Default
-    private IdentityVerificationConfig identityVerification =
-            IdentityVerificationConfig.builder().build();
+    private CommitAttributionPolicyConfig attributionPolicy =
+            CommitAttributionPolicyConfig.builder().build();
 
     /** Configuration for author email validation. */
     @Builder.Default

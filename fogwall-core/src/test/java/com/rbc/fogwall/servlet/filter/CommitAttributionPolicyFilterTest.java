@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-class IdentityVerificationFilterTest {
+class CommitAttributionPolicyFilterTest {
 
     PushIdentityResolver resolver;
 
@@ -149,11 +149,11 @@ class IdentityVerificationFilterTest {
                 .thenReturn(Optional.of(aliceEntry()));
         FakeResponse resp = new FakeResponse();
 
-        new IdentityVerificationFilter(
+        new CommitAttributionPolicyFilter(
                         resolver,
-                        CommitConfig.IdentityVerificationConfig.builder()
-                                .committer(CommitConfig.IdentityVerificationMode.OFF)
-                                .author(CommitConfig.IdentityVerificationMode.OFF)
+                        CommitConfig.CommitAttributionPolicyConfig.builder()
+                                .committer(CommitConfig.CommitAttributionPolicyMode.OFF)
+                                .author(CommitConfig.CommitAttributionPolicyMode.OFF)
                                 .build())
                 .doHttpFilter(mockRequest(details, basicAuth("alice-git", "token")), resp.mock);
 
@@ -169,10 +169,10 @@ class IdentityVerificationFilterTest {
         GitRequestDetails details = pushDetailsWithCommits(List.of(commitWith("abc1234", "other@example.com")));
         FakeResponse resp = new FakeResponse();
 
-        new IdentityVerificationFilter(
+        new CommitAttributionPolicyFilter(
                         null,
-                        CommitConfig.IdentityVerificationConfig.builder()
-                                .committer(CommitConfig.IdentityVerificationMode.STRICT)
+                        CommitConfig.CommitAttributionPolicyConfig.builder()
+                                .committer(CommitConfig.CommitAttributionPolicyMode.STRICT)
                                 .build())
                 .doHttpFilter(mockRequest(details, basicAuth("alice-git", "token")), resp.mock);
 
@@ -187,10 +187,10 @@ class IdentityVerificationFilterTest {
         GitRequestDetails details = pushDetailsWithCommits(List.of());
         FakeResponse resp = new FakeResponse();
 
-        new IdentityVerificationFilter(
+        new CommitAttributionPolicyFilter(
                         resolver,
-                        CommitConfig.IdentityVerificationConfig.builder()
-                                .committer(CommitConfig.IdentityVerificationMode.STRICT)
+                        CommitConfig.CommitAttributionPolicyConfig.builder()
+                                .committer(CommitConfig.CommitAttributionPolicyMode.STRICT)
                                 .build())
                 .doHttpFilter(mockRequest(details, basicAuth("alice-git", "token")), resp.mock);
 
@@ -207,10 +207,10 @@ class IdentityVerificationFilterTest {
                 .thenReturn(Optional.of(aliceEntry()));
         FakeResponse resp = new FakeResponse();
 
-        new IdentityVerificationFilter(
+        new CommitAttributionPolicyFilter(
                         resolver,
-                        CommitConfig.IdentityVerificationConfig.builder()
-                                .committer(CommitConfig.IdentityVerificationMode.STRICT)
+                        CommitConfig.CommitAttributionPolicyConfig.builder()
+                                .committer(CommitConfig.CommitAttributionPolicyMode.STRICT)
                                 .build())
                 .doHttpFilter(mockRequest(details, basicAuth("alice-git", "token")), resp.mock);
 
@@ -227,10 +227,10 @@ class IdentityVerificationFilterTest {
                 .thenReturn(Optional.of(aliceEntry()));
         FakeResponse resp = new FakeResponse();
 
-        new IdentityVerificationFilter(
+        new CommitAttributionPolicyFilter(
                         resolver,
-                        CommitConfig.IdentityVerificationConfig.builder()
-                                .committer(CommitConfig.IdentityVerificationMode.STRICT)
+                        CommitConfig.CommitAttributionPolicyConfig.builder()
+                                .committer(CommitConfig.CommitAttributionPolicyMode.STRICT)
                                 .build())
                 .doHttpFilter(mockRequest(details, basicAuth("alice-git", "token")), resp.mock);
 
@@ -238,7 +238,7 @@ class IdentityVerificationFilterTest {
         assertFalse(resp.committed.get());
         assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
         assertFalse(details.getSteps().isEmpty());
-        assertEquals("identityVerification", details.getSteps().get(0).getStepName());
+        assertEquals("commitAttributionPolicy", details.getSteps().get(0).getStepName());
     }
 
     // ---- warn mode + email mismatch → passes without recording an issue ----
@@ -250,10 +250,10 @@ class IdentityVerificationFilterTest {
                 .thenReturn(Optional.of(aliceEntry()));
         FakeResponse resp = new FakeResponse();
 
-        new IdentityVerificationFilter(
+        new CommitAttributionPolicyFilter(
                         resolver,
-                        CommitConfig.IdentityVerificationConfig.builder()
-                                .committer(CommitConfig.IdentityVerificationMode.WARN)
+                        CommitConfig.CommitAttributionPolicyConfig.builder()
+                                .committer(CommitConfig.CommitAttributionPolicyMode.WARN)
                                 .build())
                 .doHttpFilter(mockRequest(details, basicAuth("alice-git", "token")), resp.mock);
 
@@ -262,7 +262,7 @@ class IdentityVerificationFilterTest {
         // WARN mode records a WARN step with violation details in content (for the amber dashboard badge)
         assertFalse(details.getSteps().isEmpty(), "WARN mode should record a step");
         var step = details.getSteps().get(0);
-        assertEquals("identityVerification", step.getStepName());
+        assertEquals("commitAttributionPolicy", step.getStepName());
         assertEquals(StepStatus.WARN, step.getStatus());
         assertNotNull(step.getContent(), "WARN mode step should carry violation details in content");
     }
@@ -276,10 +276,10 @@ class IdentityVerificationFilterTest {
                 .thenReturn(Optional.empty());
         FakeResponse resp = new FakeResponse();
 
-        new IdentityVerificationFilter(
+        new CommitAttributionPolicyFilter(
                         resolver,
-                        CommitConfig.IdentityVerificationConfig.builder()
-                                .committer(CommitConfig.IdentityVerificationMode.STRICT)
+                        CommitConfig.CommitAttributionPolicyConfig.builder()
+                                .committer(CommitConfig.CommitAttributionPolicyMode.STRICT)
                                 .build())
                 .doHttpFilter(mockRequest(details, basicAuth("unknown", "token")), resp.mock);
 
@@ -307,10 +307,10 @@ class IdentityVerificationFilterTest {
                 .thenReturn(Optional.of(aliceEntry()));
         FakeResponse resp = new FakeResponse();
 
-        new IdentityVerificationFilter(
+        new CommitAttributionPolicyFilter(
                         resolver,
-                        CommitConfig.IdentityVerificationConfig.builder()
-                                .committer(CommitConfig.IdentityVerificationMode.STRICT)
+                        CommitConfig.CommitAttributionPolicyConfig.builder()
+                                .committer(CommitConfig.CommitAttributionPolicyMode.STRICT)
                                 .build())
                 .doHttpFilter(mockRequest(details, basicAuth("alice-git", "token")), resp.mock);
 
@@ -337,11 +337,11 @@ class IdentityVerificationFilterTest {
                 .thenReturn(Optional.of(aliceEntry()));
         FakeResponse resp = new FakeResponse();
 
-        new IdentityVerificationFilter(
+        new CommitAttributionPolicyFilter(
                         resolver,
-                        CommitConfig.IdentityVerificationConfig.builder()
-                                .committer(CommitConfig.IdentityVerificationMode.STRICT)
-                                .author(CommitConfig.IdentityVerificationMode.OFF)
+                        CommitConfig.CommitAttributionPolicyConfig.builder()
+                                .committer(CommitConfig.CommitAttributionPolicyMode.STRICT)
+                                .author(CommitConfig.CommitAttributionPolicyMode.OFF)
                                 .build())
                 .doHttpFilter(mockRequest(details, basicAuth("alice-git", "token")), resp.mock);
 
@@ -368,11 +368,11 @@ class IdentityVerificationFilterTest {
                 .thenReturn(Optional.of(aliceEntry()));
         FakeResponse resp = new FakeResponse();
 
-        new IdentityVerificationFilter(
+        new CommitAttributionPolicyFilter(
                         resolver,
-                        CommitConfig.IdentityVerificationConfig.builder()
-                                .committer(CommitConfig.IdentityVerificationMode.OFF)
-                                .author(CommitConfig.IdentityVerificationMode.STRICT)
+                        CommitConfig.CommitAttributionPolicyConfig.builder()
+                                .committer(CommitConfig.CommitAttributionPolicyMode.OFF)
+                                .author(CommitConfig.CommitAttributionPolicyMode.STRICT)
                                 .build())
                 .doHttpFilter(mockRequest(details, basicAuth("alice-git", "token")), resp.mock);
 

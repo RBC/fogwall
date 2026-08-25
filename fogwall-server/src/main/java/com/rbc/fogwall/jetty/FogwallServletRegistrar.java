@@ -324,7 +324,7 @@ public final class FogwallServletRegistrar {
             filters.add(new BitbucketIdentityFilter(bitbucketProvider));
         }
         filters.add(new CheckUserPushPermissionFilter(pushIdentityResolver, repoPermissionService));
-        filters.add(new IdentityVerificationFilter(pushIdentityResolver, commitConfigSupplier));
+        filters.add(new CommitAttributionPolicyFilter(pushIdentityResolver, commitConfigSupplier));
         filters.add(new CheckEmptyBranchFilter());
         filters.add(new CheckHiddenCommitsFilter());
         filters.add(new CheckAuthorEmailsFilter(commitConfigSupplier));

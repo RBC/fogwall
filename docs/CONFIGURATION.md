@@ -1068,15 +1068,15 @@ credentials. For token-only auth (GitHub, GitLab, Gitea PATs) the username can b
 
 ### Reloadable sections
 
-| Section        | YAML key        | What changes take effect                                            |
-| -------------- | --------------- | ------------------------------------------------------------------- |
-| `commit`       | `commit:`       | Author email rules, message block lists, identity-verification mode |
-| `diff-scan`    | `diff-scan:`    | Diff content block literals and patterns                            |
-| `secret-scan`  | `secret-scan:`  | All gitleaks settings including `inline-config`                     |
-| `binary-blob`  | `binary-blob:`  | Blob size limit and denied MIME types                               |
-| `rules`        | `rules:`        | URL access control allow/deny rules                                 |
-| `permissions`  | `permissions:`  | Config-sourced user→repo permission grants                          |
-| `attestations` | `attestations:` | Dashboard approval form questions                                   |
+| Section        | YAML key        | What changes take effect                                                |
+| -------------- | --------------- | ----------------------------------------------------------------------- |
+| `commit`       | `commit:`       | Author email rules, message block lists, commit attribution policy mode |
+| `diff-scan`    | `diff-scan:`    | Diff content block literals and patterns                                |
+| `secret-scan`  | `secret-scan:`  | All gitleaks settings including `inline-config`                         |
+| `binary-blob`  | `binary-blob:`  | Blob size limit and denied MIME types                                   |
+| `rules`        | `rules:`        | URL access control allow/deny rules                                     |
+| `permissions`  | `permissions:`  | Config-sourced user→repo permission grants                              |
+| `attestations` | `attestations:` | Dashboard approval form questions                                       |
 
 Provider, server, and database sections always require a restart.
 
@@ -1095,11 +1095,16 @@ POST /api/config/reload?section=attestations    # attestation questions only
 
 The dashboard admin panel also provides a section dropdown for manual triggers.
 
-## Identity verification
+## Commit attribution policy
+
+> Formerly `commit.identity-verification`. The old key still binds (with a deprecation warning) but will be removed in a
+> future release — rename it to `commit.attribution-policy`.
 
 ```yaml
 commit:
-  identity-verification: warn # warn | strict | off
+  attribution-policy:
+    committer: warn # warn | strict | off (default: warn)
+    author: off # warn | strict | off (default: off)
 ```
 
 For every push, the proxy runs two checks:
@@ -1107,13 +1112,12 @@ For every push, the proxy runs two checks:
 1. **SCM login check** — calls the upstream provider's user API with the token supplied in the git credentials (the HTTP
    Basic-auth password). The returned login (e.g. GitHub `login`, GitLab `username`) is matched against the
    authenticated fogwall user's `scm-identities`. This check is **always enforced** regardless of the
-   `identity-verification` mode — a push from a token that cannot be matched to a registered proxy user is always
-   blocked.
+   `attribution-policy` mode — a push from a token that cannot be matched to a registered proxy user is always blocked.
 
 2. **Commit email check** — every author and committer email in the pushed commits is checked against the authenticated
    fogwall user's `emails` list. These emails are populated independently of the SCM: they come from the IdP on
    LDAP/OIDC login, or from additional associations added via the dashboard. This is what ties commit attribution back
-   to a verified real person. The `identity-verification` mode controls this check only.
+   to a verified real person. The `attribution-policy` mode controls this check only.
 
 <!-- prettier-ignore-start -->
 > [!NOTE]
@@ -1122,7 +1126,8 @@ For every push, the proxy runs two checks:
 
 ### Modes
 
-`identity-verification` controls the **commit email check** only. The SCM login check is always enforced.
+`attribution-policy` controls the **commit email check** only, independently for `committer` and `author`. The SCM login
+check is always enforced.
 
 | Mode     | Behaviour                                                                                       | Use when                                                                       |
 | -------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
@@ -1134,7 +1139,7 @@ For every push, the proxy runs two checks:
 > [!CAUTION]
 > `warn` is not a security control. Pushes succeed regardless of the email check outcome. Only `strict` blocks mismatched commits. The default is `warn` to avoid breaking existing deployments on first install.
 >
-> **Known limitation:** `strict` currently checks **author** emails, not committer emails. This means rebased commits (where the original author is a different person) will be blocked even though the pusher is legitimate. Teams that rebase should use `warn` until this is fixed — see [#348](https://github.com/RBC/fogwall/issues/348).
+> **Committer vs author:** the two are checked independently. `committer` defaults to `warn` — the committer is who last touched the commit object, i.e. the pusher on their own work. `author` defaults to `off` because rebased or cherry-picked commits legitimately preserve a different original author, so blocking on it would reject valid workflows. Enable `author: strict` only on closed boundaries (private-to-private, M&A integration) where every commit must be authored by the pusher; leave it `off` for open-source contribution flows.
 <!-- prettier-ignore-end -->
 
 ### Token scope requirements
@@ -1150,13 +1155,13 @@ at least the following scope:
 | Gitea    | `GET https://gitea.com/api/v1/user`    | `read:user`                                                            |
 
 If the token is missing the required scope or cannot be resolved to a registered proxy user, the push is blocked
-regardless of `identity-verification` mode.
+regardless of `attribution-policy` mode.
 
 ### Prerequisites
 
 Both checks require the user record to be populated before a push. A push from a token that cannot be matched to any
-registered proxy user is always blocked. Use `identity-verification: warn` during rollout to allow pushes through while
-users register their commit emails; the SCM identity must be registered before any push can proceed.
+registered proxy user is always blocked. Use `attribution-policy` with `committer: warn` during rollout to allow pushes
+through while users register their commit emails; the SCM identity must be registered before any push can proceed.
 
 ```yaml
 users:

@@ -290,14 +290,14 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
         SecretScanConfig secretScanConfig = secretScanConfigSupplier.get();
         BinaryBlobConfig binaryBlobConfig = binaryBlobConfigSupplier.get();
 
-        var identityVerificationHook = new IdentityVerificationHook(
-                pushIdentityResolver, commitConfig.getIdentityVerification(), validationContext, pushContext, provider);
+        var attributionPolicyHook = new CommitAttributionPolicyHook(
+                pushIdentityResolver, commitConfig.getAttributionPolicy(), validationContext, pushContext, provider);
 
         // Build and sort the orderable validation hook list
         List<FogwallHook> validationHooks = new ArrayList<>(List.of(
                 new RepositoryUrlRuleHook(urlRuleRegistry, provider, validationContext, pushContext),
                 permissionHook,
-                identityVerificationHook,
+                attributionPolicyHook,
                 new CheckEmptyBranchHook(pushContext),
                 new CheckHiddenCommitsHook(pushContext),
                 new AuthorEmailValidationHook(commitConfig, validationContext, pushContext),

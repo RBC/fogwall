@@ -23,12 +23,13 @@ import lombok.extern.slf4j.Slf4j;
  * login's registered SSH key fingerprints from the provider via {@link SshKeyFingerprintLookup}, and returns the
  * matching SCM login if found.
  *
- * <h2>Enrichment, not gating</h2>
+ * <h2>Resolver, not the gate</h2>
  *
- * <p>This is additive — it does not gate the push. If no match is found (e.g. the user has not registered their SSH key
- * on the SCM, or the provider does not implement {@link SshKeyFingerprintLookup}), the push proceeds without a resolved
- * {@code scmUsername}. A match binds the push record's {@code scmUsername} field for attribution in the dashboard and
- * audit log.
+ * <p>This service only resolves — it returns the matching SCM login or {@link Optional#empty()} and never blocks a push
+ * itself. The gating decision lives in the caller: {@link com.rbc.fogwall.git.CheckUserPushPermissionHook} fails the
+ * SSH push <em>closed</em> when no match is found (unregistered key, or a provider that does not implement
+ * {@link SshKeyFingerprintLookup}), so on the SSH path a resolved login is effectively required. A match binds the push
+ * record's {@code scmUsername} field for attribution in the dashboard and audit log.
  *
  * <h2>Caching</h2>
  *

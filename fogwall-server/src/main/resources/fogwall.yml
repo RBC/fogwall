@@ -189,8 +189,8 @@ commit:
   #            Should not gate push access in most workflows. Default: off.
   #
   # NOTE: 'warn' is not a security control — pushes succeed regardless of outcome.
-  # See docs/CONFIGURATION.md#identity-verification for token scope requirements and rollout guidance.
-  # identity-verification:
+  # See docs/CONFIGURATION.md#commit-attribution-policy for token scope requirements and rollout guidance.
+  # attribution-policy:
   #   committer: warn
   #   author: off
 

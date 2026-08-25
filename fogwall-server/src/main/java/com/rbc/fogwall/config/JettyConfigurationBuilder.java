@@ -326,6 +326,7 @@ public class JettyConfigurationBuilder {
      * Builds a {@link CommitConfig} from the {@code commit:} YAML section. Pattern strings are compiled here; absent or
      * blank strings produce permissive defaults (no restriction).
      */
+    @SuppressWarnings("deprecation") // intentionally reads the deprecated identity-verification alias to warn on it
     public CommitConfig buildCommitConfig() {
         CommitSettings cs = config.getCommit();
 
@@ -338,15 +339,20 @@ public class JettyConfigurationBuilder {
                 .block(buildBlockConfig(cs.getMessage().getBlock()))
                 .build();
 
-        CommitSettings.IdentityVerificationSettings ivs = cs.getIdentityVerification();
-        CommitConfig.IdentityVerificationConfig identityVerificationConfig =
-                CommitConfig.IdentityVerificationConfig.builder()
-                        .committer(CommitConfig.IdentityVerificationMode.fromString(ivs.getCommitter()))
-                        .author(CommitConfig.IdentityVerificationMode.fromString(ivs.getAuthor()))
+        if (cs.getIdentityVerification() != null) {
+            log.warn(
+                    "Config key 'commit.identity-verification' is deprecated and IGNORED — its values have no effect. "
+                            + "Rename it to 'commit.attribution-policy' (see docs/CONFIGURATION.md#commit-attribution-policy).");
+        }
+        CommitSettings.CommitAttributionPolicySettings ivs = cs.getAttributionPolicy();
+        CommitConfig.CommitAttributionPolicyConfig attributionPolicyConfig =
+                CommitConfig.CommitAttributionPolicyConfig.builder()
+                        .committer(CommitConfig.CommitAttributionPolicyMode.fromString(ivs.getCommitter()))
+                        .author(CommitConfig.CommitAttributionPolicyMode.fromString(ivs.getAuthor()))
                         .build();
 
         CommitConfig commitConfig = CommitConfig.builder()
-                .identityVerification(identityVerificationConfig)
+                .attributionPolicy(attributionPolicyConfig)
                 .author(authorConfig)
                 .committer(committerConfig)
                 .message(messageConfig)
