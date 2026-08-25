@@ -3,6 +3,7 @@ package com.rbc.fogwall.ssh;
 import com.rbc.fogwall.approval.ClientLivenessCheck;
 import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.git.PushTransport;
+import com.rbc.fogwall.git.QuarantineObjectStore;
 import com.rbc.fogwall.git.StoreAndForwardReceivePackFactory;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.user.UserEntry;
@@ -12,6 +13,7 @@ import java.io.OutputStream;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.Map;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.sshd.agent.SshAgent;
 import org.apache.sshd.common.Closeable;
@@ -156,6 +158,7 @@ public class SshGitReceiveCommand implements Command {
             ClientLivenessCheck liveness) {
         int exitCode = 0;
         SshAgent agent = null;
+        QuarantineObjectStore quarantine = null;
         try {
             RepoRoute route;
             try {
@@ -191,8 +194,15 @@ public class SshGitReceiveCommand implements Command {
             // upstream, and a different key must not inherit another key's verification.
             Repository localRepo = cache.getOrClone(upstreamUrl, null, transportConfig, connectingFingerprint);
 
-            ReceivePack rp =
-                    route.receivePackFactory().createForSsh(localRepo, sshUser, repoSlug, upstreamUrl, pushTransport);
+            // Receive into a scratch store so a rejected push leaves nothing behind in the shared mirror.
+            // Unlike the HTTP path there is no servlet request to hang the lifetime off, so it is scoped here.
+            // Minted here so the quarantine directory on disk carries the same id as the audit record.
+            String pushId = UUID.randomUUID().toString();
+            quarantine = QuarantineObjectStore.createOrNull(localRepo, pushId);
+            Repository target = quarantine != null ? quarantine.getRepository() : localRepo;
+
+            ReceivePack rp = route.receivePackFactory()
+                    .createForSsh(target, sshUser, repoSlug, upstreamUrl, pushTransport, quarantine, pushId);
             rp.setBiDirectionalPipe(true); // factory defaults to false for HTTP; SSH is bidirectional
             rp.receive(in, out, err);
 
@@ -206,6 +216,9 @@ public class SshGitReceiveCommand implements Command {
             writeError("Internal error: " + e.getMessage());
             exitCode = 1;
         } finally {
+            if (quarantine != null) {
+                quarantine.close();
+            }
             if (agent != null) {
                 try {
                     agent.close();

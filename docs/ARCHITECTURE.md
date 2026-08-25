@@ -123,7 +123,7 @@ git push → /proxy/<provider>/<owner>/<repo>.git
              ▼
      Servlet filter chain (ordered)
        ParseGitRequestFilter      extract pack metadata from packet lines
-       EnrichPushCommitsFilter    clone/fetch upstream repo; unpack inflight pack data into it; walk commit range
+       EnrichPushCommitsFilter    clone/fetch upstream repo; unpack inflight pack into a per-request quarantine; walk commit range
        AllowApprovedPushFilter    prior-approved? skip validation, proxy directly
        UrlRuleAggregateFilter     evaluate ALLOW/DENY rules
        CheckUserPushPermissionFilter   resolve identity; check repo permissions
@@ -137,6 +137,51 @@ git push → /proxy/<provider>/<owner>/<repo>.git
        • HTTP proxy pass-through to upstream
        • on response: update push record → FORWARDED or ERROR
 ```
+
+#### Per-request object quarantine
+
+Validation has to read a push's objects before it can decide anything about them, but the mirror behind
+`/proxy/<provider>/...` is shared by every request for that repository. Unpacking straight into it means a rejected push
+leaves its content there permanently — including the content policy just refused.
+
+`QuarantineObjectStore` gives each push its own scratch object store instead:
+
+- the quarantine `Repository` shares the mirror's **git directory**, so it sees the mirror's refs and can still answer
+  "what does this push actually introduce";
+- its **object directory** is a temporary directory, so every write lands there;
+- the mirror's object directory is registered as an **alternate**, which is what lets thin-pack deltas resolve against
+  objects the mirror already has.
+
+Downstream filters receive the quarantine as `GitRequestDetails.localRepository`, so they see the union: mirror contents
+plus this push. `EnrichPushCommitsFilter` wraps the rest of the chain in try-finally and deletes the quarantine when the
+request ends.
+
+In this mode nothing is ever promoted back into the mirror. An accepted push's objects reach it the same way everything
+else does — by being fetched from upstream once they exist there — which keeps the mirror a reflection of upstream
+rather than an accumulation of everything anyone attempted. (Store-and-forward differs; see below.) If a quarantine
+cannot be created the filter logs a warning and falls back to the mirror: the loss is disk hygiene, not a validation
+result, so it is not worth failing a push over.
+
+This is the same shape as git's own `receive-pack` quarantine (`tmp_objdir`, exposed to hooks as `GIT_QUARANTINE_PATH`):
+temporary object directory, real one as an alternate, hooks run against that view. JGit has no equivalent, hence the
+local implementation. Note it is roughly the _inverse_ of a worktree — a worktree shares the object database and
+isolates the index and HEAD, whereas this shares refs and isolates objects, so a worktree would not help here.
+
+The one deliberate departure from git's version is the last step: git migrates objects into the real store on success,
+because for git the receive is authoritative and those objects have nowhere else to come from. Here the mirror is a
+cache of upstream, so not promoting is both simpler and a stronger guarantee.
+
+Store-and-forward quarantines too, with one difference. There JGit's `ReceivePack` applies the ref updates to the shared
+git directory once the pre-receive hooks pass, so the objects those refs name have to be in the mirror by then —
+discarding them would leave the mirror pointing at objects that no longer exist. `QuarantinePromotionHook` runs as the
+last pre-receive hook and moves the objects across only when nothing has been rejected; if it fails, it rejects the
+push, because a half-promoted push is worse than a refused one. The HTTP path's quarantine is torn down by
+`QuarantineCleanupFilter` on the `/push` mapping; the SSH path scopes it to `SshGitReceiveCommand`, which has no servlet
+request to hang it off.
+
+So both modes discard a rejected push's objects. The transparent proxy additionally never promotes, because it never
+applies ref updates. There, JGit's `ReceivePack` owns the inserter and writes into the mirror before the pre-receive
+hooks run, so the same guarantee needs a different mechanism.
 
 ---
 

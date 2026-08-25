@@ -11,8 +11,13 @@ import com.rbc.fogwall.git.CommitInspectionService;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
 import com.rbc.fogwall.git.LocalRepositoryCache;
+import com.rbc.fogwall.git.QuarantineObjectStore;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.servlet.RequestBodyWrapper;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.ByteArrayInputStream;
@@ -22,6 +27,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
+import org.eclipse.jgit.errors.MissingObjectException;
 import org.eclipse.jgit.lib.NullProgressMonitor;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectInserter;
@@ -55,6 +61,24 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
     public EnrichPushCommitsFilter(FogwallProvider provider, LocalRepositoryCache repositoryCache) {
         super(ORDER, Set.of(HttpOperation.PUSH), provider);
         this.repositoryCache = repositoryCache;
+    }
+
+    /**
+     * Wraps the rest of the chain so the quarantine opened here outlives the filters that read from it — content
+     * validation runs downstream of this filter — but never outlives the request.
+     */
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+            throws IOException, ServletException {
+        try {
+            super.doFilter(request, response, chain);
+        } finally {
+            if (request.getAttribute(QuarantineObjectStore.REQUEST_ATTRIBUTE)
+                    instanceof QuarantineObjectStore quarantine) {
+                request.removeAttribute(QuarantineObjectStore.REQUEST_ATTRIBUTE);
+                quarantine.close();
+            }
+        }
     }
 
     @Override
@@ -99,7 +123,20 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
             CredentialsProvider credentials =
                     userPass == null ? null : new UsernamePasswordCredentialsProvider(userPass[0], userPass[1]);
             String principal = userPass == null ? null : userPass[0] + ":" + userPass[1];
-            Repository repository = repositoryCache.getOrClone(remoteUrl, credentials, null, principal);
+            Repository mirror = repositoryCache.getOrClone(remoteUrl, credentials, null, principal);
+
+            // Everything this push writes goes to a scratch store that is deleted when the request ends, so
+            // content fogwall rejects never lands in the shared mirror. Reads still see the mirror, which is
+            // registered as an alternate. If the quarantine can't be opened, fall back to the mirror rather
+            // than failing the push: the loss is disk hygiene, not a validation result.
+            Repository repository = mirror;
+            QuarantineObjectStore quarantine = QuarantineObjectStore.createOrNull(
+                    mirror,
+                    requestDetails.getId() != null ? requestDetails.getId().toString() : null);
+            if (quarantine != null) {
+                request.setAttribute(QuarantineObjectStore.REQUEST_ATTRIBUTE, quarantine);
+                repository = quarantine.getRepository();
+            }
             requestDetails.setLocalRepository(repository);
 
             // Step 2: Unpack the inflight push's pack data into the local clone.
@@ -115,7 +152,7 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
                 // validation — reject outright.
                 ObjectId peeled;
                 try {
-                    peeled = repository.resolve(toCommit + "^{commit}");
+                    peeled = peelRefreshingIfStale(repository, toCommit, remoteUrl, credentials, principal);
                 } catch (Exception e) {
                     log.warn(
                             "Tag push ({}) — could not peel {} to a commit: {}",
@@ -142,7 +179,8 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
                 }
                 String peeledSha = peeled.getName();
                 log.info("Tag push ({}) — peeled {} to commit {}", requestDetails.getBranch(), toCommit, peeledSha);
-                List<Commit> commits = CommitInspectionService.getCommitRange(repository, fromCommit, peeledSha);
+                List<Commit> commits = commitRangeRefreshingIfStale(
+                        repository, fromCommit, peeledSha, remoteUrl, credentials, principal);
                 if (!commits.isEmpty()) {
                     // A non-empty range has three possible explanations, and only one of them is smuggling:
                     //   1. the commits really did arrive via this tag, bypassing branch validation;
@@ -176,7 +214,8 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
 
             log.debug("Extracting commits from {} to {}", fromCommit, toCommit);
 
-            List<Commit> commits = CommitInspectionService.getCommitRange(repository, fromCommit, toCommit);
+            List<Commit> commits =
+                    commitRangeRefreshingIfStale(repository, fromCommit, toCommit, remoteUrl, credentials, principal);
 
             if (commits.isEmpty()) {
                 // Not an inspection failure: the walk succeeded and the range is genuinely empty, which is
@@ -335,5 +374,59 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
         String base = provider.getUri().toString();
         if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
         return base + slug + ".git";
+    }
+
+    /**
+     * Walks the commit range, refreshing the mirror once if an object the walk needs is not there.
+     *
+     * <p>{@code fromCommit} is the ref's current tip upstream, and the mirror can legitimately be behind it: the fetch
+     * cooldown may not have expired since the previous push was forwarded, and the mirror is a shallow clone whose
+     * boundary may sit in front of it. Neither means the push is bad. Refreshing deepens the mirror to full history, so
+     * a push whose parent genuinely does not exist upstream still fails — one retry later.
+     */
+    private List<Commit> commitRangeRefreshingIfStale(
+            Repository repository,
+            String fromCommit,
+            String toCommit,
+            String remoteUrl,
+            CredentialsProvider credentials,
+            String principal)
+            throws Exception {
+        try {
+            return CommitInspectionService.getCommitRange(repository, fromCommit, toCommit);
+        } catch (MissingObjectException e) {
+            log.info(
+                    "Commit range {}..{} is missing {}; refreshing the mirror before failing",
+                    fromCommit,
+                    toCommit,
+                    e.getObjectId() != null ? e.getObjectId().name() : "an object");
+            repositoryCache.refreshNow(remoteUrl, credentials, null, principal);
+            return CommitInspectionService.getCommitRange(repository, fromCommit, toCommit);
+        }
+    }
+
+    /**
+     * Peels {@code toCommit} to a commit, refreshing the mirror once if it cannot be found.
+     *
+     * <p>A tag usually points at a commit that is already upstream, and after the push that introduced it the mirror
+     * may not have re-fetched yet — the cooldown is measured in seconds and a tag often follows its branch immediately.
+     * Unlike the commit walk, an object the mirror has never seen surfaces here as {@code resolve} returning
+     * {@code null} rather than as an exception, so it needs its own retry. A tag whose target genuinely is not upstream
+     * still fails, one refresh later.
+     */
+    private ObjectId peelRefreshingIfStale(
+            Repository repository, String toCommit, String remoteUrl, CredentialsProvider credentials, String principal)
+            throws Exception {
+        try {
+            ObjectId peeled = repository.resolve(toCommit + "^{commit}");
+            if (peeled != null) return peeled;
+            log.info("Tag {} did not peel to a known commit; refreshing the mirror before failing", toCommit);
+        } catch (IOException e) {
+            // A target the mirror has never seen surfaces either way depending on how far the peel got: as a
+            // null result, or as a missing-object failure part-way through. Both mean the same thing here.
+            log.info("Tag {} could not be peeled ({}); refreshing the mirror before failing", toCommit, e.getMessage());
+        }
+        repositoryCache.refreshNow(remoteUrl, credentials, null, principal);
+        return repository.resolve(toCommit + "^{commit}");
     }
 }

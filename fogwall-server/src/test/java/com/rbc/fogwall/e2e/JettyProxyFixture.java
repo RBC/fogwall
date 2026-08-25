@@ -198,6 +198,10 @@ class JettyProxyFixture implements AutoCloseable {
         var gitHolder = new ServletHolder(gitServlet);
         gitHolder.setName("git-gitea-e2e");
         context.addServlet(gitHolder, pushMapping);
+        // Mirrors FogwallServletRegistrar: without this the fixture would exercise a store-and-forward
+        // wiring production never runs, leaking every push's quarantine instead of discarding it.
+        context.addFilter(
+                new FilterHolder(new QuarantineCleanupFilter()), pushMapping, EnumSet.of(DispatcherType.REQUEST));
         context.addFilter(
                 new FilterHolder(new SmartHttpErrorFilter()), pushMapping, EnumSet.of(DispatcherType.REQUEST));
         context.addFilter(
