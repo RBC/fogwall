@@ -68,6 +68,7 @@ jobs:
     runs-on: ubuntu-latest
     if: >
       github.ref == 'refs/heads/main' ||
+      startsWith(github.ref, 'refs/heads/release/') ||
       github.event_name == 'pull_request'
 
     steps:
@@ -102,6 +103,7 @@ jobs:
     needs: build-smoke-image
     if: >
       github.ref == 'refs/heads/main' ||
+      startsWith(github.ref, 'refs/heads/release/') ||
       github.event_name == 'pull_request'
     strategy:
       matrix:
