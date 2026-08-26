@@ -130,12 +130,10 @@ public final class QuarantineObjectStore implements Closeable {
      * that delete, which throws after the response has already begun and leaves the client's {@code git push} waiting
      * forever. It is a lock marker rather than an object, so the mirror has no use for it.
      *
-     * <p>The objects are <em>linked</em> into the mirror, not moved, and that is load-bearing. A push big enough to be
-     * written as a pack leaves this store's object database holding an open handle to that pack file, and
-     * {@code ForwardingPostReceiveHook} reads through this same database afterwards to build the upstream push. Moving
-     * the file out from under it leaves that handle pointing at nothing and the forward stalls, so the developer's
-     * {@code git push} hangs rather than failing. Linking leaves this store's path intact and {@link #close()} later
-     * removes only its name.
+     * <p>Moving the files is safe even though this store's object database is still open and
+     * {@code ForwardingPostReceiveHook} reads through it afterwards to build the upstream push. The mirror's object
+     * directory is registered as an alternate, so a pack that has moved there is still reachable from this store — the
+     * reader finds it at its new location rather than losing it.
      */
     public void promote() throws IOException {
         Path from = directory.resolve(Constants.OBJECTS);
@@ -153,9 +151,6 @@ public final class QuarantineObjectStore implements Closeable {
             Path target = to.resolve(from.relativize(file).toString());
             if (Files.exists(target)) continue;
             Files.createDirectories(target.getParent());
-            // Link, don't move: this store's object database is still open and JGit holds handles against
-            // these paths — see the note above promote(). Copying is the fallback when the scratch directory
-            // and the mirror are on different filesystems.
             Files.move(file, target);
         }
         log.debug("Promoted {} object file(s) from {} into {}", files.size(), from, to);
