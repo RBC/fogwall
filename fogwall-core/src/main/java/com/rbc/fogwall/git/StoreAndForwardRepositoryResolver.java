@@ -2,7 +2,7 @@ package com.rbc.fogwall.git;
 
 import com.rbc.fogwall.provider.FogwallProvider;
 import jakarta.servlet.http.HttpServletRequest;
-import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -84,9 +84,14 @@ public class StoreAndForwardRepositoryResolver implements RepositoryResolver<Htt
     }
 
     /**
-     * Extract credentials from either the Authorization header or the URL userinfo. These are reused for the upstream
-     * clone/fetch done by {@link #open} above, and stored as a request attribute so {@link ForwardingPostReceiveHook}
-     * can reuse the same credentials for the upstream push. They are held in memory only and never written to disk.
+     * Extracts the client's HTTP Basic credentials. These are reused for the upstream clone/fetch done by {@link #open}
+     * above, and stored as a request attribute so {@link ForwardingPostReceiveHook} can reuse the same credentials for
+     * the upstream push. They are held in memory only and never written to disk.
+     *
+     * <p>The {@code Authorization} header is the only source. Credentials a developer embeds in the remote URL
+     * ({@code https://user:token@fogwall/...}) still arrive here, because git strips the userinfo out of the URL and
+     * sends it as a Basic header once challenged — they never appear in the request line, and the servlet API excludes
+     * userinfo from {@link HttpServletRequest#getRequestURL()} regardless.
      */
     private String[] extractCredentials(HttpServletRequest req) {
         // Try Authorization header first
@@ -94,7 +99,7 @@ public class StoreAndForwardRepositoryResolver implements RepositoryResolver<Htt
         if (authHeader != null && authHeader.startsWith("Basic ")) {
             try {
                 String base64 = authHeader.substring("Basic ".length()).trim();
-                String decoded = new String(Base64.getDecoder().decode(base64));
+                String decoded = new String(Base64.getDecoder().decode(base64), StandardCharsets.UTF_8);
                 int colon = decoded.indexOf(':');
                 if (colon >= 0) {
                     return new String[] {decoded.substring(0, colon), decoded.substring(colon + 1)};
@@ -102,22 +107,6 @@ public class StoreAndForwardRepositoryResolver implements RepositoryResolver<Htt
             } catch (IllegalArgumentException e) {
                 log.warn("Invalid Base64 in Authorization header", e);
             }
-        }
-
-        // Fall back to URL userinfo - git embeds user:pass in the request URL
-        String requestUrl = req.getRequestURL().toString();
-        try {
-            URI uri = java.net.URI.create(requestUrl);
-            String userInfo = uri.getUserInfo();
-            if (userInfo != null) {
-                int colon = userInfo.indexOf(':');
-                if (colon >= 0) {
-                    return new String[] {userInfo.substring(0, colon), userInfo.substring(colon + 1)};
-                }
-                return new String[] {userInfo, ""};
-            }
-        } catch (Exception e) {
-            log.debug("Could not parse userinfo from request URL", e);
         }
 
         return null;

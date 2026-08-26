@@ -9,6 +9,7 @@ import com.rbc.fogwall.provider.ScmUserInfo;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Optional;
 import java.util.Set;
@@ -71,8 +72,10 @@ public class BitbucketIdentityFilter extends ProviderAwareFogwallFilter<Bitbucke
         String authHeader = request.getHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Basic ")) return null;
         try {
-            String decoded = new String(Base64.getDecoder()
-                    .decode(authHeader.substring("Basic ".length()).trim()));
+            String decoded = new String(
+                    Base64.getDecoder()
+                            .decode(authHeader.substring("Basic ".length()).trim()),
+                    StandardCharsets.UTF_8);
             int colon = decoded.indexOf(':');
             if (colon < 0) return null;
             return new String[] {decoded.substring(0, colon), decoded.substring(colon + 1)};
