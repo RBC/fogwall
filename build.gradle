@@ -1,21 +1,21 @@
 buildscript {
     configurations.configureEach {
         resolutionStrategy {
-            force 'org.codehaus.plexus:plexus-utils:3.6.1'
+            force 'org.codehaus.plexus:plexus-utils:3.6.2'
             force 'org.bouncycastle:bcpg-jdk18on:1.85'
             // Jackson 2.x on the *plugin* classpath (gradle-node-plugin, cyclonedx-gradle-plugin).
             // The runtime pin in the subprojects eachDependency table does not reach this
             // configuration, and the dependency graph submitted to GitHub includes it.
             // CVE fix: GHSA-r7wm-3cxj-wff9, GHSA-5gvw-p9qm-jgwh, GHSA-5jmj-h7xm-6q6v
-            force 'com.fasterxml.jackson.core:jackson-core:2.22.1'
-            force 'com.fasterxml.jackson.core:jackson-databind:2.22.1'
+            force 'com.fasterxml.jackson.core:jackson-core:2.22.2'
+            force 'com.fasterxml.jackson.core:jackson-databind:2.22.2'
         }
     }
 }
 
 plugins {
-    id 'com.diffplug.spotless' version '8.9.0' apply false
-    id 'org.cyclonedx.bom' version '3.4.0'
+    id 'com.diffplug.spotless' version '8.10.0' apply false
+    id 'org.cyclonedx.bom' version '3.4.1'
     id 'com.github.node-gradle.node' version '7.1.0' apply false
     id 'com.github.jk1.dependency-license-report' version '3.1.4' apply false
 }
@@ -44,15 +44,15 @@ ext {
     postgresVersion = '42.7.13'
     mysqlVersion = '26.7.0'
     mariadbVersion = '3.5.10'
-    mongoVersion = '5.9.1'
+    mongoVersion = '5.10.0'
 
     // Jackson
-    jacksonBomVersion = '3.2.1'
+    jacksonBomVersion = '3.2.2'
 
     // Spring
-    springVersion = '7.0.8'
-    springSecurityVersion = '7.1.0'
-    springSessionVersion = '4.1.0'
+    springVersion = '7.0.9'
+    springSecurityVersion = '7.1.1'
+    springSessionVersion = '4.1.1'
     lettuceVersion = '6.8.2.RELEASE'
 
     // YAML
@@ -80,8 +80,8 @@ ext {
     gitleaksVersion = '8.30.1'
 
     // OpenAPI spec generation
-    swaggerCoreVersion = '2.2.53'
-    swaggerUiVersion = '5.32.11'
+    swaggerCoreVersion = '2.2.54'
+    swaggerUiVersion = '5.32.14'
 
 }
 
