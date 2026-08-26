@@ -48,3 +48,12 @@ updates:
       day: "monday"
     labels:
       - "dependencies:docker"
+    # eclipse-temurin is a Docker Official Image: trusted publisher, digest-pinned, and its bumps are
+    # OS/JDK CVE patches. The supply-chain "let a new release bake before pulling it" rationale behind a
+    # cooldown doesn't apply here — a cooldown just delays security fixes on the base image — so exclude
+    # it. The cooldown still guards any future, less-trusted docker dependency. Note: an enterprise-level
+    # cooldown policy may override this repo setting; confirm on the next Dependabot run.
+    cooldown:
+      default-days: 3
+      exclude:
+        - "eclipse-temurin"
