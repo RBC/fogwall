@@ -3,6 +3,11 @@ services:
   # ── fogwall ───────────────────────────────────────────────────────────────────
   fogwall:
     build: ..
+    # Stable tag for the built image so a pre-built image can be reused instead of
+    # rebuilt. Local `compose.sh -- up -d --build` builds and tags it here; CI builds
+    # the image once, `docker load`s it under this tag, and the smoke-test matrix jobs
+    # then `up -d` (no --build) and reuse it.
+    image: fogwall:local
     ports:
       - "8080:8080"
     volumes:
