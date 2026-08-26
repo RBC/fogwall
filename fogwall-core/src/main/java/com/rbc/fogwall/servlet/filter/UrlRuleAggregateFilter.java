@@ -14,6 +14,7 @@ import com.rbc.fogwall.servlet.FogwallServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 
@@ -183,7 +184,8 @@ public class UrlRuleAggregateFilter extends ProviderAwareFogwallFilter<FogwallPr
             String authHeader = request.getHeader("Authorization");
             String pushUsername = null;
             if (authHeader != null && authHeader.startsWith("Basic ")) {
-                String decoded = new String(java.util.Base64.getDecoder().decode(authHeader.substring(6)));
+                String decoded = new String(
+                        java.util.Base64.getDecoder().decode(authHeader.substring(6)), StandardCharsets.UTF_8);
                 int colon = decoded.indexOf(':');
                 if (colon > 0) pushUsername = decoded.substring(0, colon);
             }

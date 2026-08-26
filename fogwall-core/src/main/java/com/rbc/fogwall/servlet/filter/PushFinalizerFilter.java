@@ -15,6 +15,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Enumeration;
@@ -141,8 +142,10 @@ public class PushFinalizerFilter extends AbstractFogwallFilter {
             return request;
         }
         try {
-            String decoded = new String(Base64.getDecoder()
-                    .decode(authHeader.substring("Basic ".length()).trim()));
+            String decoded = new String(
+                    Base64.getDecoder()
+                            .decode(authHeader.substring("Basic ".length()).trim()),
+                    StandardCharsets.UTF_8);
             int colon = decoded.indexOf(':');
             if (colon < 0) return request;
             String token = decoded.substring(colon + 1);

@@ -17,6 +17,7 @@ import com.rbc.fogwall.service.SshScmIdentityEnricher;
 import com.rbc.fogwall.user.UserEntry;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -463,7 +464,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
 
         try {
             String base64 = authHeader.substring("Basic ".length()).trim();
-            String decoded = new String(Base64.getDecoder().decode(base64));
+            String decoded = new String(Base64.getDecoder().decode(base64), StandardCharsets.UTF_8);
             int colonIndex = decoded.indexOf(':');
             if (colonIndex < 0) {
                 log.warn("Invalid Basic auth format (no colon separator)");
