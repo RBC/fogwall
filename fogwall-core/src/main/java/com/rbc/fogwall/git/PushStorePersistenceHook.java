@@ -80,7 +80,11 @@ public class PushStorePersistenceHook {
     /** Returns a {@link PreReceiveHook} that creates the initial push record. Should be the first hook in the chain. */
     public PreReceiveHook preReceiveHook() {
         return (ReceivePack rp, Collection<ReceiveCommand> commands) -> {
-            String pushId = UUID.randomUUID().toString();
+            // The id is minted before the push is received so the quarantine directory can be named after it;
+            // only fall back to generating one here for callers that did not pre-assign it.
+            String pushId = pushContext.getPushId() != null
+                    ? pushContext.getPushId()
+                    : UUID.randomUUID().toString();
             pushContext.setPushId(pushId);
 
             try {

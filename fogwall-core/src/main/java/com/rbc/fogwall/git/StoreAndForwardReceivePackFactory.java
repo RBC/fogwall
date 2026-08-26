@@ -23,6 +23,7 @@ import java.util.Base64;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
+import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.lib.Repository;
@@ -202,7 +203,21 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
 
         String upstreamUrl = (String) req.getAttribute(StoreAndForwardRepositoryResolver.UPSTREAM_URL_ATTRIBUTE);
 
-        return buildReceivePack(db, creds, pushUser, pushToken, repoSlug, upstreamUrl, PushTransport.http());
+        // Mint the push record's id here rather than in PushStorePersistenceHook, so the quarantine directory
+        // on disk carries the same id an operator will see in the audit record.
+        String pushId = UUID.randomUUID().toString();
+
+        // Receive into a scratch store so a rejected push leaves nothing behind in the shared mirror.
+        // QuarantineCleanupFilter discards it when the request ends.
+        Repository target = db;
+        QuarantineObjectStore quarantine = QuarantineObjectStore.createOrNull(db, pushId);
+        if (quarantine != null) {
+            req.setAttribute(QuarantineObjectStore.REQUEST_ATTRIBUTE, quarantine);
+            target = quarantine.getRepository();
+        }
+
+        return buildReceivePack(
+                target, creds, pushUser, pushToken, repoSlug, upstreamUrl, PushTransport.http(), quarantine, pushId);
     }
 
     /**
@@ -210,9 +225,15 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
      * during public-key authentication and the per-push SSH session factory for upstream forwarding.
      */
     public ReceivePack createForSsh(
-            Repository db, String pushUser, String repoSlug, String upstreamUrl, PushTransport.Ssh transport)
+            Repository db,
+            String pushUser,
+            String repoSlug,
+            String upstreamUrl,
+            PushTransport.Ssh transport,
+            QuarantineObjectStore quarantine,
+            String pushId)
             throws ServiceNotEnabledException, ServiceNotAuthorizedException {
-        return buildReceivePack(db, null, pushUser, null, repoSlug, upstreamUrl, transport);
+        return buildReceivePack(db, null, pushUser, null, repoSlug, upstreamUrl, transport, quarantine, pushId);
     }
 
     private ReceivePack buildReceivePack(
@@ -222,7 +243,9 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
             String pushToken,
             String repoSlug,
             String upstreamUrl,
-            PushTransport transport)
+            PushTransport transport,
+            QuarantineObjectStore quarantine,
+            String pushId)
             throws ServiceNotEnabledException, ServiceNotAuthorizedException {
 
         ReceivePack rp = new ReceivePack(db);
@@ -234,6 +257,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
 
         pushContext.setPushUser(pushUser);
         pushContext.setPushToken(pushToken);
+        pushContext.setPushId(pushId);
         pushContext.setRepoSlug(repoSlug);
         pushContext.setUpstreamUrl(upstreamUrl);
         pushContext.setTransport(transport);
@@ -269,6 +293,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
         //   [pre]  PushStorePersistenceHook.preReceive      - record RECEIVED
         //   [post-validation] PushStorePersistenceHook.validationResult - save APPROVED/PENDING
         //   [post-validation] ApprovalPreReceiveHook        - blocks until approved or timeout
+        //   [last]  QuarantinePromotionHook                  - moves objects into the mirror once nothing rejected
         //
         // Post-receive:
         //   ForwardingPostReceiveHook       - forwards to upstream
@@ -326,9 +351,12 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
             hooks.add(persistenceHook.validationResultHook(validationContext));
             hooks.add(new ApprovalPreReceiveHook(
                     pushStore, approvalGateway, approvalTimeout, serviceUrl, repoPermissionService, pushContext));
+            if (quarantine != null) hooks.add(new QuarantinePromotionHook(quarantine));
             preHooks = hooks.toArray(PreReceiveHook[]::new);
         } else {
-            preHooks = validationHooks.toArray(PreReceiveHook[]::new);
+            List<PreReceiveHook> hooks = new ArrayList<>(validationHooks);
+            if (quarantine != null) hooks.add(new QuarantinePromotionHook(quarantine));
+            preHooks = hooks.toArray(PreReceiveHook[]::new);
         }
 
         Runnable disconnectCallback = null;

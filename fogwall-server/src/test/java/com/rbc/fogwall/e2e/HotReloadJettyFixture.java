@@ -106,6 +106,9 @@ class HotReloadJettyFixture implements AutoCloseable {
         var gitHolder = new ServletHolder(gitServlet);
         gitHolder.setName("git-gitea-hotreload");
         context.addServlet(gitHolder, pushMapping);
+        // Mirrors FogwallServletRegistrar — see JettyProxyFixture for why the fixture must not diverge.
+        context.addFilter(
+                new FilterHolder(new QuarantineCleanupFilter()), pushMapping, EnumSet.of(DispatcherType.REQUEST));
         context.addFilter(
                 new FilterHolder(new SmartHttpErrorFilter()), pushMapping, EnumSet.of(DispatcherType.REQUEST));
         context.addFilter(

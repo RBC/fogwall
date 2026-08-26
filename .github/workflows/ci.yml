@@ -253,7 +253,8 @@ jobs:
 
       - name: Run e2e tests
         run: ./gradlew :fogwall-server:e2eTest
-        timeout-minutes: 5
+        # Covers a cold compile as well as the suite itself; the suite alone runs ~3m on a healthy runner
+        timeout-minutes: 10
 
       - name: Publish e2e test results
         if: always()

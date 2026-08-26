@@ -233,6 +233,10 @@ public final class FogwallServletRegistrar {
         holder.setName("git-" + provider.getName());
         context.addServlet(holder, pushMapping);
 
+        // Must wrap the GitServlet: the quarantine is opened while the servlet runs, so this filter's
+        // finally block is what bounds its lifetime to the request.
+        context.addFilter(
+                new FilterHolder(new QuarantineCleanupFilter()), pushMapping, EnumSet.of(DispatcherType.REQUEST));
         context.addFilter(new FilterHolder(new LfsRejectionFilter()), pushMapping, EnumSet.of(DispatcherType.REQUEST));
         context.addFilter(
                 new FilterHolder(new SmartHttpErrorFilter()), pushMapping, EnumSet.of(DispatcherType.REQUEST));

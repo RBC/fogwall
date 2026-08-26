@@ -11,6 +11,7 @@ import com.rbc.fogwall.git.HttpOperation;
 import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.provider.GitHubProvider;
 import com.rbc.fogwall.servlet.RequestBodyWrapper;
+import jakarta.servlet.FilterChain;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.ServletOutputStream;
@@ -21,6 +22,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
 import java.util.Collections;
@@ -29,6 +31,7 @@ import java.util.Set;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.internal.storage.pack.PackWriter;
 import org.eclipse.jgit.lib.*;
+import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.transport.CredentialsProvider;
 import org.eclipse.jgit.transport.PacketLineOut;
 import org.junit.jupiter.api.Test;
@@ -58,6 +61,12 @@ class EnrichPushCommitsFilterTest {
 
     @TempDir
     Path sourceDir2;
+
+    @TempDir
+    Path quarantineSourceDir;
+
+    @TempDir
+    Path quarantineMirrorDir;
 
     // Minimal ServletInputStream backed by a byte array - mirrors ParseGitRequestFilterTest.
     private static class MockServletInputStream extends ServletInputStream {
@@ -435,7 +444,7 @@ class EnrichPushCommitsFilterTest {
                     details.getResult(),
                     "Should pass through — commit already upstream");
             assertTrue(details.getPushedCommits().isEmpty(), "No new commits expected");
-            assertSame(
+            assertSameGitDir(
                     cacheRepo,
                     details.getLocalRepository(),
                     "localRepository must be set for CheckHiddenCommitsFilter");
@@ -466,7 +475,7 @@ class EnrichPushCommitsFilterTest {
 
         assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
         assertTrue(details.getPushedCommits().isEmpty());
-        assertSame(cacheRepo, details.getLocalRepository());
+        assertSameGitDir(cacheRepo, details.getLocalRepository(), "localRepository must be set");
     }
 
     /**
@@ -516,7 +525,7 @@ class EnrichPushCommitsFilterTest {
         assertNotNull(details.getReason());
         assertTrue(details.getReason().contains("branch"), "Error must direct the user to push the branch first");
         assertTrue(details.getPushedCommits().isEmpty());
-        assertSame(cacheRepo, details.getLocalRepository(), "localRepository must still be set");
+        assertSameGitDir(cacheRepo, details.getLocalRepository(), "localRepository must still be set");
     }
 
     /**
@@ -543,7 +552,7 @@ class EnrichPushCommitsFilterTest {
                 GitRequestDetails.GitResult.ERROR, details.getResult(), "Unresolvable tag object must be rejected");
         assertNotNull(details.getReason());
         assertTrue(details.getPushedCommits().isEmpty());
-        assertSame(emptyRepo, details.getLocalRepository());
+        assertSameGitDir(emptyRepo, details.getLocalRepository(), "localRepository must be set");
     }
 
     /** Ref deletions (commitTo = all zeros) must skip enrichment entirely and leave result PENDING. */
@@ -599,5 +608,86 @@ class EnrichPushCommitsFilterTest {
         assertEquals(GitRequestDetails.GitResult.ERROR, details.getResult());
         assertNotNull(details.getReason());
         assertTrue(details.getPushedCommits().isEmpty());
+    }
+
+    /**
+     * The point of M6: the whole request runs, the push is inspected, and when it is over the shared mirror holds
+     * nothing the push brought in. Goes through {@code doFilter} rather than {@code doHttpFilter} because teardown is
+     * tied to the chain completing, not to this filter's own body finishing.
+     */
+    @Test
+    void pushedObjectsAreGoneFromTheMirrorOnceTheRequestEnds() throws Exception {
+        Path srcDir = Files.createDirectories(quarantineSourceDir.resolve("src"));
+        Git sourceGit = Git.init().setDirectory(srcDir.toFile()).call();
+        Files.writeString(srcDir.resolve("secret.txt"), "leaked credential\n");
+        sourceGit.add().addFilepattern("secret.txt").call();
+        var revCommit = sourceGit
+                .commit()
+                .setMessage("would be rejected")
+                .setAuthor("Author", "author@example.com")
+                .setSign(false)
+                .call();
+        String toSha = revCommit.getName();
+        String fromSha = ObjectId.zeroId().name();
+
+        ByteArrayOutputStream packOut = new ByteArrayOutputStream();
+        try (PackWriter packWriter = new PackWriter(sourceGit.getRepository())) {
+            packWriter.setDeltaBaseAsOffset(false);
+            packWriter.preparePack(NullProgressMonitor.INSTANCE, Set.of(ObjectId.fromString(toSha)), Set.of());
+            packWriter.writePack(NullProgressMonitor.INSTANCE, NullProgressMonitor.INSTANCE, packOut);
+        }
+        ByteArrayOutputStream bodyOut = new ByteArrayOutputStream();
+        PacketLineOut plo = new PacketLineOut(bodyOut);
+        plo.writeString(fromSha + " " + toSha + " refs/heads/main\0 report-status side-band-64k");
+        plo.end();
+        bodyOut.write(packOut.toByteArray());
+
+        Repository mirror = Git.init()
+                .setBare(true)
+                .setDirectory(quarantineMirrorDir.toFile())
+                .call()
+                .getRepository();
+        LocalRepositoryCache mockCache = mock(LocalRepositoryCache.class);
+        when(mockCache.getOrClone(any(), any(), any(), any())).thenReturn(mirror);
+
+        GitRequestDetails details = makeDetails(fromSha, toSha);
+        RequestBodyWrapper request = wrapRequest(bodyOut.toByteArray(), details);
+
+        // The chain stands in for the validation filters that read the pushed objects
+        ObjectId[] seenDuringChain = new ObjectId[1];
+        FilterChain chain = (req, resp) -> {
+            Repository inFlight = details.getLocalRepository();
+            try {
+                if (inFlight.getObjectDatabase().has(ObjectId.fromString(toSha))) {
+                    seenDuringChain[0] = ObjectId.fromString(toSha);
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        };
+
+        new EnrichPushCommitsFilter(new GitHubProvider("/proxy"), mockCache)
+                .doFilter(request, mock(HttpServletResponse.class), chain);
+
+        assertNotNull(seenDuringChain[0], "Validation filters must be able to read the pushed commit while running");
+        assertFalse(details.getPushedCommits().isEmpty(), "The push must still have been inspected");
+
+        try (Repository reopened =
+                new FileRepositoryBuilder().setGitDir(mirror.getDirectory()).build()) {
+            assertFalse(
+                    reopened.getObjectDatabase().has(ObjectId.fromString(toSha)),
+                    "The pushed commit must not be left behind in the shared mirror");
+        }
+        sourceGit.close();
+        mirror.close();
+    }
+
+    /**
+     * Downstream filters get a per-request quarantine rather than the shared mirror itself, so identity is no longer
+     * the contract — what they need is a repository backed by the same git directory, seeing the same refs.
+     */
+    private static void assertSameGitDir(Repository expectedMirror, Repository actual, String message) {
+        assertNotNull(actual, message);
+        assertEquals(expectedMirror.getDirectory(), actual.getDirectory(), message);
     }
 }
