@@ -90,6 +90,14 @@ git remote add proxy https://me:ghp_yourtoken@fogwall.corp.example.com/push/gith
 
 Or use `git credential store` / your OS keychain as you normally would.
 
+**Fetching from a public repository needs no credentials.** When you clone or pull through the proxy, fogwall asks the
+upstream SCM whether that repository serves anonymous reads. If it does, your request goes through without a credential
+prompt. If it doesn't — a private repository — you get the usual 401 challenge and your git client supplies the token,
+which fogwall forwards upstream.
+
+Pushing always requires credentials, whatever the repository's visibility, because fogwall forwards the push upstream
+using your own token.
+
 <!-- prettier-ignore-start -->
 > [!TIP]
 > Most credential helpers (macOS Keychain, Windows Credential Manager, `git-credential-store`) pin credentials to a hostname. Since the proxy hostname differs from the upstream SCM, your helper won't automatically supply the right token — it will look for a stored credential for `fogwall.corp.example.com`, not `github.com`. Either store a separate credential entry for the proxy hostname, or embed the token in the remote URL as shown above. For local development environments that are frequently recreated, embedding the token in the URL is simpler than managing keychain entries.
@@ -510,6 +518,16 @@ the exact messages and what to do for each.
 
 Your git credential helper is prompting for the proxy URL but nothing appears. Embed credentials directly in the remote
 URL or configure your credential helper to recognise the proxy host.
+
+### Cloning a public repository asks for credentials, or fails in CI
+
+fogwall determines whether to ask for credentials by checking whether the upstream repository serves anonymous reads. If
+it cannot reach the upstream to check — a network timeout, an outbound proxy misconfiguration — it asks for credentials
+rather than assuming the repository is public. In a non-interactive environment (`GIT_TERMINAL_PROMPT=0`, most CI
+runners) that surfaces as an outright failure rather than a prompt.
+
+Check the fogwall server log for a line about probing the upstream. If the upstream genuinely is private, supply a token
+as normal.
 
 ### `SSL certificate problem`
 
