@@ -115,6 +115,31 @@ git push → /push/<provider>/<owner>/<repo>.git
        └─────────────────────────────────────────┘
 ```
 
+### Authenticating a store-and-forward request
+
+Store-and-forward cannot forward a request it has no credentials for, and a git client only sends credentials after a
+401 challenge — so `BasicAuthChallengeFilter` has to decide, before the servlet runs, whether this request needs one.
+
+Push is unambiguous: the push is forwarded upstream using the developer's own token, so it is always challenged.
+
+Fetch is not. The mirror is cloned from upstream on every open, so a fetch of a private repository must be able to carry
+credentials — but challenging every fetch makes public repositories unclonable by anyone who has no credential to offer,
+and a client that answers the challenge with an unrelated or expired token is rejected by providers such as GitHub even
+on a repository they would have served anonymously. Guessing in either direction breaks a real workflow.
+
+So fogwall asks upstream instead. `UpstreamAuthProbe` issues the git advertisement itself —
+`GET <repo>/info/refs?service=git-upload-pack`, no credentials — and reads the answer: `200` means anonymous reads are
+served, anything else means they are not. That is provider-agnostic, needs no REST API and no per-provider visibility
+field, and follows the repository's real visibility rather than a configured assumption.
+
+Two properties keep it cheap and safe. Only an _unauthenticated_ fetch probes at all — a request already carrying an
+`Authorization` header is passed straight through — and verdicts are cached per repository, so a burst of anonymous
+clones costs one upstream round trip. Any unclear answer (timeout, 404, 5xx) is treated as "credentials required",
+because a probe that cannot reach upstream must never be the reason a repository becomes anonymously readable.
+
+The transparent proxy needs none of this: it forwards to upstream directly, so upstream issues its own challenge. SSH
+authenticates by key before any git command runs.
+
 ### Transparent proxy push
 
 ```

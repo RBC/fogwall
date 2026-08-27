@@ -19,6 +19,7 @@ import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.git.StoreAndForwardReceivePackFactory;
 import com.rbc.fogwall.git.StoreAndForwardRepositoryResolver;
 import com.rbc.fogwall.git.StoreAndForwardUploadPackFactory;
+import com.rbc.fogwall.git.UpstreamAuthProbe;
 import com.rbc.fogwall.jetty.BlockingContentHandler;
 import com.rbc.fogwall.jetty.FogwallJettyApplication;
 import com.rbc.fogwall.permission.RepoPermissionService;
@@ -205,7 +206,9 @@ class JettyProxyFixture implements AutoCloseable {
         context.addFilter(
                 new FilterHolder(new SmartHttpErrorFilter()), pushMapping, EnumSet.of(DispatcherType.REQUEST));
         context.addFilter(
-                new FilterHolder(new BasicAuthChallengeFilter()), pushMapping, EnumSet.of(DispatcherType.REQUEST));
+                new FilterHolder(new BasicAuthChallengeFilter(provider, new UpstreamAuthProbe())),
+                pushMapping,
+                EnumSet.of(DispatcherType.REQUEST));
 
         // Transparent proxy fogwallServlet on /proxy/...
         String proxyServletPath = PROXY_PREFIX + provider.servletPath();

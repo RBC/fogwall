@@ -17,6 +17,7 @@ import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.git.StoreAndForwardReceivePackFactory;
 import com.rbc.fogwall.git.StoreAndForwardRepositoryResolver;
 import com.rbc.fogwall.git.StoreAndForwardUploadPackFactory;
+import com.rbc.fogwall.git.UpstreamAuthProbe;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.net.ResolvedOutboundProxy;
 import com.rbc.fogwall.permission.RepoPermissionService;
@@ -241,7 +242,9 @@ public final class FogwallServletRegistrar {
         context.addFilter(
                 new FilterHolder(new SmartHttpErrorFilter()), pushMapping, EnumSet.of(DispatcherType.REQUEST));
         context.addFilter(
-                new FilterHolder(new BasicAuthChallengeFilter()), pushMapping, EnumSet.of(DispatcherType.REQUEST));
+                new FilterHolder(new BasicAuthChallengeFilter(provider, new UpstreamAuthProbe())),
+                pushMapping,
+                EnumSet.of(DispatcherType.REQUEST));
         context.addFilter(
                 new FilterHolder(new ParseGitRequestFilter(provider, maxPushBytes)),
                 pushMapping,
