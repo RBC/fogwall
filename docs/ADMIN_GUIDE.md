@@ -1162,7 +1162,17 @@ The same applies when a key is removed from the SCM account — the old fingerpr
 1. Enable the Spring Security debug profile (`docker/log4j2-debug.xml`) — see
    [Debug profiles](#debug-profiles-by-problem-area).
 2. Check the redirect URI registered in the IdP matches `https://<your-host>/login/oauth2/code/fogwall` exactly.
-3. For Entra ID: verify `jwk-set-uri` is set — without it, token issuer validation fails silently.
+3. For Entra ID: make sure `issuer-uri` ends in `/v2.0` and `skip-user-info: true` is set — see the
+   [Entra ID section in CONFIGURATION.md](CONFIGURATION.md#entra-id-azure-ad). `jwk-set-uri` is **not** needed for
+   Entra: it is a plain endpoint override and no longer changes how tokens are validated.
+
+### OIDC login fails with "Claim '…' not present in the ID token"
+
+The configured `auth.oidc.user-name-attribute` names a claim your IdP did not include. The OIDC spec guarantees only
+`sub` in an ID token — `email` and the rest are voluntary, and IdPs differ in what they send (Entra ID, for example,
+omits `email` unless the optional claim is added to the app registration). Either configure the IdP to include the
+claim, or point `user-name-attribute` at one it actually sends. The warning in the application log lists the claims that
+were present.
 
 ### Upgrading from a pre-1.2.0 deployment: OIDC redirect URI mismatch (AADSTS50011)
 

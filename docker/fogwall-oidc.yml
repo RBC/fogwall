@@ -16,14 +16,21 @@
 auth:
   provider: oidc
   oidc:
-    # issuer-uri drives the browser-facing authorization redirect only.
+    # issuer-uri drives the browser-facing authorization redirect AND the OIDC discovery
+    # fetch at startup — discovery always runs, so mock-oauth2 must be resolvable from
+    # inside the fogwall container (Docker DNS provides this on the compose network).
     issuer-uri: http://mock-oauth2:9090/default
 #    client-id: fogwall-client
 #    client-secret: fogwall-secret
-    # Server-side endpoints use host.containers.internal (Podman's automatic host alias)
-    # to reach the port-mapped mock-oauth2 container. This avoids the Podman /etc/hosts
-    # injection problem where mock-oauth2 resolves to 127.0.0.1 inside containers.
-    # jwk-set-uri also skips OIDC discovery at startup (no eager connection on boot).
+    # Server-side endpoint overrides use host.containers.internal (Podman's automatic host
+    # alias) to reach the port-mapped mock-oauth2 container. This avoids the Podman
+    # /etc/hosts injection problem where mock-oauth2 resolves to 127.0.0.1 inside containers.
+    #
+    # NOTE: these are plain endpoint overrides — they do not affect token validation. ID
+    # tokens are validated against issuer-uri, so if the mock server derives the token's
+    # issuer from the Host header of the token call (host.containers.internal), login fails
+    # issuer validation. If that happens, remove these overrides so every call uses the
+    # mock-oauth2 hostname consistently.
     jwk-set-uri: http://host.containers.internal:9090/default/jwks
     token-uri: http://host.containers.internal:9090/default/token
     user-info-uri: http://host.containers.internal:9090/default/userinfo

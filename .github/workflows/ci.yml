@@ -252,14 +252,17 @@ jobs:
           cache: gradle
 
       - name: Run e2e tests
-        run: ./gradlew :fogwall-server:e2eTest
-        # Covers a cold compile as well as the suite itself; the suite alone runs ~3m on a healthy runner
-        timeout-minutes: 10
+        run: ./gradlew :fogwall-server:e2eTest :fogwall-dashboard:e2eTest
+        # Covers a cold compile as well as the suites themselves; the server suite alone runs ~3m on a
+        # healthy runner, the dashboard auth suite (LDAP/OIDC via Testcontainers) well under 1m warm
+        timeout-minutes: 15
 
       - name: Publish e2e test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # ratchet:actions/upload-artifact@v7
         with:
           name: e2e-test-reports
-          path: "fogwall-server/build/reports/tests/e2eTest/"
+          path: |
+            fogwall-server/build/reports/tests/e2eTest/
+            fogwall-dashboard/build/reports/tests/e2eTest/
           retention-days: 14
