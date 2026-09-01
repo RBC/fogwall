@@ -25,8 +25,19 @@ class MockOAuth2Container extends GenericContainer<MockOAuth2Container> {
     private static final String ISSUER_ID = "default";
 
     MockOAuth2Container() {
-        super("ghcr.io/navikt/mock-oauth2-server:2.1.10");
+        this(null);
+    }
+
+    /**
+     * @param jsonConfig optional mock-oauth2-server JSON configuration (issuer token callbacks, claim mappings); null
+     *     for the server's defaults. Issuers are created on demand, so callbacks may name any issuer id.
+     */
+    MockOAuth2Container(String jsonConfig) {
+        super("ghcr.io/navikt/mock-oauth2-server:6.0.2");
         withExposedPorts(SERVER_PORT);
+        if (jsonConfig != null) {
+            withEnv("JSON_CONFIG", jsonConfig);
+        }
         waitingFor(Wait.forHttp("/" + ISSUER_ID + "/.well-known/openid-configuration"));
     }
 
@@ -42,5 +53,13 @@ class MockOAuth2Container extends GenericContainer<MockOAuth2Container> {
      */
     String getIssuerUri() {
         return getBaseUrl() + "/" + ISSUER_ID;
+    }
+
+    /**
+     * Issuer URI for an arbitrary issuer id. mock-oauth2-server creates issuers on demand, so any id works; pair with a
+     * JSON_CONFIG token callback to control the claims that issuer mints.
+     */
+    String getIssuerUri(String issuerId) {
+        return getBaseUrl() + "/" + issuerId;
     }
 }

@@ -623,6 +623,25 @@ auth:
     # Not needed when cert-path is set (Entra ID uses x5t instead of kid).
     # key-id: my-registered-kid
 
+    # Claim used as the principal name (the fogwall username). Defaults to "sub" — the only
+    # claim the OIDC spec guarantees in every ID token. Claims like preferred_username and
+    # email are voluntary: point this at one only if your IdP actually sends it, otherwise
+    # login fails with a clear "claim not present" error.
+    # user-name-attribute: email
+
+    # Read all claims from the ID token and never call the UserInfo endpoint. Needed when
+    # user-name-attribute names a claim your IdP's UserInfo response omits (see the Entra ID
+    # section below); harmless otherwise.
+    # skip-user-info: true
+
+    # Endpoint overrides. OIDC discovery ALWAYS runs at startup against issuer-uri; these
+    # replace individual discovered endpoints for split-egress setups (e.g. an internal JWKS
+    # mirror). They have no effect on token validation.
+    # authorization-uri: ...
+    # token-uri: ...
+    # user-info-uri: ...
+    # jwk-set-uri: ...
+
   # OIDC claim containing the user's group memberships. Defaults to "groups",
   # which is standard for Keycloak, Okta, and most Entra ID configurations.
   groups-claim: groups
@@ -635,21 +654,31 @@ auth:
 
 #### Entra ID (Azure AD)
 
-Entra ID requires two extra settings. The `jwk-set-uri` field is the key signal — when it is set, fogwall skips OIDC
-discovery and issuer validation. This is necessary because Entra issues tokens with
-`iss=https://sts.windows.net/{tenant}/` rather than the discovery base URL, which would cause Spring Security to reject
-them otherwise.
+Entra ID works with standard OIDC discovery and full stock token validation — no bypass and no endpoint overrides. What
+it does need is two settings that account for its unusual (but spec-conformant — all profile/email claims are voluntary,
+only `sub` is guaranteed) **claims** behaviour:
+
+- **`user-name-attribute: email`** — with the `email` optional claim added to the app registration (checklist below).
+  Don't skip this one: the default (`sub`) logs in without any error, but Entra's `sub` is an opaque generated string,
+  so every downstream record — permissions, push history, the admin UI — ends up keyed to an unreadable identifier.
+  Nothing breaks loudly; it is just miserable to operate.
+- **`skip-user-info: true`** (recommended). Entra's UserInfo endpoint is Microsoft Graph, which returns HTTP 200 with a
+  minimal claim set and has historically broken Spring's principal construction when `user-name-attribute` names a claim
+  its response lacks. Skipping UserInfo reads all claims from the ID token and drops the runtime dependency on Graph
+  (and its `User.Read` permission) entirely.
 
 ```yaml
 auth:
   provider: oidc
   oidc:
+    # The /v2.0 suffix matters: it selects the v2 endpoints, and ID-token format follows the
+    # endpoint — v2 tokens carry iss=https://login.microsoftonline.com/{tenant-id}/v2.0, which
+    # matches discovery and validates cleanly.
     issuer-uri: https://login.microsoftonline.com/{tenant-id}/v2.0
     client-id: <app-registration-client-id>
     client-secret: <client-secret>
-
-    # Required for Entra ID — triggers issuer-validation bypass.
-    jwk-set-uri: https://login.microsoftonline.com/{tenant-id}/discovery/v2.0/keys
+    skip-user-info: true
+    user-name-attribute: email
 
   # Requires "Group claims" to be enabled in the app registration (Token configuration → Groups claim).
   # Group values will be object IDs (GUIDs) unless "Group names" is selected in the manifest.
@@ -666,7 +695,20 @@ auth:
 > 1. Platform: Web — redirect URI `https://<your-host>/login/oauth2/code/fogwall`
 > 2. API permissions: `openid`, `profile`, `email` (delegated)
 > 3. Token configuration → add Groups claim → select "Security groups"
+> 4. Token configuration → add optional claim → ID token → `email` (feeds fogwall's locked-email provisioning)
 <!-- prettier-ignore-end -->
+
+**Legacy v1-token tenants.** An app registration reached through the v1 endpoints issues v1-format tokens with
+`iss=https://sts.windows.net/{tenant-id}/`, which fails validation against the v2 discovery issuer. The fix is to use
+the v2 issuer URI above. If your tenant genuinely cannot, point `issuer-uri` directly at
+`https://sts.windows.net/{tenant-id}/` — it serves a self-consistent discovery document — and set `user-name-attribute`
+to a claim v1-format tokens actually carry (check a decoded token; `upn` is the usual candidate).
+
+To tell which case you are in, decode an ID token from a real login and check its `ver` claim (`"1.0"` or `"2.0"`) —
+that is authoritative. Don't infer it from the app manifest: Microsoft documents `requestedAccessTokenVersion` as
+applying to access tokens issued to your app when it acts as an API, and in deployments verified so far a tenant with
+that setting unset still issued v2 ID tokens through the `/v2.0` endpoints — but tenant configurations vary, so check
+the token.
 
 ### Role mappings
 

@@ -63,7 +63,6 @@ import org.springframework.security.ldap.userdetails.DefaultLdapAuthoritiesPopul
 import org.springframework.security.oauth2.client.endpoint.NimbusJwtClientAuthenticationParametersConverter;
 import org.springframework.security.oauth2.client.endpoint.OAuth2AuthorizationCodeGrantRequest;
 import org.springframework.security.oauth2.client.endpoint.RestClientAuthorizationCodeTokenResponseClient;
-import org.springframework.security.oauth2.client.oidc.authentication.OidcIdTokenDecoderFactory;
 import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserRequest;
 import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserService;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
@@ -71,14 +70,10 @@ import org.springframework.security.oauth2.client.registration.ClientRegistratio
 import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
 import org.springframework.security.oauth2.client.web.HttpSessionOAuth2AuthorizedClientRepository;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
-import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoderFactory;
-import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler;
@@ -539,12 +534,43 @@ public class SecurityConfig {
         OidcUserService service = new OidcUserService() {
             @Override
             public OidcUser loadUser(OidcUserRequest userRequest) {
-                OidcUser oidcUser = super.loadUser(userRequest);
                 String nameAttributeKey = userRequest
                         .getClientRegistration()
                         .getProviderDetails()
                         .getUserInfoEndpoint()
                         .getUserNameAttributeName();
+                OidcUser oidcUser;
+                try {
+                    oidcUser = super.loadUser(userRequest);
+                } catch (IllegalArgumentException e) {
+                    // Spring throws when the configured name attribute is absent from the claim set it
+                    // consulted, and an unhandled runtime exception here surfaces to the user as a 500.
+                    // Rethrow as an authentication failure so the login lands on the error page instead.
+                    // Which claim set that was matters for the diagnostic: with the UserInfo call enabled
+                    // Spring builds the principal from the UserInfo *response alone*, which can lack a
+                    // claim the ID token carries (Entra omits preferred_username there, for one) — so
+                    // blaming the ID token would print a claim list that contains the attribute and
+                    // contradict itself.
+                    //
+                    // Deliberate and permanent, not a stopgap: upstream confirmed this exact Entra
+                    // behaviour is not a client misconfiguration (spring-security#16340) and declined the
+                    // structural fix of making the UserInfo call opt-in (spring-security#16843), so the
+                    // framework will keep surfacing it as an IllegalArgumentException.
+                    if (skipUserInfo) {
+                        throw missingNameAttribute(
+                                nameAttributeKey,
+                                "ID token",
+                                userRequest.getIdToken().getClaims(),
+                                e);
+                    }
+                    throw missingFromUserInfoResponse(
+                            nameAttributeKey, userRequest.getIdToken().getClaims(), e);
+                }
+                // OIDC guarantees only iss/sub/aud/exp/iat in an ID token — every profile/email claim is
+                // voluntary, so a configured user-name-attribute may simply not be in what the IdP sent.
+                if (oidcUser.getClaims().get(nameAttributeKey) == null) {
+                    throw missingNameAttribute(nameAttributeKey, "merged token", oidcUser.getClaims(), null);
+                }
                 if (roleMappings.isEmpty()) {
                     Set<GrantedAuthority> authorities = new LinkedHashSet<>(oidcUser.getAuthorities());
                     authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
@@ -583,12 +609,62 @@ public class SecurityConfig {
         };
         if (skipUserInfo) {
             // skip-user-info=true: all claims are read from the ID token; the UserInfo endpoint is
-            // never contacted. Required for Entra ID — graph.microsoft.com/oidc/userinfo returns 200
-            // but omits preferred_username, causing DefaultOAuth2UserService to throw before the ID
-            // token merge. All required claims are present in the Entra v2.0 ID token with profile scope.
+            // never contacted. Needed whenever user-name-attribute names a claim the IdP's UserInfo
+            // response omits — Entra ID's graph.microsoft.com/oidc/userinfo returns 200 without
+            // preferred_username (though it does return email), and DefaultOAuth2UserService throws
+            // on a missing name attribute before the ID token merge. Recommended for Entra either
+            // way: it drops the runtime dependency on Graph entirely.
             service.setRetrieveUserInfo(req -> false);
         }
         return service;
+    }
+
+    /**
+     * The configured user-name-attribute names a claim the IdP did not send. Logged with the claims that were present
+     * so the operator can pick a real one; returned as an authentication error so the browser lands on the login error
+     * page rather than a 500.
+     */
+    private static OAuth2AuthenticationException missingNameAttribute(
+            String nameAttributeKey, String claimSource, Map<String, Object> claims, Throwable cause) {
+        log.warn(
+                "OIDC login failed: configured user-name-attribute '{}' is not present in the {} claims {}."
+                        + " Only 'sub' is guaranteed by the OIDC spec — either request the claim from the IdP or"
+                        + " point auth.oidc.user-name-attribute at a claim it actually sends.",
+                nameAttributeKey,
+                claimSource,
+                claims.keySet());
+        return new OAuth2AuthenticationException(
+                new OAuth2Error("invalid_id_token"),
+                "Claim '" + nameAttributeKey + "' (auth.oidc.user-name-attribute) not present in the " + claimSource,
+                cause);
+    }
+
+    /**
+     * The name attribute is missing from the UserInfo endpoint's <em>response</em> — a different failure from a missing
+     * ID-token claim, because the two claim sets can legitimately disagree (Entra's userinfo omits
+     * {@code preferred_username} that its ID tokens carry). Spring builds the principal from the UserInfo response
+     * alone before merging, so a claim present in the ID token doesn't save the login. When the ID token does carry the
+     * claim, the message names the actual remedy: {@code skip-user-info: true}.
+     */
+    private static OAuth2AuthenticationException missingFromUserInfoResponse(
+            String nameAttributeKey, Map<String, Object> idTokenClaims, Throwable cause) {
+        boolean inIdToken = idTokenClaims.get(nameAttributeKey) != null;
+        log.warn(
+                "OIDC login failed: configured user-name-attribute '{}' is not present in the UserInfo endpoint"
+                        + " response. The ID token's claims are {} — {}",
+                nameAttributeKey,
+                idTokenClaims.keySet(),
+                inIdToken
+                        ? "'" + nameAttributeKey + "' IS among them, so set auth.oidc.skip-user-info: true to read"
+                                + " claims from the ID token instead of the UserInfo endpoint (required for IdPs"
+                                + " like Entra ID whose UserInfo response omits ID-token claims)."
+                        : "either request the claim from the IdP or point auth.oidc.user-name-attribute at a claim"
+                                + " it actually sends.");
+        return new OAuth2AuthenticationException(
+                new OAuth2Error("invalid_id_token"),
+                "Claim '" + nameAttributeKey + "' (auth.oidc.user-name-attribute) not present in the UserInfo"
+                        + " response" + (inIdToken ? "; the ID token carries it — set skip-user-info: true" : ""),
+                cause);
     }
 
     /**
@@ -679,24 +755,6 @@ public class SecurityConfig {
         } catch (Exception e) {
             throw new IllegalStateException("Failed to load RSA private key from: " + pemPath, e);
         }
-    }
-
-    /**
-     * Custom ID token decoder factory that skips issuer ({@code iss}) claim validation when {@code jwkSetUri} is
-     * explicitly configured. This is needed for providers whose reported issuer URL does not match the URL used to
-     * reach them — notably Entra ID, which issues tokens with {@code iss=https://sts.windows.net/{tenant}/} regardless
-     * of which discovery URL was used.
-     *
-     * <p>Spring Security's {@code OAuth2LoginConfigurer} automatically picks this factory up from the
-     * {@code ApplicationContext} and uses it when decoding OIDC ID tokens.
-     */
-    @Bean
-    public JwtDecoderFactory<ClientRegistration> idTokenDecoderFactory() {
-        OidcIdTokenDecoderFactory factory = new OidcIdTokenDecoderFactory();
-        if (!fogwallConfig.getAuth().getOidc().getJwkSetUri().isBlank()) {
-            factory.setJwtValidatorFactory(reg -> new DelegatingOAuth2TokenValidator<Jwt>(new JwtTimestampValidator()));
-        }
-        return factory;
     }
 
     // ── Shared helpers ───────────────────────────────────────────────────────────
