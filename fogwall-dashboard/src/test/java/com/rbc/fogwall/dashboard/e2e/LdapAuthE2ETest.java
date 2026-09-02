@@ -83,6 +83,16 @@ class LdapAuthE2ETest {
         // response for /). We just check that we did NOT get a 401 or stay on the login page.
         assertNotEquals(401, resp.statusCode(), "Should not be 401 after valid LDAP login");
         assertNotEquals(403, resp.statusCode(), "Should not be 403 after valid LDAP login");
+
+        // A failed form login is a 302 to the error page, which the checks above can't tell from success —
+        // prove the session is actually authenticated so a silent login failure fails here, not downstream.
+        var meResp = client.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(baseUrl + "/api/me"))
+                        .GET()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, meResp.statusCode(), "Login must establish an authenticated session; got " + meResp.body());
     }
 
     @Test

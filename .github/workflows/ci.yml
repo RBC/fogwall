@@ -265,4 +265,5 @@ jobs:
           path: |
             fogwall-server/build/reports/tests/e2eTest/
             fogwall-dashboard/build/reports/tests/e2eTest/
+            fogwall-dashboard/build/reports/e2e-app.log
           retention-days: 14
