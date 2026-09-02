@@ -14,7 +14,7 @@ buildscript {
 }
 
 plugins {
-    id 'com.diffplug.spotless' version '8.10.0' apply false
+    id 'com.diffplug.spotless' version '8.10.1' apply false
     id 'org.cyclonedx.bom' version '3.4.1'
     id 'com.github.node-gradle.node' version '7.1.0' apply false
     id 'com.github.jk1.dependency-license-report' version '3.1.4' apply false
@@ -44,7 +44,7 @@ ext {
     postgresVersion = '42.7.13'
     mysqlVersion = '26.7.0'
     mariadbVersion = '3.5.10'
-    mongoVersion = '5.10.0'
+    mongoVersion = '5.11.0'
 
     // Jackson
     jacksonBomVersion = '3.2.2'
