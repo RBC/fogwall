@@ -1,4 +1,4 @@
-import type { GroupPermissionRule, RepoPermission } from './types'
+import type { GroupPermissionRule, RepoPermission, ScmOAuthProviderInfo } from './types'
 
 /** Reads the XSRF-TOKEN cookie set by Spring Security's CookieCsrfTokenRepository. */
 function getCsrfToken(): string | null {
@@ -73,6 +73,9 @@ export async function fetchConfig(): Promise<{
   authProvider: string
   allowedOrigins: string[]
   bulkReview: boolean
+  scmOAuthProviders: ScmOAuthProviderInfo[]
+  scmOAuthLinkAvailable: boolean
+  scmIdentityMode: string
 }> {
   const res = await fetch('/api/runtime-config')
   if (!res.ok) throw new Error('Failed to fetch config')
@@ -173,6 +176,13 @@ export async function removeScmIdentity(provider: string, scmUsername: string) {
     { method: 'DELETE' },
   )
   if (!res.ok) await parseErrorResponse(res, 'Failed to remove SCM identity')
+}
+
+export async function unlinkScmOAuth(provider: string) {
+  const res = await apiFetch(`/api/scm-oauth/${encodeURIComponent(provider)}/unlink`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) await parseErrorResponse(res, 'Failed to unlink OAuth account')
 }
 
 export async function createUser(

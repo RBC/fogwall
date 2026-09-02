@@ -23,6 +23,7 @@ import lombok.Data;
  * content-patterns: → {@link ContentPatternSettings} (push-level: built-in PII/identifier bundle scanning, WARN-only)
  * attestations:    → List&lt;{@link AttestationQuestion}&gt; (global reviewer prompts)
  * rules:           → {@link RulesConfig}
+ * scm-oauth:       → {@link ScmOAuthSettings} (OAuth account linking + verified-identity enforcement mode, #40)
  * </pre>
  */
 @Data
@@ -37,6 +38,7 @@ public class FogwallConfig {
     private BinaryBlobSettings binaryBlob = new BinaryBlobSettings();
     private ContentPatternSettings contentPatterns = new ContentPatternSettings();
     private RulesConfig rules = new RulesConfig();
+    private ScmOAuthSettings scmOauth = new ScmOAuthSettings();
 
     /**
      * Global attestation questions shown to reviewers in the dashboard approval form. Applies to all providers —

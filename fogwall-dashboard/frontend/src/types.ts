@@ -107,6 +107,18 @@ export interface ScmIdentity {
   source?: string
 }
 
+/**
+ * A provider configured for SCM OAuth account linking, as served by /api/runtime-config. `type` picks the
+ * logo/brand to render (github, gitlab, forgejo); `hostname` is the actual host this instance talks to, since a
+ * github/gitlab-type provider isn't always github.com/gitlab.com (GHE data residency, self-managed GHES, self-hosted
+ * GitLab), and a forgejo-type provider covers everything from a generic self-hosted instance to codeberg.org.
+ */
+export interface ScmOAuthProviderInfo {
+  id: string
+  type: string
+  hostname: string
+}
+
 export interface CurrentUser {
   username: string
   emails: EmailEntry[]
@@ -135,6 +147,7 @@ export interface SshKeyEntry {
   label: string
   createdAt: string
   locked: boolean
+  source: string
 }
 
 export interface RepoPermission {

@@ -2,6 +2,7 @@ package com.rbc.fogwall.dashboard.e2e;
 
 import com.rbc.fogwall.config.FogwallConfig;
 import com.rbc.fogwall.config.JettyConfigurationBuilder;
+import com.rbc.fogwall.crypto.TokenCipherProvider;
 import com.rbc.fogwall.dashboard.SecurityConfig;
 import com.rbc.fogwall.dashboard.SpringWebConfig;
 import com.rbc.fogwall.db.PushStoreFactory;
@@ -17,6 +18,7 @@ import com.rbc.fogwall.user.UserEntry;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.ServletContextEvent;
 import jakarta.servlet.ServletContextListener;
+import java.nio.file.Path;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
@@ -82,6 +84,13 @@ class DashboardFixture implements AutoCloseable {
             bf.registerSingleton("repoRegistry", new InMemoryUrlRuleRegistry());
             bf.registerSingleton("fetchStore", new InMemoryFetchStore());
             bf.registerSingleton("repoPermissionService", new RepoPermissionService(new InMemoryRepoPermissionStore()));
+            bf.registerSingleton(
+                    "tokenCipherProvider",
+                    TokenCipherProvider.initialize(
+                            null,
+                            Path.of(
+                                    System.getProperty("java.io.tmpdir"),
+                                    "fogwall-test-scm-oauth-key-" + UUID.randomUUID())));
         });
 
         server = new Server();

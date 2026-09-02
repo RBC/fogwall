@@ -94,6 +94,34 @@ public class DatabaseMigrator {
                     "9",
                     "permission groups (mysql/mariadb)",
                     "db/migration-mysql/V9__permission_groups.sql",
+                    Vendor.MYSQL_ONLY),
+            new Migration("10", "scm oauth tokens", "db/migration/V10__scm_oauth_tokens.sql", Vendor.EXCEPT_MYSQL),
+            new Migration(
+                    "10",
+                    "scm oauth tokens (mysql/mariadb)",
+                    "db/migration-mysql/V10__scm_oauth_tokens.sql",
+                    Vendor.MYSQL_ONLY),
+            new Migration(
+                    "11",
+                    "ssh key locked flag and auth source",
+                    "db/migration/V11__ssh_key_locked.sql",
+                    Vendor.EXCEPT_MYSQL),
+            new Migration(
+                    "11",
+                    "ssh key locked flag and auth source (mysql/mariadb)",
+                    "db/migration-mysql/V11__ssh_key_locked.sql",
+                    Vendor.MYSQL_ONLY),
+            new Migration("12", "ssh key sources", "db/migration/V12__ssh_key_sources.sql", Vendor.EXCEPT_MYSQL),
+            new Migration(
+                    "12",
+                    "ssh key sources (mysql/mariadb)",
+                    "db/migration-mysql/V12__ssh_key_sources.sql",
+                    Vendor.MYSQL_ONLY),
+            new Migration("13", "email sources", "db/migration/V13__email_sources.sql", Vendor.EXCEPT_MYSQL),
+            new Migration(
+                    "13",
+                    "email sources (mysql/mariadb)",
+                    "db/migration-mysql/V13__email_sources.sql",
                     Vendor.MYSQL_ONLY));
 
     // ---------------------------------------------------------------------------

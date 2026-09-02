@@ -9,6 +9,7 @@ import com.rbc.fogwall.config.ContentPatternConfig;
 import com.rbc.fogwall.config.DiffScanConfig;
 import com.rbc.fogwall.config.GpgConfig;
 import com.rbc.fogwall.config.JettyConfigurationBuilder;
+import com.rbc.fogwall.config.ScmOAuthConfig;
 import com.rbc.fogwall.config.SecretScanConfig;
 import com.rbc.fogwall.db.FetchStore;
 import com.rbc.fogwall.db.PushStore;
@@ -81,6 +82,7 @@ public final class FogwallServletRegistrar {
         Supplier<DiffScanConfig> diffScanConfigSupplier = configHolder::getDiffScanConfig;
         Supplier<SecretScanConfig> secretScanConfigSupplier = configHolder::getSecretScanConfig;
         Supplier<BinaryBlobConfig> binaryBlobConfigSupplier = configHolder::getBinaryBlobConfig;
+        Supplier<ScmOAuthConfig> scmOAuthConfigSupplier = configHolder::getScmOAuthConfig;
         ContentPatternConfig contentPatternConfig = configBuilder.buildContentPatternConfig();
 
         // Seed config rules once — registry is the single source of truth for all rule evaluation
@@ -97,6 +99,7 @@ public final class FogwallServletRegistrar {
                         diffScanConfigSupplier,
                         secretScanConfigSupplier,
                         binaryBlobConfigSupplier,
+                        scmOAuthConfigSupplier,
                         contentPatternConfig,
                         fogwallContext.pushStore(),
                         fogwallContext.serviceUrl(),
@@ -176,6 +179,7 @@ public final class FogwallServletRegistrar {
         factory.setApprovalTimeout(Duration.ofSeconds(fogwallContext.approvalTimeoutSeconds()));
         factory.setCache(fogwallContext.storeForwardCache());
         factory.setSshScmIdentityEnricher(fogwallContext.sshScmIdentityEnricher());
+        factory.setScmOAuthConfigSupplier(configHolder::getScmOAuthConfig);
         return factory;
     }
 
@@ -187,6 +191,7 @@ public final class FogwallServletRegistrar {
             Supplier<DiffScanConfig> diffScanConfigSupplier,
             Supplier<SecretScanConfig> secretScanConfigSupplier,
             Supplier<BinaryBlobConfig> binaryBlobConfigSupplier,
+            Supplier<ScmOAuthConfig> scmOAuthConfigSupplier,
             ContentPatternConfig contentPatternConfig,
             PushStore pushStore,
             String serviceUrl,
@@ -221,6 +226,7 @@ public final class FogwallServletRegistrar {
         factory.setConnectTimeoutSeconds(connectTimeoutSeconds);
         factory.setApprovalTimeout(Duration.ofSeconds(approvalTimeoutSeconds));
         factory.setCache(cache);
+        factory.setScmOAuthConfigSupplier(scmOAuthConfigSupplier);
 
         var gitServlet = new GitServlet();
         gitServlet.setRepositoryResolver(resolver);

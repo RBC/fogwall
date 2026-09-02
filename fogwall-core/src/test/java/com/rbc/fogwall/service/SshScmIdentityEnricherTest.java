@@ -4,9 +4,11 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.rbc.fogwall.provider.FogwallProvider;
+import com.rbc.fogwall.provider.InMemoryProviderRegistry;
 import com.rbc.fogwall.provider.SshKeyFingerprintLookup;
 import com.rbc.fogwall.user.ScmIdentity;
 import com.rbc.fogwall.user.UserEntry;
+import java.net.URI;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
@@ -29,6 +31,8 @@ class SshScmIdentityEnricherTest {
         provider = mock(FingerprintProvider.class);
         when(provider.getName()).thenReturn("github");
         when(provider.getProviderId()).thenReturn("github");
+        when(provider.getType()).thenReturn("github");
+        when(provider.getUri()).thenReturn(URI.create("https://github.com"));
         persistentCache = mock(SshFingerprintCache.class);
         when(persistentCache.lookup(any(), any())).thenReturn(Set.of());
 
@@ -157,5 +161,62 @@ class SshScmIdentityEnricherTest {
         Optional<String> result = noDb.resolveScmLogin(aliceUser, provider, "SHA256:abc");
 
         assertEquals(Optional.of("alice-gh"), result);
+    }
+
+    // ── same-host provider matching (fogwall#531: HTTP/SSH still need separate provider entries) ──
+
+    @Test
+    void resolve_noRegistry_identityUnderDifferentProviderName_notMatched() {
+        // Reproduces the reported bug: identity linked under "github" (OAuth), push routed through "github-ssh" —
+        // without a registry, the enricher can only require an exact provider-name match.
+        FingerprintProvider githubSsh = mock(FingerprintProvider.class);
+        when(githubSsh.getName()).thenReturn("github-ssh");
+        when(githubSsh.getProviderId()).thenReturn("github-ssh");
+
+        Optional<String> result = enricher.resolveScmLogin(aliceUser, githubSsh, "SHA256:abc");
+
+        assertTrue(result.isEmpty());
+        verify(githubSsh, never()).fetchSshFingerprints(any());
+    }
+
+    @Test
+    void resolve_withRegistry_identityUnderSameHostDifferentProviderName_isMatched() {
+        FingerprintProvider github = mock(FingerprintProvider.class);
+        when(github.getName()).thenReturn("github");
+        when(github.getProviderId()).thenReturn("github");
+        when(github.getType()).thenReturn("github");
+        when(github.getUri()).thenReturn(URI.create("https://github.com"));
+
+        FingerprintProvider githubSsh = mock(FingerprintProvider.class);
+        when(githubSsh.getName()).thenReturn("github-ssh");
+        when(githubSsh.getProviderId()).thenReturn("github-ssh");
+        when(githubSsh.getType()).thenReturn("github");
+        when(githubSsh.getUri()).thenReturn(URI.create("ssh://github.com"));
+        when(githubSsh.fetchSshFingerprints("alice-gh")).thenReturn(Set.of("SHA256:abc"));
+
+        var registry = new InMemoryProviderRegistry(List.of(github, githubSsh));
+        var enricherWithRegistry = new SshScmIdentityEnricher(Duration.ofMinutes(10), persistentCache, registry);
+
+        // aliceUser's identity is linked under "github" (matches githubSsh by type+host), pushing via "github-ssh"
+        Optional<String> result = enricherWithRegistry.resolveScmLogin(aliceUser, githubSsh, "SHA256:abc");
+
+        assertEquals(Optional.of("alice-gh"), result);
+    }
+
+    @Test
+    void resolve_withRegistry_differentHost_notMatched() {
+        FingerprintProvider ghes = mock(FingerprintProvider.class);
+        when(ghes.getName()).thenReturn("github-ghe");
+        when(ghes.getProviderId()).thenReturn("github-ghe");
+        when(ghes.getType()).thenReturn("github");
+        when(ghes.getUri()).thenReturn(URI.create("https://my-tenant.ghe.com"));
+
+        var registry = new InMemoryProviderRegistry(List.of(provider, ghes));
+        var enricherWithRegistry = new SshScmIdentityEnricher(Duration.ofMinutes(10), persistentCache, registry);
+
+        Optional<String> result = enricherWithRegistry.resolveScmLogin(aliceUser, ghes, "SHA256:abc");
+
+        assertTrue(result.isEmpty());
+        verify(ghes, never()).fetchSshFingerprints(any());
     }
 }

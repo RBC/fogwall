@@ -69,6 +69,25 @@ class CompositeUserStoreTest {
     }
 
     @Test
+    void findByUsername_configUser_withSupplementalData_mergesEmailsAndScmIdentities() {
+        // A config-declared user (e.g. a break-glass "admin" account) links an OAuth account — its verified email
+        // and identity land in the mutable store under the same username. findByUsername must surface both, not just
+        // the config-only snapshot, or commit attribution / strict identity mode silently never see them (#40).
+        jdbcStore.upsertUser("alice"); // login-time provisioning, which happens before any real OAuth link attempt
+        jdbcStore.upsertLockedEmail("alice", "alice@oauth.com", "github");
+        jdbcStore.upsertVerifiedScmIdentity("alice", "gitlab", "alice-oauth");
+
+        var result = store.findByUsername("alice");
+
+        assertTrue(result.isPresent());
+        assertEquals("{noop}config-pw", result.get().getPasswordHash()); // config stays authoritative
+        assertTrue(result.get().getEmails().contains("alice@config.com"));
+        assertTrue(result.get().getEmails().contains("alice@oauth.com"));
+        assertEquals(2, result.get().getScmIdentities().size());
+        assertTrue(result.get().getScmIdentities().stream().anyMatch(ScmIdentity::isVerified));
+    }
+
+    @Test
     void findByEmail_configUser_found() {
         assertTrue(store.findByEmail("alice@config.com").isPresent());
     }
@@ -81,6 +100,18 @@ class CompositeUserStoreTest {
     }
 
     @Test
+    void findByEmail_configUser_matchViaConfigEmail_stillSeesSupplementalScmIdentity() {
+        jdbcStore.upsertUser("alice");
+        jdbcStore.upsertVerifiedScmIdentity("alice", "gitlab", "alice-oauth");
+
+        var result = store.findByEmail("alice@config.com");
+
+        assertTrue(result.isPresent());
+        assertTrue(result.get().getScmIdentities().stream()
+                .anyMatch(id -> "alice-oauth".equals(id.getUsername()) && id.isVerified()));
+    }
+
+    @Test
     void findByScmIdentity_configUser_found() {
         assertTrue(store.findByScmIdentity("github", "alice-config").isPresent());
     }
@@ -90,6 +121,20 @@ class CompositeUserStoreTest {
         jdbcStore.createUser("bob", "{noop}pw", "USER");
         jdbcStore.addScmIdentity("bob", "github", "bob-gh");
         assertTrue(store.findByScmIdentity("github", "bob-gh").isPresent());
+    }
+
+    @Test
+    void findByScmIdentity_configUser_matchViaConfigIdentity_stillSeesSupplementalEmail() {
+        // Reproduces the exact reported bug: a push resolves the pusher via their config-declared SCM identity, but
+        // the commit-attribution check reads .getEmails() off that same resolved UserEntry — it must include emails
+        // added later via OAuth linking, not just the config-only snapshot.
+        jdbcStore.upsertUser("alice");
+        jdbcStore.upsertLockedEmail("alice", "alice@oauth.com", "github");
+
+        var result = store.findByScmIdentity("github", "alice-config");
+
+        assertTrue(result.isPresent());
+        assertTrue(result.get().getEmails().contains("alice@oauth.com"));
     }
 
     @Test

@@ -152,10 +152,16 @@ server:
   # divided by concurrent pushes. See "Sizing memory for pushes" in the Admin Guide.
   max-push-bytes: 268435456 # 256MiB
 
-  # Base URL of the dashboard, used in links sent to clients via sideband messages.
-  # Should include the /dashboard path prefix.
-  # Defaults to http://localhost:<port>/dashboard if not set.
-  # service-url: https://fogwall.internal.example.com/dashboard
+  # Base URL fogwall is externally reachable at — the bare host, WITHOUT a /dashboard suffix (fogwall appends
+  # /dashboard, /api, etc. itself where needed). Used in links sent to clients via sideband messages, and required
+  # for SCM OAuth account linking (#40) to build a correct redirect_uri — OAuth linking is disabled with a clear
+  # error if this is unset. No default — must be set explicitly.
+  #
+  # BREAKING CHANGE in v1.4.0: prior releases expected this to already include any path prefix your reverse proxy
+  # adds (e.g. https://fogwall.internal.example.com/dashboard), with fogwall concatenating routes directly onto it.
+  # As of v1.4.0 it must be the bare origin instead — drop a trailing /dashboard (or other prefix) from your existing
+  # value when upgrading, or push-record/profile links in sideband messages will point at the wrong path.
+  # service-url: https://fogwall.internal.example.com
 
   # When false (default), any authenticated user may review any push they did not push
   # themselves. Set to true to require an explicit REVIEW permission entry for the repo.
@@ -813,6 +819,94 @@ accepts the internal username, not an email address.
 > [!TIP]
 > **M&A / private server use case:** This same mechanism works for self-hosted Bitbucket Data Center instances. Set `uri` to your internal Bitbucket URL and the proxy will route and rewrite credentials accordingly, making it straightforward to gate pushes to acquired-company repositories during an integration period.
 <!-- prettier-ignore-end -->
+
+## SCM OAuth
+
+_Available since v1.4.0._
+
+Lets a proxy user link their account to an upstream SCM identity (GitHub, GitLab, or a Forgejo/Gitea/Codeberg instance)
+via OAuth from their profile page, instead of typing their SCM username into a free-text field. A successful link sets
+`verified = true` on that identity, which `scm-oauth.identity-mode: strict` can then require for push authorization —
+closing the gap where a manually entered SCM username is trusted with no proof the pusher actually controls it. Linking
+also imports the SCM provider's own verified emails and registered SSH public keys, so a developer doesn't have to
+re-enter data the provider already has confirmed.
+
+```yaml
+scm-oauth:
+  # permissive (default): any linked SCM identity is usable for push authorization, verified or not — today's
+  # behaviour, unchanged.
+  # strict: only OAuth-verified identities count, on both HTTP and SSH push paths.
+  identity-mode: permissive
+
+  # Path to a file holding a base64-encoded 32-byte AES-256-GCM key, used to encrypt linked OAuth tokens at rest.
+  # If unset, a key is auto-generated under ./.data/ for local development only — a loud warning is logged on every
+  # startup when this happens. Production deployments MUST set this to a durable, backed-up location (see
+  # ADMIN_GUIDE.md's production checklist); losing an auto-generated key just means every linked user has to
+  # re-link — push authorization itself is never affected by a token-encryption problem.
+  token-encryption-key-path: /run/secrets/fogwall-scm-oauth-key
+
+# OAuth app registration is a property of the provider instance it belongs to, nested under that provider's own
+# providers.<name>.oauth block below — not a separate map keyed by the same name. An operator running two separate
+# GitHub OAuth apps at once (one for github.com/GHEC, a second for a GHEC-with-data-residency *.ghe.com tenant, or a
+# self-managed GHES host) already needs two separate providers: entries for routing; each just carries its own
+# oauth: block alongside its uri. The OAuth authorize/token/user-API host is always derived from that same provider
+# instance's own `uri` — github.com/GHEC, *.ghe.com, and self-managed GHES are each detected automatically, so
+# there's nothing to set for that under oauth: specifically. GHES's `api-uri` (the general provider setting, not
+# scm-oauth-specific) is also auto-derived and only needs setting explicitly when the API isn't reachable on the
+# standard host/port (e.g. local dev).
+providers:
+  github:
+    enabled: true # github.com/GHEC
+    oauth:
+      enabled: true
+      client-id: Iv1.abc123
+      client-secret-path: /run/secrets/fogwall-github-oauth-secret
+
+  github-ghe:
+    enabled: true
+    type: github
+    uri: https://my-tenant.ghe.com
+    oauth:
+      enabled: true
+      client-id: Iv1.def456
+      client-secret-path: /run/secrets/fogwall-github-ghe-oauth-secret
+
+  gitlab:
+    enabled: true # gitlab.com
+    oauth:
+      enabled: true
+      client-id: abc123
+      client-secret-path: /run/secrets/fogwall-gitlab-oauth-secret
+
+  forgejo:
+    enabled: true
+    type: forgejo
+    uri: https://forgejo.example.internal # self-hosted
+    oauth:
+      enabled: true
+      client-id: abc123
+      client-secret-path: /run/secrets/fogwall-forgejo-oauth-secret
+```
+
+### SCM OAuth properties
+
+| Property                                    | Type    | Default      | Description                                                                                                      |
+| ------------------------------------------- | ------- | ------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `identity-mode`                             | string  | `permissive` | `permissive` or `strict` — see above.                                                                            |
+| `token-encryption-key-path`                 | string  | _(none)_     | Path to the base64-encoded 32-byte AES-256-GCM key file. Auto-generated under `./.data/` for local dev if unset. |
+| `providers.<name>.oauth.enabled`            | boolean | `false`      | Whether "Link via OAuth" is offered for this provider.                                                           |
+| `providers.<name>.oauth.client-id`          | string  | `""`         | OAuth app/client ID.                                                                                             |
+| `providers.<name>.oauth.client-secret-path` | string  | `""`         | Path to a file holding the OAuth app/client secret.                                                              |
+
+**Registering a GitHub App:** account permissions needed are exactly **Email addresses (read-only)** and **Git SSH keys
+(read-only)** — no others, and no private key (a GitHub App's private key is for app/installation-level auth, which this
+user-to-server linking flow never uses). Callback URL:
+`https://<server.service-url>/api/scm-oauth/<provider-name>/callback`, where `<provider-name>` is the top-level
+`providers:` key (e.g. `github`), not the provider type.
+
+**Registering a Forgejo/Gitea OAuth application:** self-service OAuth2 application registration under the instance's own
+Settings → Applications page (works the same way on Codeberg, self-hosted Forgejo/Gitea, and org-owned applications),
+requesting the `read:user` scope. Callback URL is the same shape as above.
 
 ## SSH transport
 

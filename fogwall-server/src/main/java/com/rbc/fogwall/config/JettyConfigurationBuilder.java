@@ -171,7 +171,8 @@ public class JettyConfigurationBuilder {
                     buildDiffScanConfig(),
                     buildSecretScanConfig(),
                     buildBinaryBlobConfig(),
-                    buildAttestations(config));
+                    buildAttestations(config),
+                    buildScmOAuthConfig());
         }
         return cachedConfigHolder;
     }
@@ -368,6 +369,16 @@ public class JettyConfigurationBuilder {
         return commitConfig;
     }
 
+    /** Builds a {@link ScmOAuthConfig} from the {@code scm-oauth:} YAML section. */
+    public ScmOAuthConfig buildScmOAuthConfig() {
+        ScmOAuthSettings settings = config.getScmOauth();
+        ScmOAuthConfig scmOAuthConfig = ScmOAuthConfig.builder()
+                .identityMode(ScmOAuthConfig.IdentityMode.fromString(settings.getIdentityMode()))
+                .build();
+        log.info("Loaded SCM OAuth config: identityMode={}", scmOAuthConfig.getIdentityMode());
+        return scmOAuthConfig;
+    }
+
     private CommitConfig.AuthorConfig buildAuthorConfig(CommitSettings.EmailSettings email) {
         return CommitConfig.AuthorConfig.builder()
                 .email(buildEmailConfig(email))
@@ -518,7 +529,8 @@ public class JettyConfigurationBuilder {
                 proxyCache,
                 buildUpstreamTls(),
                 buildProviderRegistry(),
-                new SshScmIdentityEnricher(SshScmIdentityEnricher.DEFAULT_TTL, buildSshFingerprintCache()));
+                new SshScmIdentityEnricher(
+                        SshScmIdentityEnricher.DEFAULT_TTL, buildSshFingerprintCache(), buildProviderRegistry()));
     }
 
     /**

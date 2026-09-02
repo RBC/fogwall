@@ -1,4 +1,9 @@
 server:
+  # Externally-reachable base URL fogwall is reachable at — the bare host, WITHOUT a /dashboard suffix
+  # (fogwall appends /dashboard, /api, etc. itself where needed). Used to build things like "link your
+  # identity" hints and OAuth redirect_uris. No default is baked in for real deployments (it must match how
+  # operators actually expose fogwall), so local dev needs it set explicitly too.
+  service-url: http://localhost:8080
   ssh:
     enabled: true
     # port: 2222

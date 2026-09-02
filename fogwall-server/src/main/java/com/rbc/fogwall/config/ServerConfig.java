@@ -97,9 +97,11 @@ public class ServerConfig {
     private boolean requireReviewPermission = false;
 
     /**
-     * Base URL of the dashboard, embedded in sideband messages sent to git clients when a push is blocked or queued for
-     * review (e.g. {@code https://fogwall.example.com/dashboard}). Defaults to
-     * {@code http://localhost:<port>/dashboard} when not set.
+     * The bare externally-reachable base URL fogwall runs at (e.g. {@code https://fogwall.example.com}) — no
+     * {@code /dashboard} suffix; fogwall appends that itself, along with {@code /api} and other routes, when building
+     * links embedded in sideband messages sent to git clients (push blocked/queued for review) and OAuth account-link
+     * redirect_uris (#40). No default — {@code null} when unset, which disables anything that depends on it (OAuth
+     * linking) or simply omits the link (sideband messages).
      *
      * <p>Set via YAML ({@code server.service-url:}) or env var ({@code fogwall_SERVER_SERVICE_URL}).
      */

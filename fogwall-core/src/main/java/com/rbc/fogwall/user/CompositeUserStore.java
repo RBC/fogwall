@@ -35,19 +35,30 @@ public class CompositeUserStore implements UserStore {
     @Override
     public Optional<UserEntry> findByUsername(String username) {
         Optional<UserEntry> fromConfig = configStore.findByUsername(username);
-        return fromConfig.isPresent() ? fromConfig : mutableStore.findByUsername(username);
+        if (fromConfig.isEmpty()) {
+            return mutableStore.findByUsername(username);
+        }
+        return Optional.of(mergeMutableFields(fromConfig.get(), mutableStore.findByUsername(username)));
     }
 
     @Override
     public Optional<UserEntry> findByEmail(String email) {
         Optional<UserEntry> fromConfig = configStore.findByEmail(email);
-        return fromConfig.isPresent() ? fromConfig : mutableStore.findByEmail(email);
+        if (fromConfig.isPresent()) {
+            UserEntry cfg = fromConfig.get();
+            return Optional.of(mergeMutableFields(cfg, mutableStore.findByUsername(cfg.getUsername())));
+        }
+        return mutableStore.findByEmail(email).map(this::mergeConfigFields);
     }
 
     @Override
     public Optional<UserEntry> findByScmIdentity(String provider, String scmUsername) {
         Optional<UserEntry> fromConfig = configStore.findByScmIdentity(provider, scmUsername);
-        return fromConfig.isPresent() ? fromConfig : mutableStore.findByScmIdentity(provider, scmUsername);
+        if (fromConfig.isPresent()) {
+            UserEntry cfg = fromConfig.get();
+            return Optional.of(mergeMutableFields(cfg, mutableStore.findByUsername(cfg.getUsername())));
+        }
+        return mutableStore.findByScmIdentity(provider, scmUsername).map(this::mergeConfigFields);
     }
 
     @Override
@@ -142,6 +153,11 @@ public class CompositeUserStore implements UserStore {
     }
 
     @Override
+    public void removeEmailsByAuthSource(String username, String authSource) {
+        mutableStore.removeEmailsByAuthSource(username, authSource);
+    }
+
+    @Override
     public void addScmIdentity(String username, String provider, String scmUsername) {
         var configUser = configStore.findByUsername(username);
         if (configUser.isPresent()) {
@@ -163,6 +179,16 @@ public class CompositeUserStore implements UserStore {
             if (inConfig) throw new LockedByConfigException(username);
         });
         mutableStore.removeScmIdentity(username, provider, scmUsername);
+    }
+
+    @Override
+    public void upsertVerifiedScmIdentity(String username, String provider, String scmUsername) {
+        mutableStore.upsertVerifiedScmIdentity(username, provider, scmUsername);
+    }
+
+    @Override
+    public void removeVerifiedScmIdentity(String username, String provider) {
+        mutableStore.removeVerifiedScmIdentity(username, provider);
     }
 
     @Override
@@ -201,7 +227,8 @@ public class CompositeUserStore implements UserStore {
     public Optional<UserEntry> findBySshFingerprint(String fingerprint) {
         Optional<UserEntry> fromConfig = configStore.findBySshFingerprint(fingerprint);
         if (fromConfig.isPresent()) {
-            return fromConfig;
+            UserEntry cfg = fromConfig.get();
+            return Optional.of(mergeMutableFields(cfg, mutableStore.findByUsername(cfg.getUsername())));
         }
         return mutableStore.findBySshFingerprint(fingerprint).map(this::mergeConfigFields);
     }
@@ -254,8 +281,55 @@ public class CompositeUserStore implements UserStore {
                 .build();
     }
 
+    /**
+     * Merges a config-defined user's additive fields (emails/scmIdentities/sshKeys) with the same username's
+     * supplemental data from the mutable store — the mirror of {@link #mergeConfigFields}, for lookups that resolved
+     * via the config store first. Config's own username/passwordHash/roles stay authoritative, per this class's
+     * invariant that YAML changes take effect on restart.
+     *
+     * <p>Without this, any lookup that finds a config-defined user (by username, email, SCM identity, or SSH
+     * fingerprint) returns a config-only snapshot that never reflects supplemental data written to the mutable store
+     * under the same username (e.g. #40's OAuth-imported emails/SSH keys, or a verified SCM identity) — silently
+     * breaking commit attribution checks and strict identity mode for any config-declared user (such as a break-glass
+     * {@code admin} account) who links an OAuth account.
+     */
+    private static UserEntry mergeMutableFields(UserEntry cfg, Optional<UserEntry> fromMutable) {
+        if (fromMutable.isEmpty()) {
+            return cfg;
+        }
+        UserEntry mutable = fromMutable.get();
+
+        List<String> mergedEmails = new ArrayList<>(cfg.getEmails());
+        mutable.getEmails().stream().filter(e -> !cfg.getEmails().contains(e)).forEach(mergedEmails::add);
+
+        Set<String> configScmKeys = cfg.getScmIdentities().stream()
+                .map(id -> id.getProvider() + ":" + id.getUsername())
+                .collect(Collectors.toSet());
+        List<ScmIdentity> mergedScmIdentities = new ArrayList<>(cfg.getScmIdentities());
+        mutable.getScmIdentities().stream()
+                .filter(id -> !configScmKeys.contains(id.getProvider() + ":" + id.getUsername()))
+                .forEach(mergedScmIdentities::add);
+
+        Set<String> configFingerprints =
+                cfg.getSshKeys().stream().map(SshKeyEntry::getFingerprint).collect(Collectors.toSet());
+        List<SshKeyEntry> mergedSshKeys = new ArrayList<>(cfg.getSshKeys());
+        mutable.getSshKeys().stream()
+                .filter(k -> !configFingerprints.contains(k.getFingerprint()))
+                .forEach(mergedSshKeys::add);
+
+        return UserEntry.builder()
+                .username(cfg.getUsername())
+                .passwordHash(cfg.getPasswordHash())
+                .emails(mergedEmails)
+                .scmIdentities(mergedScmIdentities)
+                .sshKeys(mergedSshKeys)
+                .roles(cfg.getRoles())
+                .build();
+    }
+
     @Override
-    public SshKeyEntry addSshKey(String username, String fingerprint, String publicKey, String label) {
+    public SshKeyEntry addSshKey(
+            String username, String fingerprint, String publicKey, String label, boolean locked, String authSource) {
         // Config-declared keys cannot be re-added via the dashboard
         configStore.findByUsername(username).ifPresent(u -> {
             boolean inConfig =
@@ -265,7 +339,12 @@ public class CompositeUserStore implements UserStore {
         if (configStore.findByUsername(username).isPresent()) {
             mutableStore.upsertUser(username); // ensure DB row exists for config users
         }
-        return mutableStore.addSshKey(username, fingerprint, publicKey, label);
+        return mutableStore.addSshKey(username, fingerprint, publicKey, label, locked, authSource);
+    }
+
+    @Override
+    public void removeSshKeysByAuthSource(String username, String authSource) {
+        mutableStore.removeSshKeysByAuthSource(username, authSource);
     }
 
     @Override

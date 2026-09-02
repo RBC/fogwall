@@ -6,9 +6,12 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.rbc.fogwall.config.ScmOAuthConfig;
+import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.permission.GroupPermissionStore;
 import com.rbc.fogwall.permission.PermissionGroup;
 import com.rbc.fogwall.permission.RepoPermission;
@@ -48,6 +51,9 @@ class ProfileControllerTest {
     @Mock
     RepoPermissionService permissionService;
 
+    @Mock
+    ConfigHolder configHolder;
+
     @BeforeEach
     void setupSecurityContext() {
         Authentication auth = mock(Authentication.class);
@@ -55,6 +61,8 @@ class ProfileControllerTest {
         SecurityContext ctx = mock(SecurityContext.class);
         lenient().when(ctx.getAuthentication()).thenReturn(auth);
         SecurityContextHolder.setContext(ctx);
+
+        lenient().when(configHolder.getScmOAuthConfig()).thenReturn(ScmOAuthConfig.defaultConfig());
     }
 
     @AfterEach
@@ -148,6 +156,29 @@ class ProfileControllerTest {
 
         assertEquals(HttpStatus.OK, resp.getStatusCode());
         verify(userStore).addScmIdentity("alice", "github", "alice-gh");
+    }
+
+    @Test
+    void addScmIdentity_strictMode_returns403_andNeverCallsStore() {
+        when(configHolder.getScmOAuthConfig())
+                .thenReturn(ScmOAuthConfig.builder()
+                        .identityMode(ScmOAuthConfig.IdentityMode.STRICT)
+                        .build());
+
+        var resp = controller.addScmIdentity(Map.of("provider", "github", "username", "alice-gh"));
+
+        assertEquals(HttpStatus.FORBIDDEN, resp.getStatusCode());
+        verify(userStore, never()).addScmIdentity(any(), any(), any());
+    }
+
+    @Test
+    void addEmail_strictMode_stillAllowed() {
+        // addEmail never consults ScmOAuthConfig at all — strict identity mode governs push-time SCM identity
+        // resolution, not commit-author-email verification, so email claims are unaffected regardless of mode.
+        var resp = controller.addEmail(Map.of("email", "new@example.com"));
+
+        assertEquals(HttpStatus.OK, resp.getStatusCode());
+        verify(userStore).addEmail("alice", "new@example.com");
     }
 
     // ── DELETE /api/me/identities/{provider}/{scmUsername} ──────────────────────

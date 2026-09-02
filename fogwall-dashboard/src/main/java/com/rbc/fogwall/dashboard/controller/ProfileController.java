@@ -1,15 +1,19 @@
 package com.rbc.fogwall.dashboard.controller;
 
+import com.rbc.fogwall.config.ScmOAuthConfig;
+import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.ssh.SshKeyUtils;
 import com.rbc.fogwall.user.EmailConflictException;
 import com.rbc.fogwall.user.LockedByConfigException;
 import com.rbc.fogwall.user.LockedEmailException;
+import com.rbc.fogwall.user.LockedSshKeyException;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
 import com.rbc.fogwall.user.ScmIdentityConflictException;
 import com.rbc.fogwall.user.SshKeyConflictException;
 import com.rbc.fogwall.user.SshKeyEntry;
 import com.rbc.fogwall.user.UserStore;
+import com.rbc.fogwall.user.VerifiedScmIdentityException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
@@ -47,11 +51,21 @@ public class ProfileController {
                     HttpStatus.FORBIDDEN)
             .body(Map.of("error", "This profile is defined in configuration and cannot be modified at runtime"));
 
+    private static final ResponseEntity<Map<String, String>> STRICT_MODE_MANUAL_ENTRY_DISABLED = ResponseEntity.status(
+                    HttpStatus.FORBIDDEN)
+            .body(Map.of(
+                    "error",
+                    "This deployment requires an OAuth-verified SCM identity — manually entering one is disabled."
+                            + " Use \"Link via OAuth\" instead."));
+
     @Autowired
     private ReadOnlyUserStore userStore;
 
     @Autowired
     private RepoPermissionService permissionService;
+
+    @Autowired
+    private ConfigHolder configHolder;
 
     // ---- email claims ----
 
@@ -93,10 +107,21 @@ public class ProfileController {
 
     // ---- SCM identity claims ----
 
+    /**
+     * In {@code scm-oauth.identity-mode: strict}, a manually-entered identity would never actually be usable for push
+     * authorization — {@code CheckUserPushPermissionHook} only honors {@code verified} identities in that mode — so
+     * this is disabled server-side (not just hidden in the dashboard) to avoid the confusing dead state of an identity
+     * that appears added but can never gate a push. This is deliberately narrower than blocking email claims too:
+     * strict identity mode governs which SCM login a push is attributed to, not commit-author-email verification
+     * ({@code commit.attribution-policy}), an independent control — see docs/CONFIGURATION.md#scm-oauth.
+     */
     @Operation(operationId = "addScmIdentity", summary = "Add an SCM identity to the current user's profile")
     @PostMapping("/identities")
     public ResponseEntity<?> addScmIdentity(@RequestBody Map<String, String> body) {
         if (!(userStore instanceof UserStore mutable)) return NOT_MUTABLE;
+        if (configHolder.getScmOAuthConfig().getIdentityMode() == ScmOAuthConfig.IdentityMode.STRICT) {
+            return STRICT_MODE_MANUAL_ENTRY_DISABLED;
+        }
         String provider = body.get("provider");
         String scmUsername = body.get("username");
         if (provider == null || provider.isBlank() || scmUsername == null || scmUsername.isBlank()) {
@@ -125,6 +150,12 @@ public class ProfileController {
             mutable.removeScmIdentity(currentUsername(), provider, scmUsername);
         } catch (LockedByConfigException e) {
             return LOCKED_BY_CONFIG;
+        } catch (VerifiedScmIdentityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of(
+                            "error",
+                            "Cannot remove an OAuth-verified SCM identity here — unlink it via /api/scm-oauth/"
+                                    + provider + "/unlink instead"));
         }
         return ResponseEntity.noContent().build();
     }
@@ -142,7 +173,9 @@ public class ProfileController {
                         "fingerprint", k.getFingerprint(),
                         "publicKey", k.getPublicKey(),
                         "label", k.getLabel() != null ? k.getLabel() : "",
-                        "createdAt", k.getCreatedAt().toString()))
+                        "createdAt", k.getCreatedAt().toString(),
+                        "locked", k.isLocked(),
+                        "source", k.getAuthSource() != null ? k.getAuthSource() : "config"))
                 .toList());
     }
 
@@ -170,7 +203,9 @@ public class ProfileController {
                     "fingerprint", entry.getFingerprint(),
                     "publicKey", entry.getPublicKey(),
                     "label", entry.getLabel() != null ? entry.getLabel() : "",
-                    "createdAt", entry.getCreatedAt().toString()));
+                    "createdAt", entry.getCreatedAt().toString(),
+                    "locked", entry.isLocked(),
+                    "source", entry.getAuthSource() != null ? entry.getAuthSource() : "config"));
         } catch (SshKeyConflictException e) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("error", "SSH key is already registered to another user"));
@@ -185,6 +220,9 @@ public class ProfileController {
             mutable.removeSshKey(currentUsername(), id);
         } catch (LockedByConfigException e) {
             return LOCKED_BY_CONFIG;
+        } catch (LockedSshKeyException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Cannot remove an SSH key imported from a verified identity provider"));
         }
         return ResponseEntity.noContent().build();
     }

@@ -87,7 +87,8 @@ public class CheckUserPushPermissionFilter extends AbstractFogwallFilter {
                     : "SCM";
             String serviceUrl = (String) request.getAttribute(SERVICE_URL_ATTR);
             String profileHint = serviceUrl != null
-                    ? "Link your " + providerHostName + " identity at:\n  " + sym(LINK) + "  " + serviceUrl + "/profile"
+                    ? "Link your " + providerHostName + " identity at:\n  " + sym(LINK) + "  " + serviceUrl
+                            + "/dashboard/profile"
                     : "Ask an administrator to link your " + providerHostName + " identity to your proxy account.";
             String title = sym(NO_ENTRY) + "  Push Blocked - Identity Not Linked";
             String message = sym(CROSS_MARK) + "  Your " + providerHostName
