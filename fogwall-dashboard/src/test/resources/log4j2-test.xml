@@ -4,15 +4,24 @@
         <Console name="CONSOLE" target="SYSTEM_OUT">
             <PatternLayout pattern="%d{HH:mm:ss.SSS} %-5level %logger{50} - %msg%n"/>
         </Console>
+        <!-- Console output from the in-process dashboard never reaches CI logs or the Gradle HTML
+             report, so failures in CI were undiagnosable from the server side. This file is
+             uploaded as part of the e2e-test-reports artifact. -->
+        <File name="FILE" fileName="build/reports/e2e-app.log" append="false">
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} %-5level %logger{50} - %msg%n"/>
+        </File>
     </Appenders>
     <Loggers>
         <Logger name="org.springframework.security" level="DEBUG"/>
         <Logger name="org.springframework.security.oauth2" level="DEBUG"/>
         <Logger name="org.springframework.security.web" level="DEBUG"/>
+        <Logger name="org.springframework.security.ldap" level="TRACE"/>
+        <Logger name="org.springframework.ldap" level="DEBUG"/>
         <Logger name="com.rbc.fogwall" level="DEBUG"/>
 
         <Root level="WARN">
             <AppenderRef ref="CONSOLE"/>
+            <AppenderRef ref="FILE"/>
         </Root>
     </Loggers>
 </Configuration>

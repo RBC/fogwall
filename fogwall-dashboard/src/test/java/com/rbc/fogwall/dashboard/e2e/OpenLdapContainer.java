@@ -2,6 +2,7 @@ package com.rbc.fogwall.dashboard.e2e;
 
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
+import org.testcontainers.containers.wait.strategy.WaitAllStrategy;
 import org.testcontainers.images.builder.Transferable;
 
 /**
@@ -77,7 +78,16 @@ class OpenLdapContainer extends GenericContainer<OpenLdapContainer> {
         withEnv("LDAP_ADMIN_PASSWORD", ADMIN_PASSWORD);
         withEnv("LDAP_TLS", "false");
         withExposedPorts(LDAP_PORT);
-        waitingFor(Wait.forListeningPort());
+        // The image's init starts slapd TWICE: a silent bootstrap instance for the config phase,
+        // which it then kills, and the real one, which is the only one that logs "slapd starting".
+        // Waiting for the listening port alone matches the bootstrap instance, so a client that
+        // connects right after startup can hit the kill window between the two and die with
+        // "LDAP connection has been closed" mid-search — the cause of the intermittent login
+        // failures in the dashboard e2e suite. Wait for the final instance's log line, then for
+        // the port it serves.
+        waitingFor(new WaitAllStrategy()
+                .withStrategy(Wait.forLogMessage(".*slapd starting.*", 1))
+                .withStrategy(Wait.forListeningPort()));
     }
 
     @Override

@@ -63,43 +63,24 @@ class LdapRoleMappingE2ETest {
     @Test
     @Order(1)
     void loginSucceeds() throws Exception {
-        // Retried because the first login after several test classes can hit a stale pooled LDAP
-        // connection: each class runs its own container on an ephemeral host port, stopped containers
-        // free their ports for reuse, and the JVM-global JNDI pool can hand back a socket to a dead
-        // predecessor ("java.io.IOException: LDAP connection has been closed" after a successful
-        // bind). The pool discards the dead connection on failure, so one retry gets a fresh socket.
-        // A test-environment artifact, not a product concern — production LDAP servers do not churn
-        // across reused ports. The success criterion is a real one (authenticated /api/me), stronger
-        // than the earlier not-401 check, so genuine login breakage still fails after the retries.
-        int status = -1;
+        // No retries: the "LDAP connection has been closed" failures this test once retried around
+        // were the openldap container's silent slapd restart during startup, fixed at the source by
+        // OpenLdapContainer's wait strategy. A login failure here is a real finding.
         String formBody = "username=" + OpenLdapContainer.TEST_USER + "&password=" + OpenLdapContainer.TEST_PASSWORD;
-        for (int attempt = 1; attempt <= 3; attempt++) {
-            var cookieManager = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
-            var freshClient = HttpClient.newBuilder()
-                    .cookieHandler(cookieManager)
-                    .followRedirects(HttpClient.Redirect.NORMAL)
-                    .build();
-            freshClient.send(
-                    HttpRequest.newBuilder()
-                            .uri(URI.create(baseUrl + "/login"))
-                            .header("Content-Type", "application/x-www-form-urlencoded")
-                            .POST(HttpRequest.BodyPublishers.ofString(formBody, StandardCharsets.UTF_8))
-                            .build(),
-                    HttpResponse.BodyHandlers.ofString());
-            var meResp = freshClient.send(
-                    HttpRequest.newBuilder()
-                            .uri(URI.create(baseUrl + "/api/me"))
-                            .GET()
-                            .build(),
-                    HttpResponse.BodyHandlers.ofString());
-            status = meResp.statusCode();
-            if (status == 200) {
-                client = freshClient; // later tests reuse the authenticated session
-                return;
-            }
-            Thread.sleep(500);
-        }
-        assertEquals(200, status, "Login did not produce an authenticated session after 3 attempts");
+        client.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(baseUrl + "/login"))
+                        .header("Content-Type", "application/x-www-form-urlencoded")
+                        .POST(HttpRequest.BodyPublishers.ofString(formBody, StandardCharsets.UTF_8))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        var meResp = client.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(baseUrl + "/api/me"))
+                        .GET()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, meResp.statusCode(), "Login must establish an authenticated session; got " + meResp.body());
     }
 
     @Test
