@@ -31,6 +31,7 @@ public class FogwallConfig {
 
     private ServerConfig server = new ServerConfig();
     private DatabaseConfig database = new DatabaseConfig();
+    private CacheConfig cache = new CacheConfig();
     private Map<String, ProviderConfig> providers = new LinkedHashMap<>();
     private CommitSettings commit = new CommitSettings();
     private DiffScanSettings diffScan = new DiffScanSettings();

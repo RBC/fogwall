@@ -510,10 +510,22 @@ public class JettyConfigurationBuilder {
         FetchStore fs = buildFetchStore();
         UserStore us = buildUserStore();
         UrlRuleRegistry rr = buildUrlRuleRegistry();
-        var storeForwardCache = new LocalRepositoryCache(Files.createTempDirectory("fogwall-sf-"), 0, true);
-        log.info("Initialized store-and-forward LocalRepositoryCache (full clone)");
-        var proxyCache = new LocalRepositoryCache();
-        log.info("Initialized proxy LocalRepositoryCache (shallow clone)");
+        // Mirror clone depth is configurable per mode (#476). Store-and-forward defaults to full history, transparent
+        // proxy to a shallow clone; shallow-since (a time boundary) takes precedence over clone-depth when both are
+        // set.
+        var cacheConfig = config.getCache();
+        var serverCache = cacheConfig.getServer();
+        var storeForwardCache = new LocalRepositoryCache(
+                Files.createTempDirectory("fogwall-sf-"),
+                serverCache.resolveCloneDepth(CacheConfig.DEFAULT_SERVER_CLONE_DEPTH),
+                true,
+                serverCache.resolveShallowSince());
+        var proxyCacheConfig = cacheConfig.getProxy();
+        var proxyCache = new LocalRepositoryCache(
+                Files.createTempDirectory("fogwall-cache-"),
+                proxyCacheConfig.resolveCloneDepth(CacheConfig.DEFAULT_PROXY_CLONE_DEPTH),
+                true,
+                proxyCacheConfig.resolveShallowSince());
         return new FogwallContext(
                 ps,
                 fs,
