@@ -1,33 +1,33 @@
 # JGit infrastructure
 
-How fogwall uses [Eclipse JGit](https://github.com/eclipse-jgit/jgit) to implement the store-and-forward proxy mode and
-to support commit inspection in the transparent proxy mode.
+How fogwall uses [Eclipse JGit](https://github.com/eclipse-jgit/jgit) to implement the server mode proxy mode and to
+support commit inspection in the transparent proxy mode.
 
 For low-level details on git wire-protocol behaviour and how individual hooks/filters handle edge cases (tags, new
 branches, force pushes, deletions, etc.), see [GIT_INTERNALS.md](GIT_INTERNALS.md).
 
 ---
 
-## Store-and-forward architecture
+## Server mode architecture
 
-The store-and-forward path (`/push/<host>/owner/repo.git`) uses JGit's built-in HTTP git server. Three JGit SPIs are
-plugged in to turn a vanilla `GitServlet` into a validating, forwarding proxy:
+The server mode path (`/server/<host>/owner/repo.git`) uses JGit's built-in HTTP git server. Three JGit SPIs are plugged
+in to turn a vanilla `GitServlet` into a validating, forwarding proxy:
 
-| SPI                  | Implementation                      | Role                                                                            |
-| -------------------- | ----------------------------------- | ------------------------------------------------------------------------------- |
-| `RepositoryResolver` | `StoreAndForwardRepositoryResolver` | Resolves the upstream repo into a local bare clone; extracts client credentials |
-| `ReceivePackFactory` | `StoreAndForwardReceivePackFactory` | Creates a `ReceivePack` per request; assembles the pre/post-receive hook chain  |
-| `UploadPackFactory`  | `StoreAndForwardUploadPackFactory`  | Creates `UploadPack` for fetch requests                                         |
+| SPI                  | Implementation             | Role                                                                            |
+| -------------------- | -------------------------- | ------------------------------------------------------------------------------- |
+| `RepositoryResolver` | `ServerRepositoryResolver` | Resolves the upstream repo into a local bare clone; extracts client credentials |
+| `ReceivePackFactory` | `ServerReceivePackFactory` | Creates a `ReceivePack` per request; assembles the pre/post-receive hook chain  |
+| `UploadPackFactory`  | `ServerUploadPackFactory`  | Creates `UploadPack` for fetch requests                                         |
 
 Registration happens in `FogwallServletRegistrar`:
 
 ```java
 var gitServlet = new GitServlet();
-gitServlet.setRepositoryResolver(new StoreAndForwardRepositoryResolver(cache, provider));
-gitServlet.setReceivePackFactory(new StoreAndForwardReceivePackFactory(...));
-gitServlet.setUploadPackFactory(new StoreAndForwardUploadPackFactory());
+gitServlet.setRepositoryResolver(new ServerRepositoryResolver(cache, provider));
+gitServlet.setReceivePackFactory(new ServerReceivePackFactory(...));
+gitServlet.setUploadPackFactory(new ServerUploadPackFactory());
 
-context.addServlet(new ServletHolder(gitServlet), "/push/" + provider.servletPath() + "/*");
+context.addServlet(new ServletHolder(gitServlet), "/server/" + provider.servletPath() + "/*");
 ```
 
 ---
@@ -35,10 +35,10 @@ context.addServlet(new ServletHolder(gitServlet), "/push/" + provider.servletPat
 ## Push lifecycle
 
 ```text
-Client: git push http://proxy:8080/push/github.com/owner/repo.git
+Client: git push http://proxy:8080/server/github.com/owner/repo.git
     |
     v
-StoreAndForwardRepositoryResolver.open()
+ServerRepositoryResolver.open()
     - Extract credentials from Authorization header (in-memory only)
     - Clone/fetch upstream WITHOUT credentials (public repos only)
     - Store upstream URL in repo config (fogwall.upstreamUrl)
@@ -49,7 +49,7 @@ JGit GitServlet receives pack data
     - Creates ReceiveCommand entries for each ref update
     |
     v
-StoreAndForwardReceivePackFactory.create()
+ServerReceivePackFactory.create()
     - Retrieve credentials from request attribute
     - Create ValidationContext + PushContext (shared across hooks)
     - Assemble and sort the hook chain
@@ -104,7 +104,7 @@ Client receives result
 
 ## RepositoryResolver
 
-`StoreAndForwardRepositoryResolver` does two things per request:
+`ServerRepositoryResolver` does two things per request:
 
 1. **Local mirror** — calls `LocalRepositoryCache.getOrClone(upstreamUrl)` to maintain a bare clone. First access
    triggers `git clone --bare --depth 100`; subsequent requests do `git fetch --depth 100`. The clone uses **no
@@ -122,8 +122,8 @@ without access to the HTTP request.
 
 ## ReceivePackFactory
 
-`StoreAndForwardReceivePackFactory` creates a fresh `ReceivePack` for each push request. Its main job is assembling the
-hook chain:
+`ServerReceivePackFactory` creates a fresh `ReceivePack` for each push request. Its main job is assembling the hook
+chain:
 
 - **Orderable validation hooks** implement `FogwallHook` and are sorted by `getOrder()`. Two ranges are used:
   - Authorization (0–199): whitelist check, user permission
@@ -190,7 +190,7 @@ Post-receive hooks run only for commands with `Result.OK` (refs that were succes
 
 ### ForwardingPostReceiveHook
 
-The "forward" half of store-and-forward. For each accepted `ReceiveCommand`:
+The "forward" half of server mode. For each accepted `ReceiveCommand`:
 
 1. Opens a JGit `Transport` to the upstream URL (read from `fogwall.upstreamUrl` in repo config)
 2. Sets the `CredentialsProvider` extracted from the original client request
@@ -232,9 +232,9 @@ the push audit trail.
 
 Credentials are handled carefully to avoid writing secrets to disk:
 
-1. **`StoreAndForwardRepositoryResolver.open()`** — extracts from Authorization header or URL userinfo. Stores as
-   request attribute `com.rbc.fogwall.credentials`. Never used for cloning.
-2. **`StoreAndForwardReceivePackFactory.create()`** — reads from request attribute (or re-extracts from header). Creates
+1. **`ServerRepositoryResolver.open()`** — extracts from Authorization header or URL userinfo. Stores as request
+   attribute `com.rbc.fogwall.credentials`. Never used for cloning.
+2. **`ServerReceivePackFactory.create()`** — reads from request attribute (or re-extracts from header). Creates
    `UsernamePasswordCredentialsProvider`.
 3. **`ForwardingPostReceiveHook.pushToUpstream()`** — sets the `CredentialsProvider` on JGit's `Transport` before
    calling `push()`.
@@ -262,9 +262,8 @@ because heartbeat fires only during silent gaps.
 
 Manages bare clones used by both proxy modes:
 
-- **S&F mode**: `StoreAndForwardRepositoryResolver` calls `getOrClone()` on each push. Objects from the client's pack
-  are already in the repo (JGit's `ReceivePack` unpacked them), so hooks can use `RevWalk`, `DiffFormatter`, etc.
-  directly.
+- **server mode**: `ServerRepositoryResolver` calls `getOrClone()` on each push. Objects from the client's pack are
+  already in the repo (JGit's `ReceivePack` unpacked them), so hooks can use `RevWalk`, `DiffFormatter`, etc. directly.
 - **Proxy mode**: `EnrichPushCommitsFilter` calls `getOrClone()` to get a local repo, then feeds the push's pack data
   through JGit's `PackParser` to insert objects. This bridges the gap between raw HTTP bytes and the JGit API.
 
@@ -303,7 +302,7 @@ All methods use `^{commit}` peeling to handle annotated tags transparently. See
 | API                    | Where                                               | Purpose                                             |
 | ---------------------- | --------------------------------------------------- | --------------------------------------------------- |
 | `GitServlet`           | `FogwallServletRegistrar`                           | HTTP git server implementation                      |
-| `ReceivePack`          | `StoreAndForwardReceivePackFactory`                 | Receives pack data, runs hook chain                 |
+| `ReceivePack`          | `ServerReceivePackFactory`                          | Receives pack data, runs hook chain                 |
 | `Transport`            | `ForwardingPostReceiveHook`                         | Pushes to upstream with credentials                 |
 | `RevWalk`              | `CommitInspectionService`, `CheckHiddenCommitsHook` | Walks commit graph                                  |
 | `DiffFormatter`        | `CommitInspectionService`, `DiffGenerationHook`     | Generates unified diffs                             |

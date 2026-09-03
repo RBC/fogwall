@@ -17,7 +17,7 @@ import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Pure-logic rule evaluator shared by both proxy-mode ({@link UrlRuleAggregateFilter}) and store-and-forward mode
+ * Pure-logic rule evaluator shared by both proxy-mode ({@link UrlRuleAggregateFilter}) and server mode
  * ({@link RepositoryUrlRuleHook}). Contains no Servlet or JGit dependencies.
  *
  * <p>Evaluation uses firewall / iptables semantics: all matching rules (config and DB) are collected, sorted by

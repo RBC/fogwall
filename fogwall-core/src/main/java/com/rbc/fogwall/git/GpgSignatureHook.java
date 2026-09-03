@@ -21,8 +21,8 @@ import org.eclipse.jgit.transport.ReceiveCommand;
 import org.eclipse.jgit.transport.ReceivePack;
 
 /**
- * S&F-mode adapter for {@link GpgSignatureCheck}. Reads commits from the JGit repository, sends per-violation sideband
- * feedback, and records results in the shared {@link ValidationContext} and {@link PushContext}.
+ * server-mode adapter for {@link GpgSignatureCheck}. Reads commits from the JGit repository, sends per-violation
+ * sideband feedback, and records results in the shared {@link ValidationContext} and {@link PushContext}.
  */
 @Slf4j
 @RequiredArgsConstructor

@@ -118,7 +118,7 @@ See the full [Configuration Reference](docs/CONFIGURATION.md) and [Administrator
 
 ## Push Audit Database
 
-All pushes through the store-and-forward path are recorded as an event log. Each state transition (RECEIVED → APPROVED →
+All pushes through the server mode path are recorded as an event log. Each state transition (RECEIVED → APPROVED →
 FORWARDED, or BLOCKED/ERROR) is written as a separate row, enabling full push history and audit reporting.
 
 | Type         | Config value | Notes                                      |
@@ -134,14 +134,14 @@ See the [Configuration Reference](docs/CONFIGURATION.md#database) for connection
 
 ## Documentation
 
-| Document                                                     | Description                                                                                                      |
-| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| [User Guide](docs/USER_GUIDE.md)                             | For developers pushing code through the proxy: remote setup, push modes, blocked pushes, approval workflow       |
-| [Administrator Guide](docs/ADMIN_GUIDE.md)                   | For operators: RBAC vs permissions, approval modes, logging, JGit filesystem requirements, production checklist  |
-| [Configuration Reference](docs/CONFIGURATION.md)             | YAML config structure, environment variable overrides, provider settings, validation rules                       |
-| [Architecture](docs/ARCHITECTURE.md)                         | How the proxy works: two proxy modes, validation pipeline, core abstractions, advanced use cases                 |
-| [JGit Infrastructure](docs/internals/JGIT_INFRASTRUCTURE.md) | Store-and-forward internals: ReceivePackFactory, hook chain, forwarding, credential flow (contributor reference) |
-| [Git Internals](docs/internals/GIT_INTERNALS.md)             | Wire-protocol edge cases: tags, new branches, force pushes, pack parsing (contributor reference)                 |
+| Document                                                     | Description                                                                                                     |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| [User Guide](docs/USER_GUIDE.md)                             | For developers pushing code through the proxy: remote setup, push modes, blocked pushes, approval workflow      |
+| [Administrator Guide](docs/ADMIN_GUIDE.md)                   | For operators: RBAC vs permissions, approval modes, logging, JGit filesystem requirements, production checklist |
+| [Configuration Reference](docs/CONFIGURATION.md)             | YAML config structure, environment variable overrides, provider settings, validation rules                      |
+| [Architecture](docs/ARCHITECTURE.md)                         | How the proxy works: two proxy modes, validation pipeline, core abstractions, advanced use cases                |
+| [JGit Infrastructure](docs/internals/JGIT_INFRASTRUCTURE.md) | Server mode internals: ReceivePackFactory, hook chain, forwarding, credential flow (contributor reference)      |
+| [Git Internals](docs/internals/GIT_INTERNALS.md)             | Wire-protocol edge cases: tags, new branches, force pushes, pack parsing (contributor reference)                |
 
 ## Roadmap
 
@@ -150,7 +150,7 @@ rationale and reference material:
 
 | Document                                                                                             | Description                                                                                                                        |
 | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| [Background & architecture](https://gist.github.com/coopernetes/d02d48efa759282ff8187da0d5dcae64)    | Project background, relationship to finos/git-proxy, store-and-forward vs transparent proxy, near-term and moonshot roadmap        |
+| [Background & architecture](https://gist.github.com/coopernetes/d02d48efa759282ff8187da0d5dcae64)    | Project background, relationship to finos/git-proxy, server mode vs transparent proxy, near-term and moonshot roadmap              |
 | [Programming model comparison](https://gist.github.com/coopernetes/626541b83a148f4ae21ae2c62c57edea) | JGit + Jetty vs Express + child-process git: stack comparison, capability deep-dive, honest assessment of both sides               |
 | [Performance benchmarks](perf/)                                                                      | Side-by-side comparison vs finos/git-proxy: sequential and concurrent clone, fetch, push throughput against a shared Gitea backend |
 

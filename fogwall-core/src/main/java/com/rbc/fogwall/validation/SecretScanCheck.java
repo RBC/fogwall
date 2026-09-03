@@ -13,7 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Scans a unified diff for secrets using gitleaks. Implements {@link DiffCheck} so it can be used in both the
- * transparent-proxy filter chain and the store-and-forward pre-receive hook chain without duplication.
+ * transparent-proxy filter chain and the server mode pre-receive hook chain without duplication.
  *
  * <p>Returns {@link Optional#empty()} (fail-open) if the scanner is unavailable or execution fails - pushes are never
  * blocked because the scanner is misconfigured.

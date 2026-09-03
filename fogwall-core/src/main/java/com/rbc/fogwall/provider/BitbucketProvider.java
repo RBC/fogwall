@@ -30,9 +30,9 @@ import tools.jackson.databind.json.JsonMapper;
  *   <li><b>Transparent proxy:</b> {@code BitbucketIdentityFilter} sets {@code upstreamUsername} on
  *       {@link GitRequestDetails}; {@code PushFinalizerFilter} rewrites the HTTP {@code Authorization} header via an
  *       {@code HttpServletRequestWrapper} before handing off to the proxy servlet.
- *   <li><b>Store-and-forward:</b> {@code BitbucketCredentialRewriteHook} writes the resolved username into the
- *       in-memory JGit repo config; {@code ForwardingPostReceiveHook} reads it and opens the upstream transport with
- *       rewritten {@link org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider}.
+ *   <li><b>Server mode:</b> {@code BitbucketCredentialRewriteHook} writes the resolved username into the in-memory JGit
+ *       repo config; {@code ForwardingPostReceiveHook} reads it and opens the upstream transport with rewritten
+ *       {@link org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider}.
  * </ul>
  *
  * <p><b>Required token scopes:</b> {@code read:user:bitbucket} (identity lookup) and {@code write:repository:bitbucket}

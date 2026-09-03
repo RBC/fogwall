@@ -27,10 +27,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * Integration tests for the store-and-forward pre-receive hook chain. Tests the chain: AuthorEmailValidationHook →
+ * Integration tests for the server mode pre-receive hook chain. Tests the chain: AuthorEmailValidationHook →
  * CommitMessageValidationHook → ValidationVerifierHook.
  */
-class StoreAndForwardHookChainTest {
+class ServerHookChainTest {
 
     @TempDir
     Path tempDir;

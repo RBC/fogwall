@@ -54,7 +54,7 @@ public class SshServerRegistrar {
         SshGitServer server = SshGitServer.create(
                 sshConfig,
                 routes,
-                ctx.storeForwardCache(),
+                ctx.serverCache(),
                 ctx.userStore(),
                 ctx.urlRuleRegistry(),
                 configBuilder.buildUpstreamKnownHosts());

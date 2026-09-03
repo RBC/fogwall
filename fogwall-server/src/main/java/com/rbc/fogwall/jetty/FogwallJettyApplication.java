@@ -25,8 +25,8 @@ import org.eclipse.jetty.util.thread.VirtualThreadPool;
  * Standalone Jetty server application for the JGit proxy. Registers two servlets per provider:
  *
  * <ul>
- *   <li><b>GitServlet</b> on {@code /push/...} - store-and-forward mode using JGit's native ReceivePack/UploadPack
- *       stack with sideband validation feedback
+ *   <li><b>GitServlet</b> on {@code /server/...} (and the legacy {@code /push/...} alias) - server mode using JGit's
+ *       native ReceivePack/UploadPack stack with sideband validation feedback
  *   <li><b>fogwallServlet</b> on {@code /proxy/...} - transparent HTTP proxy bypass
  * </ul>
  *
@@ -103,8 +103,10 @@ public class FogwallJettyApplication {
         log.info("Fogwall started on port {}", connector.getPort());
         for (FogwallProvider provider : providers) {
             log.info(
-                    "  - {} (store-and-forward) at {}{}",
+                    "  - {} (server mode) at {}{} (legacy alias: {}{})",
                     provider.getName(),
+                    FogwallServletRegistrar.SERVER_PATH_PREFIX,
+                    provider.servletMapping(),
                     FogwallServletRegistrar.PUSH_PATH_PREFIX,
                     provider.servletMapping());
             log.info(

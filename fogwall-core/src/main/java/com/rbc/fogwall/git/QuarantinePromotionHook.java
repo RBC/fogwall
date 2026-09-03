@@ -9,7 +9,7 @@ import org.eclipse.jgit.transport.ReceiveCommand;
 import org.eclipse.jgit.transport.ReceivePack;
 
 /**
- * Moves a store-and-forward push's objects out of its quarantine and into the mirror, once every check has passed.
+ * Moves a server mode push's objects out of its quarantine and into the mirror, once every check has passed.
  *
  * <p>Must be the last pre-receive hook. Everything before it can still reject the push, and a rejected push's objects
  * are exactly what should never reach the mirror; everything after it — JGit applying the ref updates, then

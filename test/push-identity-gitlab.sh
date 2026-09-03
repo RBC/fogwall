@@ -18,7 +18,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
 resolve_pat ~/.gitlab-pat
 GITLAB_REPO=${GITLAB_REPO:-"gitlab.com/coopernetes/test-repo-gitlab.git"}
 GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME:-"Thomas Cooper"}
-PUSH_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/push/${GITLAB_REPO}"
+PUSH_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/server/${GITLAB_REPO}"
 TEST_BRANCH="test/identity-gitlab-$(date +%s)"
 REPO_DIR=$(mktemp -d "${TMPDIR:-/tmp}/push-identity-gitlab-XXXX")
 

@@ -17,7 +17,7 @@ import org.eclipse.jgit.transport.ReceiveCommand;
 import org.eclipse.jgit.transport.ReceivePack;
 
 /**
- * S&amp;F-mode content-pattern scanning of commit messages (structured PII/identifier detection - SIN, SSN, NINO, etc).
+ * server-mode content-pattern scanning of commit messages (structured PII/identifier detection - SIN, SSN, NINO, etc).
  * A human describing an incident or bug in a commit message is a real, separate way PII ends up in a repo, distinct
  * from the diff content itself - see {@link ContentPatternDiffHook}.
  *

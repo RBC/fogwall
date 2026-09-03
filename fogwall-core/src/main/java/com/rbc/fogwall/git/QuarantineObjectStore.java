@@ -27,7 +27,7 @@ import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
  *
  * <p>The transparent proxy never promotes anything back into the mirror: objects from an accepted push reach it the
  * same way everything else does, by being fetched from upstream once they exist there, which keeps the mirror a
- * reflection of upstream rather than an accumulation of everything anyone attempted. Store-and-forward has to promote,
+ * reflection of upstream rather than an accumulation of everything anyone attempted. Server mode has to promote,
  * because JGit applies its ref updates to the shared git directory before this store is discarded — see
  * {@link #promote()}.
  */
@@ -115,7 +115,7 @@ public final class QuarantineObjectStore implements Closeable {
     /**
      * Promotes everything this push wrote into the mirror.
      *
-     * <p>Only store-and-forward needs this. There JGit applies the ref updates to the shared git directory once the
+     * <p>Only server mode needs this. There JGit applies the ref updates to the shared git directory once the
      * pre-receive hooks pass, so the objects those refs name have to be in the mirror by then or it would be left
      * pointing at objects that are about to be deleted. Call it only after every check has passed — promoting is what
      * makes a push permanent. The transparent proxy never applies ref updates and so never promotes.

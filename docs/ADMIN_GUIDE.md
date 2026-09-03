@@ -498,7 +498,7 @@ If you see `Permission denied` errors on startup, check whether your security co
 
 ### `/tmp` for scratch repos and gitleaks
 
-JGit creates temporary bare repositories in `java.io.tmpdir` (defaults to `/tmp`) for store-and-forward pushes and for
+JGit creates temporary bare repositories in `java.io.tmpdir` (defaults to `/tmp`) for server mode pushes and for
 transparent proxy diff inspection. Gitleaks also writes temporary files there.
 
 If `/tmp` is not writable (e.g. `noexec` mount, read-only root filesystem), override the JVM temp dir:
@@ -658,8 +658,8 @@ developer machines.
 
 | Path                                       | Library                  | Destination               |
 | ------------------------------------------ | ------------------------ | ------------------------- |
-| Store-and-forward upstream push (HTTPS)    | JGit Transport (HTTPS)   | SCM provider git endpoint |
-| Store-and-forward upstream push (SSH)      | JGit Transport (SSH)     | SCM provider SSH endpoint |
+| Server mode upstream push (HTTPS)          | JGit Transport (HTTPS)   | SCM provider git endpoint |
+| Server mode upstream push (SSH)            | JGit Transport (SSH)     | SCM provider SSH endpoint |
 | Transparent proxy forwarding               | Jetty HttpClient (HTTPS) | SCM provider git endpoint |
 | SCM identity resolution (PAT verification) | Apache HttpClient 5      | SCM provider REST API     |
 | SSH fingerprint lookup                     | Apache HttpClient 5      | SCM provider REST API     |
@@ -803,8 +803,8 @@ case and `max-concurrent-requests` in mind rather than assuming pushes stay near
 ### Local mirror clone depth
 
 fogwall keeps a local bare mirror of each upstream repo to inspect push content. Its clone depth is configurable per
-proxy mode under `cache:` (see [CONFIGURATION.md](CONFIGURATION.md#local-mirror-cache)). Store-and-forward defaults to
-full history; the transparent proxy defaults to a shallow clone, because a first full clone of a very large repository
+proxy mode under `cache:` (see [CONFIGURATION.md](CONFIGURATION.md#local-mirror-cache)). Server mode defaults to full
+history; the transparent proxy defaults to a shallow clone, because a first full clone of a very large repository
 through the proxy can exceed HTTP connection timeouts. If proxy-mode first-clones are timing out for a large repo, keep
 it shallow (the default) or tune `cache.proxy.shallow-since`; if you want the proxy to mirror full history and can
 absorb the first-clone cost, set `cache.proxy.clone-depth: 0`. A shallow default is safe: reachability and hidden-commit

@@ -16,7 +16,7 @@ import java.util.Optional;
  *
  * <ol>
  *   <li>Implement this interface.
- *   <li>Wire the implementation into {@code StoreAndForwardReceivePackFactory} and {@code fogwallServletRegistrar}.
+ *   <li>Wire the implementation into {@code ServerReceivePackFactory} and {@code fogwallServletRegistrar}.
  *   <li>Add the step name to {@code STEP_DISPLAY_NAMES} in {@code index.html}.
  * </ol>
  *

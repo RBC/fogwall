@@ -23,7 +23,7 @@ public class ServerConfig {
     private List<String> allowedOrigins = new ArrayList<>();
 
     /**
-     * Approval mode for store-and-forward pushes. Values: {@code auto} (default), {@code ui}, {@code servicenow}.
+     * Approval mode for server mode pushes. Values: {@code auto} (default), {@code ui}, {@code servicenow}.
      *
      * <p>Note: {@code fogwallWithDashboardApplication} always uses {@code ui} regardless of this setting.
      */
@@ -36,8 +36,8 @@ public class ServerConfig {
     private int heartbeatIntervalSeconds = 10;
 
     /**
-     * Maximum time in seconds a store-and-forward push waits for human review before the record is marked timed out.
-     * Only applies to {@code ui}/{@code servicenow} approval modes — {@code auto} approves immediately and never waits.
+     * Maximum time in seconds a server mode push waits for human review before the record is marked timed out. Only
+     * applies to {@code ui}/{@code servicenow} approval modes — {@code auto} approves immediately and never waits.
      */
     private int approvalTimeoutSeconds = 1800;
 
@@ -73,8 +73,8 @@ public class ServerConfig {
 
     /**
      * Maximum decompressed size in bytes of any single object in a pushed pack, applied to both proxy modes (and both
-     * the HTTP and SSH transports of store-and-forward). {@code maxPushBytes} bounds the compressed wire size, but a
-     * crafted pack can inflate to roughly a thousand times its compressed size; this is the bound on the inflated side.
+     * the HTTP and SSH transports of server mode). {@code maxPushBytes} bounds the compressed wire size, but a crafted
+     * pack can inflate to roughly a thousand times its compressed size; this is the bound on the inflated side.
      *
      * <p>Defaults to 128 MiB. Like {@code maxPushBytes} this is a resource bound rather than a policy check, so it
      * defaults to an active value. It is deliberately far above the binary-blob filter's default 50 MiB ceiling: that
@@ -84,7 +84,7 @@ public class ServerConfig {
     private long maxObjectSizeBytes = 134217728L;
 
     /**
-     * Connection timeout in seconds for store-and-forward upstream pushes
+     * Connection timeout in seconds for server mode upstream pushes
      * ({@link org.eclipse.jgit.transport.Transport#setTimeout}). Set to 0 to use JGit's default (no timeout).
      * Enterprises with slow or inspecting middleboxes should set this to a generous value (e.g. 120) rather than
      * leaving it unbounded.

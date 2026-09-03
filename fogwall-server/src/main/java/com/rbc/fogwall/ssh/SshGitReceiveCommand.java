@@ -4,7 +4,7 @@ import com.rbc.fogwall.approval.ClientLivenessCheck;
 import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.git.PushTransport;
 import com.rbc.fogwall.git.QuarantineObjectStore;
-import com.rbc.fogwall.git.StoreAndForwardReceivePackFactory;
+import com.rbc.fogwall.git.ServerReceivePackFactory;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.user.UserEntry;
 import java.io.IOException;
@@ -30,7 +30,7 @@ import org.eclipse.jgit.transport.ReceivePack;
 
 /**
  * MINA SSHD {@link Command} that handles {@code git-receive-pack} over SSH. Delegates to the same
- * {@link StoreAndForwardReceivePackFactory} hook chain used by the HTTP push path.
+ * {@link ServerReceivePackFactory} hook chain used by the HTTP push path.
  *
  * <p>Upstream authentication uses the client's forwarded SSH agent (requires {@code ssh -A}) via
  * {@link SshUpstreamTransport}, shared with {@link SshGitUploadCommand}.
@@ -153,7 +153,7 @@ public class SshGitReceiveCommand implements Command {
             return target.provider();
         }
 
-        StoreAndForwardReceivePackFactory receivePackFactory() {
+        ServerReceivePackFactory receivePackFactory() {
             return target.receivePackFactory();
         }
     }

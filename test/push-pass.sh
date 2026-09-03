@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Golden-path store-and-forward push: valid commit that should pass all checks.
+# Golden-path server mode push: valid commit that should pass all checks.
 set -euo pipefail
 
 GIT_USERNAME=${GIT_USERNAME:-"me"}
@@ -8,7 +8,7 @@ resolve_pat ~/.github-pat
 GIT_REPO=${GIT_REPO:-"github.com/coopernetes/test-repo.git"}
 
 
-PUSH_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/push/${GIT_REPO}"
+PUSH_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/server/${GIT_REPO}"
 TEST_BRANCH="test/push-pass-$(date +%s)"
 REPO_DIR=$(mktemp -d "${TMPDIR:-/tmp}/push-test-pass-XXXX")
 
@@ -27,7 +27,7 @@ git config user.email "${GIT_EMAIL}"
 
 echo "pass - $(date)" >> test-file.txt
 git add test-file.txt
-git commit -m "feat: golden-path store-and-forward test"
+git commit -m "feat: golden-path server mode test"
 git push origin "${TEST_BRANCH}"
 
 echo "PASSED"

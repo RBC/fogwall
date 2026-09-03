@@ -100,7 +100,7 @@ public class FogwallDashboardApplication {
 
         var context = new ServletContextHandler("/", true, false);
 
-        // Register git proxy servlets (store-and-forward + transparent proxy) for each provider
+        // Register git proxy servlets (server mode + transparent proxy) for each provider
         FogwallServletRegistrar.registerProviders(context, ctx, configBuilder, providers);
 
         SshGitServer sshGitServer =

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Store-and-forward tag push: lightweight and annotated tags should pass all checks.
+# Server mode tag push: lightweight and annotated tags should pass all checks.
 set -euo pipefail
 
 GIT_USERNAME=${GIT_USERNAME:-"me"}
@@ -8,7 +8,7 @@ resolve_pat ~/.github-pat
 GIT_REPO=${GIT_REPO:-"github.com/coopernetes/test-repo.git"}
 
 
-PUSH_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/push/${GIT_REPO}"
+PUSH_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/server/${GIT_REPO}"
 TEST_BRANCH="test/push-pass-tag-$(date +%s)"
 LIGHTWEIGHT_TAG="test/lw-tag-$(date +%s)"
 ANNOTATED_TAG="test/ann-tag-$(date +%s)"

@@ -10,7 +10,7 @@ import java.time.Instant;
 import org.junit.jupiter.api.*;
 
 /**
- * End-to-end tests for the <em>store-and-forward</em> path ({@code /push/...}).
+ * End-to-end tests for the <em>server mode</em> path ({@code /push/...}).
  *
  * <p>Mirrors {@code test-push-pass.sh} and {@code test-push-fail.sh}: every test performs a real {@code git clone} +
  * commit + push through a live Jetty proxy that uses JGit's ReceivePack to receive the push, runs pre-receive
@@ -21,7 +21,7 @@ import org.junit.jupiter.api.*;
  */
 @Tag("e2e")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class StoreForwardModeE2ETest {
+class ServerModeE2ETest {
 
     static GiteaContainer gitea;
     static JettyProxyFixture proxy;
@@ -83,7 +83,7 @@ class StoreForwardModeE2ETest {
                 cloneCommitPush(
                         "sf-pass-1",
                         GiteaContainer.VALID_AUTHOR_EMAIL,
-                        "feat: add new feature for store-and-forward testing"),
+                        "feat: add new feature for server mode testing"),
                 "push should succeed with clean message and valid email");
     }
 

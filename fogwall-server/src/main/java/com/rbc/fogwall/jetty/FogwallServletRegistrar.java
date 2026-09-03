@@ -15,9 +15,9 @@ import com.rbc.fogwall.db.FetchStore;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.git.LocalRepositoryCache;
-import com.rbc.fogwall.git.StoreAndForwardReceivePackFactory;
-import com.rbc.fogwall.git.StoreAndForwardRepositoryResolver;
-import com.rbc.fogwall.git.StoreAndForwardUploadPackFactory;
+import com.rbc.fogwall.git.ServerReceivePackFactory;
+import com.rbc.fogwall.git.ServerRepositoryResolver;
+import com.rbc.fogwall.git.ServerUploadPackFactory;
 import com.rbc.fogwall.git.UpstreamAuthProbe;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.net.ResolvedOutboundProxy;
@@ -50,8 +50,21 @@ import org.eclipse.jgit.http.server.GitServlet;
 @Slf4j
 public final class FogwallServletRegistrar {
 
+    /** Canonical path prefix for server mode (fogwall terminates the git connection and acts as the git server). */
+    public static final String SERVER_PATH_PREFIX = "/server";
+    /**
+     * Legacy path prefix for server mode, kept as a permanent-for-now alias of {@link #SERVER_PATH_PREFIX} so existing
+     * git remotes keep working. Deprecated in favour of {@code /server}; slated for removal in a future major release.
+     */
     public static final String PUSH_PATH_PREFIX = "/push";
+
     public static final String PROXY_PATH_PREFIX = "/proxy";
+
+    /**
+     * Server-mode path prefixes to register each git servlet under: the canonical {@code /server} and legacy
+     * {@code /push}.
+     */
+    private static final List<String> SERVER_PATH_PREFIXES = List.of(SERVER_PATH_PREFIX, PUSH_PATH_PREFIX);
 
     private FogwallServletRegistrar() {}
 
@@ -64,18 +77,21 @@ public final class FogwallServletRegistrar {
             FogwallContext fogwallContext,
             JettyConfigurationBuilder configBuilder,
             List<FogwallProvider> providers) {
-        // Wire up JGit's HTTP transport factory once for all store-and-forward connections
+        // Wire up JGit's HTTP transport factory once for all server-mode connections
         if (fogwallContext.upstreamTls() != null) {
             setConnectionFactory(new SslAwareHttpConnectionFactory(
                     fogwallContext.upstreamTls().trustManagers()));
             log.info("Custom upstream SSL trust applied to JGit HTTP transport");
         }
-        // ForceGitClientFilter is registered once at the top-level proxy and push paths so it covers
-        // any path with the right prefix, including paths that don't match a configured provider.
+        // ForceGitClientFilter is registered once at each top-level path prefix so it covers any path with the
+        // right prefix, including paths that don't match a configured provider. Both server-mode prefixes
+        // (/server canonical, /push legacy alias) and the transparent-proxy prefix are covered.
         var forceGitClientHolder = new FilterHolder(new ForceGitClientFilter());
         forceGitClientHolder.setAsyncSupported(true);
         context.addFilter(forceGitClientHolder, PROXY_PATH_PREFIX + "/*", EnumSet.of(DispatcherType.REQUEST));
-        context.addFilter(forceGitClientHolder, PUSH_PATH_PREFIX + "/*", EnumSet.of(DispatcherType.REQUEST));
+        for (String serverPrefix : SERVER_PATH_PREFIXES) {
+            context.addFilter(forceGitClientHolder, serverPrefix + "/*", EnumSet.of(DispatcherType.REQUEST));
+        }
 
         ConfigHolder configHolder = configBuilder.buildConfigHolder();
         Supplier<CommitConfig> commitConfigSupplier = configHolder::getCommitConfig;
@@ -94,7 +110,7 @@ public final class FogwallServletRegistrar {
                 registerGitServlet(
                         context,
                         provider,
-                        fogwallContext.storeForwardCache(),
+                        fogwallContext.serverCache(),
                         commitConfigSupplier,
                         diffScanConfigSupplier,
                         secretScanConfigSupplier,
@@ -154,13 +170,13 @@ public final class FogwallServletRegistrar {
     }
 
     /**
-     * Builds a {@link StoreAndForwardReceivePackFactory} for the given provider using the current context and config.
-     * Used by the SSH server to share the same factory the HTTP push servlet uses.
+     * Builds a {@link ServerReceivePackFactory} for the given provider using the current context and config. Used by
+     * the SSH server to share the same factory the HTTP push servlet uses.
      */
-    public static StoreAndForwardReceivePackFactory buildReceivePackFactory(
+    public static ServerReceivePackFactory buildReceivePackFactory(
             FogwallContext fogwallContext, JettyConfigurationBuilder configBuilder, FogwallProvider provider) {
         ConfigHolder configHolder = configBuilder.buildConfigHolder();
-        var factory = new StoreAndForwardReceivePackFactory(
+        var factory = new ServerReceivePackFactory(
                 provider,
                 configHolder::getCommitConfig,
                 configHolder::getDiffScanConfig,
@@ -178,7 +194,7 @@ public final class FogwallServletRegistrar {
         factory.setFailFast(configBuilder.isFailFast());
         factory.setConnectTimeoutSeconds(fogwallContext.upstreamConnectTimeoutSeconds());
         factory.setApprovalTimeout(Duration.ofSeconds(fogwallContext.approvalTimeoutSeconds()));
-        factory.setCache(fogwallContext.storeForwardCache());
+        factory.setCache(fogwallContext.serverCache());
         factory.setSshScmIdentityEnricher(fogwallContext.sshScmIdentityEnricher());
         factory.setScmOAuthConfigSupplier(configHolder::getScmOAuthConfig);
         factory.setMaxPackBytes(fogwallContext.maxPushBytes());
@@ -209,64 +225,71 @@ public final class FogwallServletRegistrar {
             int connectTimeoutSeconds,
             UrlRuleRegistry urlRuleRegistry,
             FetchStore fetchStore) {
-        var resolver = new StoreAndForwardRepositoryResolver(cache, provider);
+        // A configured GitServlet is built fresh per path prefix rather than shared: mapping one servlet instance
+        // under two holders would init() it twice. The resolver/factory are cheap, and both share the one repo cache.
+        Supplier<GitServlet> gitServletFactory = () -> {
+            var resolver = new ServerRepositoryResolver(cache, provider);
 
-        var factory = new StoreAndForwardReceivePackFactory(
-                provider,
-                commitConfigSupplier,
-                diffScanConfigSupplier,
-                secretScanConfigSupplier,
-                binaryBlobConfigSupplier,
-                contentPatternConfig,
-                GpgConfig.defaultConfig(),
-                repoPermissionService,
-                pushIdentityResolver,
-                pushStore,
-                approvalGateway,
-                serviceUrl,
-                Duration.ofSeconds(heartbeatIntervalSeconds),
-                urlRuleRegistry);
-        factory.setFailFast(failFast);
-        factory.setConnectTimeoutSeconds(connectTimeoutSeconds);
-        factory.setApprovalTimeout(Duration.ofSeconds(approvalTimeoutSeconds));
-        factory.setCache(cache);
-        factory.setScmOAuthConfigSupplier(scmOAuthConfigSupplier);
-        factory.setMaxPackBytes(maxPushBytes);
-        factory.setMaxObjectSizeBytes(maxObjectSizeBytes);
+            var factory = new ServerReceivePackFactory(
+                    provider,
+                    commitConfigSupplier,
+                    diffScanConfigSupplier,
+                    secretScanConfigSupplier,
+                    binaryBlobConfigSupplier,
+                    contentPatternConfig,
+                    GpgConfig.defaultConfig(),
+                    repoPermissionService,
+                    pushIdentityResolver,
+                    pushStore,
+                    approvalGateway,
+                    serviceUrl,
+                    Duration.ofSeconds(heartbeatIntervalSeconds),
+                    urlRuleRegistry);
+            factory.setFailFast(failFast);
+            factory.setConnectTimeoutSeconds(connectTimeoutSeconds);
+            factory.setApprovalTimeout(Duration.ofSeconds(approvalTimeoutSeconds));
+            factory.setCache(cache);
+            factory.setScmOAuthConfigSupplier(scmOAuthConfigSupplier);
+            factory.setMaxPackBytes(maxPushBytes);
+            factory.setMaxObjectSizeBytes(maxObjectSizeBytes);
 
-        var gitServlet = new GitServlet();
-        gitServlet.setRepositoryResolver(resolver);
-        gitServlet.setReceivePackFactory(factory);
-        gitServlet.setUploadPackFactory(new StoreAndForwardUploadPackFactory());
+            var gitServlet = new GitServlet();
+            gitServlet.setRepositoryResolver(resolver);
+            gitServlet.setReceivePackFactory(factory);
+            gitServlet.setUploadPackFactory(new ServerUploadPackFactory());
+            return gitServlet;
+        };
 
-        String pushPath = PUSH_PATH_PREFIX + provider.servletPath();
-        String pushMapping = pushPath + "/*";
+        // Server mode is served under both the canonical /server prefix and the legacy /push alias.
+        for (String prefix : SERVER_PATH_PREFIXES) {
+            String mapping = prefix + provider.servletPath() + "/*";
 
-        var holder = new ServletHolder(gitServlet);
-        holder.setName("git-" + provider.getName());
-        context.addServlet(holder, pushMapping);
+            var holder = new ServletHolder(gitServletFactory.get());
+            holder.setName("git-" + provider.getName() + "-" + prefix.substring(1));
+            context.addServlet(holder, mapping);
 
-        // Must wrap the GitServlet: the quarantine is opened while the servlet runs, so this filter's
-        // finally block is what bounds its lifetime to the request.
-        context.addFilter(
-                new FilterHolder(new QuarantineCleanupFilter()), pushMapping, EnumSet.of(DispatcherType.REQUEST));
-        context.addFilter(new FilterHolder(new LfsRejectionFilter()), pushMapping, EnumSet.of(DispatcherType.REQUEST));
-        context.addFilter(
-                new FilterHolder(new SmartHttpErrorFilter()), pushMapping, EnumSet.of(DispatcherType.REQUEST));
-        context.addFilter(
-                new FilterHolder(new BasicAuthChallengeFilter(provider, new UpstreamAuthProbe())),
-                pushMapping,
-                EnumSet.of(DispatcherType.REQUEST));
-        context.addFilter(
-                new FilterHolder(new ParseGitRequestFilter(provider, maxPushBytes)),
-                pushMapping,
-                EnumSet.of(DispatcherType.REQUEST));
-        context.addFilter(
-                new FilterHolder(new UrlRuleAggregateFilter(100, provider, fetchStore, urlRuleRegistry)),
-                pushMapping,
-                EnumSet.of(DispatcherType.REQUEST));
+            // Must wrap the GitServlet: the quarantine is opened while the servlet runs, so this filter's
+            // finally block is what bounds its lifetime to the request.
+            context.addFilter(
+                    new FilterHolder(new QuarantineCleanupFilter()), mapping, EnumSet.of(DispatcherType.REQUEST));
+            context.addFilter(new FilterHolder(new LfsRejectionFilter()), mapping, EnumSet.of(DispatcherType.REQUEST));
+            context.addFilter(
+                    new FilterHolder(new SmartHttpErrorFilter()), mapping, EnumSet.of(DispatcherType.REQUEST));
+            context.addFilter(
+                    new FilterHolder(new BasicAuthChallengeFilter(provider, new UpstreamAuthProbe())),
+                    mapping,
+                    EnumSet.of(DispatcherType.REQUEST));
+            context.addFilter(
+                    new FilterHolder(new ParseGitRequestFilter(provider, maxPushBytes)),
+                    mapping,
+                    EnumSet.of(DispatcherType.REQUEST));
+            context.addFilter(
+                    new FilterHolder(new UrlRuleAggregateFilter(100, provider, fetchStore, urlRuleRegistry)),
+                    mapping,
+                    EnumSet.of(DispatcherType.REQUEST));
 
-        log.info("Registered GitServlet for {} at {}", provider.getName(), pushMapping);
+            log.info("Registered GitServlet for {} at {}", provider.getName(), mapping);
+        }
     }
 
     public static void registerProxyServlet(

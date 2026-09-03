@@ -40,7 +40,7 @@ public record FogwallContext(
         long maxObjectSizeBytes,
         int upstreamConnectTimeoutSeconds,
         int proxyConnectTimeoutSeconds,
-        LocalRepositoryCache storeForwardCache,
+        LocalRepositoryCache serverCache,
         LocalRepositoryCache proxyCache,
         SslUtil.UpstreamTls upstreamTls,
         ProviderRegistry providerRegistry,

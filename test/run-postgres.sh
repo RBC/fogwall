@@ -65,7 +65,7 @@ export GIT_PASSWORD="$ADMIN_PASS"
 export GIT_REPO="gitea:3000/${TEST_ORG}/${TEST_REPO}.git"
 export FOGWALL_API_KEY="change-me-in-production"
 
-# push-pass* scripts expect store-and-forward to forward immediately, but the dashboard
+# push-pass* scripts expect server mode to forward immediately, but the dashboard
 # always uses UiApprovalGateway so they would hang waiting for approval. Skip them here.
 SKIP_PATTERN="push-pass"
 
@@ -83,7 +83,7 @@ for script in "${REPO_ROOT}"/test/*.sh; do
     [[ "$name" == run-*.sh ]] && continue
     if [[ "$name" == *${SKIP_PATTERN}* ]]; then
         echo ""
-        echo "  SKIP: $name  (S&F pass scripts require non-dashboard server)"
+        echo "  SKIP: $name  (server mode pass scripts require non-dashboard server)"
         ((++SKIPPED))
         continue
     fi

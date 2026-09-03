@@ -8,7 +8,7 @@ import java.util.stream.Collectors;
 
 /**
  * Shared WARN-step recording for {@link ContentPatternDiffHook} and {@link ContentPatternCommitMessageHook} -
- * S&amp;F-mode content-pattern checks that both scan for {@link ContentPatternFinding}s against a {@link PushContext}
+ * server-mode content-pattern checks that both scan for {@link ContentPatternFinding}s against a {@link PushContext}
  * and never block. Matched values are routed to redaction; only the data type and jurisdiction (never the raw match)
  * are recorded in the step content shown to reviewers.
  */

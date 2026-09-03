@@ -1,7 +1,7 @@
 # Five users covering all proxy permission scenarios and admin/reviewer roles.
 # gitea-setup.sh creates the corresponding Gitea-side accounts and tokens.
 #
-# Identity chain (store-and-forward):
+# Identity chain (server mode):
 #   git push credentials (me:<gitea-token>) → Gitea API → gitea username
 #   → scm_identities lookup → proxy username → permission check
 #

@@ -5,9 +5,9 @@ import lombok.Data;
 /**
  * Binds the {@code server.outbound-proxy:} block in fogwall.yml.
  *
- * <p>Covers outbound connections fogwall itself makes: store-and-forward upstream pushes (JGit Transport),
- * transparent-proxy forwarding (Jetty HttpClient), and provider REST API calls (Apache HttpClient 5). All three are
- * wired from the single resolved proxy here rather than configured independently.
+ * <p>Covers outbound connections fogwall itself makes: server mode upstream pushes (JGit Transport), transparent-proxy
+ * forwarding (Jetty HttpClient), and provider REST API calls (Apache HttpClient 5). All three are wired from the single
+ * resolved proxy here rather than configured independently.
  *
  * <p>{@link #httpProxy}, {@link #httpsProxy}, and {@link #noProxy} fall back to the {@code HTTP_PROXY},
  * {@code HTTPS_PROXY}, and {@code NO_PROXY} environment variables (respected by most CLI tooling) when left unset here.

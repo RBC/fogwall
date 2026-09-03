@@ -87,7 +87,7 @@ export interface Provider {
   id: string
   uri: string
   host: string
-  pushPath: string
+  serverPath: string
   proxyPath: string
   /** True when the SSH listener is enabled and this provider serves SSH (#442). */
   sshEnabled: boolean

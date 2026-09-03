@@ -156,7 +156,7 @@ Scripts read the upstream PAT from a file if `GIT_PASSWORD` is not set:
 
 Run tests by logical grouping. Each entry point orchestrates multiple related test cases:
 
-**Store-and-forward (push):**
+**Server mode (push):**
 
 - `bash test/push-pass-all.sh` — golden-path pushes and tag pushes (should succeed)
 - `bash test/push-fail-all.sh` — validation failures (should be rejected)
@@ -175,7 +175,7 @@ Run tests by logical grouping. Each entry point orchestrates multiple related te
 
 If running a single test case by name:
 
-**Store-and-forward (push):**
+**Server mode (push):**
 
 | Script                 | Category | What it tests                                          |
 | ---------------------- | -------- | ------------------------------------------------------ |
@@ -380,14 +380,14 @@ Open `http://localhost:8080` and log in with any username.
 After `docker/gitea-setup.sh`, the test repository is reachable at:
 
 ```text
-http://localhost:8080/push/gitea:3000/test-owner/test-repo.git
+http://localhost:8080/server/gitea:3000/test-owner/test-repo.git
 http://localhost:8080/proxy/gitea:3000/test-owner/test-repo.git
 ```
 
 Clone example:
 
 ```shell
-git clone http://fogwalladmin:Admin1234!@localhost:8080/push/gitea:3000/test-owner/test-repo.git
+git clone http://fogwalladmin:Admin1234!@localhost:8080/server/gitea:3000/test-owner/test-repo.git
 ```
 
 ### Teardown

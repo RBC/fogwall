@@ -105,7 +105,7 @@ public class JettyConfigurationBuilder {
         return config.getServer().getHeartbeatIntervalSeconds();
     }
 
-    /** Returns the store-and-forward approval wait timeout in seconds. */
+    /** Returns the server mode approval wait timeout in seconds. */
     public int getApprovalTimeoutSeconds() {
         return config.getServer().getApprovalTimeoutSeconds();
     }
@@ -130,7 +130,7 @@ public class JettyConfigurationBuilder {
         return config.getServer().getMaxObjectSizeBytes();
     }
 
-    /** Returns the S&amp;F upstream connect timeout in seconds (0 = no timeout). */
+    /** Returns the server mode upstream connect timeout in seconds (0 = no timeout). */
     public int getUpstreamConnectTimeoutSeconds() {
         return config.getServer().getUpstreamConnectTimeoutSeconds();
     }
@@ -510,16 +510,16 @@ public class JettyConfigurationBuilder {
         FetchStore fs = buildFetchStore();
         UserStore us = buildUserStore();
         UrlRuleRegistry rr = buildUrlRuleRegistry();
-        // Mirror clone depth is configurable per mode (#476). Store-and-forward defaults to full history, transparent
+        // Mirror clone depth is configurable per mode (#476). Server mode defaults to full history, transparent
         // proxy to a shallow clone; shallow-since (a time boundary) takes precedence over clone-depth when both are
         // set.
         var cacheConfig = config.getCache();
-        var serverCache = cacheConfig.getServer();
-        var storeForwardCache = new LocalRepositoryCache(
-                Files.createTempDirectory("fogwall-sf-"),
-                serverCache.resolveCloneDepth(CacheConfig.DEFAULT_SERVER_CLONE_DEPTH),
+        var serverCacheConfig = cacheConfig.getServer();
+        var serverCache = new LocalRepositoryCache(
+                Files.createTempDirectory("fogwall-server-"),
+                serverCacheConfig.resolveCloneDepth(CacheConfig.DEFAULT_SERVER_CLONE_DEPTH),
                 true,
-                serverCache.resolveShallowSince());
+                serverCacheConfig.resolveShallowSince());
         var proxyCacheConfig = cacheConfig.getProxy();
         var proxyCache = new LocalRepositoryCache(
                 Files.createTempDirectory("fogwall-cache-"),
@@ -543,7 +543,7 @@ public class JettyConfigurationBuilder {
                 getMaxObjectSizeBytes(),
                 getUpstreamConnectTimeoutSeconds(),
                 getProxyConnectTimeoutSeconds(),
-                storeForwardCache,
+                serverCache,
                 proxyCache,
                 buildUpstreamTls(),
                 buildProviderRegistry(),

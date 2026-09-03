@@ -19,7 +19,7 @@ import org.eclipse.jgit.transport.*;
 
 /**
  * Post-receive hook that forwards successfully received refs to the upstream provider. This is the "forward" part of
- * store-and-forward: after objects are stored locally and refs updated, we push them upstream.
+ * server mode: after objects are stored locally and refs updated, we push them upstream.
  *
  * <p>If the upstream push fails, the objects remain stored locally. A future retry mechanism could re-attempt the
  * forwarding.

@@ -18,8 +18,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * Regression tests for the fail-closed behavior of store-and-forward validation hooks. When a check cannot run — e.g.
- * the pushed commit can't be read from the repository — the hook must record a blocking error, not a silent PASS, so a
+ * Regression tests for the fail-closed behavior of server mode validation hooks. When a check cannot run — e.g. the
+ * pushed commit can't be read from the repository — the hook must record a blocking error, not a silent PASS, so a
  * malformed push cannot slip an unvalidated change past a control. See {@code ValidationContext#addError}.
  */
 class ValidationHookFailClosedTest {

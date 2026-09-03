@@ -15,8 +15,8 @@ import lombok.Data;
  * {@link PushStep} records (diffs, scan results, etc.) and transient per-request values that must not be stored on the
  * shared cached {@link org.eclipse.jgit.lib.Repository} config.
  *
- * <p>All fields are written once (by {@link StoreAndForwardReceivePackFactory} or early hooks) and read by later hooks.
- * No synchronisation is needed because hooks in a single push execute sequentially on the same thread.
+ * <p>All fields are written once (by {@link ServerReceivePackFactory} or early hooks) and read by later hooks. No
+ * synchronisation is needed because hooks in a single push execute sequentially on the same thread.
  */
 @Data
 public class PushContext {
@@ -27,7 +27,7 @@ public class PushContext {
     // Never logged and never included in any user-facing message - see SecretRedactor.
     private final List<String> secretsToRedact = new ArrayList<>();
 
-    // Per-request credentials — written by StoreAndForwardReceivePackFactory before any hook runs.
+    // Per-request credentials — written by ServerReceivePackFactory before any hook runs.
     private String pushUser;
     private String pushToken;
     private String repoSlug;
@@ -45,12 +45,12 @@ public class PushContext {
     // Resolved upstream username for Bitbucket pushes — written by BitbucketCredentialRewriteHook.
     private String upstreamUser;
 
-    // Push record ID (the correlation identifier) — minted by StoreAndForwardReceivePackFactory and used as the id of
+    // Push record ID (the correlation identifier) — minted by ServerReceivePackFactory and used as the id of
     // the single lifecycle record created by PushStorePersistenceHook.validationResultHook().
     private String pushId;
 
     // When fogwall received the submission — the transport → business-logic handoff, stamped by
-    // StoreAndForwardReceivePackFactory alongside the push id. Used as the lifecycle record's receivedAt (its
+    // ServerReceivePackFactory alongside the push id. Used as the lifecycle record's receivedAt (its
     // timestamp), so receipt time is fixed at the handoff rather than when the record is first persisted. This mirrors
     // transparent proxy, where GitRequestDetails stamps its timestamp at parse time.
     private Instant receivedAt;

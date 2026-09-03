@@ -15,8 +15,8 @@ import org.eclipse.jgit.transport.ReceiveCommand;
 import org.eclipse.jgit.transport.ReceivePack;
 
 /**
- * Pre-receive hook that detects S&amp;F re-pushes where the local cache tip has not yet been forwarded upstream, and
- * stores the effective upstream base SHA in {@link PushContext} so downstream hooks enumerate the full commit range
+ * Pre-receive hook that detects server mode re-pushes where the local cache tip has not yet been forwarded upstream,
+ * and stores the effective upstream base SHA in {@link PushContext} so downstream hooks enumerate the full commit range
  * relative to the upstream rather than just the local cache delta.
  *
  * <p>Example: branch {@code foo} was first pushed (A, B) and then canceled. On re-push (A, B, C), JGit sets
@@ -68,7 +68,7 @@ public class PriorPushEnrichmentHook implements FogwallHook {
                     : lastForwarded.get(0).getCommitTo();
 
             log.debug(
-                    "S&F re-push detected for {}: local tip {} not forwarded upstream; effective base: {}",
+                    "server mode re-push detected for {}: local tip {} not forwarded upstream; effective base: {}",
                     refName,
                     localCacheTip,
                     effectiveFrom);

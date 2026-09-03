@@ -1,16 +1,16 @@
 server:
   port: 8080
-  # Approval mode for store-and-forward pushes. Options:
+  # Approval mode for server mode pushes. Options:
   #   auto        — immediately approves every clean push; no dashboard required (default)
   #   ui          — polls the push store waiting for a human reviewer via the REST API
   #   servicenow  — delegates to a ServiceNow approval workflow
   # Note: when running FogwallDashboardApplication, 'ui' mode is always used regardless of this setting.
   approval-mode: auto
-  # Heartbeat interval in seconds for store-and-forward sideband keepalives.
+  # Heartbeat interval in seconds for server mode sideband keepalives.
   # Sends a "." progress packet periodically to prevent idle-timeout disconnects during long validation steps
   # (e.g. secret scanning, approval polling). Set to 0 to disable.
   heartbeat-interval-seconds: 10
-  # Maximum time in seconds a store-and-forward push waits for human review before the record is marked
+  # Maximum time in seconds a server mode push waits for human review before the record is marked
   # timed out (and canceled). Only applies to 'ui'/'servicenow' approval modes.
   approval-timeout-seconds: 1800
   # Maximum number of requests handled concurrently on virtual threads. Requests over the limit wait for a
@@ -26,7 +26,7 @@ server:
   # real bound is heap divided by concurrent pushes. Set to 0 to disable the check (still bounded by heap).
   max-push-bytes: 67108864
   # Largest decompressed size of any single object in a pushed pack, in bytes (default 128MiB). Applies to both
-  # proxy modes and both store-and-forward transports (HTTP and SSH). max-push-bytes caps the compressed wire
+  # proxy modes and both server mode transports (HTTP and SSH). max-push-bytes caps the compressed wire
   # size; a crafted pack can inflate to roughly 1000x that, and this is the bound on the inflated side. It sits
   # deliberately far above the binary-blob filter's 50MiB policy ceiling — this limit exists only to stop
   # decompression bombs and should never be the check a legitimate push runs into. Set to 0 to disable.
@@ -54,12 +54,12 @@ server:
   # allowed-origins:
   #   - https://dashboard.example.com
 
-# SSH transport (store-and-forward push over SSH).
+# SSH transport (server mode push over SSH).
 # Disabled by default. Enable with server.ssh.enabled: true.
 #
 # When enabled, fogwall listens on an SSH port and accepts `git push` connections authenticated by
 # public key. The push is processed through the same validation and approval hook chain as HTTP
-# store-and-forward. Upstream forwarding uses SSH key auth; the upstream provider must therefore
+# server mode. Upstream forwarding uses SSH key auth; the upstream provider must therefore
 # have an SSH URI (e.g. ssh://git@github.com or git@gitea-host).
 #
 #  ssh:
@@ -73,7 +73,7 @@ server:
 #      - "git.internal.example.com ssh-ed25519 AAAA..."
 #    trust-on-first-use: false                     # true = pin an unknown host on first connect (logged); trusted networks only
 
-# Outbound proxy for connections fogwall itself makes: store-and-forward upstream pushes,
+# Outbound proxy for connections fogwall itself makes: server mode upstream pushes,
 # transparent-proxy forwarding, and provider REST API calls (identity resolution, SSH key listing).
 #
 # Unset here, http-proxy/https-proxy/no-proxy fall back to the HTTP_PROXY/HTTPS_PROXY/NO_PROXY env vars.
@@ -163,7 +163,7 @@ attestations: []
 #    label: "Internal ticket or justification reference"
 #    required: false
 
-# Per-commit validation rules applied by both the store-and-forward and transparent proxy pipelines.
+# Per-commit validation rules applied by both the server mode and transparent proxy pipelines.
 # These checks run once per commit in a push (author email, commit message content).
 commit:
   author:

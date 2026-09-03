@@ -11,7 +11,7 @@ import org.apache.hc.core5.util.Timeout;
 /**
  * Answers one question about an upstream repository: does reading it require credentials?
  *
- * <p>Store-and-forward has to challenge a developer for credentials before it can forward them upstream, but a blanket
+ * <p>Server mode has to challenge a developer for credentials before it can forward them upstream, but a blanket
  * challenge on every fetch makes genuinely public repositories unclonable by anyone who has no credential to offer —
  * and worse, providers such as GitHub reject an <em>invalid</em> {@code Authorization} header on a public repository
  * that they would have served anonymously. Asking upstream first means the challenge follows the repository's actual

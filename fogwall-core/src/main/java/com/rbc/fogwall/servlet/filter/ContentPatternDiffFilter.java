@@ -21,7 +21,7 @@ import org.eclipse.jgit.lib.Repository;
 
 /**
  * Proxy-mode content-pattern scanning of the pushed diff (structured PII/identifier detection - SIN, SSN, NINO, etc).
- * Runs after {@link EnrichPushCommitsFilter} (local repository is populated) and mirrors the store-and-forward
+ * Runs after {@link EnrichPushCommitsFilter} (local repository is populated) and mirrors the server mode
  * {@link com.rbc.fogwall.git.ContentPatternDiffHook}.
  *
  * <p>Always WARN, never blocks - see {@link ContentPatternConfig}. Matched values are routed to

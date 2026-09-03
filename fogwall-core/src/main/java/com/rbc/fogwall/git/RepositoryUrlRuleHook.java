@@ -16,8 +16,8 @@ import org.eclipse.jgit.transport.ReceiveCommand;
 import org.eclipse.jgit.transport.ReceivePack;
 
 /**
- * Pre-receive hook that enforces URL allow/deny rules in store-and-forward mode. Rule evaluation is delegated entirely
- * to {@link UrlRuleEvaluator}; this class only handles extracting the JGit context and writing JGit responses.
+ * Pre-receive hook that enforces URL allow/deny rules in server mode. Rule evaluation is delegated entirely to
+ * {@link UrlRuleEvaluator}; this class only handles extracting the JGit context and writing JGit responses.
  *
  * <p>Mirrors the behaviour of {@link UrlRuleAggregateFilter} for the JGit hook chain.
  */

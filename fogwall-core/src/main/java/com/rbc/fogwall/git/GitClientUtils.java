@@ -223,16 +223,16 @@ public class GitClientUtils {
     }
 
     /**
-     * Builds a validation summary in the same two-line format as store-and-forward streaming output:
+     * Builds a validation summary in the same two-line format as server mode streaming output:
      *
      * <pre>
      *   🔑  Checking author emails...
      *     ✅  emails OK
      * </pre>
      *
-     * <p>Used by both the transparent proxy pipeline (delivered as a single batch at the end) and the S&amp;F pipeline
-     * (shown before the approval-gate message). Data steps (diff generation) and infrastructure steps are excluded.
-     * Returns an empty string if there are no relevant steps.
+     * <p>Used by both the transparent proxy pipeline (delivered as a single batch at the end) and the server mode
+     * pipeline (shown before the approval-gate message). Data steps (diff generation) and infrastructure steps are
+     * excluded. Returns an empty string if there are no relevant steps.
      */
     public static String buildValidationSummary(List<PushStep> steps) {
         // Pure data / infrastructure steps that don't represent a user-visible check

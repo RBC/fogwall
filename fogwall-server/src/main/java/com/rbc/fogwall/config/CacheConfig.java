@@ -12,9 +12,9 @@ import lombok.Data;
  * holds is a genuine per-deployment tradeoff, not something that should differ by accident: a full mirror is the most
  * correct basis for reachability checks but a first clone of a large repo can exceed HTTP timeouts, while a shallow
  * mirror clones cheaply but truncates history. Each mode has its own sub-block ({@code cache.proxy} and
- * {@code cache.server}) and only the <b>defaults</b> differ — server mode (store-and-forward) defaults to full,
- * transparent proxy to shallow. Both knobs are available to both modes: shallow cloning is fully supported for server
- * mode too (it serves large repos as well), it is simply not the default.
+ * {@code cache.server}) and only the <b>defaults</b> differ — server mode defaults to full, transparent proxy to
+ * shallow. Both knobs are available to both modes: shallow cloning is fully supported for server mode too (it serves
+ * large repos as well), it is simply not the default.
  *
  * <p>Two knobs, {@code shallow-since} preferred:
  *
@@ -37,7 +37,7 @@ public class CacheConfig {
     /** Transparent-proxy mirror. Defaults to shallow ({@code clone-depth: 100}) — see {@link TransportCacheConfig}. */
     private TransportCacheConfig proxy = new TransportCacheConfig();
 
-    /** Server-mode (store-and-forward) mirror. Defaults to full history ({@code clone-depth: 0}). */
+    /** Server-mode mirror. Defaults to full history ({@code clone-depth: 0}). */
     private TransportCacheConfig server = new TransportCacheConfig();
 
     /** Default depth for the transparent-proxy mirror when neither knob is configured. */
@@ -53,9 +53,9 @@ public class CacheConfig {
         /**
          * Commit depth for the shallow clone; {@code 0} means full history. {@code null} (the default) means "unset" —
          * the mode's own default applies ({@link #DEFAULT_PROXY_CLONE_DEPTH} for proxy,
-         * {@link #DEFAULT_STORE_FORWARD_CLONE_DEPTH} for store-and-forward). Ignored entirely when
-         * {@link #shallowSince} is set. Modelled as a nullable {@link Integer} so an explicit {@code 0} (full) is
-         * distinguishable from an omitted key.
+         * {@link #DEFAULT_SERVER_CLONE_DEPTH} for server mode). Ignored entirely when {@link #shallowSince} is set.
+         * Modelled as a nullable {@link Integer} so an explicit {@code 0} (full) is distinguishable from an omitted
+         * key.
          */
         private Integer cloneDepth;
 

@@ -59,28 +59,28 @@ isn't actually providing security.
 
 Two proxy modes, both configurable per-provider:
 
-- **Store-and-forward** (`/push/<provider>/<owner>/<repo>.git`) — JGit ReceivePack receives the push locally, runs a
-  pre-receive hook chain (`AuthorEmailValidationHook` → `CommitMessageValidationHook` → `ValidationVerifierHook`), then
+- **Server mode** (`/server/<provider>/<owner>/<repo>.git`; formerly "store-and-forward", still served at the deprecated
+  `/push/…` alias) — JGit ReceivePack receives the push locally, runs a pre-receive hook chain
+  (`AuthorEmailValidationHook` → `CommitMessageValidationHook` → `ValidationVerifierHook`), then
   `ForwardingPostReceiveHook` pushes upstream using the client's credentials.
 - **Transparent proxy** (`/proxy/<provider>/<owner>/<repo>.git`) — Jetty's `ProxyServlet` forwards the request; a
   servlet filter chain (`ParseGitRequestFilter` → `EnrichPushCommitsFilter` → validation filters) inspects the pack data
   before it reaches the upstream.
 
 Virtually all core features (validation rules, approval model, provider abstraction) must be shared between the two
-modes. The main difference is that store-and-forward can stream progress messages live to the client via JGit hooks,
-while transparent proxy must buffer everything and send one response at the end of the filter chain.
+modes. The main difference is that server mode can stream progress messages live to the client via JGit hooks, while
+transparent proxy must buffer everything and send one response at the end of the filter chain.
 
-Store-and-forward also has an SSH transport (`fogwall-server`'s MINA SSHD-based `SshGitServer` / `SshGitReceiveCommand`
-/ `SshGitUploadCommand`) alongside the HTTP one — it's the same mode, delegating to the same
-`StoreAndForwardReceivePackFactory` hook chain, just reached over `git-receive-pack`/`git-upload-pack` SSH commands
-instead of HTTP, with upstream auth via the client's forwarded SSH agent. Not a third proxy mode; a second transport for
-the same one.
+Server mode also has an SSH transport (`fogwall-server`'s MINA SSHD-based `SshGitServer` / `SshGitReceiveCommand` /
+`SshGitUploadCommand`) alongside the HTTP one — it's the same mode, delegating to the same `ServerReceivePackFactory`
+hook chain, just reached over `git-receive-pack`/`git-upload-pack` SSH commands instead of HTTP, with upstream auth via
+the client's forwarded SSH agent. Not a third proxy mode; a second transport for the same one.
 
 ## Client output — streaming constraint
 
-**Store-and-forward** uses JGit `ReceivePack` pre-receive hooks. Each hook can call `rp.sendMessage()` at any point and
-the message streams to the git client immediately as a sideband progress packet (`remote: …`). This is how per-step
-progress lines are sent live.
+**Server mode** uses JGit `ReceivePack` pre-receive hooks. Each hook can call `rp.sendMessage()` at any point and the
+message streams to the git client immediately as a sideband progress packet (`remote: …`). This is how per-step progress
+lines are sent live.
 
 **Transparent proxy** uses servlet filters. The HTTP response is a single buffered reply — there is no mechanism to
 stream partial output mid-filter-chain. Validation filters must _accumulate_ their result and return;

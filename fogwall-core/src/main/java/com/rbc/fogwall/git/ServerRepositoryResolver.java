@@ -15,23 +15,21 @@ import org.eclipse.jgit.transport.resolver.ServiceNotAuthorizedException;
 import org.eclipse.jgit.transport.resolver.ServiceNotEnabledException;
 
 /**
- * Repository resolver for store-and-forward mode. Syncs a local bare repo from the upstream provider on each open,
- * ensuring the local mirror is fresh for both fetch and push operations.
+ * Repository resolver for server mode. Syncs a local bare repo from the upstream provider on each open, ensuring the
+ * local mirror is fresh for both fetch and push operations.
  *
  * <p>Supports both public and private repositories. Client credentials are extracted from the request and used
  * transiently for the upstream clone/fetch — they are never written to disk. The same credentials are stored as a
- * request attribute ({@link #CREDENTIALS_ATTRIBUTE}) so that {@link StoreAndForwardReceivePackFactory} can pass them to
+ * request attribute ({@link #CREDENTIALS_ATTRIBUTE}) so that {@link ServerReceivePackFactory} can pass them to
  * {@link ForwardingPostReceiveHook} for the upstream push.
  */
 @Slf4j
 @RequiredArgsConstructor
-public class StoreAndForwardRepositoryResolver implements RepositoryResolver<HttpServletRequest> {
+public class ServerRepositoryResolver implements RepositoryResolver<HttpServletRequest> {
 
     public static final String CREDENTIALS_ATTRIBUTE = "com.rbc.fogwall.credentials";
 
-    /**
-     * Upstream URL this request resolved to, read by {@link StoreAndForwardReceivePackFactory} onto its PushContext.
-     */
+    /** Upstream URL this request resolved to, read by {@link ServerReceivePackFactory} onto its PushContext. */
     public static final String UPSTREAM_URL_ATTRIBUTE = "com.rbc.fogwall.upstreamUrl";
 
     private final LocalRepositoryCache cache;
@@ -48,7 +46,7 @@ public class StoreAndForwardRepositoryResolver implements RepositoryResolver<Htt
         // URI normalization must not be the only defense against traversal in the repository path.
         for (String segment : cleanName.split("/")) {
             if (!RepoSlugValidator.isValidSegment(segment)) {
-                log.warn("Rejecting store-and-forward open with invalid repository path: {}", name);
+                log.warn("Rejecting server mode open with invalid repository path: {}", name);
                 throw new RepositoryNotFoundException(name);
             }
         }
@@ -71,7 +69,7 @@ public class StoreAndForwardRepositoryResolver implements RepositoryResolver<Htt
             req.setAttribute("com.rbc.fogwall.pushUser", userPass[0]);
         }
 
-        log.info("Opening store-and-forward repository: {} -> {}", name, cleanUpstreamUrl);
+        log.info("Opening server mode repository: {} -> {}", name, cleanUpstreamUrl);
 
         req.setAttribute(UPSTREAM_URL_ATTRIBUTE, cleanUpstreamUrl);
 

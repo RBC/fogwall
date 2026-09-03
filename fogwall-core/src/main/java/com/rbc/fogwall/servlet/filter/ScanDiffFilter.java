@@ -29,10 +29,10 @@ import org.eclipse.jgit.lib.Repository;
  * <p>Only added lines (prefixed with {@code +} in the unified diff, excluding the {@code +++} header) are scanned.
  * Deletions and context lines are ignored.
  *
- * <p>Two scan passes run, mirroring the store-and-forward {@code DiffScanningHook}: an aggregate scan of the old..new
- * diff, and a per-commit scan of every individually introduced commit. The per-commit pass exists so that content added
- * in one commit and removed by a later commit in the same push is still caught — otherwise the aggregate diff alone
- * would look clean (see RBC/fogwall#339).
+ * <p>Two scan passes run, mirroring the server mode {@code DiffScanningHook}: an aggregate scan of the old..new diff,
+ * and a per-commit scan of every individually introduced commit. The per-commit pass exists so that content added in
+ * one commit and removed by a later commit in the same push is still caught — otherwise the aggregate diff alone would
+ * look clean (see RBC/fogwall#339).
  *
  * <p>This filter runs at order 300, in the content filters range (200-399).
  */

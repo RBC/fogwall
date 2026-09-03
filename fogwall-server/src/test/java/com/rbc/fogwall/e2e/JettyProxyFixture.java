@@ -16,9 +16,9 @@ import com.rbc.fogwall.db.model.AccessRule;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
 import com.rbc.fogwall.git.LocalRepositoryCache;
-import com.rbc.fogwall.git.StoreAndForwardReceivePackFactory;
-import com.rbc.fogwall.git.StoreAndForwardRepositoryResolver;
-import com.rbc.fogwall.git.StoreAndForwardUploadPackFactory;
+import com.rbc.fogwall.git.ServerReceivePackFactory;
+import com.rbc.fogwall.git.ServerRepositoryResolver;
+import com.rbc.fogwall.git.ServerUploadPackFactory;
 import com.rbc.fogwall.git.UpstreamAuthProbe;
 import com.rbc.fogwall.jetty.BlockingContentHandler;
 import com.rbc.fogwall.jetty.FogwallJettyApplication;
@@ -101,8 +101,8 @@ class JettyProxyFixture implements AutoCloseable {
     }
 
     /**
-     * Create a fixture with URL allow/deny rules enforced on both the transparent proxy path and the store-and-forward
-     * path. Uses auto-approve for the approval gateway so that allowed pushes go through without a review step.
+     * Create a fixture with URL allow/deny rules enforced on both the transparent proxy path and the server mode path.
+     * Uses auto-approve for the approval gateway so that allowed pushes go through without a review step.
      */
     JettyProxyFixture(URI giteaUri, List<AccessRule> configRules) throws Exception {
         this(
@@ -146,7 +146,7 @@ class JettyProxyFixture implements AutoCloseable {
         server.addConnector(connector);
 
         pushStore = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
-        var storeForwardCache = new LocalRepositoryCache(Files.createTempDirectory("fogwall-e2e-sf-"), 0, true);
+        var serverCache = new LocalRepositoryCache(Files.createTempDirectory("fogwall-e2e-sf-"), 0, true);
         var proxyCache = new LocalRepositoryCache();
 
         var provider =
@@ -172,12 +172,12 @@ class JettyProxyFixture implements AutoCloseable {
             configRules.forEach(urlRuleRegistry::save);
         }
 
-        // Store-and-forward GitServlet on /push/...
-        var resolver = new StoreAndForwardRepositoryResolver(storeForwardCache, provider);
+        // Server mode GitServlet on /push/...
+        var resolver = new ServerRepositoryResolver(serverCache, provider);
         var gitServlet = new GitServlet();
         gitServlet.setRepositoryResolver(resolver);
         var approvalGateway = new AutoApproveGateway(pushStore);
-        gitServlet.setReceivePackFactory(new StoreAndForwardReceivePackFactory(
+        gitServlet.setReceivePackFactory(new ServerReceivePackFactory(
                 provider,
                 () -> commitConfig,
                 DiffScanConfig::defaultConfig,
@@ -192,14 +192,14 @@ class JettyProxyFixture implements AutoCloseable {
                 null,
                 Duration.ofSeconds(30),
                 urlRuleRegistry));
-        gitServlet.setUploadPackFactory(new StoreAndForwardUploadPackFactory());
+        gitServlet.setUploadPackFactory(new ServerUploadPackFactory());
 
         String pushServletPath = PUSH_PREFIX + provider.servletPath();
         String pushMapping = pushServletPath + "/*";
         var gitHolder = new ServletHolder(gitServlet);
         gitHolder.setName("git-gitea-e2e");
         context.addServlet(gitHolder, pushMapping);
-        // Mirrors FogwallServletRegistrar: without this the fixture would exercise a store-and-forward
+        // Mirrors FogwallServletRegistrar: without this the fixture would exercise a server mode
         // wiring production never runs, leaking every push's quarantine instead of discarding it.
         context.addFilter(
                 new FilterHolder(new QuarantineCleanupFilter()), pushMapping, EnumSet.of(DispatcherType.REQUEST));

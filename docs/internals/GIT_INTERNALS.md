@@ -65,7 +65,7 @@ When you run `git push origin refs/tags/v1.0`:
 
 ### How each hook/filter handles tags
 
-#### S&F hooks (`CheckEmptyBranchHook`, `CheckHiddenCommitsHook`)
+#### server mode hooks (`CheckEmptyBranchHook`, `CheckHiddenCommitsHook`)
 
 Tags push commits that already exist upstream. `CommitInspectionService.getCommitRange()` returns an empty list — the
 commit at the tag tip is already reachable from existing heads, so it is not "new".
@@ -83,14 +83,14 @@ if (commitId == null) continue;
 walk.markStart(walk.parseCommit(commitId));
 ```
 
-All other S&F hooks (`AuthorEmailValidationHook`, `CommitMessageValidationHook`, etc.) delegate to
+All other server mode hooks (`AuthorEmailValidationHook`, `CommitMessageValidationHook`, etc.) delegate to
 `CommitInspectionService.getCommitDetails()` or `getCommitRange()`, both of which use `^{commit}`. They are safe
 transitively.
 
 #### Proxy-mode filters
 
-The proxy pipeline sees the same two objects as the S&F hooks — the packet line SHAs and the pack data — but runs as
-servlet filters without JGit's `ReceivePack` infrastructure.
+The proxy pipeline sees the same two objects as the server mode hooks — the packet line SHAs and the pack data — but
+runs as servlet filters without JGit's `ReceivePack` infrastructure.
 
 **`ParseGitRequestFilter`** — extracts `branch`, `commitFrom`, `commitTo` from the packet line, then tries to parse the
 first pack object as a commit. For a tag push this fails (the pack contains a tag object or no new objects). The parse
@@ -102,7 +102,7 @@ email → rejects with "Unknown User". Fix: skip the email check for tag pushes;
 basic auth.
 
 **`CheckEmptyBranchFilter`** — empty `pushedCommits` + zero `commitFrom` looks like an empty branch push. Fix: skip for
-tag refs, same reasoning as the S&F hook.
+tag refs, same reasoning as the server mode hook.
 
 **`CheckHiddenCommitsFilter`** — calls `walk.parseCommit(repo.resolve(toCommit))` where `toCommit` is the tag object
 SHA. Fix: use `repo.resolve(toCommit + "^{commit}")`, consistent with all other `CommitInspectionService` callers.
@@ -141,7 +141,7 @@ The null byte `\0` separates the ref triple from the capability string (e.g. `re
 **first** packet line carries capabilities; subsequent lines omit the `\0…` suffix.
 
 `GitReceivePackParser.parsePush()` splits this line and populates `PushInfo` (proxy mode) or JGit's `ReceiveCommand`
-carries the same triple (S&F mode).
+carries the same triple (server mode).
 
 ### Determining the push type from the packet line
 
@@ -154,7 +154,7 @@ The packet line SHAs encode what kind of ref update is happening:
 | `abc123` | `000…0`  | `refs/heads/feature` | **Branch deletion** — remove the ref               |
 | `000…0`  | `abc123` | `refs/tags/v1.0`     | **New tag** — see "Tag objects" section            |
 
-In S&F mode, JGit's `ReceiveCommand.Type` enum maps these directly: `CREATE`, `UPDATE`, `UPDATE_NONFASTFORWARD`,
+In server mode, JGit's `ReceiveCommand.Type` enum maps these directly: `CREATE`, `UPDATE`, `UPDATE_NONFASTFORWARD`,
 `DELETE`.
 
 In proxy mode, `GitRequestDetails` exposes helper methods:
@@ -183,8 +183,8 @@ for (Ref ref : repository.getRefDatabase().getRefsByPrefix("refs/heads/")) {
 This walks backward from the pushed tip, excluding anything reachable from existing branch heads. The result is only the
 commits that are genuinely new.
 
-**S&F mode**: JGit's `ReceivePack` has already unpacked the objects into its own repository, so `getCommitRange()` works
-against that repo directly.
+**server mode**: JGit's `ReceivePack` has already unpacked the objects into its own repository, so `getCommitRange()`
+works against that repo directly.
 
 **Proxy mode**: `EnrichPushCommitsFilter` must first clone/fetch the upstream and unpack the push's pack data into the
 local clone (see "How proxy mode gets a repository" below), then `getCommitRange()` can walk the combined object store.
@@ -204,7 +204,7 @@ returns exactly the commits introduced by this push.
 
 A force push rewrites history. `oldOid` is no longer an ancestor of `newOid`.
 
-In S&F mode, JGit classifies this as `ReceiveCommand.Type.UPDATE_NONFASTFORWARD`.
+In server mode, JGit classifies this as `ReceiveCommand.Type.UPDATE_NONFASTFORWARD`.
 `ForwardingPostReceiveHook.buildRefUpdates()` sets `force=true` for these so the upstream accepts the rewrite.
 
 In proxy mode, the request is forwarded as-is — the upstream git server decides whether to accept the force push based
@@ -217,7 +217,7 @@ added, not what was removed.
 
 When `newOid` is all-zeros, the client is deleting a ref. There are no objects in the pack and no commits to validate.
 
-**S&F mode**: `ReceiveCommand.Type.DELETE`. Hooks that iterate commands skip `DELETE` types explicitly (e.g.
+**server mode**: `ReceiveCommand.Type.DELETE`. Hooks that iterate commands skip `DELETE` types explicitly (e.g.
 `CheckEmptyBranchHook`, `CheckHiddenCommitsHook`, `DiffGenerationHook`). `ForwardingPostReceiveHook` handles deletion by
 creating a `RemoteRefUpdate` with a null source ref — JGit translates this to a delete on the upstream.
 
@@ -231,7 +231,7 @@ creating a `RemoteRefUpdate` with a null source ref — JGit translates this to 
 
 The two proxy modes obtain commit metadata very differently.
 
-### S&F mode: JGit ReceivePack
+### server mode: JGit ReceivePack
 
 JGit's `ReceivePack` handles the entire git protocol server-side. When the client pushes, JGit:
 
@@ -242,7 +242,7 @@ JGit's `ReceivePack` handles the entire git protocol server-side. When the clien
 Hooks can call any JGit API — `RevWalk`, `DiffFormatter`, `git.log()` — because the objects are already in the local
 object store. No special setup required.
 
-The repository is a bare repo managed by the S&F servlet, one per provider+repo combination.
+The repository is a bare repo managed by the server mode servlet, one per provider+repo combination.
 
 ### Proxy mode: clone + unpack
 
@@ -257,7 +257,7 @@ request is just bytes on the wire being forwarded to the upstream.
 
 2. **Unpack push data**: The push's pack data (from the HTTP request body) is fed into JGit's `PackParser`, which
    inserts the objects into the local clone's object store. This is the equivalent of what `ReceivePack` does internally
-   in S&F mode.
+   in server mode.
 
 3. **Walk commits**: With objects now in the local clone, `CommitInspectionService` can walk the commit range, generate
    diffs, etc.
@@ -287,10 +287,10 @@ can be deepened via configuration (`cloneDepth`).
 
 Diffs are generated in both modes but through different code paths:
 
-| Mode  | Component                        | When                            | What                                     |
-| ----- | -------------------------------- | ------------------------------- | ---------------------------------------- |
-| S&F   | `DiffGenerationHook` (order 280) | Pre-receive, post-validation    | Push diff + optional default-branch diff |
-| Proxy | `ScanDiffFilter` (order 300)     | After `EnrichPushCommitsFilter` | Push diff only                           |
+| Mode        | Component                        | When                            | What                                     |
+| ----------- | -------------------------------- | ------------------------------- | ---------------------------------------- |
+| server mode | `DiffGenerationHook` (order 280) | Pre-receive, post-validation    | Push diff + optional default-branch diff |
+| Proxy       | `ScanDiffFilter` (order 300)     | After `EnrichPushCommitsFilter` | Push diff only                           |
 
 Both ultimately call `CommitInspectionService.getFormattedDiff(repo, fromCommit, toCommit)`.
 
@@ -320,7 +320,7 @@ new commits, not the entire history they're built on.
 If the oldest new commit is a root commit (no parent), the base is null, and the diff does fall back to the empty tree —
 but this only happens for genuinely new repositories.
 
-### Default-branch diff (S&F only)
+### Default-branch diff (server mode only)
 
 `DiffGenerationHook` generates a second diff when pushing to a non-default branch: the total diff of
 `defaultBranch..commitTo`. This helps reviewers see the full scope of a feature branch without having to check it out.
@@ -425,8 +425,8 @@ the servlet layer sees it. It uses Jetty 12's `Content.Source.read()` / `Content
 
 The accumulated body is wrapped in a `BufferedBodyRequest` (a `Request.Wrapper` that overrides the `Content.Source`
 methods) so the servlet layer's `HttpInput` reads from the buffered copy. Both the transparent proxy filter chain
-(`RequestBodyWrapper.readAllBytes()`) and the store-and-forward path (JGit's `ReceivePack`) get the complete body
-without touching the network.
+(`RequestBodyWrapper.readAllBytes()`) and the server mode path (JGit's `ReceivePack`) get the complete body without
+touching the network.
 
 GET requests pass through without buffering.
 

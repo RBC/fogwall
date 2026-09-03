@@ -117,20 +117,20 @@ unchanged, since none of them contain `__`.
 server:
   port: 8080
 
-  # Approval mode for store-and-forward pushes:
+  # Approval mode for server mode pushes:
   #   auto       — approves every clean push immediately (default; no dashboard required)
   #   ui         — waits for a human reviewer via the REST API
   #   servicenow — delegates to a ServiceNow approval workflow
   # Note: FogwallDashboardApplication always uses 'ui' regardless of this setting.
   approval-mode: auto
 
-  # How long a store-and-forward push waits for a review decision while the client
+  # How long a server mode push waits for a review decision while the client
   # connection is held open (approval-mode: ui or servicenow). On expiry the push is
   # marked CANCELED and rejected — the developer must re-push and re-review. This is a
   # live-session bound, not a durable queue; hold it short. Default 1800 (30 minutes).
   approval-timeout-seconds: 1800
 
-  # Sideband keepalive interval in seconds for store-and-forward operations.
+  # Sideband keepalive interval in seconds for server mode operations.
   # Sends periodic progress packets to prevent idle-timeout disconnects during
   # long steps (secret scanning, approval polling). Set to 0 to disable.
   heartbeat-interval-seconds: 10
@@ -153,7 +153,7 @@ server:
   max-push-bytes: 67108864 # 64MiB
 
   # Largest decompressed size of any single object in a pushed pack, in bytes.
-  # Applies to both proxy modes, and to both store-and-forward transports (HTTP and
+  # Applies to both proxy modes, and to both server mode transports (HTTP and
   # SSH). max-push-bytes above caps the compressed wire size, but a crafted pack can
   # inflate to roughly 1000x its compressed size — this caps the inflated side, per
   # object. A push containing a violating object is rejected during pack parsing.
@@ -269,9 +269,9 @@ To inspect push content, fogwall keeps a local bare mirror of each upstream repo
 holds is a per-deployment tradeoff: a full mirror is the most correct basis for reachability checks, but a first clone
 of a large repository (e.g. one with a large binary history) can be slow enough to exceed HTTP connection timeouts; a
 shallow mirror clones cheaply but truncates history. The two modes are configured separately and only their **defaults**
-differ — **server mode (store-and-forward) defaults to full history, transparent proxy to a shallow clone.** Either mode
-accepts either knob: server mode is used against large repositories too, so shallow cloning is fully supported there —
-set `cache.server.shallow-since` or `cache.server.clone-depth` to enable it.
+differ — **server mode defaults to full history, transparent proxy to a shallow clone.** Either mode accepts either
+knob: server mode is used against large repositories too, so shallow cloning is fully supported there — set
+`cache.server.shallow-since` or `cache.server.clone-depth` to enable it.
 
 ```yaml
 cache:
@@ -350,16 +350,15 @@ without any changes.
 This applies to both proxy modes:
 
 - **Transparent proxy** — Jetty's `HttpClient` used for upstream forwarding
-- **Store-and-forward** — JGit's HTTP transport used for forwarding after local receipt
+- **Server mode** — JGit's HTTP transport used for forwarding after local receipt
 
 ## Outbound proxy
 
 _Available since v1.3.0._
 
 For environments without direct internet access, fogwall can route its own outbound connections through a corporate HTTP
-proxy. This covers all three places fogwall makes outbound connections: store-and-forward upstream pushes (JGit
-Transport), transparent-proxy forwarding (Jetty `HttpClient`), and provider REST API calls (identity resolution, SSH key
-listing).
+proxy. This covers all three places fogwall makes outbound connections: server mode upstream pushes (JGit Transport),
+transparent-proxy forwarding (Jetty `HttpClient`), and provider REST API calls (identity resolution, SSH key listing).
 
 ```yaml
 server:
@@ -1037,7 +1036,7 @@ providers:
 
 ## Commit validation
 
-Per-commit checks (identity, email policy, message content) apply to both store-and-forward and transparent proxy modes.
+Per-commit checks (identity, email policy, message content) apply to both server mode and transparent proxy modes.
 
 ```yaml
 commit:
