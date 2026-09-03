@@ -178,6 +178,20 @@ public class ParseGitRequestFilter extends ProviderAwareFogwallFilter<FogwallPro
                     packetLine = pli.readStringRaw();
                 }
 
+                // A signed push (git push --signed) replaces the ref-update line with a push-cert
+                // block whose second line is certificate text, so without this check it would fall
+                // through to the multi-ref rejection below and be blamed on multi-branch pushing.
+                // No supported upstream advertises the push-cert capability, so a stock client never
+                // sends this; reject it by name rather than parse into the certificate.
+                if (packetLine.startsWith("push-cert")) {
+                    log.warn("Rejecting signed push (push-cert): the capability is not supported");
+                    gr.setResult(GitRequestDetails.GitResult.REJECTED);
+                    gr.setRejectionTitle("Push Blocked - Signed Push Not Supported");
+                    gr.setReason(
+                            "Signed pushes (git push --signed) are not supported. Please push again without --signed.");
+                    return gr;
+                }
+
                 // CVE-2025-54583: Reject multi-ref pushes. Read the next pkt-line — it must
                 // be a flush packet (0000). If it's another ref update, the client is pushing
                 // multiple branches and we must reject.
