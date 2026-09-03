@@ -126,6 +126,45 @@ class CommitInspectionServiceTest {
     }
 
     @Test
+    void getAnnotatedTagTagger_annotatedTag_returnsTagger() throws Exception {
+        createCommit("init");
+        var ref = git.tag()
+                .setName("v1.0.0")
+                .setMessage("Release 1.0.0")
+                .setTagger(new PersonIdent("Tag Ger", "tagger@example.com"))
+                .setAnnotated(true)
+                .call();
+
+        var tagger = CommitInspectionService.getAnnotatedTagTagger(repo, ref.getObjectId());
+
+        assertTrue(tagger.isPresent());
+        assertEquals("Tag Ger", tagger.get().getName());
+        assertEquals("tagger@example.com", tagger.get().getEmail());
+    }
+
+    @Test
+    void getAnnotatedTagTagger_lightweightTag_returnsEmpty() throws Exception {
+        createCommit("init");
+        var ref = git.tag().setName("v1.0.0").setAnnotated(false).call();
+
+        assertTrue(CommitInspectionService.getAnnotatedTagTagger(repo, ref.getObjectId())
+                .isEmpty());
+    }
+
+    @Test
+    void getAnnotatedTagTagger_commitObject_returnsEmpty() throws Exception {
+        RevCommit c = createCommit("a commit, not a tag");
+
+        assertTrue(
+                CommitInspectionService.getAnnotatedTagTagger(repo, c.getId()).isEmpty());
+    }
+
+    @Test
+    void getAnnotatedTagTagger_nullId_returnsEmpty() throws Exception {
+        assertTrue(CommitInspectionService.getAnnotatedTagTagger(repo, null).isEmpty());
+    }
+
+    @Test
     void getAnnotatedTagMessage_nullId_returnsEmpty() throws Exception {
         assertTrue(CommitInspectionService.getAnnotatedTagMessage(repo, null).isEmpty());
     }

@@ -37,6 +37,14 @@ public class GitRequestDetails {
      */
     private String tagMessage;
 
+    /**
+     * The tagger identity of an annotated tag push, or {@code null} for a branch push or a lightweight tag. Set by
+     * {@code EnrichPushCommitsFilter} (transparent proxy). Git fills the tagger line from the same identity as a
+     * commit's committer line, so it is validated against the committer email policy by
+     * {@code CheckAuthorEmailsFilter}.
+     */
+    private Contributor tagger;
+
     private FogwallProvider provider; // this should never be null
     /**
      * Provider-specific upstream username to use when forwarding the push. Set by {@code BitbucketIdentityFilter}

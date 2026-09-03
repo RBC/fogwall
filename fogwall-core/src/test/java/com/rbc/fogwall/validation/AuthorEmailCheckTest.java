@@ -213,4 +213,51 @@ class AuthorEmailCheckTest {
         AuthorEmailCheck check = new AuthorEmailCheck(committerDomainAllow("corp\\.com$"));
         assertTrue(check.check(List.of(plainCommit(email))).isEmpty());
     }
+
+    // ---- tagger identity (annotated tags, held to the committer policy) ----
+
+    private static Contributor tagger(String email) {
+        return Contributor.builder().name("Tagger").email(email).build();
+    }
+
+    @Test
+    void checkTagger_allowedDomain_noViolations() {
+        AuthorEmailCheck check = new AuthorEmailCheck(committerDomainAllow("corp\\.com$"));
+        assertTrue(check.checkTagger(tagger("dev@corp.com")).isEmpty());
+    }
+
+    @Test
+    void checkTagger_disallowedDomain_violation() {
+        AuthorEmailCheck check = new AuthorEmailCheck(committerDomainAllow("corp\\.com$"));
+        List<Violation> violations = check.checkTagger(tagger("dev@gmail.com"));
+        assertEquals(1, violations.size());
+        assertTrue(violations.get(0).formattedDetail().contains("tagger email"));
+    }
+
+    @Test
+    void checkTagger_blockedLocalPart_violation() {
+        AuthorEmailCheck check = new AuthorEmailCheck(committerLocalBlock("^noreply$"));
+        assertFalse(check.checkTagger(tagger("noreply@corp.com")).isEmpty());
+    }
+
+    @Test
+    void checkTagger_emptyEmailWithPolicyConfigured_violation() {
+        // A hand-crafted tag object without a tagger line surfaces as an empty identity; a configured
+        // policy must flag it rather than skip it.
+        AuthorEmailCheck check = new AuthorEmailCheck(committerDomainAllow("corp\\.com$"));
+        assertFalse(check.checkTagger(tagger("")).isEmpty());
+    }
+
+    @Test
+    void checkTagger_noCommitterPolicy_noViolations() {
+        // Only an author policy is configured — the tagger follows the committer policy, so nothing applies.
+        AuthorEmailCheck check = new AuthorEmailCheck(authorDomainAllow("corp\\.com$"));
+        assertTrue(check.checkTagger(tagger("anyone@anywhere.io")).isEmpty());
+    }
+
+    @Test
+    void checkTagger_nullTagger_noViolations() {
+        AuthorEmailCheck check = new AuthorEmailCheck(committerDomainAllow("corp\\.com$"));
+        assertTrue(check.checkTagger(null).isEmpty());
+    }
 }

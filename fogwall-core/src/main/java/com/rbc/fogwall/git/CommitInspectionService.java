@@ -173,6 +173,37 @@ public class CommitInspectionService {
     }
 
     /**
+     * Returns the tagger identity of an annotated tag object, or empty for a lightweight tag or any non-tag object.
+     *
+     * <p>Git fills the tagger line from the same identity that fills a commit's committer line ({@code user.email} /
+     * {@code GIT_COMMITTER_*}), so the tagger is subject to the same identity policy as a committer. A tag object
+     * hand-crafted without a tagger line (stock {@code git tag -a} always writes one) yields a contributor with empty
+     * fields rather than an empty optional, so a configured policy flags it instead of silently skipping the tag.
+     *
+     * @param repository the JGit repository holding the tag object
+     * @param tagObjectId the object id the tag ref points at (the tag object itself, not its peeled commit)
+     * @return the tagger, or empty if this is a lightweight tag or a non-tag object
+     * @throws IOException if the object cannot be read
+     */
+    public static Optional<Contributor> getAnnotatedTagTagger(Repository repository, ObjectId tagObjectId)
+            throws IOException {
+        if (tagObjectId == null) {
+            return Optional.empty();
+        }
+        try (RevWalk revWalk = new RevWalk(repository)) {
+            RevObject object = revWalk.parseAny(tagObjectId);
+            if (object instanceof RevTag tag) {
+                PersonIdent tagger = tag.getTaggerIdent();
+                return Optional.of(Contributor.builder()
+                        .name(tagger != null ? tagger.getName() : "")
+                        .email(tagger != null ? tagger.getEmailAddress() : "")
+                        .build());
+            }
+            return Optional.empty();
+        }
+    }
+
+    /**
      * Get the diff between two commits.
      *
      * @param repository The JGit repository

@@ -10,6 +10,7 @@ import com.rbc.fogwall.validation.Violation;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -52,12 +53,19 @@ public class CheckAuthorEmailsFilter extends AbstractFogwallFilter {
         }
 
         var commits = requestDetails.getPushedCommits();
-        if (commits == null || commits.isEmpty()) {
-            log.debug("No commits to validate");
+        if ((commits == null || commits.isEmpty()) && requestDetails.getTagger() == null) {
+            log.debug("No commits or tagger to validate");
             return;
         }
 
-        List<Violation> violations = new AuthorEmailCheck(commitConfigSupplier.get()).check(commits);
+        var check = new AuthorEmailCheck(commitConfigSupplier.get());
+        List<Violation> violations = new ArrayList<>();
+        if (commits != null && !commits.isEmpty()) {
+            violations.addAll(check.check(commits));
+        }
+        // An annotated tag push carries no commits of its own, but the tag object names its creator;
+        // hold the tagger to the same committer identity policy as a branch pusher (#474).
+        violations.addAll(check.checkTagger(requestDetails.getTagger()));
         if (violations.isEmpty()) {
             log.debug("All commit author emails passed");
             return;
