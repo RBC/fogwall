@@ -176,7 +176,10 @@ public class ApprovalPreReceiveHook implements PreReceiveHook {
                     rp, msgOut, color(YELLOW, "" + sym(WARNING) + "  Push requires review. Waiting for approval..."));
             sendAndFlush(rp, msgOut, color(CYAN, "" + sym(KEY) + "  Push ID: " + validationRecordId));
             if (serviceUrl != null) {
-                sendAndFlush(rp, msgOut, color(CYAN, "   Review at: " + serviceUrl + "/push/" + validationRecordId));
+                sendAndFlush(
+                        rp,
+                        msgOut,
+                        color(CYAN, "   Review at: " + serviceUrl + "/dashboard/push/" + validationRecordId));
             }
             if (record.getBlockedMessage() != null) {
                 sendAndFlush(rp, msgOut, color(YELLOW, "   Reason: " + record.getBlockedMessage()));

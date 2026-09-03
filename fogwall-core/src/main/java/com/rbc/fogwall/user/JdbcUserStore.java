@@ -3,7 +3,9 @@ package com.rbc.fogwall.user;
 import com.rbc.fogwall.service.ScmTokenCache;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -120,16 +122,34 @@ public class JdbcUserStore implements UserStore {
 
     /** Returns all email entries for a user with their verified status, locked flag, and source, ordered by email. */
     public List<Map<String, Object>> findEmailsWithVerified(String username) {
+        Map<String, List<String>> sourcesByEmail = new LinkedHashMap<>();
+        for (Map<String, Object> row : jdbc.queryForList(
+                "SELECT email, auth_source FROM email_sources WHERE username = :u", Map.of("u", username))) {
+            sourcesByEmail
+                    .computeIfAbsent((String) row.get("email"), k -> new ArrayList<>())
+                    .add((String) row.get("auth_source"));
+        }
         return jdbc
                 .queryForList(
                         "SELECT email, verified, locked, auth_source FROM user_emails WHERE username = :u ORDER BY email",
                         Map.of("u", username))
                 .stream()
-                .<Map<String, Object>>map(row -> Map.of(
-                        "email", row.get("email"),
-                        "verified", Boolean.TRUE.equals(row.get("verified")),
-                        "locked", Boolean.TRUE.equals(row.get("locked")),
-                        "source", row.get("auth_source") != null ? row.get("auth_source") : "local"))
+                .<Map<String, Object>>map(row -> {
+                    String email = (String) row.get("email");
+                    List<String> sources = sourcesByEmail.get(email);
+                    String sourceLabel = sources != null && !sources.isEmpty()
+                            ? String.join(", ", sources)
+                            : (row.get("auth_source") != null ? (String) row.get("auth_source") : "local");
+                    return Map.of(
+                            "email",
+                            email,
+                            "verified",
+                            Boolean.TRUE.equals(row.get("verified")),
+                            "locked",
+                            Boolean.TRUE.equals(row.get("locked")),
+                            "source",
+                            sourceLabel);
+                })
                 .toList();
     }
 
@@ -180,6 +200,29 @@ public class JdbcUserStore implements UserStore {
     }
 
     @Override
+    public void removeEmailsByAuthSource(String username, String authSource) {
+        Map<String, Object> params = Map.of("u", username, "source", authSource);
+        jdbc.update("DELETE FROM email_sources WHERE username = :u AND auth_source = :source", params);
+        // Re-label the primary auth_source shown in the UI when the removed source was the one currently shown,
+        // but another linked provider still claims this email (#40).
+        jdbc.update(
+                "UPDATE user_emails SET auth_source ="
+                        + " (SELECT MIN(s.auth_source) FROM email_sources s WHERE s.username = user_emails.username"
+                        + " AND s.email = user_emails.email)"
+                        + " WHERE username = :u AND auth_source = :source"
+                        + " AND EXISTS (SELECT 1 FROM email_sources s WHERE s.username = user_emails.username AND"
+                        + " s.email = user_emails.email)",
+                params);
+        // Only delete emails no linked provider claims anymore — never touches manually-added ('local') emails.
+        int removed = jdbc.update(
+                "DELETE FROM user_emails WHERE username = :u AND locked = TRUE AND auth_source <> 'local'"
+                        + " AND NOT EXISTS (SELECT 1 FROM email_sources s WHERE s.username = user_emails.username"
+                        + " AND s.email = user_emails.email)",
+                params);
+        log.debug("Removed {} email(s) no longer claimed by any linked provider for user '{}'", removed, username);
+    }
+
+    @Override
     public void addScmIdentity(String username, String provider, String scmUsername) {
         List<String> existing = jdbc.queryForList(
                 "SELECT username FROM user_scm_identities WHERE provider = :provider AND scm_username = :scmUsername",
@@ -199,10 +242,57 @@ public class JdbcUserStore implements UserStore {
 
     @Override
     public void removeScmIdentity(String username, String provider, String scmUsername) {
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT verified FROM user_scm_identities WHERE username = :u AND provider = :provider AND scm_username"
+                        + " = :scmUsername",
+                Map.of("u", username, "provider", provider, "scmUsername", scmUsername));
+        if (rows.isEmpty()) return; // no-op — identity does not exist or does not belong to this user
+        if (Boolean.TRUE.equals(rows.get(0).get("verified"))) {
+            throw new VerifiedScmIdentityException(provider, scmUsername);
+        }
         jdbc.update(
                 "DELETE FROM user_scm_identities WHERE username = :u AND provider = :provider AND scm_username = :scmUsername",
                 Map.of("u", username, "provider", provider, "scmUsername", scmUsername));
         log.debug("Removed SCM identity '{}/{}' for user '{}'", provider, scmUsername, username);
+        tokenCache.evictByUsername(provider, username);
+    }
+
+    @Override
+    public void removeVerifiedScmIdentity(String username, String provider) {
+        int removed = jdbc.update(
+                "DELETE FROM user_scm_identities WHERE username = :u AND provider = :provider AND verified = TRUE",
+                Map.of("u", username, "provider", provider));
+        log.debug("Unlinked {} OAuth-verified SCM identity for user '{}' / provider '{}'", removed, username, provider);
+        tokenCache.evictByUsername(provider, username);
+    }
+
+    @Override
+    public void upsertVerifiedScmIdentity(String username, String provider, String scmUsername) {
+        List<String> existingOwners = jdbc.queryForList(
+                "SELECT username FROM user_scm_identities WHERE provider = :provider AND scm_username = :scmUsername",
+                Map.of("provider", provider, "scmUsername", scmUsername),
+                String.class);
+        if (!existingOwners.isEmpty() && !existingOwners.get(0).equals(username)) {
+            throw new ScmIdentityConflictException(provider, scmUsername, existingOwners.get(0));
+        }
+
+        // OAuth linking is one identity per provider — replace any other identity this user has here (e.g. they
+        // previously linked, or manually entered, a different SCM username for this provider).
+        jdbc.update(
+                "DELETE FROM user_scm_identities WHERE username = :u AND provider = :provider AND scm_username <> :scmUsername",
+                Map.of("u", username, "provider", provider, "scmUsername", scmUsername));
+
+        int updated = jdbc.update(
+                "UPDATE user_scm_identities SET verified = TRUE "
+                        + "WHERE username = :u AND provider = :provider AND scm_username = :scmUsername",
+                Map.of("u", username, "provider", provider, "scmUsername", scmUsername));
+        if (updated == 0) {
+            jdbc.update(
+                    "INSERT INTO user_scm_identities (username, provider, scm_username, verified) "
+                            + "VALUES (:u, :provider, :scmUsername, TRUE)",
+                    Map.of("u", username, "provider", provider, "scmUsername", scmUsername));
+        }
+        log.debug("Upserted verified SCM identity '{}/{}' for user '{}'", provider, scmUsername, username);
         tokenCache.evictByUsername(provider, username);
     }
 
@@ -297,11 +387,28 @@ public class JdbcUserStore implements UserStore {
                     "INSERT INTO user_emails (username, email, verified, auth_source, locked) VALUES (:u, :email, TRUE, :source, TRUE)",
                     Map.of("u", username, "email", email, "source", authSource));
         } else {
+            // Don't overwrite auth_source here — it stays the first-recorded "primary" label; a second (or later)
+            // linked provider reporting the same email just adds to email_sources below (#40: an email can
+            // legitimately be verified by more than one linked provider).
             jdbc.update(
-                    "UPDATE user_emails SET verified = TRUE, auth_source = :source, locked = TRUE WHERE username = :u AND email = :email",
+                    "UPDATE user_emails SET verified = TRUE, locked = TRUE WHERE username = :u AND email = :email",
+                    Map.of("u", username, "email", email));
+        }
+        addEmailSource(username, email, authSource);
+        log.debug("Upserted locked email '{}' ({}) for user '{}'", email, authSource, username);
+    }
+
+    private void addEmailSource(String username, String email, String authSource) {
+        List<String> existing = jdbc.queryForList(
+                "SELECT auth_source FROM email_sources WHERE username = :u AND email = :email AND auth_source ="
+                        + " :source",
+                Map.of("u", username, "email", email, "source", authSource),
+                String.class);
+        if (existing.isEmpty()) {
+            jdbc.update(
+                    "INSERT INTO email_sources (username, email, auth_source) VALUES (:u, :email, :source)",
                     Map.of("u", username, "email", email, "source", authSource));
         }
-        log.debug("Upserted locked email '{}' ({}) for user '{}'", email, authSource, username);
     }
 
     // ── SSH key management ────────────────────────────────────────────────────────
@@ -316,12 +423,19 @@ public class JdbcUserStore implements UserStore {
     }
 
     @Override
-    public SshKeyEntry addSshKey(String username, String fingerprint, String publicKey, String label) {
-        List<String> existing = jdbc.queryForList(
-                "SELECT username FROM user_ssh_keys WHERE fingerprint = :fp", Map.of("fp", fingerprint), String.class);
+    public SshKeyEntry addSshKey(
+            String username, String fingerprint, String publicKey, String label, boolean locked, String authSource) {
+        List<Map<String, Object>> existing = jdbc.queryForList(
+                "SELECT id, username FROM user_ssh_keys WHERE fingerprint = :fp", Map.of("fp", fingerprint));
         if (!existing.isEmpty()) {
-            String owner = existing.get(0);
+            String owner = (String) existing.get(0).get("username");
             if (owner.equals(username)) {
+                // Same key, already registered to this user — possibly via a different provider (#40: a key can
+                // legitimately be verified by more than one linked provider). Record the additional source rather
+                // than silently no-opping, so unlinking one provider doesn't delete a key another still claims.
+                if (locked && !"config".equals(authSource)) {
+                    addSshKeySource((String) existing.get(0).get("id"), authSource);
+                }
                 return findSshKeys(username).stream()
                         .filter(k -> k.getFingerprint().equals(fingerprint))
                         .findFirst()
@@ -333,16 +447,27 @@ public class JdbcUserStore implements UserStore {
         String id = UUID.randomUUID().toString();
         Instant now = Instant.now();
         jdbc.update(
-                "INSERT INTO user_ssh_keys (id, username, fingerprint, public_key, label, created_at)"
-                        + " VALUES (:id, :u, :fp, :pk, :label, :created)",
+                "INSERT INTO user_ssh_keys (id, username, fingerprint, public_key, label, created_at, locked,"
+                        + " auth_source) VALUES (:id, :u, :fp, :pk, :label, :created, :locked, :source)",
                 Map.of(
                         "id", id,
                         "u", username,
                         "fp", fingerprint,
                         "pk", publicKey,
                         "label", label != null ? label : "",
-                        "created", Timestamp.from(now)));
-        log.info("Added SSH key {} ({}) for user '{}'", fingerprint, label, username);
+                        "created", Timestamp.from(now),
+                        "locked", locked,
+                        "source", authSource));
+        if (locked && !"config".equals(authSource)) {
+            addSshKeySource(id, authSource);
+        }
+        log.info(
+                "Added SSH key {} ({}) for user '{}' (locked={}, source={})",
+                fingerprint,
+                label,
+                username,
+                locked,
+                authSource);
         return SshKeyEntry.builder()
                 .id(id)
                 .username(username)
@@ -350,34 +475,96 @@ public class JdbcUserStore implements UserStore {
                 .publicKey(publicKey)
                 .label(label)
                 .createdAt(now)
+                .locked(locked)
+                .authSource(authSource)
                 .build();
     }
 
     @Override
-    public void removeSshKey(String username, String keyId) {
-        int deleted = jdbc.update(
-                "DELETE FROM user_ssh_keys WHERE id = :id AND username = :u", Map.of("id", keyId, "u", username));
-        if (deleted > 0) {
-            log.info("Removed SSH key {} for user '{}'", keyId, username);
+    public void removeSshKeysByAuthSource(String username, String authSource) {
+        Map<String, Object> params = Map.of("u", username, "source", authSource);
+        jdbc.update(
+                "DELETE FROM ssh_key_sources WHERE auth_source = :source AND ssh_key_id IN"
+                        + " (SELECT id FROM user_ssh_keys WHERE username = :u)",
+                params);
+        // Re-label the primary auth_source shown in the UI when the removed source was the one currently shown,
+        // but another linked provider still claims this key (#40).
+        jdbc.update(
+                "UPDATE user_ssh_keys SET auth_source ="
+                        + " (SELECT MIN(s.auth_source) FROM ssh_key_sources s WHERE s.ssh_key_id = user_ssh_keys.id)"
+                        + " WHERE username = :u AND auth_source = :source"
+                        + " AND EXISTS (SELECT 1 FROM ssh_key_sources s WHERE s.ssh_key_id = user_ssh_keys.id)",
+                params);
+        // Only delete keys no linked provider claims anymore — never touches config-locked keys.
+        int removed = jdbc.update(
+                "DELETE FROM user_ssh_keys WHERE username = :u AND locked = TRUE AND auth_source <> 'config'"
+                        + " AND id NOT IN (SELECT ssh_key_id FROM ssh_key_sources)",
+                params);
+        log.debug("Removed {} SSH key(s) no longer claimed by any linked provider for user '{}'", removed, username);
+    }
+
+    private void addSshKeySource(String sshKeyId, String authSource) {
+        List<String> existing = jdbc.queryForList(
+                "SELECT auth_source FROM ssh_key_sources WHERE ssh_key_id = :id AND auth_source = :source",
+                Map.of("id", sshKeyId, "source", authSource),
+                String.class);
+        if (existing.isEmpty()) {
+            jdbc.update(
+                    "INSERT INTO ssh_key_sources (ssh_key_id, auth_source) VALUES (:id, :source)",
+                    Map.of("id", sshKeyId, "source", authSource));
+            log.info("Added '{}' as an additional verified source for SSH key {}", authSource, sshKeyId);
+        } else {
+            log.debug("SSH key {} already has '{}' recorded as a source — no-op", sshKeyId, authSource);
         }
     }
 
     @Override
+    public void removeSshKey(String username, String keyId) {
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT locked FROM user_ssh_keys WHERE id = :id AND username = :u",
+                Map.of("id", keyId, "u", username));
+        if (rows.isEmpty()) return; // no-op — key does not exist or does not belong to this user
+        if (Boolean.TRUE.equals(rows.get(0).get("locked"))) {
+            throw new LockedSshKeyException(keyId);
+        }
+        jdbc.update("DELETE FROM user_ssh_keys WHERE id = :id AND username = :u", Map.of("id", keyId, "u", username));
+        log.info("Removed SSH key {} for user '{}'", keyId, username);
+    }
+
+    @Override
     public List<SshKeyEntry> findSshKeys(String username) {
+        Map<String, List<String>> sourcesByKeyId = new LinkedHashMap<>();
+        for (Map<String, Object> row : jdbc.queryForList(
+                "SELECT s.ssh_key_id, s.auth_source FROM ssh_key_sources s JOIN user_ssh_keys k ON s.ssh_key_id = k.id"
+                        + " WHERE k.username = :u",
+                Map.of("u", username))) {
+            sourcesByKeyId
+                    .computeIfAbsent((String) row.get("ssh_key_id"), k -> new ArrayList<>())
+                    .add((String) row.get("auth_source"));
+        }
         return jdbc
                 .queryForList(
-                        "SELECT id, fingerprint, public_key, label, created_at FROM user_ssh_keys"
-                                + " WHERE username = :u ORDER BY created_at",
+                        "SELECT id, fingerprint, public_key, label, created_at, locked, auth_source FROM"
+                                + " user_ssh_keys WHERE username = :u ORDER BY created_at",
                         Map.of("u", username))
                 .stream()
-                .map(row -> SshKeyEntry.builder()
-                        .id((String) row.get("id"))
-                        .username(username)
-                        .fingerprint((String) row.get("fingerprint"))
-                        .publicKey((String) row.get("public_key"))
-                        .label((String) row.get("label"))
-                        .createdAt(((Timestamp) row.get("created_at")).toInstant())
-                        .build())
+                .map(row -> {
+                    String id = (String) row.get("id");
+                    List<String> sources = sourcesByKeyId.get(id);
+                    String sourceLabel = sources != null && !sources.isEmpty()
+                            ? String.join(", ", sources)
+                            : (row.get("auth_source") != null ? (String) row.get("auth_source") : "config");
+                    return SshKeyEntry.builder()
+                            .id(id)
+                            .username(username)
+                            .fingerprint((String) row.get("fingerprint"))
+                            .publicKey((String) row.get("public_key"))
+                            .label((String) row.get("label"))
+                            .createdAt(((Timestamp) row.get("created_at")).toInstant())
+                            .locked(Boolean.TRUE.equals(row.get("locked")))
+                            .authSource(sourceLabel)
+                            .build();
+                })
                 .toList();
     }
 
@@ -387,11 +574,13 @@ public class JdbcUserStore implements UserStore {
                 Map.of("u", username),
                 String.class);
         List<Map<String, Object>> scmRows = jdbc.queryForList(
-                "SELECT provider, scm_username FROM user_scm_identities WHERE username = :u", Map.of("u", username));
+                "SELECT provider, scm_username, verified FROM user_scm_identities WHERE username = :u",
+                Map.of("u", username));
         List<ScmIdentity> scmIdentities = scmRows.stream()
                 .map(r -> ScmIdentity.builder()
                         .provider((String) r.get("provider"))
                         .username((String) r.get("scm_username"))
+                        .verified(Boolean.TRUE.equals(r.get("verified")))
                         .build())
                 .toList();
         List<String> roles = (rolesStr != null && !rolesStr.isBlank()) ? List.of(rolesStr.split(",")) : List.of("USER");

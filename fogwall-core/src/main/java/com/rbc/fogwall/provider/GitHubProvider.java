@@ -70,6 +70,19 @@ public class GitHubProvider extends AbstractFogwallProvider implements HttpToken
     }
 
     /**
+     * OAuth authorize endpoint for account linking (#40) — always the web host (github.com, a {@code .ghe.com} tenant,
+     * or a self-hosted GHES host), unlike {@link #getApiUrl()} which differs by shape.
+     */
+    public String getOAuthAuthorizeUrl() {
+        return selfHostedHttpsBase() + "/login/oauth/authorize";
+    }
+
+    /** OAuth token exchange endpoint for account linking (#40). See {@link #getOAuthAuthorizeUrl()}. */
+    public String getOAuthTokenUrl() {
+        return selfHostedHttpsBase() + "/login/oauth/access_token";
+    }
+
+    /**
      * {@inheritDoc}
      *
      * <p>Calls {@code GET /user} with {@code Authorization: token <pat>}. GitHub emails are often empty because users

@@ -173,6 +173,10 @@ dependencies {
     // Proxy server (for FogwallervletRegistrar and config classes)
     implementation project(':fogwall-server')
 
+    // #40: SCM OAuth token exchange / user-info HTTP calls (fogwall-core declares this as `implementation`, not
+    // transitively visible — see the comment above)
+    implementation "org.apache.httpcomponents.client5:httpclient5-fluent:${apacheHttpClientVersion}"
+
     // Spring MVC for the REST API and dashboard
     implementation "org.springframework:spring-webmvc:${springVersion}"
 

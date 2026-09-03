@@ -130,6 +130,117 @@ export function Legal() {
         </p>
       </div>
 
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+          Trademark notices
+        </h3>
+
+        <div className="border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 p-4 space-y-2 text-sm text-gray-600 dark:text-gray-300">
+          <p className="font-medium text-gray-800 dark:text-gray-200">GitHub</p>
+          <p>
+            GITHUB®, the GITHUB® logo design, the INVERTOCAT logo design, OCTOCAT®, and the OCTOCAT®
+            logo design are trademarks of GitHub, Inc., registered in the United States and other
+            countries.
+          </p>
+          <p>
+            The OCTOCAT design is the exclusive property of GitHub, Inc and has been federally
+            registered with the United States Copyright Office. All rights reserved.
+          </p>
+          <p>
+            No adaptation or use of any kind of any of GitHub&apos;s registered trademarks or
+            copyrights is allowed without the express written permission of GitHub, Inc. The
+            Invertocat mark used on the profile page&apos;s OAuth account-linking button is used per{' '}
+            <a
+              href="https://brand.github.com/foundations/logo#legal"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-500 hover:text-blue-600 no-underline hover:underline"
+            >
+              GitHub&apos;s logo usage guidelines
+            </a>{' '}
+            as a permitted social/integration button, unmodified.
+          </p>
+        </div>
+
+        <div className="border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 p-4 space-y-2 text-sm text-gray-600 dark:text-gray-300">
+          <p className="font-medium text-gray-800 dark:text-gray-200">GitLab</p>
+          <p>
+            GITLAB™ is a trademark of GitLab Inc. in the United States and other countries and
+            regions. fogwall integrates with GitLab as an OAuth account-linking provider and uses
+            the GitLab logo, unmodified, solely to identify that integration on the profile page;
+            this does not imply affiliation, endorsement, sponsorship, or approval by GitLab Inc.
+            See{' '}
+            <a
+              href="https://handbook.gitlab.com/handbook/marketing/brand-experience/trademark-guidelines/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-500 hover:text-blue-600 no-underline hover:underline"
+            >
+              GitLab&apos;s trademark guidelines
+            </a>
+            .
+          </p>
+        </div>
+
+        <div className="border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 p-4 space-y-2 text-sm text-gray-600 dark:text-gray-300">
+          <p className="font-medium text-gray-800 dark:text-gray-200">Codeberg</p>
+          <p>
+            Codeberg and the Codeberg Logo are trademarks of Codeberg e.V. fogwall integrates with
+            Codeberg (a hosted Forgejo instance) as an OAuth account-linking provider and uses the
+            Codeberg icon mark, unmodified, solely to identify that integration on the profile page;
+            this does not imply affiliation, endorsement, sponsorship, or approval by Codeberg e.V.
+            The logo artwork itself is released under{' '}
+            <a
+              href="http://creativecommons.org/publicdomain/zero/1.0/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-500 hover:text-blue-600 no-underline hover:underline"
+            >
+              CC0
+            </a>{' '}
+            by Codeberg, per{' '}
+            <a
+              href="https://codeberg.org/Codeberg/Design"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-500 hover:text-blue-600 no-underline hover:underline"
+            >
+              Codeberg&apos;s design guidelines
+            </a>
+            .
+          </p>
+        </div>
+
+        <div className="border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 p-4 space-y-2 text-sm text-gray-600 dark:text-gray-300">
+          <p className="font-medium text-gray-800 dark:text-gray-200">Gitea</p>
+          <p>
+            Gitea and the Gitea logo are trademarks of the Gitea project. fogwall integrates with
+            gitea.com (a hosted Gitea instance) as an OAuth account-linking provider and uses the
+            Gitea mascot mark, unmodified, solely to identify that integration on the profile page;
+            this does not imply affiliation, endorsement, sponsorship, or approval by the Gitea
+            project. The logo artwork itself is released under{' '}
+            <a
+              href="https://creativecommons.org/licenses/by-sa/4.0/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-500 hover:text-blue-600 no-underline hover:underline"
+            >
+              CC BY-SA 4.0
+            </a>{' '}
+            per the (now archived){' '}
+            <a
+              href="https://gitea.com/gitea/design"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-500 hover:text-blue-600 no-underline hover:underline"
+            >
+              gitea/design
+            </a>{' '}
+            repository.
+          </p>
+        </div>
+      </div>
+
       {!loading && notices && (
         <p className="text-xs text-gray-400 dark:text-gray-500">
           Third-party notices for the {notices.variant ?? 'unknown'} image

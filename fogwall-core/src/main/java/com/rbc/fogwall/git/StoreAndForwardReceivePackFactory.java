@@ -6,6 +6,7 @@ import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.config.ContentPatternConfig;
 import com.rbc.fogwall.config.DiffScanConfig;
 import com.rbc.fogwall.config.GpgConfig;
+import com.rbc.fogwall.config.ScmOAuthConfig;
 import com.rbc.fogwall.config.SecretScanConfig;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.UrlRuleRegistry;
@@ -50,6 +51,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
     private final Supplier<DiffScanConfig> diffScanConfigSupplier;
     private final Supplier<SecretScanConfig> secretScanConfigSupplier;
     private final Supplier<BinaryBlobConfig> binaryBlobConfigSupplier;
+    private Supplier<ScmOAuthConfig> scmOAuthConfigSupplier = ScmOAuthConfig::defaultConfig;
     private final ContentPatternConfig contentPatternConfig;
     private final GpgConfig gpgConfig;
     private final RepoPermissionService repoPermissionService;
@@ -88,6 +90,12 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
 
     public void setSshScmIdentityEnricher(SshScmIdentityEnricher enricher) {
         this.sshScmIdentityEnricher = enricher;
+    }
+
+    /** Set the live SCM OAuth config supplier (#40 — {@code scm-oauth.identity-mode}). Defaults to permissive. */
+    public void setScmOAuthConfigSupplier(Supplier<ScmOAuthConfig> scmOAuthConfigSupplier) {
+        this.scmOAuthConfigSupplier =
+                scmOAuthConfigSupplier != null ? scmOAuthConfigSupplier : ScmOAuthConfig::defaultConfig;
     }
 
     /** Set the approval-wait timeout. Call after construction before the factory handles any requests. */
@@ -300,6 +308,14 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
         //   ForwardingPostReceiveHook       - forwards to upstream
         //   PushStorePersistenceHook.postReceive - save FORWARDED/ERROR
 
+        // Snapshot current config for this push — all hooks in one push see the same config even if a reload fires
+        // mid-push.
+        CommitConfig commitConfig = commitConfigSupplier.get();
+        DiffScanConfig diffScanConfig = diffScanConfigSupplier.get();
+        SecretScanConfig secretScanConfig = secretScanConfigSupplier.get();
+        BinaryBlobConfig binaryBlobConfig = binaryBlobConfigSupplier.get();
+        ScmOAuthConfig scmOAuthConfig = scmOAuthConfigSupplier.get();
+
         var permissionHook = new CheckUserPushPermissionHook(
                 pushIdentityResolver,
                 repoPermissionService,
@@ -307,14 +323,8 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
                 pushContext,
                 provider,
                 serviceUrl,
-                sshScmIdentityEnricher);
-
-        // Snapshot current config for this push — all hooks in one push see the same config even if a reload fires
-        // mid-push.
-        CommitConfig commitConfig = commitConfigSupplier.get();
-        DiffScanConfig diffScanConfig = diffScanConfigSupplier.get();
-        SecretScanConfig secretScanConfig = secretScanConfigSupplier.get();
-        BinaryBlobConfig binaryBlobConfig = binaryBlobConfigSupplier.get();
+                sshScmIdentityEnricher,
+                scmOAuthConfig.getIdentityMode());
 
         var attributionPolicyHook = new CommitAttributionPolicyHook(
                 pushIdentityResolver, commitConfig.getAttributionPolicy(), validationContext, pushContext, provider);

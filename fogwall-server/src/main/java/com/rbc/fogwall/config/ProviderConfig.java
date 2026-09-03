@@ -58,4 +58,7 @@ public class ProviderConfig {
      * repository exists at all (security by obscurity for sensitive environments).
      */
     private int blockedInfoRefsStatus = 403;
+
+    /** OAuth account-linking settings for this provider instance (#40). See docs/CONFIGURATION.md#scm-oauth. */
+    private OAuthProviderSettings oauth = new OAuthProviderSettings();
 }

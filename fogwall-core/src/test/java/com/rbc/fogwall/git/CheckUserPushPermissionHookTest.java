@@ -4,11 +4,15 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.*;
 
+import com.rbc.fogwall.approval.ClientLivenessCheck;
+import com.rbc.fogwall.config.ScmOAuthConfig;
 import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.GitHubProvider;
 import com.rbc.fogwall.service.PushIdentityResolver;
+import com.rbc.fogwall.service.SshScmIdentityEnricher;
+import com.rbc.fogwall.user.ScmIdentity;
 import com.rbc.fogwall.user.UserEntry;
 import java.io.File;
 import java.nio.file.Files;
@@ -215,5 +219,178 @@ class CheckUserPushPermissionHookTest {
 
         verify(resolver).resolve(eq(github), eq("my-user"), any());
         assertFalse(validationContext.hasIssues());
+    }
+
+    // ---- strict identity mode (#40) — HTTP path ----
+
+    private static UserEntry userEntryWithScmIdentity(
+            String username, String provider, String scmUsername, boolean verified) {
+        return UserEntry.builder()
+                .username(username)
+                .emails(List.of())
+                .scmIdentities(List.of(ScmIdentity.builder()
+                        .provider(provider)
+                        .username(scmUsername)
+                        .verified(verified)
+                        .build()))
+                .build();
+    }
+
+    @Test
+    void strictMode_httpUnverifiedIdentity_blocksPush() throws Exception {
+        FogwallProvider github = new GitHubProvider("/push");
+        when(resolver.resolve(eq(github), eq("corp-user"), any()))
+                .thenReturn(Optional.of(userEntryWithScmIdentity("alice", "github", "alice-gh", false)));
+        when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(true);
+
+        RevCommit c1 = createCommit("init");
+        RevCommit c2 = createCommit("second");
+        ReceivePack rp = new ReceivePack(repo);
+        ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
+        PushContext pushContext = new PushContext();
+        pushContext.setPushUser("corp-user");
+        pushContext.setRepoSlug("/owner/repo");
+        ValidationContext validationContext = new ValidationContext();
+
+        new CheckUserPushPermissionHook(
+                        resolver,
+                        permService,
+                        validationContext,
+                        pushContext,
+                        github,
+                        null,
+                        null,
+                        ScmOAuthConfig.IdentityMode.STRICT)
+                .onPreReceive(rp, List.of(cmd));
+
+        assertTrue(validationContext.hasIssues());
+        assertTrue(
+                validationContext.getIssues().get(0).summary().contains("No OAuth-verified SCM identity"),
+                "Issue message should mention no verified identity");
+    }
+
+    @Test
+    void strictMode_httpVerifiedIdentity_allowsPush() throws Exception {
+        FogwallProvider github = new GitHubProvider("/push");
+        when(resolver.resolve(eq(github), eq("corp-user"), any()))
+                .thenReturn(Optional.of(userEntryWithScmIdentity("alice", "github", "alice-gh", true)));
+        when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(true);
+
+        RevCommit c1 = createCommit("init");
+        RevCommit c2 = createCommit("second");
+        ReceivePack rp = new ReceivePack(repo);
+        ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
+        PushContext pushContext = new PushContext();
+        pushContext.setPushUser("corp-user");
+        pushContext.setRepoSlug("/owner/repo");
+        ValidationContext validationContext = new ValidationContext();
+
+        new CheckUserPushPermissionHook(
+                        resolver,
+                        permService,
+                        validationContext,
+                        pushContext,
+                        github,
+                        null,
+                        null,
+                        ScmOAuthConfig.IdentityMode.STRICT)
+                .onPreReceive(rp, List.of(cmd));
+
+        assertFalse(validationContext.hasIssues());
+        assertEquals("alice-gh", pushContext.getScmUsername());
+    }
+
+    @Test
+    void permissiveMode_unverifiedIdentity_stillAllowsPush() throws Exception {
+        FogwallProvider github = new GitHubProvider("/push");
+        when(resolver.resolve(eq(github), eq("corp-user"), any()))
+                .thenReturn(Optional.of(userEntryWithScmIdentity("alice", "github", "alice-gh", false)));
+        when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(true);
+
+        RevCommit c1 = createCommit("init");
+        RevCommit c2 = createCommit("second");
+        ReceivePack rp = new ReceivePack(repo);
+        ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
+        PushContext pushContext = new PushContext();
+        pushContext.setPushUser("corp-user");
+        pushContext.setRepoSlug("/owner/repo");
+        ValidationContext validationContext = new ValidationContext();
+
+        // Default (no identityMode arg) constructor = PERMISSIVE — today's unaffected behavior.
+        new CheckUserPushPermissionHook(resolver, permService, validationContext, pushContext, github, null)
+                .onPreReceive(rp, List.of(cmd));
+
+        assertFalse(validationContext.hasIssues());
+        assertEquals("alice-gh", pushContext.getScmUsername());
+    }
+
+    // ---- strict identity mode (#40) — SSH path ----
+
+    @Test
+    void strictMode_sshUnverifiedIdentity_blocksPush() throws Exception {
+        FogwallProvider github = new GitHubProvider("/push");
+        UserEntry alice = userEntryWithScmIdentity("alice", "github", "alice-gh", false);
+        var enricher = mock(SshScmIdentityEnricher.class);
+        when(enricher.resolveScmLogin(eq(alice), eq(github), eq("SHA256:fingerprint")))
+                .thenReturn(Optional.of("alice-gh"));
+        when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(true);
+
+        RevCommit c1 = createCommit("init");
+        RevCommit c2 = createCommit("second");
+        ReceivePack rp = new ReceivePack(repo);
+        ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
+        PushContext pushContext = new PushContext();
+        pushContext.setRepoSlug("/owner/repo");
+        pushContext.setTransport(
+                new PushTransport.Ssh(alice, "SHA256:fingerprint", null, ClientLivenessCheck.alwaysConnected()));
+        ValidationContext validationContext = new ValidationContext();
+
+        new CheckUserPushPermissionHook(
+                        resolver,
+                        permService,
+                        validationContext,
+                        pushContext,
+                        github,
+                        null,
+                        enricher,
+                        ScmOAuthConfig.IdentityMode.STRICT)
+                .onPreReceive(rp, List.of(cmd));
+
+        assertTrue(validationContext.hasIssues());
+        assertTrue(validationContext.getIssues().get(0).summary().contains("No OAuth-verified SCM identity"));
+    }
+
+    @Test
+    void strictMode_sshVerifiedIdentity_allowsPush() throws Exception {
+        FogwallProvider github = new GitHubProvider("/push");
+        UserEntry alice = userEntryWithScmIdentity("alice", "github", "alice-gh", true);
+        var enricher = mock(SshScmIdentityEnricher.class);
+        when(enricher.resolveScmLogin(eq(alice), eq(github), eq("SHA256:fingerprint")))
+                .thenReturn(Optional.of("alice-gh"));
+        when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(true);
+
+        RevCommit c1 = createCommit("init");
+        RevCommit c2 = createCommit("second");
+        ReceivePack rp = new ReceivePack(repo);
+        ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
+        PushContext pushContext = new PushContext();
+        pushContext.setRepoSlug("/owner/repo");
+        pushContext.setTransport(
+                new PushTransport.Ssh(alice, "SHA256:fingerprint", null, ClientLivenessCheck.alwaysConnected()));
+        ValidationContext validationContext = new ValidationContext();
+
+        new CheckUserPushPermissionHook(
+                        resolver,
+                        permService,
+                        validationContext,
+                        pushContext,
+                        github,
+                        null,
+                        enricher,
+                        ScmOAuthConfig.IdentityMode.STRICT)
+                .onPreReceive(rp, List.of(cmd));
+
+        assertFalse(validationContext.hasIssues());
+        assertEquals("alice-gh", pushContext.getScmUsername());
     }
 }

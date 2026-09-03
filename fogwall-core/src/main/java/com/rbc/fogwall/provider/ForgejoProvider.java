@@ -54,6 +54,24 @@ public class ForgejoProvider extends AbstractFogwallProvider implements HttpToke
         return uri + "/api/v1";
     }
 
+    /**
+     * OAuth authorize endpoint for account linking (#40) — the web host (self-hosted Forgejo/Gitea, or Codeberg),
+     * derived the same way {@link #getApiUrl()} derives its host from an {@code ssh://} uri.
+     */
+    public String getOAuthAuthorizeUrl() {
+        return webHttpsBase() + "/login/oauth/authorize";
+    }
+
+    /** OAuth token exchange endpoint for account linking (#40). See {@link #getOAuthAuthorizeUrl()}. */
+    public String getOAuthTokenUrl() {
+        return webHttpsBase() + "/login/oauth/access_token";
+    }
+
+    private String webHttpsBase() {
+        if ("ssh".equals(uri.getScheme())) return "https://" + uri.getHost();
+        return uri.toString();
+    }
+
     @Override
     public Optional<String> buildRepoUrl(String owner, String repo) {
         return webBaseUrl().map(base -> base + "/" + owner + "/" + repo);

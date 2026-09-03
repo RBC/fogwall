@@ -195,6 +195,210 @@ class MongoUserStoreIntegrationTest {
         assertEquals("alice-gh", identities.get(0).get("username"));
     }
 
+    // ── verified SCM identities (#40) ──────────────────────────────────────────
+
+    @Test
+    void upsertVerifiedScmIdentity_setsVerifiedTrue() {
+        store.createUser("alice", null, "USER");
+        store.upsertVerifiedScmIdentity("alice", "github", "alice-gh");
+
+        UserEntry found = store.findByUsername("alice").orElseThrow();
+        assertEquals(1, found.getScmIdentities().size());
+        assertTrue(found.getScmIdentities().get(0).isVerified());
+    }
+
+    @Test
+    void upsertVerifiedScmIdentity_replacesPriorIdentityForSameProvider() {
+        store.createUser("alice", null, "USER");
+        store.addScmIdentity("alice", "github", "old-manual-handle");
+        store.upsertVerifiedScmIdentity("alice", "github", "new-oauth-handle");
+
+        List<ScmIdentity> identities =
+                store.findByUsername("alice").orElseThrow().getScmIdentities();
+        assertEquals(1, identities.size());
+        assertEquals("new-oauth-handle", identities.get(0).getUsername());
+        assertTrue(identities.get(0).isVerified());
+    }
+
+    @Test
+    void upsertVerifiedScmIdentity_differentUser_throwsConflict() {
+        store.createUser("alice", null, "USER");
+        store.createUser("bob", null, "USER");
+        store.upsertVerifiedScmIdentity("alice", "github", "shared-handle");
+
+        assertThrows(
+                ScmIdentityConflictException.class,
+                () -> store.upsertVerifiedScmIdentity("bob", "github", "shared-handle"));
+    }
+
+    @Test
+    void removeVerifiedScmIdentity_removesOnlyVerifiedOne() {
+        store.createUser("alice", null, "USER");
+        store.upsertVerifiedScmIdentity("alice", "github", "alice-gh");
+
+        store.removeVerifiedScmIdentity("alice", "github");
+
+        assertTrue(
+                store.findByUsername("alice").orElseThrow().getScmIdentities().isEmpty());
+    }
+
+    @Test
+    void removeVerifiedScmIdentity_leavesUnverifiedIdentityUntouched() {
+        store.createUser("alice", null, "USER");
+        store.addScmIdentity("alice", "gitlab", "alice-gl"); // manual entry, unverified
+
+        store.removeVerifiedScmIdentity("alice", "gitlab");
+
+        List<ScmIdentity> identities =
+                store.findByUsername("alice").orElseThrow().getScmIdentities();
+        assertEquals(1, identities.size());
+        assertEquals("alice-gl", identities.get(0).getUsername());
+    }
+
+    @Test
+    void removeScmIdentity_verifiedIdentity_throws() {
+        store.createUser("alice", null, "USER");
+        store.upsertVerifiedScmIdentity("alice", "github", "alice-gh");
+
+        assertThrows(VerifiedScmIdentityException.class, () -> store.removeScmIdentity("alice", "github", "alice-gh"));
+    }
+
+    // ── SSH key management (#40) ────────────────────────────────────────────────
+
+    private static final String SAMPLE_KEY =
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIQiTzhWg82OVGUGpUMctA7FoBSZteJQ5R/TPaVfCC95";
+
+    @Test
+    void addSshKey_andFindBySshFingerprint() {
+        store.createUser("alice", null, "USER");
+        store.addSshKey("alice", "SHA256:abc", SAMPLE_KEY, "laptop", false, "config");
+
+        UserEntry found = store.findBySshFingerprint("SHA256:abc").orElseThrow();
+        assertEquals("alice", found.getUsername());
+        assertEquals(1, store.findSshKeys("alice").size());
+        assertFalse(store.findSshKeys("alice").get(0).isLocked());
+    }
+
+    @Test
+    void addSshKey_differentUserSameFingerprint_throws() {
+        store.createUser("alice", null, "USER");
+        store.createUser("bob", null, "USER");
+        store.addSshKey("alice", "SHA256:abc", SAMPLE_KEY, "laptop", false, "config");
+
+        assertThrows(
+                SshKeyConflictException.class,
+                () -> store.addSshKey("bob", "SHA256:abc", SAMPLE_KEY, "laptop", false, "config"));
+    }
+
+    @Test
+    void addSshKey_sameKeySecondProvider_recordsBothSources() {
+        store.createUser("alice", null, "USER");
+        store.addSshKey("alice", "SHA256:abc", SAMPLE_KEY, "GitHub key", true, "github");
+        store.addSshKey("alice", "SHA256:abc", SAMPLE_KEY, "GitHub key", true, "gitlab");
+
+        List<SshKeyEntry> keys = store.findSshKeys("alice");
+        assertEquals(1, keys.size());
+        assertTrue(keys.get(0).getAuthSource().contains("github"));
+        assertTrue(keys.get(0).getAuthSource().contains("gitlab"));
+    }
+
+    @Test
+    void removeSshKeysByAuthSource_lastSourceRemoved_deletesKey() {
+        store.createUser("alice", null, "USER");
+        store.addSshKey("alice", "SHA256:abc", SAMPLE_KEY, "GitHub key", true, "github");
+
+        store.removeSshKeysByAuthSource("alice", "github");
+
+        assertTrue(store.findSshKeys("alice").isEmpty());
+    }
+
+    @Test
+    void removeSshKeysByAuthSource_otherSourceRemains_keepsKeyRelabeled() {
+        store.createUser("alice", null, "USER");
+        store.addSshKey("alice", "SHA256:abc", SAMPLE_KEY, "GitHub key", true, "github");
+        store.addSshKey("alice", "SHA256:abc", SAMPLE_KEY, "GitHub key", true, "gitlab");
+
+        store.removeSshKeysByAuthSource("alice", "github");
+
+        List<SshKeyEntry> keys = store.findSshKeys("alice");
+        assertEquals(1, keys.size());
+        assertEquals("gitlab", keys.get(0).getAuthSource());
+    }
+
+    @Test
+    void removeSshKeysByAuthSource_configLockedKey_untouched() {
+        store.createUser("alice", null, "USER");
+        store.addSshKey("alice", "SHA256:abc", SAMPLE_KEY, "laptop", true, "config");
+
+        store.removeSshKeysByAuthSource("alice", "github");
+
+        assertEquals(1, store.findSshKeys("alice").size());
+    }
+
+    @Test
+    void removeSshKey_unlocked_succeeds() {
+        store.createUser("alice", null, "USER");
+        SshKeyEntry key = store.addSshKey("alice", "SHA256:abc", SAMPLE_KEY, "laptop", false, "config");
+
+        store.removeSshKey("alice", key.getId());
+
+        assertTrue(store.findSshKeys("alice").isEmpty());
+    }
+
+    @Test
+    void removeSshKey_locked_throwsAndDoesNotRemove() {
+        store.createUser("alice", null, "USER");
+        SshKeyEntry key = store.addSshKey("alice", "SHA256:abc", SAMPLE_KEY, "Imported from GitHub", true, "github");
+
+        assertThrows(LockedSshKeyException.class, () -> store.removeSshKey("alice", key.getId()));
+        assertEquals(1, store.findSshKeys("alice").size());
+    }
+
+    // ── multi-source emails (#40) ───────────────────────────────────────────────
+
+    @Test
+    void upsertLockedEmail_sameEmailSecondProvider_recordsBothSources() {
+        store.createUser("alice", null, "USER");
+        store.upsertLockedEmail("alice", "alice@example.com", "github");
+        store.upsertLockedEmail("alice", "alice@example.com", "gitlab");
+
+        Map<String, Object> entry = store.findEmailsWithVerified("alice").get(0);
+        assertTrue(((String) entry.get("source")).contains("github"));
+        assertTrue(((String) entry.get("source")).contains("gitlab"));
+    }
+
+    @Test
+    void removeEmailsByAuthSource_lastSourceRemoved_deletesEmail() {
+        store.createUser("alice", null, "USER");
+        store.upsertLockedEmail("alice", "alice@example.com", "github");
+
+        store.removeEmailsByAuthSource("alice", "github");
+
+        assertTrue(store.findEmailsWithVerified("alice").isEmpty());
+    }
+
+    @Test
+    void removeEmailsByAuthSource_otherSourceRemains_keepsEmailRelabeled() {
+        store.createUser("alice", null, "USER");
+        store.upsertLockedEmail("alice", "alice@example.com", "github");
+        store.upsertLockedEmail("alice", "alice@example.com", "gitlab");
+
+        store.removeEmailsByAuthSource("alice", "github");
+
+        Map<String, Object> entry = store.findEmailsWithVerified("alice").get(0);
+        assertEquals("gitlab", entry.get("source"));
+    }
+
+    @Test
+    void removeEmailsByAuthSource_localEmail_untouched() {
+        store.createUser("alice", null, "USER");
+        store.addEmail("alice", "alice@example.com");
+
+        store.removeEmailsByAuthSource("alice", "github");
+
+        assertEquals(1, store.findEmailsWithVerified("alice").size());
+    }
+
     // ── deleteUser cascades to repo_permissions ─────────────────────────────────
 
     @Test

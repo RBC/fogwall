@@ -4,6 +4,7 @@ import com.rbc.fogwall.approval.UiApprovalGateway;
 import com.rbc.fogwall.config.FogwallConfig;
 import com.rbc.fogwall.config.FogwallConfigLoader;
 import com.rbc.fogwall.config.JettyConfigurationBuilder;
+import com.rbc.fogwall.crypto.TokenCipherProvider;
 import com.rbc.fogwall.db.MongoStoreFactory;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.jetty.BlockingContentHandler;
@@ -17,9 +18,11 @@ import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.InMemoryProviderRegistry;
 import com.rbc.fogwall.provider.ProviderRegistry;
 import com.rbc.fogwall.ssh.SshGitServer;
+import com.rbc.fogwall.user.ScmOAuthTokenStore;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.ServletContextEvent;
 import jakarta.servlet.ServletContextListener;
+import java.nio.file.Path;
 import java.util.EnumSet;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
@@ -166,6 +169,13 @@ public class FogwallDashboardApplication {
             bf.registerSingleton("liveConfigLoader", liveConfigLoader);
             bf.registerSingleton("repoRegistry", urlRuleRegistry);
             bf.registerSingleton("fetchStore", ctx.fetchStore());
+            // #40: OAuth token encryption never fails startup — see TokenCipherProvider javadoc. A missing/invalid
+            // key only disables the /api/scm-oauth/{provider}/link|callback endpoints, never push authorization.
+            bf.registerSingleton(
+                    "tokenCipherProvider",
+                    TokenCipherProvider.initialize(
+                            fogwallConfig.getScmOauth().getTokenEncryptionKeyPath(),
+                            Path.of("./.data/scm-oauth-token-key")));
             if (ctx.repoPermissionService() != null) {
                 bf.registerSingleton("repoPermissionService", ctx.repoPermissionService());
             }
@@ -173,6 +183,9 @@ public class FogwallDashboardApplication {
             // when session-store=jdbc. Null for MongoDB deployments (no JDBC DataSource available).
             if (jdbcDataSource != null) {
                 bf.registerSingleton("dataSource", jdbcDataSource);
+                // #40: OAuth token storage is JDBC-only for now — ScmOAuthLinkController treats its absence
+                // (Mongo deployments) as "OAuth linking not supported with this backend", not a startup failure.
+                bf.registerSingleton("scmOAuthTokenStore", new ScmOAuthTokenStore(jdbcDataSource));
             }
             // Expose the shared MongoClient + database name for session-store=mongo. Null for JDBC deployments.
             if (mongoFactory != null) {

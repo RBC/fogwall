@@ -219,7 +219,8 @@ public class PushStorePersistenceHook {
                         if (serviceUrl != null && !autoApproval) {
                             rp.sendMessage(color(
                                     CYAN,
-                                    "" + sym(LINK) + "  View push record: " + serviceUrl + "/push/" + record.getId()));
+                                    "" + sym(LINK) + "  View push record: " + serviceUrl + "/dashboard/push/"
+                                            + record.getId()));
                         }
 
                         // Reject all commands immediately - no approval wait
@@ -254,7 +255,8 @@ public class PushStorePersistenceHook {
                     if (serviceUrl != null && !autoApproval) {
                         rp.sendMessage(color(
                                 CYAN,
-                                "" + sym(LINK) + "  View push record: " + serviceUrl + "/push/" + record.getId()));
+                                "" + sym(LINK) + "  View push record: " + serviceUrl + "/dashboard/push/"
+                                        + record.getId()));
                     }
 
                     pushStore.save(record);

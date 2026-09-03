@@ -1,6 +1,9 @@
 package com.rbc.fogwall.dashboard.controller;
 
 import com.rbc.fogwall.config.FogwallConfig;
+import com.rbc.fogwall.crypto.TokenCipherProvider;
+import com.rbc.fogwall.provider.FogwallProvider;
+import com.rbc.fogwall.provider.ProviderRegistry;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
@@ -26,12 +29,48 @@ public class RuntimeConfigController {
     @Autowired
     private FogwallConfig fogwallConfig;
 
+    @Autowired
+    private TokenCipherProvider tokenCipherProvider;
+
+    @Autowired
+    private ProviderRegistry providerRegistry;
+
+    /**
+     * One enabled-for-OAuth provider, as the frontend needs it to render a "Link via OAuth" button: {@code type} picks
+     * the logo/brand (github, gitlab, forgejo), {@code hostname} is the actual host this instance talks to — needed
+     * because a {@code github}/{@code gitlab}-type provider isn't always github.com/gitlab.com (GHE data residency,
+     * self-managed GHES, self-hosted GitLab), and a {@code forgejo}-type provider covers everything from a generic
+     * self-hosted instance to the specific hosted {@code codeberg.org}.
+     */
+    private record ScmOAuthProviderInfo(String id, String type, String hostname) {}
+
     @Operation(operationId = "getRuntimeConfig", summary = "Get frontend runtime configuration")
     @GetMapping("/runtime-config")
     public Map<String, Object> runtimeConfig() {
         List<String> allowedOrigins = fogwallConfig.getServer().getAllowedOrigins();
         String authProvider = fogwallConfig.getAuth().getProvider();
         boolean bulkReview = fogwallConfig.getDashboard().isBulkReview();
-        return Map.of("allowedOrigins", allowedOrigins, "authProvider", authProvider, "bulkReview", bulkReview);
+
+        List<ScmOAuthProviderInfo> scmOAuthProviders = fogwallConfig.getProviders().entrySet().stream()
+                .filter(e -> e.getValue().getOauth().isEnabled()
+                        && !e.getValue().getOauth().getClientId().isBlank())
+                .map(e -> {
+                    String id = e.getKey();
+                    FogwallProvider provider = providerRegistry.getProvider(id).orElse(null);
+                    String type = provider != null ? provider.getType() : "";
+                    String hostname = provider != null ? provider.getUri().getHost() : "";
+                    return new ScmOAuthProviderInfo(id, type, hostname);
+                })
+                .toList();
+        boolean scmOAuthLinkAvailable = tokenCipherProvider.isAvailable();
+        String scmIdentityMode = fogwallConfig.getScmOauth().getIdentityMode();
+
+        return Map.of(
+                "allowedOrigins", allowedOrigins,
+                "authProvider", authProvider,
+                "bulkReview", bulkReview,
+                "scmOAuthProviders", scmOAuthProviders,
+                "scmOAuthLinkAvailable", scmOAuthLinkAvailable,
+                "scmIdentityMode", scmIdentityMode);
     }
 }

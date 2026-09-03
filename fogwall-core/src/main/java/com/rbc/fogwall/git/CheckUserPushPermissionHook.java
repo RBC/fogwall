@@ -4,6 +4,7 @@ import static com.rbc.fogwall.git.GitClientUtils.AnsiColor.*;
 import static com.rbc.fogwall.git.GitClientUtils.SymbolCodes.*;
 import static com.rbc.fogwall.git.GitClientUtils.sym;
 
+import com.rbc.fogwall.config.ScmOAuthConfig;
 import com.rbc.fogwall.db.model.PushStep;
 import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.permission.RepoPermissionService;
@@ -43,6 +44,7 @@ public class CheckUserPushPermissionHook implements FogwallHook {
     private final FogwallProvider provider;
     private final String serviceUrl;
     private final SshScmIdentityEnricher sshEnricher;
+    private final ScmOAuthConfig.IdentityMode identityMode;
 
     public CheckUserPushPermissionHook(
             PushIdentityResolver identityResolver,
@@ -70,6 +72,30 @@ public class CheckUserPushPermissionHook implements FogwallHook {
             FogwallProvider provider,
             String serviceUrl,
             SshScmIdentityEnricher sshEnricher) {
+        this(
+                identityResolver,
+                repoPermissionService,
+                validationContext,
+                pushContext,
+                provider,
+                serviceUrl,
+                sshEnricher,
+                ScmOAuthConfig.IdentityMode.PERMISSIVE);
+    }
+
+    /**
+     * Full constructor, additionally taking the {@code scm-oauth.identity-mode} (#40). In {@code STRICT} mode, only
+     * OAuth-verified SCM identities count for push authorization — on both HTTP and SSH.
+     */
+    public CheckUserPushPermissionHook(
+            PushIdentityResolver identityResolver,
+            RepoPermissionService repoPermissionService,
+            ValidationContext validationContext,
+            PushContext pushContext,
+            FogwallProvider provider,
+            String serviceUrl,
+            SshScmIdentityEnricher sshEnricher,
+            ScmOAuthConfig.IdentityMode identityMode) {
         this.identityResolver = identityResolver;
         this.repoPermissionService = repoPermissionService;
         this.validationContext = validationContext;
@@ -77,6 +103,7 @@ public class CheckUserPushPermissionHook implements FogwallHook {
         this.provider = provider;
         this.serviceUrl = serviceUrl;
         this.sshEnricher = sshEnricher;
+        this.identityMode = identityMode != null ? identityMode : ScmOAuthConfig.IdentityMode.PERMISSIVE;
     }
 
     @Override
@@ -116,7 +143,8 @@ public class CheckUserPushPermissionHook implements FogwallHook {
             log.warn("Push user '{}' could not be resolved to a registered proxy user", pushUser);
             String providerName = provider != null ? provider.getName() : "SCM";
             String profileHint = serviceUrl != null
-                    ? "Link your " + providerName + " identity at:\n  " + sym(LINK) + "  " + serviceUrl + "/profile"
+                    ? "Link your " + providerName + " identity at:\n  " + sym(LINK) + "  " + serviceUrl
+                            + "/dashboard/profile"
                     : "Ask an administrator to link your " + providerName + " identity to your proxy account.";
             String detail = GitClientUtils.format(
                     sym(NO_ENTRY) + "  Push Blocked - Identity Not Linked",
@@ -198,20 +226,61 @@ public class CheckUserPushPermissionHook implements FogwallHook {
                         detail);
                 return;
             }
+            if (identityMode == ScmOAuthConfig.IdentityMode.STRICT && !isVerified(user, providerId, scmLogin.get())) {
+                blockUnverifiedIdentity(user);
+                return;
+            }
             pushContext.setScmUsername(scmLogin.get());
         } else if (provider != null && user.getScmIdentities() != null) {
             // HTTP: scmUsername comes from the token lookup already performed during identity resolution
-            user.getScmIdentities().stream()
-                    .filter(id -> provider.getProviderId().equalsIgnoreCase(id.getProvider()))
-                    .map(ScmIdentity::getUsername)
-                    .findFirst()
-                    .ifPresent(pushContext::setScmUsername);
+            var httpScmIdentities = user.getScmIdentities().stream()
+                    .filter(id -> provider.getProviderId().equalsIgnoreCase(id.getProvider()));
+            if (identityMode == ScmOAuthConfig.IdentityMode.STRICT) {
+                httpScmIdentities = httpScmIdentities.filter(ScmIdentity::isVerified);
+            }
+            Optional<String> scmUsername =
+                    httpScmIdentities.map(ScmIdentity::getUsername).findFirst();
+            if (scmUsername.isEmpty() && identityMode == ScmOAuthConfig.IdentityMode.STRICT) {
+                blockUnverifiedIdentity(user);
+                return;
+            }
+            scmUsername.ifPresent(pushContext::setScmUsername);
         }
         pushContext.addStep(PushStep.builder()
                 .stepName("checkUserPermission")
                 .stepOrder(ORDER)
                 .status(StepStatus.PASS)
                 .build());
+    }
+
+    /**
+     * Whether {@code user} has an OAuth-verified (#40) identity for {@code providerId} matching {@code scmUsername}.
+     */
+    private static boolean isVerified(UserEntry user, String providerId, String scmUsername) {
+        if (user.getScmIdentities() == null) return false;
+        return user.getScmIdentities().stream()
+                .anyMatch(id -> providerId.equalsIgnoreCase(id.getProvider())
+                        && scmUsername.equals(id.getUsername())
+                        && id.isVerified());
+    }
+
+    /** Blocks the push in {@code scm-oauth.identity-mode: strict} when no OAuth-verified SCM identity is usable. */
+    private void blockUnverifiedIdentity(UserEntry user) {
+        log.warn(
+                "User '{}' has no OAuth-verified SCM identity — push denied (strict identity mode)",
+                user.getUsername());
+        String profileHint = serviceUrl != null
+                ? "Link your account via OAuth at:\n  " + sym(LINK) + "  " + serviceUrl + "/dashboard/profile"
+                : "Ask an administrator to link your SCM account via OAuth.";
+        String detail = GitClientUtils.format(
+                sym(NO_ENTRY) + "  Push Blocked - SCM Identity Not Verified",
+                sym(CROSS_MARK) + "  This deployment requires an OAuth-verified SCM identity"
+                        + " (scm-oauth.identity-mode: strict) — a manually-entered identity is not sufficient.\n\n"
+                        + profileHint,
+                RED,
+                null);
+        validationContext.addIssue(
+                "CheckUserPushPermissionHook", "No OAuth-verified SCM identity for " + user.getUsername(), detail);
     }
 
     @Override

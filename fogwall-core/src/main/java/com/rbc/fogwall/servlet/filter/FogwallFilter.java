@@ -275,7 +275,7 @@ public interface FogwallFilter extends Filter {
         String serviceUrl = (String) request.getAttribute(SERVICE_URL_ATTR);
         var details = (GitRequestDetails) request.getAttribute(GIT_REQUEST_ATTR);
         boolean isPush = details != null && details.getOperation() == HttpOperation.PUSH;
-        String link = isPush && serviceUrl != null ? serviceUrl + "/push/" + details.getId() : null;
+        String link = isPush && serviceUrl != null ? serviceUrl + "/dashboard/push/" + details.getId() : null;
         String fullMessage = link != null ? formattedMessage + "\n\nView push record: " + link : formattedMessage;
         sendGitError(request, response, fullMessage);
     }

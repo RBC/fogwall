@@ -12,4 +12,12 @@ public class ScmIdentity {
 
     /** Username on that provider. */
     String username;
+
+    /**
+     * Whether this identity was confirmed via OAuth account linking (#40), as opposed to manually entered by an
+     * admin/user via the free-text dashboard form. Used by {@code CheckUserPushPermissionHook} to decide which
+     * identities count for push authorization when {@code scm-oauth.identity-mode} is {@code strict}.
+     */
+    @Builder.Default
+    boolean verified = false;
 }

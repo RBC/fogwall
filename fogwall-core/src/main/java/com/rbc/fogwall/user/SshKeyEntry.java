@@ -22,7 +22,14 @@ public class SshKeyEntry {
 
     Instant createdAt;
 
-    /** True when this key was declared in the config file and cannot be removed via the dashboard. */
+    /**
+     * True when this key was declared in the config file, or imported via SCM OAuth (#40), and cannot be removed via
+     * the dashboard.
+     */
     @Builder.Default
     boolean locked = false;
+
+    /** What locked this key: {@code "config"} (default, pre-#40 meaning) or an SCM OAuth provider id (#40). */
+    @Builder.Default
+    String authSource = "config";
 }

@@ -3,6 +3,7 @@ import {
   addEmail,
   addScmIdentity,
   addSshKey,
+  fetchConfig,
   fetchMe,
   fetchMyPermissions,
   fetchMySshKeys,
@@ -10,10 +11,96 @@ import {
   removeEmail,
   removeScmIdentity,
   removeSshKey,
+  unlinkScmOAuth,
 } from '../api'
 import type { UserGroupView } from '../api'
 import { OperationsBadge, PathTypeBadge } from '../components/PermissionBadges'
-import type { CurrentUser, EmailEntry, RepoPermission, ScmIdentity, SshKeyEntry } from '../types'
+import type {
+  CurrentUser,
+  EmailEntry,
+  RepoPermission,
+  ScmIdentity,
+  ScmOAuthProviderInfo,
+  SshKeyEntry,
+} from '../types'
+import githubMarkLight from '../assets/logos/github-mark-light.svg'
+import githubMarkDark from '../assets/logos/github-mark-dark.svg'
+import gitlabLogo from '../assets/logos/gitlab-logo.png'
+import codebergIconBlue from '../assets/logos/codeberg-icon-blue.svg'
+import codebergIconWhite from '../assets/logos/codeberg-icon-white.svg'
+import giteaLogo from '../assets/logos/gitea-logo.svg'
+
+/** codeberg.org and gitea.com are the two `forgejo`-type hosts with their own dedicated logo. */
+function isCodeberg(hostname: string): boolean {
+  return hostname.toLowerCase() === 'codeberg.org'
+}
+function isGiteaCom(hostname: string): boolean {
+  return hostname.toLowerCase() === 'gitea.com'
+}
+
+/**
+ * GitHub's Invertocat mark, used per GitHub's logo usage guidelines (brand.github.com/foundations/logo#legal) as a
+ * permitted, unmodified social/integration button; GitLab's tanuki mark, used unmodified to identify this OAuth
+ * integration; Codeberg's icon mark (CC0-licensed, per codeberg.org/Codeberg/Design), used per its own usage
+ * guidelines (white variant on dark backgrounds); and Gitea's mascot mark (CC BY-SA 4.0, per gitea.com/gitea/design,
+ * now archived), used unmodified — see the Legal page for the full trademark/license notices for all four. Any other
+ * self-hosted Forgejo/Gitea instance has no fixed brand to show, so renders no logo.
+ */
+function ProviderLogo({
+  type,
+  hostname,
+  onDark,
+}: {
+  type: string
+  hostname: string
+  onDark?: boolean
+}) {
+  if (type === 'github') {
+    // onDark: the mark sits on an always-dark button background regardless of page theme, so always use the
+    // white variant there. Otherwise (e.g. next to the badge on the page's own background) switch with the theme.
+    if (onDark) return <img src={githubMarkDark} alt="" className="h-4 w-4" />
+    return (
+      <>
+        <img src={githubMarkLight} alt="" className="h-4 w-4 dark:hidden" />
+        <img src={githubMarkDark} alt="" className="hidden h-4 w-4 dark:inline" />
+      </>
+    )
+  }
+  if (type === 'gitlab') return <img src={gitlabLogo} alt="" className="h-4 w-4" />
+  if (type === 'forgejo' && isCodeberg(hostname)) {
+    if (onDark) return <img src={codebergIconWhite} alt="" className="h-4 w-4" />
+    return (
+      <>
+        <img src={codebergIconBlue} alt="" className="h-4 w-4 dark:hidden" />
+        <img src={codebergIconWhite} alt="" className="hidden h-4 w-4 dark:inline" />
+      </>
+    )
+  }
+  // The mascot mark has no separate light/dark variant — its own green/white artwork reads fine on both.
+  if (type === 'forgejo' && isGiteaCom(hostname))
+    return <img src={giteaLogo} alt="" className="h-4 w-4" />
+  return null
+}
+
+/**
+ * Named after the host being linked, not the provider brand — a github/gitlab-type provider isn't always
+ * github.com/gitlab.com (GHE data residency, self-managed GHES, self-hosted GitLab), so the hostname is the only
+ * thing that actually distinguishes which account a developer is about to link.
+ */
+function providerLinkLabel(hostname: string): string {
+  return hostname ? `Link with ${hostname}` : 'Link via OAuth'
+}
+
+function VerifiedBadge({ source }: { source?: string }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-300"
+      title="Confirmed via OAuth account linking"
+    >
+      verified{source ? ` (${source})` : ''}
+    </span>
+  )
+}
 
 function LockedBadge({ source }: { source: string }) {
   const title =
@@ -55,6 +142,40 @@ export function Profile() {
   const [newScmUsername, setNewScmUsername] = useState('')
   const [identityError, setIdentityError] = useState<string | null>(null)
   const [identityBusy, setIdentityBusy] = useState(false)
+
+  const [scmOAuthProviders, setScmOAuthProviders] = useState<ScmOAuthProviderInfo[]>([])
+  const [scmOAuthLinkAvailable, setScmOAuthLinkAvailable] = useState(false)
+  const [scmIdentityMode, setScmIdentityMode] = useState<string>('permissive')
+
+  // The OAuth callback redirects back here with a query param on both success and failure — read it once as
+  // initial state (not in an effect — this derives from the URL present at mount, it isn't subscribing to
+  // anything), then strip it from the URL in an effect so a page refresh doesn't re-show a stale notice.
+  const [oauthResult] = useState<{ notice: string | null; error: string | null }>(() => {
+    const params = new URLSearchParams(window.location.search)
+    const linked = params.get('scmOAuthLinked')
+    const err = params.get('scmOAuthError')
+    return {
+      notice: linked ? `Linked your ${linked} account via OAuth.` : null,
+      error: err ? `SCM OAuth linking failed: ${err.replaceAll('_', ' ')}` : null,
+    }
+  })
+  const { notice: oauthNotice, error: oauthError } = oauthResult
+
+  useEffect(() => {
+    if (oauthNotice || oauthError) {
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+  }, [oauthNotice, oauthError])
+
+  useEffect(() => {
+    fetchConfig()
+      .then((c) => {
+        setScmOAuthProviders(c.scmOAuthProviders ?? [])
+        setScmOAuthLinkAvailable(c.scmOAuthLinkAvailable ?? false)
+        setScmIdentityMode(c.scmIdentityMode ?? 'permissive')
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     fetchMe()
@@ -140,6 +261,20 @@ export function Profile() {
     }
   }
 
+  async function handleUnlinkOAuth(provider: string) {
+    setIdentityError(null)
+    try {
+      await unlinkScmOAuth(provider)
+      setProfile(
+        (p) =>
+          p && { ...p, scmIdentities: p.scmIdentities.filter((id) => id.provider !== provider) },
+      )
+      setSshKeys((prev) => prev.filter((k) => k.source !== provider))
+    } catch (err: unknown) {
+      setIdentityError(err instanceof Error ? err.message : 'Failed to unlink OAuth account')
+    }
+  }
+
   async function handleAddSshKey(e: React.FormEvent) {
     e.preventDefault()
     if (!newSshKey.trim()) return
@@ -222,6 +357,56 @@ export function Profile() {
         </div>
       </div>
 
+      {/* Connected accounts */}
+      {scmOAuthLinkAvailable && scmOAuthProviders.length > 0 && (
+        <div className="space-y-2 rounded-lg border border-gray-200 bg-white p-4 dark:bg-slate-800 dark:border-slate-700">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+            Connected accounts
+          </h2>
+          {oauthNotice && (
+            <p className="text-sm text-green-700 dark:text-green-400">{oauthNotice}</p>
+          )}
+          {oauthError && <p className="text-sm text-red-600 dark:text-red-400">{oauthError}</p>}
+          <ul className="divide-y divide-gray-100 dark:divide-gray-700">
+            {scmOAuthProviders.map((p) => {
+              const linked = profile.scmIdentities.find((id) => id.provider === p.id && id.verified)
+              return (
+                <li key={p.id} className="flex items-center justify-between py-2 text-sm">
+                  <span className="flex items-center gap-2">
+                    <ProviderLogo type={p.type} hostname={p.hostname} />
+                    <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                      {p.id}
+                    </span>
+                    {linked ? (
+                      <span className="text-gray-800 dark:text-gray-200">{linked.username}</span>
+                    ) : (
+                      <span className="text-gray-400 italic dark:text-gray-500">Not linked</span>
+                    )}
+                  </span>
+                  {linked ? (
+                    <button
+                      onClick={() => handleUnlinkOAuth(p.id)}
+                      className="text-gray-400 hover:text-red-500 transition-colors text-xs dark:text-gray-500 dark:hover:text-red-400"
+                      title="Unlink OAuth account"
+                    >
+                      Unlink
+                    </button>
+                  ) : (
+                    <a
+                      href={`/api/scm-oauth/${encodeURIComponent(p.id)}/link`}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-slate-700 text-white text-xs hover:bg-slate-600 transition-colors"
+                    >
+                      <ProviderLogo type={p.type} hostname={p.hostname} onDark />
+                      {providerLinkLabel(p.hostname)}
+                    </a>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200 dark:border-slate-700">
         {(['emails', 'identities', 'sshkeys', 'permissions'] as const).map((t) => (
@@ -250,8 +435,8 @@ export function Profile() {
       {tab === 'emails' && (
         <div className="space-y-4">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Email addresses linked to your commits. The identity verification hook uses these to
-            confirm your authorship on push.
+            Email addresses linked to your commits. Commit attribution hooks use these to confirm
+            your authorship on push.
           </p>
 
           {profile.emails.length === 0 ? (
@@ -267,7 +452,11 @@ export function Profile() {
                 >
                   <span className="flex items-center gap-2">
                     <span className="text-gray-800 dark:text-gray-200">{entry.email}</span>
-                    {entry.locked && <LockedBadge source={entry.source} />}
+                    {entry.verified ? (
+                      <VerifiedBadge source={entry.source} />
+                    ) : (
+                      entry.locked && <LockedBadge source={entry.source} />
+                    )}
                   </span>
                   {!entry.locked && (
                     <button
@@ -326,7 +515,12 @@ export function Profile() {
                       {key.label || (
                         <span className="italic text-gray-400 dark:text-gray-500">unlabelled</span>
                       )}
-                      {key.locked && <LockedBadge source="config" />}
+                      {key.locked &&
+                        (key.source === 'config' ? (
+                          <LockedBadge source={key.source} />
+                        ) : (
+                          <VerifiedBadge source={key.source} />
+                        ))}
                     </span>
                     {!key.locked && (
                       <button
@@ -342,7 +536,9 @@ export function Profile() {
                   </p>
                   <p className="text-xs text-gray-400 dark:text-gray-500">
                     {key.locked
-                      ? 'Defined in server configuration'
+                      ? key.source === 'config'
+                        ? 'Defined in server configuration'
+                        : `Imported from your ${key.source} account`
                       : `Added ${new Date(key.createdAt).toLocaleDateString()}`}
                   </p>
                 </li>
@@ -535,9 +731,10 @@ export function Profile() {
                       {id.provider}
                     </span>
                     <span className="text-gray-800 dark:text-gray-200">{id.username}</span>
+                    {id.verified ? <VerifiedBadge /> : null}
                     {id.source === 'config' && <LockedBadge source="config" />}
                   </span>
-                  {id.source !== 'config' && (
+                  {!id.verified && id.source !== 'config' && (
                     <button
                       onClick={() => handleRemoveIdentity(id)}
                       className="text-gray-400 hover:text-red-500 transition-colors text-xs dark:text-gray-500 dark:hover:text-red-400"
@@ -555,34 +752,41 @@ export function Profile() {
             <p className="text-sm text-red-600 dark:text-red-400">{identityError}</p>
           )}
 
-          <form onSubmit={handleAddIdentity} className="flex gap-2">
-            <select
-              value={newProvider}
-              onChange={(e) => setNewProvider(e.target.value)}
-              className="rounded border border-gray-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"
-              disabled={providers.length === 0}
-            >
-              {providers.map((p) => (
-                <option key={p.name} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-            <input
-              type="text"
-              value={newScmUsername}
-              onChange={(e) => setNewScmUsername(e.target.value)}
-              placeholder="your-username"
-              className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400"
-            />
-            <button
-              type="submit"
-              disabled={identityBusy || !newScmUsername.trim()}
-              className="px-4 py-2 rounded bg-slate-700 text-white text-sm hover:bg-slate-600 disabled:opacity-50 transition-colors"
-            >
-              Add
-            </button>
-          </form>
+          {scmIdentityMode === 'strict' ? (
+            <p className="text-xs text-gray-400 italic dark:text-gray-500">
+              This deployment requires an OAuth-verified SCM identity — manual entry is disabled.
+              Use the "Link via OAuth" button above.
+            </p>
+          ) : (
+            <form onSubmit={handleAddIdentity} className="flex gap-2">
+              <select
+                value={newProvider}
+                onChange={(e) => setNewProvider(e.target.value)}
+                className="rounded border border-gray-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"
+                disabled={providers.length === 0}
+              >
+                {providers.map((p) => (
+                  <option key={p.name} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={newScmUsername}
+                onChange={(e) => setNewScmUsername(e.target.value)}
+                placeholder="your-username"
+                className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400"
+              />
+              <button
+                type="submit"
+                disabled={identityBusy || !newScmUsername.trim()}
+                className="px-4 py-2 rounded bg-slate-700 text-white text-sm hover:bg-slate-600 disabled:opacity-50 transition-colors"
+              >
+                Add
+              </button>
+            </form>
+          )}
         </div>
       )}
     </div>

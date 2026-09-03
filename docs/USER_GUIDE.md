@@ -494,6 +494,32 @@ in fogwall alone is not enough — the proxy cross-checks against the SCM to con
 
 If you are blocked with "SSH key not linked to any SCM identity", add the key to your SCM account settings and retry.
 
+### Linking your account via OAuth
+
+If your administrator has configured it, your profile page's SCM Identities tab has a **"Link with `<hostname>`"**
+button for each supported provider instance (GitHub, GitLab, or a Forgejo/Gitea/Codeberg instance) — the hostname
+identifies which specific account you're about to link, since a GitHub- or GitLab-type provider isn't always
+github.com/gitlab.com (it may be a GitHub Enterprise tenant or a self-hosted GitLab/Forgejo/Gitea instance). This is the
+preferred way to register an SCM identity — instead of typing your SCM username into a free-text field, you authorize
+fogwall through the provider's real OAuth login, and fogwall sets a **verified** badge on the resulting identity once
+it's confirmed you actually control that account.
+
+Some deployments require a verified identity for push authorization (`scm-oauth.identity-mode: strict`) — if your push
+is blocked with "No OAuth-verified SCM identity," link your account this way rather than adding a free-text identity.
+
+Linking also saves you some manual setup:
+
+- **Emails your provider has verified are imported automatically** and locked onto your account (shown as
+  `locked (github)` or `locked (gitlab)` on the Emails tab) — including a GitHub noreply address, if you use one. You no
+  longer need to add these yourself.
+- **Your registered SSH public keys are imported automatically** too, shown with the same locked badge on the SSH Keys
+  tab.
+
+A verified identity (and any keys/emails it locked in) can't be removed the normal way — click **"Unlink"** instead,
+which removes the identity, the stored OAuth token, and any SSH keys/emails that came from that provider in one step. If
+the same key or email is also verified by another linked provider, it stays registered under that provider instead of
+being deleted outright. You can re-link at any time.
+
 ---
 
 ## User permissions vs access rules
