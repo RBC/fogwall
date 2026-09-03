@@ -39,7 +39,11 @@ public class AuthorEmailValidationHook implements FogwallHook {
         for (ReceiveCommand cmd : commands) {
             if (cmd.getType() == ReceiveCommand.Type.DELETE) continue;
             try {
-                List<Violation> violations = check.check(getCommits(repo, cmd));
+                List<Violation> violations = new ArrayList<>(check.check(getCommits(repo, cmd)));
+                // getCommits peels an annotated tag to its target commit, so the tag object's own tagger
+                // line is never seen there; hold the tag's creator to the committer identity policy (#474).
+                CommitInspectionService.getAnnotatedTagTagger(repo, cmd.getNewId())
+                        .ifPresent(tagger -> violations.addAll(check.checkTagger(tagger)));
                 for (Violation v : violations) {
                     validationContext.addIssue("checkAuthorEmails", v.reason(), v.formattedDetail());
                     allViolations.add(v);

@@ -5,6 +5,7 @@ import static com.rbc.fogwall.git.GitClientUtils.sym;
 
 import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.git.Commit;
+import com.rbc.fogwall.git.Contributor;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -58,6 +59,31 @@ public class AuthorEmailCheck implements CommitCheck {
         }
 
         return violations;
+    }
+
+    /**
+     * Validates an annotated tag's tagger email against the committer policy ({@code commit.committer.email.*}).
+     *
+     * <p>Git fills the tagger line from the same identity that fills the committer line ({@code user.email} /
+     * {@code GIT_COMMITTER_*}), so the person creating a tag is held to the same corporate-identity rules as the person
+     * creating a commit — there is deliberately no separate tagger config to drift out of sync.
+     *
+     * @param tagger the tag object's tagger, or {@code null} when the push carries no annotated tag
+     * @return violations against the committer email policy; empty when allowed or no policy is configured
+     */
+    public List<Violation> checkTagger(Contributor tagger) {
+        if (tagger == null) {
+            return List.of();
+        }
+        String email = tagger.getEmail();
+        String reason = violationReason(email, config.getCommitter().getEmail());
+        if (reason == null) {
+            return List.of();
+        }
+        String detail = sym(CROSS_MARK) + "  tagger email (" + email + "): " + reason + "\n"
+                + "  → The tagger is you — the person who ran git tag -a (or -s).\n"
+                + "  → Fix: git config user.email \"you@corp.com\", then delete and re-create the tag.";
+        return List.of(new Violation("tagger:" + email, reason, detail));
     }
 
     /** Returns the reason the email is rejected under the given email config, or {@code null} if it is allowed. */

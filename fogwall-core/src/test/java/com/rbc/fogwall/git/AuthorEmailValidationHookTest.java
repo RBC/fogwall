@@ -209,4 +209,49 @@ class AuthorEmailValidationHookTest {
 
         assertFalse(ctx.hasIssues(), "Default config must not reject any valid email");
     }
+
+    // ---- annotated tag tagger identity ----
+
+    /** Creates an annotated tag on HEAD with the given tagger and returns a push command for its ref. */
+    private ReceiveCommand annotatedTagCommand(String taggerName, String taggerEmail) throws Exception {
+        Git git = Git.open(tempDir.toFile());
+        var ref = git.tag()
+                .setName("v1.0.0")
+                .setMessage("Release 1.0.0")
+                .setTagger(new PersonIdent(taggerName, taggerEmail))
+                .setAnnotated(true)
+                .call();
+        return new ReceiveCommand(ObjectId.zeroId(), ref.getObjectId(), "refs/tags/v1.0.0");
+    }
+
+    @Test
+    void annotatedTag_allowedTaggerDomain_noIssues() throws Exception {
+        ValidationContext ctx = new ValidationContext();
+        AuthorEmailValidationHook hook = new AuthorEmailValidationHook(allowExampleCom(), ctx, new PushContext());
+
+        hook.onPreReceive(makeReceivePack(), List.of(annotatedTagCommand("Releaser", "releaser@example.com")));
+
+        assertFalse(ctx.hasIssues(), "Tagger inside the allowed domain must not produce issues");
+    }
+
+    @Test
+    void annotatedTag_disallowedTaggerDomain_addsIssue() throws Exception {
+        ValidationContext ctx = new ValidationContext();
+        AuthorEmailValidationHook hook = new AuthorEmailValidationHook(allowExampleCom(), ctx, new PushContext());
+
+        hook.onPreReceive(makeReceivePack(), List.of(annotatedTagCommand("Outsider", "releaser@gmail.com")));
+
+        assertTrue(ctx.hasIssues(), "Tagger outside the allowed domain must be held to the committer policy");
+    }
+
+    @Test
+    void annotatedTag_noConfig_anyTaggerAllowed() throws Exception {
+        ValidationContext ctx = new ValidationContext();
+        AuthorEmailValidationHook hook =
+                new AuthorEmailValidationHook(CommitConfig.defaultConfig(), ctx, new PushContext());
+
+        hook.onPreReceive(makeReceivePack(), List.of(annotatedTagCommand("Anyone", "anyone@anywhere.io")));
+
+        assertFalse(ctx.hasIssues(), "Default config must not reject any tagger");
+    }
 }

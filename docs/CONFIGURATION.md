@@ -1043,6 +1043,8 @@ commit:
   # Committer email policy — the committer is the employee who ran git commit or git rebase.
   # This is the primary corporate control: enforce that your staff use their work identity.
   # Rebased commits from external contributors still pass as long as the committer email is valid.
+  # Also applied to the tagger of an annotated tag push: git fills the tagger line from the same
+  # user.email as the committer line, so there is no separate tagger policy to configure.
   committer:
     email:
       domain:

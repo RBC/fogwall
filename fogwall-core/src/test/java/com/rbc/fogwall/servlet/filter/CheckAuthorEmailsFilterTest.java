@@ -333,4 +333,52 @@ class CheckAuthorEmailsFilterTest {
 
         assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
     }
+
+    // ---- annotated tag tagger identity (no commits of its own; the tag object names its creator) ----
+
+    private GitRequestDetails tagPushDetails(String taggerEmail) {
+        GitRequestDetails details = makeRequestDetails(List.of());
+        details.setBranch("refs/tags/v1.0.0");
+        details.setTagger(
+                Contributor.builder().name("Releaser").email(taggerEmail).build());
+        return details;
+    }
+
+    @Test
+    void tagPush_allowedTaggerDomain_passes() throws Exception {
+        GitRequestDetails details = tagPushDetails("releaser@example.com");
+        CheckAuthorEmailsFilter filter = new CheckAuthorEmailsFilter(testConfig());
+        FakeResponse fakeResponse = new FakeResponse();
+
+        filter.doHttpFilter(mockPushRequest(details), fakeResponse.mock);
+
+        assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
+    }
+
+    @Test
+    void tagPush_disallowedTaggerDomain_blocks() throws Exception {
+        GitRequestDetails details = tagPushDetails("releaser@gmail.com");
+        CheckAuthorEmailsFilter filter = new CheckAuthorEmailsFilter(testConfig());
+        FakeResponse fakeResponse = new FakeResponse();
+
+        filter.doHttpFilter(mockPushRequest(details), fakeResponse.mock);
+
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+        assertTrue(
+                details.getSteps().stream().anyMatch(s -> s.getStatus() == StepStatus.FAIL),
+                "A blocked step must be recorded for the tagger violation");
+    }
+
+    @Test
+    void tagPush_noTaggerAndNoCommits_passes() throws Exception {
+        // A lightweight tag push: no commits of its own and no tag object, so nothing to validate.
+        GitRequestDetails details = makeRequestDetails(List.of());
+        details.setBranch("refs/tags/v1.0.0");
+        CheckAuthorEmailsFilter filter = new CheckAuthorEmailsFilter(testConfig());
+        FakeResponse fakeResponse = new FakeResponse();
+
+        filter.doHttpFilter(mockPushRequest(details), fakeResponse.mock);
+
+        assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
+    }
 }

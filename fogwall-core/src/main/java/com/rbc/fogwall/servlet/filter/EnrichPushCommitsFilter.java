@@ -225,6 +225,10 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
                 ObjectId tagObjectId = repository.resolve(toCommit);
                 CommitInspectionService.getAnnotatedTagMessage(repository, tagObjectId)
                         .ifPresent(requestDetails::setTagMessage);
+                // Likewise the tag's creator: expose the tagger so the author-email filter holds them
+                // to the same committer identity policy as a branch pusher.
+                CommitInspectionService.getAnnotatedTagTagger(repository, tagObjectId)
+                        .ifPresent(requestDetails::setTagger);
                 return;
             }
 
