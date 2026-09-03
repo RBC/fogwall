@@ -535,8 +535,7 @@ public class JettyConfigurationBuilder {
                 proxyCache,
                 buildUpstreamTls(),
                 buildProviderRegistry(),
-                new SshScmIdentityEnricher(
-                        SshScmIdentityEnricher.DEFAULT_TTL, buildSshFingerprintCache(), buildProviderRegistry()));
+                new SshScmIdentityEnricher(SshScmIdentityEnricher.DEFAULT_TTL, buildSshFingerprintCache()));
     }
 
     /**
@@ -1036,6 +1035,14 @@ public class JettyConfigurationBuilder {
         String uri = providerConfig.getUri();
         String pathSuffix = providerConfig.getPathSuffix();
         URI parsedUri = (uri != null && !uri.isBlank()) ? URI.create(uri) : null;
+        if (parsedUri != null && "ssh".equals(parsedUri.getScheme())) {
+            log.warn(
+                    "Provider '{}': a top-level 'uri' with an ssh:// scheme no longer enables SSH transport (#531). "
+                            + "Set 'uri' to the http/https endpoint and enable SSH via the 'ssh:' sub-block "
+                            + "(ssh.enabled: true, or ssh.uri for a non-standard endpoint). This provider will not "
+                            + "serve HTTP or SSH as configured.",
+                    name);
+        }
         URI parsedApiUri = null;
         if (providerConfig.getApiUri() != null && !providerConfig.getApiUri().isBlank()) {
             parsedApiUri = URI.create(providerConfig.getApiUri());
@@ -1052,45 +1059,55 @@ public class JettyConfigurationBuilder {
 
         switch (resolvedType) {
             case "github" -> {
+                URI githubUri = parsedUri != null ? parsedUri : GitHubProvider.DEFAULT_URI;
                 return Optional.of(GitHubProvider.builder()
                         .name(name)
-                        .uri(parsedUri)
+                        .uri(githubUri)
                         .pathSuffix(pathSuffix)
                         .apiUri(parsedApiUri)
+                        .sshUri(resolveSshEndpoint(name, providerConfig, githubUri))
                         .build());
             }
             case "gitlab" -> {
+                URI gitlabUri = parsedUri != null ? parsedUri : GitLabProvider.DEFAULT_URI;
                 return Optional.of(GitLabProvider.builder()
                         .name(name)
-                        .uri(parsedUri)
+                        .uri(gitlabUri)
                         .pathSuffix(pathSuffix)
                         .apiUri(parsedApiUri)
                         .apiToken(apiToken)
+                        .sshUri(resolveSshEndpoint(name, providerConfig, gitlabUri))
                         .build());
             }
             case "bitbucket" -> {
+                URI bitbucketUri = parsedUri != null ? parsedUri : BitbucketProvider.DEFAULT_URI;
                 return Optional.of(BitbucketProvider.builder()
                         .name(name)
-                        .uri(parsedUri)
+                        .uri(bitbucketUri)
                         .pathSuffix(pathSuffix)
+                        .sshUri(resolveSshEndpoint(name, providerConfig, bitbucketUri))
                         .build());
             }
             case "codeberg" -> {
+                URI codebergUri = parsedUri != null ? parsedUri : ForgejoProvider.CODEBERG;
                 return Optional.of(ForgejoProvider.builder()
                         .name(name)
-                        .uri(parsedUri != null ? parsedUri : ForgejoProvider.CODEBERG)
+                        .uri(codebergUri)
                         .pathSuffix(pathSuffix)
                         .apiUri(parsedApiUri)
                         .apiToken(apiToken)
+                        .sshUri(resolveSshEndpoint(name, providerConfig, codebergUri))
                         .build());
             }
             case "gitea" -> {
+                URI giteaUri = parsedUri != null ? parsedUri : ForgejoProvider.GITEA;
                 return Optional.of(ForgejoProvider.builder()
                         .name(name)
-                        .uri(parsedUri != null ? parsedUri : ForgejoProvider.GITEA)
+                        .uri(giteaUri)
                         .pathSuffix(pathSuffix)
                         .apiUri(parsedApiUri)
                         .apiToken(apiToken)
+                        .sshUri(resolveSshEndpoint(name, providerConfig, giteaUri))
                         .build());
             }
             case "forgejo" -> {
@@ -1106,6 +1123,7 @@ public class JettyConfigurationBuilder {
                         .pathSuffix(pathSuffix)
                         .apiUri(parsedApiUri)
                         .apiToken(apiToken)
+                        .sshUri(resolveSshEndpoint(name, providerConfig, parsedUri))
                         .build());
             }
             default -> {
@@ -1115,6 +1133,7 @@ public class JettyConfigurationBuilder {
                             .uri(parsedUri)
                             .pathSuffix(pathSuffix)
                             .blockedInfoRefsStatus(providerConfig.getBlockedInfoRefsStatus())
+                            .sshUri(resolveSshEndpoint(name, providerConfig, parsedUri))
                             .build());
                 }
                 log.warn(
@@ -1123,6 +1142,74 @@ public class JettyConfigurationBuilder {
                 return Optional.empty();
             }
         }
+    }
+
+    /**
+     * Collects the per-provider {@code known_hosts} lines pinning upstream SSH host keys — each provider's
+     * {@code ssh.known-hosts} inline entries plus the lines of its {@code ssh.known-hosts-path} file (#531). These are
+     * merged on top of the global {@link SshConfig#getExtraKnownHosts()} / bundled defaults by
+     * {@code SshGitServer.create}. known_hosts lines are keyed by host, so entries for hosts fogwall never contacts are
+     * inert.
+     */
+    public List<String> buildUpstreamKnownHosts() {
+        List<String> lines = new ArrayList<>();
+        config.getProviders().forEach((name, providerConfig) -> {
+            SshProviderConfig ssh = providerConfig.getSsh();
+            ssh.getKnownHosts().stream()
+                    .filter(l -> l != null && !l.isBlank())
+                    .map(String::strip)
+                    .forEach(lines::add);
+            String path = ssh.getKnownHostsPath();
+            if (path != null && !path.isBlank()) {
+                Path file = Path.of(path);
+                if (Files.isReadable(file)) {
+                    try {
+                        lines.addAll(Files.readAllLines(file));
+                    } catch (IOException e) {
+                        throw new IllegalStateException(
+                                "Provider '" + name + "': failed to read ssh.known-hosts-path '" + path + "': "
+                                        + e.getMessage(),
+                                e);
+                    }
+                } else {
+                    log.warn(
+                            "Provider '{}': ssh.known-hosts-path '{}' is not readable — skipping those pinned host keys",
+                            name,
+                            path);
+                }
+            }
+        });
+        return lines;
+    }
+
+    /**
+     * Resolves the SSH transport endpoint for a provider entry from its {@code ssh:} sub-block, or {@code null} when
+     * the entry declares no SSH endpoint. An explicit {@code ssh.uri} wins (covering non-{@code git} SSH usernames and
+     * non-standard ports, e.g. GHEC data-residency {@code ssh://{slug}@{tenant}.ghe.com}); otherwise
+     * {@code ssh.enabled: true} derives {@code ssh://git@<host>} from the HTTP {@code uri} host (port 22 implied). The
+     * {@code uri} must be http/https — SSH is never declared via a top-level {@code ssh://} uri.
+     */
+    private URI resolveSshEndpoint(String name, ProviderConfig providerConfig, URI httpUri) {
+        SshProviderConfig ssh = providerConfig.getSsh();
+        String explicit = ssh.getUri();
+        if (explicit != null && !explicit.isBlank()) {
+            URI parsed = URI.create(explicit.trim());
+            if (!"ssh".equals(parsed.getScheme())) {
+                throw new IllegalArgumentException("Provider '" + name
+                        + "': ssh.uri must use the ssh scheme (e.g. ssh://git@host), got: " + explicit);
+            }
+            return parsed;
+        }
+        if (ssh.isEnabled()) {
+            String scheme = httpUri != null ? httpUri.getScheme() : null;
+            if (httpUri == null || httpUri.getHost() == null || !("http".equals(scheme) || "https".equals(scheme))) {
+                throw new IllegalArgumentException("Provider '" + name
+                        + "': ssh.enabled requires an http/https 'uri' to derive the SSH endpoint from, "
+                        + "or an explicit 'ssh.uri'. Got uri: " + httpUri);
+            }
+            return URI.create("ssh://git@" + httpUri.getHost());
+        }
+        return null;
     }
 
     private static CommitConfig.BlockConfig buildBlockConfig(BlockSettings block) {

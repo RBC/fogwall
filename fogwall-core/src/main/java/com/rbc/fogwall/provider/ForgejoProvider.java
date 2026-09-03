@@ -36,10 +36,11 @@ public class ForgejoProvider extends AbstractFogwallProvider implements HttpToke
     public static final URI GITEA = URI.create("https://gitea.com");
 
     @Builder
-    public ForgejoProvider(String name, URI uri, String pathSuffix, URI apiUri, String apiToken) {
+    public ForgejoProvider(String name, URI uri, String pathSuffix, URI apiUri, String apiToken, URI sshUri) {
         super(name, TYPE, uri, pathSuffix);
         this.apiUri = apiUri;
         this.apiToken = apiToken;
+        this.sshUri = sshUri;
     }
 
     /**

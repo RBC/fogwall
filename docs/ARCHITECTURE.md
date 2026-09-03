@@ -243,11 +243,18 @@ together.
 
 ### Provider (`FogwallProvider`)
 
-A provider represents one upstream Git hosting service. It carries the upstream base URI, the URL path prefix the proxy
-listens on, and optional API calls for identity resolution.
+A provider represents one upstream Git hosting service. It carries the upstream HTTP base URI, the URL path prefix the
+proxy listens on, and optional API calls for identity resolution.
 
 Built-in providers: `github`, `gitlab`, `bitbucket`, `forgejo`/`gitea`, `codeberg`. Custom generic providers can be
 declared in config with an arbitrary name and URI.
+
+**Transport is a property of the provider, not a separate entry.** A single provider entry can serve HTTP (its `uri`),
+SSH (an `ssh:` sub-block exposing `getSshUri()`), or both — the `FogwallServletRegistrar` registers the HTTP servlets
+for any provider with an HTTP URI, and the `SshServerRegistrar` registers an SSH route for any provider whose
+`getSshUri()` is present, both keyed by the same `servletPath()`. Because both transports resolve to one provider name,
+identity resolution, permissions, and OAuth links apply uniformly across them — there is no `github` / `github-ssh`
+duplication.
 
 Providers that implement `TokenIdentityProvider` can resolve an SCM username from a push token by calling the hosting
 service's API (e.g. `GET /user` for GitHub). This is how the proxy maps a credential to a known identity without

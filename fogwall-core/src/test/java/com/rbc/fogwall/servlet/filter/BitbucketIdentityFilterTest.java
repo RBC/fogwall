@@ -21,7 +21,8 @@ class BitbucketIdentityFilterTest {
      */
     @Test
     void shouldFilter_matchesPushRequest() {
-        BitbucketProvider provider = new BitbucketProvider("bitbucket", URI.create("https://bitbucket.org"), null);
+        BitbucketProvider provider =
+                new BitbucketProvider("bitbucket", URI.create("https://bitbucket.org"), null, null);
         BitbucketIdentityFilter filter = new BitbucketIdentityFilter(provider);
 
         HttpServletRequest request = mock(HttpServletRequest.class);

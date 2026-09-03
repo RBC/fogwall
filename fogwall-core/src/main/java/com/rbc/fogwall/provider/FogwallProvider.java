@@ -25,6 +25,16 @@ public interface FogwallProvider {
 
     URI getUri();
 
+    /**
+     * The SSH transport endpoint for this provider, if it serves SSH. A provider may serve HTTP (via
+     * {@link #getUri()}), SSH (via this endpoint), or both from a single config entry (see fogwall#531). Returns
+     * {@link Optional#empty()} for HTTP-only providers. The SSH server routes and forwards using this endpoint rather
+     * than {@link #getUri()}.
+     */
+    default Optional<URI> getSshUri() {
+        return Optional.empty();
+    }
+
     String servletPath();
 
     String servletMapping();

@@ -18,10 +18,14 @@ class SshGitReceiveCommandTest {
 
     private static final URI GITEA_URI = URI.create("ssh://git@localhost:3022");
 
-    private static SshProviderTarget target(URI uri, String pathSuffix) {
+    private static SshProviderTarget target(URI sshUri, String pathSuffix) {
+        // A provider serves SSH via its ssh endpoint (#531). The http uri shares the same host:port so the
+        // host-keyed servletPath still matches the SSH push path; sshUri is what the push forwards over.
+        URI httpUri = URI.create("http://" + sshUri.getHost() + (sshUri.getPort() > 0 ? ":" + sshUri.getPort() : ""));
         var provider = ForgejoProvider.builder()
                 .name("gitea")
-                .uri(uri)
+                .uri(httpUri)
+                .sshUri(sshUri)
                 .pathSuffix(pathSuffix)
                 .build();
         return new SshProviderTarget(provider, mock(StoreAndForwardReceivePackFactory.class));

@@ -108,20 +108,24 @@ class SshProxyFixture implements AutoCloseable {
 
         var userStore = new StaticUserStore(List.of(testUser));
 
-        // ForgejoProvider implements SshKeyFingerprintLookup — required for SSH identity verification.
-        // apiUri points at Gitea's HTTP API since the transport uri uses the SSH scheme.
-        // apiToken is required because the Gitea container has REQUIRE_SIGNIN_VIEW=true by default.
+        // ForgejoProvider implements SshKeyFingerprintLookup — required for SSH identity verification. One provider
+        // entry serves both transports (#531): uri is the HTTP/API endpoint, sshUri is the SSH transport fogwall
+        // forwards over. The container maps HTTP and SSH to different host ports, so the primary entry pins its route
+        // key to the Gitea SSH host:port (via pathSuffix, leading slash required to match the normalised push path) so
+        // the push URLs below still resolve. apiToken is required because the Gitea container has REQUIRE_SIGNIN_VIEW.
+        URI giteaHttpUri = URI.create(gitea.getBaseUrl());
         var provider = ForgejoProvider.builder()
                 .name(providerId)
-                .uri(giteaSshUri)
-                .apiUri(URI.create(gitea.getBaseUrl()))
+                .uri(giteaHttpUri)
+                .sshUri(giteaSshUri)
+                .pathSuffix("/" + giteaSshHostPort)
                 .apiToken(giteaApiToken)
                 .build();
         var aliasProvider = ForgejoProvider.builder()
                 .name(aliasProviderId)
-                .uri(giteaSshUri)
+                .uri(giteaHttpUri)
+                .sshUri(giteaSshUri)
                 .pathSuffix(ALIAS_PATH_SUFFIX)
-                .apiUri(URI.create(gitea.getBaseUrl()))
                 .apiToken(giteaApiToken)
                 .build();
 
@@ -184,7 +188,7 @@ class SshProxyFixture implements AutoCloseable {
         // mechanism operators opt into for internal providers (see SshConfig#isTrustOnFirstUse).
         sshConfig.setTrustOnFirstUse(true);
 
-        sshServer = SshGitServer.create(sshConfig, routes, cache, userStore, urlRuleRegistry);
+        sshServer = SshGitServer.create(sshConfig, routes, cache, userStore, urlRuleRegistry, List.of());
         sshServer.start();
     }
 

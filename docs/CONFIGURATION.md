@@ -793,15 +793,16 @@ providers:
 
 ### Provider properties
 
-| Property                   | Type    | Default                | Description                                                                                                                                                                                                                                                                |
-| -------------------------- | ------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `enabled`                  | boolean | `true`                 | Whether the provider is active                                                                                                                                                                                                                                             |
-| `servlet-path`             | string  | `""`                   | Additional URL prefix for this provider                                                                                                                                                                                                                                    |
-| `uri`                      | string  | _(built-in default)_   | Upstream base URI. Required for custom-named providers; omit for built-ins.                                                                                                                                                                                                |
-| `type`                     | string  | _(from name)_          | Provider implementation: `github`, `gitlab`, `bitbucket`, `codeberg`, `forgejo`, `gitea`. Required for any name that is not one of the five reserved names.                                                                                                                |
-| `api-uri`                  | string  | _(derived from `uri`)_ | HTTP base URI for provider REST API calls (identity resolution, SSH key lookup). Only needed when the HTTP API port can't be derived from `uri` — e.g. a self-hosted SSH provider where the HTTP and SSH ports are both non-standard. See [SSH transport](#ssh-transport). |
-| `api-token`                | string  | _(none)_               | PAT used when the provider's SSH key listing API requires authentication (Forgejo/GitLab with `REQUIRE_SIGNIN_VIEW=true`). GitHub's equivalent endpoint is public and needs no token.                                                                                      |
-| `blocked-info-refs-status` | int     | `403`                  | HTTP status returned when a blocked `/info/refs` discovery request is denied. `403` is unambiguous; `404` obscures whether the repo exists (security by obscurity).                                                                                                        |
+| Property                   | Type    | Default                | Description                                                                                                                                                                                                                   |
+| -------------------------- | ------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`                  | boolean | `true`                 | Whether the provider is active                                                                                                                                                                                                |
+| `servlet-path`             | string  | `""`                   | Additional URL prefix for this provider                                                                                                                                                                                       |
+| `uri`                      | string  | _(built-in default)_   | Upstream base URI. Required for custom-named providers; omit for built-ins.                                                                                                                                                   |
+| `type`                     | string  | _(from name)_          | Provider implementation: `github`, `gitlab`, `bitbucket`, `codeberg`, `forgejo`, `gitea`. Required for any name that is not one of the five reserved names.                                                                   |
+| `api-uri`                  | string  | _(derived from `uri`)_ | HTTP base URI for provider REST API calls (identity resolution, SSH key lookup). Only needed when the HTTP API port can't be derived from `uri` — e.g. a self-hosted instance where the HTTP API runs on a non-standard port. |
+| `api-token`                | string  | _(none)_               | PAT used when the provider's SSH key listing API requires authentication (Forgejo/GitLab with `REQUIRE_SIGNIN_VIEW=true`). GitHub's equivalent endpoint is public and needs no token.                                         |
+| `ssh`                      | block   | _(disabled)_           | SSH transport for this provider — the same entry serves both HTTP and SSH. See [Serving a provider over SSH](#serving-a-provider-over-ssh).                                                                                   |
+| `blocked-info-refs-status` | int     | `403`                  | HTTP status returned when a blocked `/info/refs` discovery request is denied. `403` is unambiguous; `404` obscures whether the repo exists (security by obscurity).                                                           |
 
 The five reserved names (`github`, `gitlab`, `bitbucket`, `codeberg`, `gitea`) carry a built-in default URI and provider
 type. Any other name is opaque — the name is never parsed for type hints — so `type` and `uri` must both be set. The
@@ -951,6 +952,55 @@ server:
 > plain TCP/L4 passthrough on your load balancer or `Service` (external `:22` → the pod's `:2222`) rather than changing
 > what the container itself binds — the same pattern most deployments already use for terminating TLS on 443 in front
 > of the container's plaintext 8080. The Helm chart's `sshService.*` values do exactly this.
+<!-- prettier-ignore-end -->
+
+### Serving a provider over SSH
+
+_The single-entry model below is available since v1.4.0._
+
+The `server.ssh` block above starts the SSH listener; SSH transport is then turned on **per provider** via an `ssh:`
+sub-block on that provider's entry. A single provider entry serves both HTTP and SSH to the same upstream — there is no
+need for a separate `github-ssh` entry, and an OAuth-linked identity applies to both transports automatically.
+
+```yaml
+providers:
+  github:
+    enabled: true # github.com over HTTPS
+    ssh:
+      enabled: true # also serve SSH — the endpoint is derived as ssh://git@github.com
+
+  gitea-internal:
+    enabled: true
+    type: gitea
+    uri: https://gitea.corp.example.com # HTTP/API endpoint
+    ssh:
+      enabled: true
+      uri: ssh://git@gitea.corp.example.com:3022 # explicit endpoint for a non-standard SSH port
+      known-hosts:
+        - "[gitea.corp.example.com]:3022 ssh-ed25519 AAAA..." # pin this upstream's host key
+
+  # GitHub Enterprise Cloud with data residency uses the enterprise slug as the SSH username, not "git":
+  acme-ghe:
+    enabled: true
+    type: github
+    uri: https://acme.ghe.com
+    ssh:
+      enabled: true
+      uri: ssh://acme@acme.ghe.com
+```
+
+| Property (under `ssh:`) | Type    | Default     | Description                                                                                                                                                                                          |
+| ----------------------- | ------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`               | boolean | `false`     | Serve this provider over SSH. With no `ssh.uri`, the endpoint is derived as `ssh://git@<host>` from the provider's HTTP `uri` (port 22).                                                             |
+| `uri`                   | string  | _(derived)_ | Explicit SSH endpoint. Required when the upstream uses a non-`git` SSH username (e.g. GHEC data residency) or a non-standard port. Must use the `ssh://` scheme.                                     |
+| `known-hosts`           | list    | _(none)_    | Inline `known_hosts` lines pinning this upstream's SSH host key(s). Merged with the global `server.ssh.known-hosts-path` / bundled defaults. Entries are host-keyed, so they scope to this upstream. |
+| `known-hosts-path`      | string  | _(none)_    | Path to a `known_hosts` file whose lines pin this upstream's host key(s). Read once at startup and merged like `known-hosts`.                                                                        |
+
+<!-- prettier-ignore-start -->
+> [!NOTE]
+> The `uri` on a provider entry is always the **HTTP/HTTPS** endpoint (it is also the API base used for SSH-key
+> identity resolution). A top-level `uri` with an `ssh://` scheme no longer enables SSH — configure SSH through the
+> `ssh:` sub-block instead.
 <!-- prettier-ignore-end -->
 
 ## Commit validation

@@ -8,6 +8,8 @@ import com.rbc.fogwall.user.UserEntry;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
@@ -33,7 +35,7 @@ import org.apache.sshd.server.session.ServerSession;
  *
  * <p>A single server instance can serve multiple upstream providers — {@link SshGitCommandFactory} routes each command
  * to the right one using the {@link SshProviderTarget} map keyed by {@code servletPath()} (see
- * {@link com.rbc.fogwall.jetty.SshServerRegistrar}).
+ * {@link SshServerRegistrar}).
  */
 @Slf4j
 public class SshGitServer {
@@ -55,7 +57,8 @@ public class SshGitServer {
             Map<String, SshProviderTarget> routes,
             LocalRepositoryCache cache,
             ReadOnlyUserStore userStore,
-            UrlRuleRegistry urlRuleRegistry)
+            UrlRuleRegistry urlRuleRegistry,
+            List<String> providerKnownHosts)
             throws IOException {
 
         SshServer sshd = SshServer.setUpDefaultServer();
@@ -75,7 +78,13 @@ public class SshGitServer {
         sshd.setAgentFactory(agentFactory);
         sshd.setForwardingFilter(new AgentOnlyForwardingFilter());
 
-        Path knownHostsFile = UpstreamKnownHosts.assemble(config.getKnownHostsPath(), config.getExtraKnownHosts());
+        // Merge the global extra known_hosts with each provider's own pinned host keys (#531). Lines are host-keyed,
+        // so per-provider entries scope themselves to their upstream host.
+        List<String> extraKnownHosts = new ArrayList<>(config.getExtraKnownHosts());
+        if (providerKnownHosts != null) {
+            extraKnownHosts.addAll(providerKnownHosts);
+        }
+        Path knownHostsFile = UpstreamKnownHosts.assemble(config.getKnownHostsPath(), extraKnownHosts);
 
         sshd.setCommandFactory(new SshGitCommandFactory(
                 routes, cache, agentFactory, urlRuleRegistry, knownHostsFile, config.isTrustOnFirstUse()));

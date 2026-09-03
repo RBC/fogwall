@@ -21,14 +21,15 @@ public class GitLabProvider extends AbstractFogwallProvider implements HttpToken
     public static final String NAME = "gitlab";
 
     @Builder
-    public GitLabProvider(String name, URI uri, String pathSuffix, URI apiUri, String apiToken) {
+    public GitLabProvider(String name, URI uri, String pathSuffix, URI apiUri, String apiToken, URI sshUri) {
         super(name != null ? name : NAME, NAME, uri != null ? uri : DEFAULT_URI, pathSuffix);
         this.apiUri = apiUri;
         this.apiToken = apiToken;
+        this.sshUri = sshUri;
     }
 
     public GitLabProvider(String pathSuffix) {
-        this(NAME, DEFAULT_URI, pathSuffix, null, null);
+        this(NAME, DEFAULT_URI, pathSuffix, null, null, null);
     }
 
     public String getApiUrl() {
