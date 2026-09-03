@@ -15,6 +15,7 @@ import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * Integration tests for {@link ScmOAuthTokenStore} backed by an H2 in-memory database (#40).
@@ -26,12 +27,13 @@ import org.junit.jupiter.api.Test;
 class ScmOAuthTokenStoreTest {
 
     ScmOAuthTokenStore store;
+    JdbcUserStore userStore;
 
     @BeforeEach
     void setUp() {
         DataSource ds = DataSourceFactory.h2InMemory("scm-oauth-token-test-" + UUID.randomUUID());
         new JdbcPushStore(ds).initialize();
-        var userStore = new JdbcUserStore(ds, new JdbcScmTokenCache(ds, Duration.ofDays(1)));
+        userStore = new JdbcUserStore(ds, new JdbcScmTokenCache(ds, Duration.ofDays(1)));
         userStore.upsertAll(List.of(UserEntry.builder()
                 .username("alice")
                 .passwordHash("{noop}pw")
@@ -103,5 +105,30 @@ class ScmOAuthTokenStoreTest {
     @Test
     void remove_noStoredToken_isNoop() {
         assertDoesNotThrow(() -> store.remove("alice", "github"));
+    }
+
+    // ---- FK on proxy_users: OAuth linking must materialize the user first (ScmOAuthLinkController) ----
+
+    @Test
+    void save_forUserNotInProxyUsers_failsTheForeignKey() {
+        // A config-declared user with no permission/group entry has no proxy_users row. Saving a token for them
+        // violates user_scm_tokens' FK — the exact failure ScmOAuthLinkController hit before it began upserting the
+        // user first.
+        assertThrows(
+                DataIntegrityViolationException.class,
+                () -> store.save("bob", "github", "token".getBytes(StandardCharsets.UTF_8), null, null, null));
+    }
+
+    @Test
+    void save_afterUpsertUser_succeeds() {
+        // upsertUser is what ScmOAuthLinkController now calls before save — it materializes the proxy_users row so the
+        // FK holds, exactly as the permission/group paths already do for config users.
+        userStore.upsertUser("bob");
+
+        store.save("bob", "github", "token".getBytes(StandardCharsets.UTF_8), null, null, null);
+
+        assertArrayEquals(
+                "token".getBytes(StandardCharsets.UTF_8),
+                store.findAccessToken("bob", "github").orElseThrow());
     }
 }
