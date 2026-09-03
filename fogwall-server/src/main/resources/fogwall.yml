@@ -18,13 +18,19 @@ server:
   # to heap capacity and typical pack size — prefer adding instances over raising this limit when scaling out.
   # Set to 0 to disable virtual-thread dispatch (requests then run directly on the platform thread pool).
   max-concurrent-requests: 512
-  # Largest request body fogwall will accept, in bytes (default 256MiB). Applies to both proxy modes. An
+  # Largest request body fogwall will accept, in bytes (default 64MiB). Applies to both proxy modes. An
   # over-size push is rejected with a git error before the body is read, so it costs no memory. Content this
   # large is almost always binaries or generated output that shouldn't be in git history; a genuine one-off
   # import is better seeded directly upstream than pushed through the proxy.
   # Raising this needs a matching increase in container memory — see max-concurrent-requests above, since the
   # real bound is heap divided by concurrent pushes. Set to 0 to disable the check (still bounded by heap).
-  max-push-bytes: 268435456
+  max-push-bytes: 67108864
+  # Largest decompressed size of any single object in a pushed pack, in bytes (default 128MiB). Applies to both
+  # proxy modes and both store-and-forward transports (HTTP and SSH). max-push-bytes caps the compressed wire
+  # size; a crafted pack can inflate to roughly 1000x that, and this is the bound on the inflated side. It sits
+  # deliberately far above the binary-blob filter's 50MiB policy ceiling — this limit exists only to stop
+  # decompression bombs and should never be the check a legitimate push runs into. Set to 0 to disable.
+  max-object-size-bytes: 134217728
   # HTTP session persistence backend. Options:
   #   none   — in-memory sessions (default); sessions are lost on restart and not shared across instances
   #   jdbc   — persisted to the configured JDBC database (h2-file or postgres);
@@ -232,12 +238,12 @@ secret-scan:
 # Runs once per push against the aggregate diff, same scope as diff-scan above. ENFORCE-only: a match always
 # blocks the push. MIME type is content-sniffed from magic bytes, not guessed from the file extension — see
 # docs/CONFIGURATION.md#binary-blob-detection for the full signature table and why extensions aren't used.
-# Enabled by default with a 100MiB size ceiling and PDF/ZIP-family denied — a reasonable safety net out of the
+# Enabled by default with a 50MiB size ceiling and PDF/ZIP-family denied — a reasonable safety net out of the
 # box. Further content types are a policy choice; see docs/CONFIGURATION.md#binary-blob-detection for the full
 # list of detectable MIME types and uncomment/add your own below.
 binary-blob:
   enabled: true
-  max-size-bytes: 104857600 # 100MiB; 0 = no size limit
+  max-size-bytes: 52428800 # 50MiB; 0 = no size limit
   deny-mime-types:
     - application/pdf
     - application/zip

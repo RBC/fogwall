@@ -113,7 +113,7 @@ secret-scan:
 
 binary-blob:
   enabled: true
-  max-size-bytes: 104857600
+  max-size-bytes: 52428800
   deny-mime-types:
     - application/pdf
     - application/zip

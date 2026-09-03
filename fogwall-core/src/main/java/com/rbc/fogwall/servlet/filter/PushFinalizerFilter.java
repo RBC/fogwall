@@ -110,6 +110,21 @@ public class PushFinalizerFilter extends AbstractFogwallFilter {
             return;
         }
 
+        // No evidence must not equal no findings: every validation filter that ran recorded a step (PASS
+        // included), so an empty step list means the chain never actually examined this push. Refuse to
+        // finalize it as clean rather than trusting whatever composition quirk skipped the filters.
+        if (details.getSteps().isEmpty()) {
+            log.error("Refusing to finalize push {}: no validation steps were recorded", details.getId());
+            details.setResult(GitRequestDetails.GitResult.ERROR);
+            details.setReason("No validation evidence was recorded for this push");
+            sendGitError(
+                    request,
+                    response,
+                    "Push error: the validation pipeline did not run for this push. Please retry or contact your"
+                            + " administrator.");
+            return;
+        }
+
         // If the gateway approves immediately (e.g. auto mode), forward the push without blocking
         if (approvalGateway.approvesImmediately()) {
             details.setResult(GitRequestDetails.GitResult.ALLOWED);

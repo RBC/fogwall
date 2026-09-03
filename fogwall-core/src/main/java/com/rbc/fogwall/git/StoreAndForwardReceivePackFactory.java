@@ -73,6 +73,16 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
     /** Maximum time a push waits for human review before being marked timed out (see {@link ServerConfig}). */
     private Duration approvalTimeout = DEFAULT_APPROVAL_TIMEOUT;
 
+    /**
+     * Largest pack (wire bytes) the {@link ReceivePack} will accept; 0 = unlimited. On HTTP this duplicates the cap
+     * {@code ParseGitRequestFilter} already enforces, but that filter never sees SSH pushes — setting it here is what
+     * bounds the SSH transport at all.
+     */
+    private long maxPackBytes = 0;
+
+    /** Largest decompressed size of any single received object; 0 = unlimited. Guards against decompression bombs. */
+    private long maxObjectSizeBytes = 0;
+
     /** Enable fail-fast mode. Call after construction before the factory handles any requests. */
     public void setFailFast(boolean failFast) {
         this.failFast = failFast;
@@ -81,6 +91,16 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
     /** Set the upstream connect timeout. Call after construction before the factory handles any requests. */
     public void setConnectTimeoutSeconds(int connectTimeoutSeconds) {
         this.connectTimeoutSeconds = connectTimeoutSeconds;
+    }
+
+    /** Set the wire-size pack limit ({@code server.max-push-bytes}). Call before the factory handles any requests. */
+    public void setMaxPackBytes(long maxPackBytes) {
+        this.maxPackBytes = maxPackBytes;
+    }
+
+    /** Set the per-object decompressed size limit ({@code server.max-object-size-bytes}). */
+    public void setMaxObjectSizeBytes(long maxObjectSizeBytes) {
+        this.maxObjectSizeBytes = maxObjectSizeBytes;
     }
 
     /** Set the local repository cache for invalidation on forward failure. */
@@ -259,6 +279,15 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
 
         ReceivePack rp = new ReceivePack(db);
         rp.setBiDirectionalPipe(false);
+
+        // Bound what JGit will accept before any hook runs: the pack limit caps wire bytes (the only such cap on
+        // the SSH transport), and the object limit caps what those bytes may inflate to.
+        if (maxPackBytes > 0) {
+            rp.setMaxPackSizeLimit(maxPackBytes);
+        }
+        if (maxObjectSizeBytes > 0) {
+            rp.setMaxObjectSizeLimit(maxObjectSizeBytes);
+        }
 
         // Per-request shared contexts
         var validationContext = new ValidationContext();

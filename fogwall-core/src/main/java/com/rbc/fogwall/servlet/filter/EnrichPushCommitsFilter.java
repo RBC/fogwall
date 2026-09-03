@@ -57,10 +57,18 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
     // validation filters (200+) which depend on localRepository and pushedCommits being set.
     private static final int ORDER = 60;
     private final LocalRepositoryCache repositoryCache;
+    private final long maxObjectSizeBytes;
 
     public EnrichPushCommitsFilter(FogwallProvider provider, LocalRepositoryCache repositoryCache) {
+        this(provider, repositoryCache, 0);
+    }
+
+    /** @param maxObjectSizeBytes largest decompressed size of any single pushed object; 0 = unlimited */
+    public EnrichPushCommitsFilter(
+            FogwallProvider provider, LocalRepositoryCache repositoryCache, long maxObjectSizeBytes) {
         super(ORDER, Set.of(HttpOperation.PUSH), provider);
         this.repositoryCache = repositoryCache;
+        this.maxObjectSizeBytes = maxObjectSizeBytes;
     }
 
     /**
@@ -292,6 +300,11 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
             PackParser parser =
                     inserter.newPackParser(new ByteArrayInputStream(body, packOffset, body.length - packOffset));
             parser.setAllowThin(true); // Allow thin packs (deltas against objects already in the repo)
+            // The wire size was already capped at parse; this bounds what those bytes may inflate to.
+            // A violation throws from parse() and surfaces as a commit-inspection error to the client.
+            if (maxObjectSizeBytes > 0) {
+                parser.setMaxObjectSizeLimit(maxObjectSizeBytes);
+            }
             parser.parse(NullProgressMonitor.INSTANCE);
             inserter.flush();
             log.debug("Successfully unpacked push objects into local repository");

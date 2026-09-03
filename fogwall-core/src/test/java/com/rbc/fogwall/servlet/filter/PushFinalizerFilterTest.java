@@ -9,6 +9,8 @@ import static org.mockito.Mockito.*;
 import com.rbc.fogwall.approval.ApprovalGateway;
 import com.rbc.fogwall.approval.AutoApprovalGateway;
 import com.rbc.fogwall.db.PushStoreFactory;
+import com.rbc.fogwall.db.model.PushStep;
+import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
 import com.rbc.fogwall.provider.FogwallProvider;
@@ -102,6 +104,14 @@ class PushFinalizerFilterTest {
         details.setCommitTo("abc123");
         details.setRepoRef(
                 GitRequestDetails.RepoRef.builder().slug("/owner/repo").build());
+        // A real pending push always carries at least one recorded validation step — the finalizer
+        // refuses to finalize a push with none (no evidence must not equal no findings).
+        details.getSteps()
+                .add(PushStep.builder()
+                        .pushId(details.getId().toString())
+                        .stepName("TestValidationFilter")
+                        .status(StepStatus.PASS)
+                        .build());
         return details;
     }
 
@@ -208,6 +218,36 @@ class PushFinalizerFilterTest {
 
         assertEquals(GitRequestDetails.GitResult.REVIEW, details.getResult());
         assertTrue(fakeResponse.committed.get());
+    }
+
+    @Test
+    void pushWithNoRecordedValidationSteps_isErroredNotAllowed() throws Exception {
+        // Even with a gateway that approves immediately, a push the validation chain never examined
+        // (zero recorded steps) must not be finalized as ALLOWED.
+        GitRequestDetails details = pendingPushDetails();
+        details.getSteps().clear();
+        var gateway = new AutoApprovalGateway(PushStoreFactory.h2InMemory("test-" + UUID.randomUUID()));
+        PushFinalizerFilter filter = new PushFinalizerFilter("http://localhost:8080", gateway);
+        FakeResponse fakeResponse = new FakeResponse();
+
+        filter.doHttpFilter(mockPushRequest(details), fakeResponse.mock);
+
+        assertEquals(GitRequestDetails.GitResult.ERROR, details.getResult());
+        assertTrue(fakeResponse.committed.get(), "Client must be told why the push did not go through");
+    }
+
+    @Test
+    void refDeletionWithNoSteps_isStillAllowed() throws Exception {
+        // Deletions skip content validation by design, so an empty step list is their normal state.
+        GitRequestDetails details = pendingPushDetails();
+        details.getSteps().clear();
+        details.setCommitTo(ZERO_OID);
+        PushFinalizerFilter filter = new PushFinalizerFilter("http://localhost:8080", mock(ApprovalGateway.class));
+        FakeResponse fakeResponse = new FakeResponse();
+
+        filter.doHttpFilter(mockPushRequest(details), fakeResponse.mock);
+
+        assertEquals(GitRequestDetails.GitResult.ALLOWED, details.getResult());
     }
 
     @Test

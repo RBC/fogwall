@@ -20,6 +20,7 @@ import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.transport.PacketLineIn;
@@ -33,6 +34,9 @@ import org.eclipse.jgit.transport.PacketLineIn;
 public class ParseGitRequestFilter extends ProviderAwareFogwallFilter<FogwallProvider> {
 
     private static final int ORDER = Integer.MIN_VALUE + 1;
+
+    /** A full git object id: 40 lowercase hex characters. Covers the all-zero create/delete sentinel. */
+    private static final Pattern OBJECT_ID = Pattern.compile("^[0-9a-f]{40}$");
 
     private final long maxPushBytes;
 
@@ -186,17 +190,37 @@ public class ParseGitRequestFilter extends ProviderAwareFogwallFilter<FogwallPro
                     return gr;
                 }
 
-                // Parse old SHA, new SHA, ref from the pkt-line (space-separated; ref may have
-                // capability strings after a NUL byte which we strip).
-                String[] parts = packetLine.split(" ");
+                // Parse old SHA, new SHA, ref from the pkt-line. The client's capability list follows
+                // a NUL byte (its entries are themselves space-separated), so strip it before splitting
+                // the ref update itself on spaces. The object ids must be well-formed 40-hex SHAs (the
+                // zero sentinel included) — they become push-record keys and JGit resolve() inputs
+                // downstream, and nothing there should ever see a value a real git client could not
+                // have sent.
+                String[] parts = packetLine.split("\0")[0].split(" ");
+                if (parts.length != 3
+                        || !OBJECT_ID.matcher(parts[0]).matches()
+                        || !OBJECT_ID.matcher(parts[1]).matches()) {
+                    log.warn("Rejecting push with malformed ref update line: {}", packetLine.trim());
+                    return rejectMalformed(gr, "The ref update line is not a valid git push command.");
+                }
                 gr.setCommitFrom(parts[0]);
                 gr.setCommitTo(parts[1]);
-                // capability strings appear after a NUL byte in parts[2]
-                gr.setBranch(parts[2].split("\0")[0].trim());
-            } catch (IOException e) {
-                log.error("Error parsing push request", e);
+                gr.setBranch(parts[2].trim());
+            } catch (IOException | RuntimeException e) {
+                // Fail closed with an accurate reason: a body this filter cannot parse must not travel
+                // down the chain as a PENDING push that only later filters happen to stop.
+                log.warn("Rejecting push whose request body could not be parsed", e);
+                return rejectMalformed(gr, "The request body could not be parsed as a git push.");
             }
         }
+        return gr;
+    }
+
+    /** Marks the request rejected as a malformed push, with a reason the git client will see verbatim. */
+    private static GitRequestDetails rejectMalformed(GitRequestDetails gr, String reason) {
+        gr.setResult(GitRequestDetails.GitResult.REJECTED);
+        gr.setRejectionTitle("Push Blocked - Malformed Push Request");
+        gr.setReason(reason + " If a normal git push produced this, please contact your administrator.");
         return gr;
     }
 

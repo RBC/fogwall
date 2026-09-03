@@ -379,6 +379,73 @@ class ParseGitRequestFilterTest {
         assertNotEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
         assertEquals("refs/tags/v1.0", details.getBranch());
     }
+    // ---- malformed ref update lines (object ids must be 40-hex; body must be parseable) ----
+
+    @Test
+    void parse_nonHexObjectIds_isRejected() throws Exception {
+        // Values shaped like paths must never enter push records or JGit resolve() calls.
+        byte[] body = buildBody(new String[] {"../ /../.data refs/heads/main\0 report-status"}, "PACK".getBytes());
+
+        RequestBodyWrapper wrapper = wrapBody(body, "/owner/repo.git/git-receive-pack");
+        GitRequestDetails details = makeFilter().parse(wrapper);
+
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+        assertNull(details.getCommitFrom(), "Malformed object ids must not be recorded");
+        assertNull(details.getCommitTo(), "Malformed object ids must not be recorded");
+    }
+
+    @Test
+    void parse_shortObjectId_isRejected() throws Exception {
+        String shortOid = PUSH1_NEW.substring(0, 39);
+        byte[] body = buildBody(
+                new String[] {PUSH1_OLD + " " + shortOid + " refs/heads/main\0 report-status"}, "PACK".getBytes());
+
+        RequestBodyWrapper wrapper = wrapBody(body, "/owner/repo.git/git-receive-pack");
+        GitRequestDetails details = makeFilter().parse(wrapper);
+
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+    }
+
+    @Test
+    void parse_spacelessRefUpdateLine_isRejectedNotThrown() throws Exception {
+        // Previously threw ArrayIndexOutOfBoundsException → HTTP 500 with a PENDING record left behind.
+        byte[] body = buildBody(new String[] {"no-spaces-here"}, "PACK".getBytes());
+
+        RequestBodyWrapper wrapper = wrapBody(body, "/owner/repo.git/git-receive-pack");
+        GitRequestDetails details = assertDoesNotThrow(() -> makeFilter().parse(wrapper));
+
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+    }
+
+    @Test
+    void parse_unparseableBody_isRejectedNotPending() throws Exception {
+        // Not pkt-line framed at all. The push must be rejected with an accurate reason, not left
+        // PENDING for downstream filters to happen to stop.
+        byte[] body = "zzzz-this-is-not-a-git-push-body".getBytes();
+
+        RequestBodyWrapper wrapper = wrapBody(body, "/owner/repo.git/git-receive-pack");
+        GitRequestDetails details = makeFilter().parse(wrapper);
+
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+        assertTrue(details.getReason().contains("could not be parsed"), "Reason must name the parse failure");
+    }
+
+    @Test
+    void parse_zeroOidBranchCreate_isAccepted() throws Exception {
+        byte[] existingBody = loadResource("push-sample-01-body.bin");
+        byte[] packData = extractPackData(existingBody);
+        byte[] body = buildBody(
+                new String[] {GitClientUtils.ZERO_OID + " " + PUSH1_NEW + " refs/heads/new-branch\0 report-status"},
+                packData);
+
+        RequestBodyWrapper wrapper = wrapBody(body, "/owner/repo.git/git-receive-pack");
+        GitRequestDetails details = makeFilter().parse(wrapper);
+
+        assertNotEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+        assertEquals(GitClientUtils.ZERO_OID, details.getCommitFrom());
+        assertEquals(PUSH1_NEW, details.getCommitTo());
+    }
+
     // ---- invalid repository path segments (rejected before any body parsing) ----
 
     @Test

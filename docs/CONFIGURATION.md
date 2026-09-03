@@ -150,7 +150,19 @@ server:
   # as a single array.
   # Raising this needs a matching increase in container memory: the real bound is heap
   # divided by concurrent pushes. See "Sizing memory for pushes" in the Admin Guide.
-  max-push-bytes: 268435456 # 256MiB
+  max-push-bytes: 67108864 # 64MiB
+
+  # Largest decompressed size of any single object in a pushed pack, in bytes.
+  # Applies to both proxy modes, and to both store-and-forward transports (HTTP and
+  # SSH). max-push-bytes above caps the compressed wire size, but a crafted pack can
+  # inflate to roughly 1000x its compressed size — this caps the inflated side, per
+  # object. A push containing a violating object is rejected during pack parsing.
+  #
+  # The default sits deliberately far above the binary-blob filter's 50MiB policy
+  # ceiling: binary-blob is the tunable policy layer for "how big may a file be",
+  # while this limit exists only to stop decompression bombs, and should be kept
+  # high enough that no legitimate push ever hits it. Set to 0 to disable.
+  max-object-size-bytes: 134217728 # 128MiB
 
   # Base URL fogwall is externally reachable at — the bare host, WITHOUT a /dashboard suffix (fogwall appends
   # /dashboard, /api, etc. itself where needed). Used in links sent to clients via sideband messages, and required
@@ -1046,7 +1058,7 @@ classified as `application/zip`.
 ```yaml
 binary-blob:
   enabled: true # on by default — the size threshold alone is a useful safety net out of the box
-  max-size-bytes: 104857600 # 100MiB; 0 = no size limit
+  max-size-bytes: 52428800 # 50MiB; 0 = no size limit
   deny-mime-types: # PDF and ZIP-family denied by default; further types are a policy choice
     - application/pdf
     - application/zip
