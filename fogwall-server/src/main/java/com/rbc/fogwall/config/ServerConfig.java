@@ -61,7 +61,7 @@ public class ServerConfig {
      * Maximum size in bytes of a request body fogwall will accept, applied to both proxy modes. Pushes over the limit
      * are rejected with a git error before the body is read, so an over-size push costs no heap.
      *
-     * <p>Defaults to 256 MiB. This is a resource bound rather than a policy check, so unlike the {@code *Settings}
+     * <p>Defaults to 64 MiB. This is a resource bound rather than a policy check, so unlike the {@code *Settings}
      * classes it defaults to an active value: a config that omits the key still gets protection. Set to 0 to disable
      * the check, but note that "unlimited" is bounded by heap in practice and by {@code Integer.MAX_VALUE - 8}
      * absolutely, since the body is held as a single {@code byte[]}.
@@ -69,7 +69,19 @@ public class ServerConfig {
      * <p>The real bound on push size is heap divided by concurrent pushes, so raising this should come with a matching
      * increase to the container memory limit — see {@link #getMaxConcurrentRequests()}.
      */
-    private long maxPushBytes = 268435456L;
+    private long maxPushBytes = 67108864L;
+
+    /**
+     * Maximum decompressed size in bytes of any single object in a pushed pack, applied to both proxy modes (and both
+     * the HTTP and SSH transports of store-and-forward). {@code maxPushBytes} bounds the compressed wire size, but a
+     * crafted pack can inflate to roughly a thousand times its compressed size; this is the bound on the inflated side.
+     *
+     * <p>Defaults to 128 MiB. Like {@code maxPushBytes} this is a resource bound rather than a policy check, so it
+     * defaults to an active value. It is deliberately far above the binary-blob filter's default 50 MiB ceiling: that
+     * filter is the policy layer an operator may raise or disable, while this limit only exists to stop decompression
+     * bombs and should never be the check a legitimate push runs into. Set to 0 to disable.
+     */
+    private long maxObjectSizeBytes = 134217728L;
 
     /**
      * Connection timeout in seconds for store-and-forward upstream pushes

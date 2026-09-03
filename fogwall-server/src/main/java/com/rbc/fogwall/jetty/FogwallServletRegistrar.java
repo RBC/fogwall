@@ -110,6 +110,7 @@ public final class FogwallServletRegistrar {
                         fogwallContext.approvalTimeoutSeconds(),
                         fogwallContext.failFast(),
                         fogwallContext.maxPushBytes(),
+                        fogwallContext.maxObjectSizeBytes(),
                         fogwallContext.upstreamConnectTimeoutSeconds(),
                         fogwallContext.urlRuleRegistry(),
                         fogwallContext.fetchStore());
@@ -180,6 +181,8 @@ public final class FogwallServletRegistrar {
         factory.setCache(fogwallContext.storeForwardCache());
         factory.setSshScmIdentityEnricher(fogwallContext.sshScmIdentityEnricher());
         factory.setScmOAuthConfigSupplier(configHolder::getScmOAuthConfig);
+        factory.setMaxPackBytes(fogwallContext.maxPushBytes());
+        factory.setMaxObjectSizeBytes(fogwallContext.maxObjectSizeBytes());
         return factory;
     }
 
@@ -202,6 +205,7 @@ public final class FogwallServletRegistrar {
             int approvalTimeoutSeconds,
             boolean failFast,
             long maxPushBytes,
+            long maxObjectSizeBytes,
             int connectTimeoutSeconds,
             UrlRuleRegistry urlRuleRegistry,
             FetchStore fetchStore) {
@@ -227,6 +231,8 @@ public final class FogwallServletRegistrar {
         factory.setApprovalTimeout(Duration.ofSeconds(approvalTimeoutSeconds));
         factory.setCache(cache);
         factory.setScmOAuthConfigSupplier(scmOAuthConfigSupplier);
+        factory.setMaxPackBytes(maxPushBytes);
+        factory.setMaxObjectSizeBytes(maxObjectSizeBytes);
 
         var gitServlet = new GitServlet();
         gitServlet.setRepositoryResolver(resolver);
@@ -328,7 +334,7 @@ public final class FogwallServletRegistrar {
         // execution order matches the documented order ranges in fogwallFilter.
         List<FogwallFilter> filters = new ArrayList<>();
         filters.add(new ParseGitRequestFilter(provider, configBuilder.getMaxPushBytes()));
-        filters.add(new EnrichPushCommitsFilter(provider, repositoryCache));
+        filters.add(new EnrichPushCommitsFilter(provider, repositoryCache, configBuilder.getMaxObjectSizeBytes()));
         filters.add(new AllowApprovedPushFilter(pushStore, serviceUrl));
 
         filters.add(new UrlRuleAggregateFilter(100, provider, fetchStore, urlRuleRegistry));

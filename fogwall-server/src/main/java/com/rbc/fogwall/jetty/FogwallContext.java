@@ -37,6 +37,7 @@ public record FogwallContext(
         int approvalTimeoutSeconds,
         boolean failFast,
         long maxPushBytes,
+        long maxObjectSizeBytes,
         int upstreamConnectTimeoutSeconds,
         int proxyConnectTimeoutSeconds,
         LocalRepositoryCache storeForwardCache,

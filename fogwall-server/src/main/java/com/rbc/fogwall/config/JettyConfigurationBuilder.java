@@ -125,6 +125,11 @@ public class JettyConfigurationBuilder {
         return config.getServer().getMaxPushBytes();
     }
 
+    /** Returns the maximum decompressed size of a single pushed object in bytes (0 = no configured limit). */
+    public long getMaxObjectSizeBytes() {
+        return config.getServer().getMaxObjectSizeBytes();
+    }
+
     /** Returns the S&amp;F upstream connect timeout in seconds (0 = no timeout). */
     public int getUpstreamConnectTimeoutSeconds() {
         return config.getServer().getUpstreamConnectTimeoutSeconds();
@@ -523,6 +528,7 @@ public class JettyConfigurationBuilder {
                 getApprovalTimeoutSeconds(),
                 isFailFast(),
                 getMaxPushBytes(),
+                getMaxObjectSizeBytes(),
                 getUpstreamConnectTimeoutSeconds(),
                 getProxyConnectTimeoutSeconds(),
                 storeForwardCache,

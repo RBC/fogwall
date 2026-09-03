@@ -582,12 +582,12 @@ Standard git error — the branch name in your push command does not match a loc
 
 ### Push blocked as too large
 
-fogwall accepts pushes up to a configured size — 256 MiB by default. Over that, the push is refused before any data is
+fogwall accepts pushes up to a configured size — 64 MiB by default. Over that, the push is refused before any data is
 read:
 
 ```text
 remote: ⛔  Push Blocked - Too Large
-remote: ❌  This push is 512 MiB; the limit is 256 MiB.
+remote: ❌  This push is 512 MiB; the limit is 64 MiB.
 ```
 
 A push this large is usually one of three things: a binary or archive committed by mistake, generated build output that

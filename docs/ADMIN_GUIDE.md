@@ -765,7 +765,7 @@ whole pack before it can decide anything. Two settings bound that, and they mult
 
 | Setting                          | Default | Bounds                        |
 | -------------------------------- | ------- | ----------------------------- |
-| `server.max-push-bytes`          | 256 MiB | how large one push may be     |
+| `server.max-push-bytes`          | 64 MiB  | how large one push may be     |
 | `server.max-concurrent-requests` | 512     | how many run at the same time |
 
 The worst case is `max-push-bytes × concurrent large pushes`, so **raising `max-push-bytes` means raising the
@@ -781,7 +781,7 @@ chunked encoding; it does not change how large a push may be. A push under `http
 `Content-Length`, which lets fogwall reject an over-size push without reading anything. Above it, the push is chunked
 and fogwall counts bytes as they arrive instead. Both paths enforce the same limit.
 
-**If 256 MiB is too small for your estate**, prefer these over raising the limit:
+**If 64 MiB is too small for your estate**, prefer these over raising the limit:
 
 - Seed one-off imports and repository migrations directly upstream, then let the proxy handle incremental pushes. A
   migration is a coordinated, one-time event and does not need to be self-service.
@@ -789,6 +789,16 @@ and fogwall counts bytes as they arrive instead. Both paths enforce the same lim
 - Keep large binaries out of git history in the first place. Note that **Git LFS is not currently supported through
   fogwall** (see the User Guide); LFS uploads are refused because fogwall cannot inspect content that travels outside
   the git protocol.
+
+### Sizing disk for pushes
+
+Received pack data is inflated into a per-push quarantine directory on disk before validation runs, and `max-push-bytes`
+caps only the _compressed_ wire size. `server.max-object-size-bytes` (default 128 MiB) caps what any single object may
+inflate to, which stops the cheap decompression-bomb case, but there is no total-decompressed limit: a pack split across
+many highly-compressible objects can still inflate to roughly `max-push-bytes × 1000` on disk in the worst case before
+it is rejected. Quarantine directories are deleted when the request ends, so this is transient pressure, not growth —
+but the volume holding the quarantine (the working directory by default) should be sized, or quota'd, with that worst
+case and `max-concurrent-requests` in mind rather than assuming pushes stay near their wire size.
 
 ---
 
