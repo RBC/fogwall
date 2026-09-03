@@ -304,21 +304,85 @@ class JettyConfigurationBuilderTest {
     }
 
     @Test
-    void createProvider_githubType_sshUriWithApiUri_wiresApiUriThrough() {
+    void createProvider_combinedEntry_sshBlockWithApiUri_wiresAllThrough() {
+        // One provider entry serves HTTP + SSH (#531): uri is the HTTP/API endpoint, ssh.enabled derives the SSH
+        // endpoint, and an explicit api-uri override still flows through.
         var providerConfig = new ProviderConfig();
         providerConfig.setEnabled(true);
         providerConfig.setType("github");
-        providerConfig.setUri("ssh://git@github.corp.example.com");
+        providerConfig.setUri("https://github.corp.example.com");
         providerConfig.setApiUri("https://github.corp.example.com/api/v3");
+        providerConfig.getSsh().setEnabled(true);
 
         var providers =
-                new JettyConfigurationBuilder(configWithSingleProvider("github-ssh", providerConfig)).buildProviders();
+                new JettyConfigurationBuilder(configWithSingleProvider("github-ent", providerConfig)).buildProviders();
 
         assertEquals(1, providers.size());
         assertInstanceOf(GitHubProvider.class, providers.get(0));
         var github = (GitHubProvider) providers.get(0);
-        assertEquals(URI.create("ssh://git@github.corp.example.com"), github.getUri());
+        assertEquals(URI.create("https://github.corp.example.com"), github.getUri());
         assertEquals("https://github.corp.example.com/api/v3", github.getApiUrl());
+        assertTrue(github.getSshUri().isPresent());
+        assertEquals(
+                URI.create("ssh://git@github.corp.example.com"),
+                github.getSshUri().get());
+    }
+
+    @Test
+    void createProvider_sshEnabled_derivesGitAtHostEndpoint() {
+        var pc = new ProviderConfig();
+        pc.getSsh().setEnabled(true);
+        var providers = new JettyConfigurationBuilder(configWithSingleProvider("github", pc)).buildProviders();
+        assertEquals(1, providers.size());
+        var github = providers.get(0);
+        assertEquals(GitHubProvider.DEFAULT_URI, github.getUri());
+        assertTrue(github.getSshUri().isPresent());
+        assertEquals(URI.create("ssh://git@github.com"), github.getSshUri().get());
+    }
+
+    @Test
+    void createProvider_sshExplicitUri_usedVerbatimForNonGitUsername() {
+        // GHEC data-residency uses the enterprise slug as the SSH username, not "git".
+        var pc = new ProviderConfig();
+        pc.setType("github");
+        pc.setUri("https://acme.ghe.com");
+        pc.getSsh().setEnabled(true);
+        pc.getSsh().setUri("ssh://acme@acme.ghe.com");
+        var providers = new JettyConfigurationBuilder(configWithSingleProvider("github-ghe", pc)).buildProviders();
+        assertEquals(1, providers.size());
+        assertEquals(
+                URI.create("ssh://acme@acme.ghe.com"),
+                providers.get(0).getSshUri().get());
+    }
+
+    @Test
+    void createProvider_httpOnly_hasNoSshEndpoint() {
+        var providers = new JettyConfigurationBuilder(configWithSingleProvider("github", new ProviderConfig()))
+                .buildProviders();
+        assertEquals(1, providers.size());
+        assertTrue(providers.get(0).getSshUri().isEmpty());
+    }
+
+    @Test
+    void createProvider_sshEnabled_nonHttpUri_throws() {
+        var pc = new ProviderConfig();
+        pc.setType("github");
+        pc.setUri("ssh://git@github.com");
+        pc.getSsh().setEnabled(true);
+        var builder = new JettyConfigurationBuilder(configWithSingleProvider("github", pc));
+        var ex = assertThrows(IllegalArgumentException.class, builder::buildProviders);
+        assertTrue(ex.getMessage().contains("ssh.enabled requires an http/https"));
+    }
+
+    @Test
+    void createProvider_sshUriWrongScheme_throws() {
+        var pc = new ProviderConfig();
+        pc.setType("github");
+        pc.setUri("https://github.com");
+        pc.getSsh().setUri("https://github.com");
+        var builder = new JettyConfigurationBuilder(configWithSingleProvider("github", pc));
+        var ex = assertThrows(IllegalArgumentException.class, builder::buildProviders);
+        assertTrue(ex.getMessage().contains("ssh.uri must use the ssh scheme"));
     }
 
     @Test
@@ -349,15 +413,26 @@ class JettyConfigurationBuilderTest {
     }
 
     @Test
-    void createProvider_codebergKey_withSshUri_usesCustomUri() {
-        // Regression test: codeberg previously ignored any configured uri and hardcoded the HTTPS default, which
-        // meant codeberg could never be used as an SSH provider (isHttpProvider() would always see https://).
+    void createProvider_codeberg_sshBlock_derivesSshEndpointFromDefaultHost() {
+        // codeberg keeps its HTTPS default uri and gains SSH via the ssh: sub-block, deriving git@codeberg.org.
         var pc = new ProviderConfig();
-        pc.setUri("ssh://git@codeberg.org");
+        pc.getSsh().setEnabled(true);
         var providers = new JettyConfigurationBuilder(configWithSingleProvider("codeberg", pc)).buildProviders();
         assertEquals(1, providers.size());
         assertInstanceOf(ForgejoProvider.class, providers.get(0));
-        assertEquals(URI.create("ssh://git@codeberg.org"), providers.get(0).getUri());
+        assertEquals(ForgejoProvider.CODEBERG, providers.get(0).getUri());
+        assertEquals(
+                URI.create("ssh://git@codeberg.org"),
+                providers.get(0).getSshUri().get());
+    }
+
+    @Test
+    void buildUpstreamKnownHosts_mergesProviderPinnedKeys() {
+        var pc = new ProviderConfig();
+        pc.getSsh().setEnabled(true);
+        pc.getSsh().setKnownHosts(List.of("github.com ssh-ed25519 AAAAPINNED"));
+        var lines = new JettyConfigurationBuilder(configWithSingleProvider("github", pc)).buildUpstreamKnownHosts();
+        assertTrue(lines.contains("github.com ssh-ed25519 AAAAPINNED"));
     }
 
     @Test

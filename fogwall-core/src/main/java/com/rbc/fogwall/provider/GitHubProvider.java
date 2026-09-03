@@ -23,13 +23,14 @@ public class GitHubProvider extends AbstractFogwallProvider implements HttpToken
     public static final URI DEFAULT_URI = URI.create("https://github.com");
 
     @Builder
-    public GitHubProvider(String name, URI uri, String pathSuffix, URI apiUri) {
+    public GitHubProvider(String name, URI uri, String pathSuffix, URI apiUri, URI sshUri) {
         super(name != null ? name : NAME, NAME, uri != null ? uri : DEFAULT_URI, pathSuffix);
         this.apiUri = apiUri;
+        this.sshUri = sshUri;
     }
 
     public GitHubProvider(String pathSuffix) {
-        this(NAME, DEFAULT_URI, pathSuffix, null);
+        this(NAME, DEFAULT_URI, pathSuffix, null, null);
     }
 
     public String getApiUrl() {

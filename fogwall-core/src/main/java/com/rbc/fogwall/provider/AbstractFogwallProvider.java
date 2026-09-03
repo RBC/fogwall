@@ -28,6 +28,22 @@ public abstract class AbstractFogwallProvider implements FogwallProvider {
     protected String apiToken;
 
     /**
+     * SSH transport endpoint for this provider, letting a single provider entry serve both HTTP and SSH (fogwall#531).
+     * {@code null} for HTTP-only providers. Set exclusively from the provider's {@code ssh:} config sub-block — the
+     * {@link #uri} is always the HTTP/HTTPS endpoint.
+     */
+    protected URI sshUri;
+
+    /**
+     * The SSH transport endpoint to forward pushes to, if this provider serves SSH (configured via the {@code ssh:}
+     * sub-block). Empty for HTTP-only providers.
+     */
+    @Override
+    public Optional<URI> getSshUri() {
+        return Optional.ofNullable(sshUri);
+    }
+
+    /**
      * Returns the path that the servlet will be mapped to after the default path (this controls routing to the
      * appropriate servlet or JGit factory). This is based on the host of the target URL along with an optional
      * application-wide base path. To configure a {@link FogwallServlet} for proxying, use {@link #servletMapping()}

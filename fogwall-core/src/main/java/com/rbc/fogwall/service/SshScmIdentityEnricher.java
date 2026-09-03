@@ -1,7 +1,6 @@
 package com.rbc.fogwall.service;
 
 import com.rbc.fogwall.provider.FogwallProvider;
-import com.rbc.fogwall.provider.ProviderRegistry;
 import com.rbc.fogwall.provider.SshKeyFingerprintLookup;
 import com.rbc.fogwall.user.UserEntry;
 import java.time.Duration;
@@ -10,7 +9,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -62,39 +60,23 @@ public class SshScmIdentityEnricher {
     private final Map<CacheKey, CacheEntry> memCache = new ConcurrentHashMap<>();
     private final SshFingerprintCache persistentCache;
     private final long ttlMs;
-    private final ProviderRegistry providerRegistry;
 
     public SshScmIdentityEnricher() {
         this(DEFAULT_TTL, null);
     }
 
     public SshScmIdentityEnricher(Duration ttl, SshFingerprintCache persistentCache) {
-        this(ttl, persistentCache, null);
-    }
-
-    /**
-     * @param providerRegistry used to recognize an SCM identity linked under a different provider config entry that
-     *     shares the same type and host as {@code provider} in {@link #resolveScmLogin} — needed because HTTP and SSH
-     *     access to the same upstream currently require two separate provider entries (see fogwall#531 for the
-     *     follow-up to eliminate that duplication). {@code null} disables this and falls back to requiring an exact
-     *     provider-name match, same as before this parameter existed.
-     */
-    public SshScmIdentityEnricher(
-            Duration ttl, SshFingerprintCache persistentCache, ProviderRegistry providerRegistry) {
         this.ttlMs = ttl.toMillis();
         this.persistentCache = persistentCache;
-        this.providerRegistry = providerRegistry;
     }
 
     /**
      * Attempts to resolve the SCM login of {@code user} by matching {@code connectingFingerprint} against the SSH keys
      * registered for each of the user's linked SCM identities on {@code provider}.
      *
-     * <p>An identity is considered linked to {@code provider} if it's recorded under {@code provider}'s own name, OR
-     * under any other configured provider that shares the same type and host — since HTTP and SSH access to the same
-     * upstream currently require two separate provider config entries (e.g. {@code github} for OAuth linking,
-     * {@code github-ssh} for the SSH transport), an identity linked via one must still be recognized on the other. See
-     * fogwall#531 for the follow-up to remove that duplication so this same-host matching isn't needed at all.
+     * <p>An identity is considered linked to {@code provider} when it's recorded under {@code provider}'s own name.
+     * Since a single provider entry serves both HTTP and SSH (fogwall#531), an OAuth-linked identity applies to both
+     * transports directly — no cross-entry matching is needed.
      *
      * @param user the proxy user resolved at SSH connection time by public-key auth
      * @param provider the fogwall provider for this push — must implement {@link SshKeyFingerprintLookup}
@@ -114,9 +96,9 @@ public class SshScmIdentityEnricher {
             return Optional.empty();
         }
 
-        Set<String> compatibleProviderNames = compatibleProviderNames(provider);
+        String providerId = provider.getProviderId();
         return user.getScmIdentities().stream()
-                .filter(id -> compatibleProviderNames.contains(id.getProvider()))
+                .filter(id -> providerId.equals(id.getProvider()))
                 .map(id -> id.getUsername())
                 .filter(scmLogin ->
                         fingerprints(provider.getProviderId(), scmLogin, lookup).contains(connectingFingerprint))
@@ -128,25 +110,6 @@ public class SshScmIdentityEnricher {
                             provider.getProviderId());
                     return scmLogin;
                 });
-    }
-
-    /**
-     * Provider names whose SCM identities should be considered linked to {@code provider} for SSH resolution:
-     * {@code provider}'s own name, plus any other configured provider sharing the same type and host. Falls back to
-     * just {@code provider}'s own name when no registry was supplied.
-     */
-    private Set<String> compatibleProviderNames(FogwallProvider provider) {
-        if (providerRegistry == null) {
-            return Set.of(provider.getProviderId());
-        }
-        return providerRegistry.getProviders().stream()
-                .filter(p -> p.getType().equals(provider.getType())
-                        && p.getUri().getHost() != null
-                        && p.getUri()
-                                .getHost()
-                                .equalsIgnoreCase(provider.getUri().getHost()))
-                .map(FogwallProvider::getProviderId)
-                .collect(Collectors.toSet());
     }
 
     /**

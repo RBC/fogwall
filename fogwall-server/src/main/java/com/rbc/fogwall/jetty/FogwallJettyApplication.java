@@ -6,6 +6,7 @@ import com.rbc.fogwall.config.TlsConfig;
 import com.rbc.fogwall.jetty.reload.LiveConfigLoader;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.ssh.SshGitServer;
+import com.rbc.fogwall.ssh.SshServerRegistrar;
 import com.rbc.fogwall.tls.SslUtil;
 import java.nio.file.Path;
 import java.util.List;

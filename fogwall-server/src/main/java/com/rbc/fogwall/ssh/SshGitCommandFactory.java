@@ -14,9 +14,9 @@ import org.apache.sshd.server.command.CommandFactory;
 /**
  * MINA SSHD {@link CommandFactory} that maps {@code git-receive-pack} SSH commands to {@link SshGitReceiveCommand} and
  * {@code git-upload-pack} commands to {@link SshGitUploadCommand}. The provider a given command routes to isn't known
- * until the command's repo path is parsed, so {@code routes} (built once at startup by
- * {@link com.rbc.fogwall.jetty.SshServerRegistrar}) is handed to the command itself, which resolves the matching
- * provider from the path segment when it runs — see {@link SshGitReceiveCommand#resolveRoute}.
+ * until the command's repo path is parsed, so {@code routes} (built once at startup by {@link SshServerRegistrar}) is
+ * handed to the command itself, which resolves the matching provider from the path segment when it runs — see
+ * {@link SshGitReceiveCommand#resolveRoute}.
  */
 @Slf4j
 @RequiredArgsConstructor

@@ -10,6 +10,7 @@ import com.rbc.fogwall.user.UserEntry;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URI;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.Map;
@@ -136,7 +137,14 @@ public class SshGitReceiveCommand implements Command {
         String owner = ownerRepo[0];
         String repo = ownerRepo[1];
         SshProviderTarget target = match.getValue();
-        String upstreamUrl = target.provider().getUri() + "/" + owner + "/" + repo + ".git";
+        // Forward over the provider's SSH endpoint, not getUri() — for a combined HTTP+SSH entry (fogwall#531) getUri()
+        // is the https endpoint while the push must be forwarded over ssh. getSshUri() is always present here because
+        // only SSH-enabled providers are routed onto the SSH server.
+        URI sshUpstream = target.provider()
+                .getSshUri()
+                .orElseThrow(() -> new IllegalStateException("Provider '"
+                        + target.provider().getName() + "' has no SSH endpoint but was routed to the SSH server"));
+        String upstreamUrl = sshUpstream + "/" + owner + "/" + repo + ".git";
         return new RepoRoute(target, owner, repo, upstreamUrl, "/" + owner + "/" + repo);
     }
 

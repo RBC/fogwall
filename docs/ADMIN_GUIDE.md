@@ -966,29 +966,35 @@ clear MINA auth but fail step 2.
 implement this lookup (Bitbucket, generic proxy) will block all SSH pushes fail-closed. SSH is intentionally not
 supported for those providers until a compliant identity verification path exists.
 
-### Configuring an SSH provider
+### Configuring a provider for SSH
 
-An SSH provider is a standard provider entry with an SSH-scheme URI. For a self-hosted Gitea instance:
+_The single-entry model below is available since v1.4.0 (earlier releases required a separate `ssh://` provider entry)._
+
+SSH transport is a property of a provider entry — the **same** entry serves both HTTP and SSH. Turn it on with an `ssh:`
+sub-block. For a self-hosted Gitea instance:
 
 ```yaml
 providers:
-  gitea-ssh:
-    type: forgejo
-    uri: ssh://git@gitea.corp.example.com # SSH transport URI — routes inbound git-receive-pack
-    api-uri: http://gitea.corp.example.com:3000 # only needed when HTTP API port differs from standard
+  gitea:
+    type: gitea
+    uri: https://gitea.corp.example.com # HTTP/API endpoint (also used for SSH-key identity lookup)
     api-token: <service-account-PAT> # see below
+    ssh:
+      enabled: true # also serve SSH; endpoint derived as ssh://git@gitea.corp.example.com
+      # uri: ssh://git@gitea.corp.example.com:3022  # set explicitly for a non-standard SSH port or username
 ```
 
-The `uri` field controls SSH push routing — the path clients use is
-`ssh://fogwall-host:2222/<provider-host>/<org>/<repo>.git`. The `api-uri` is only required when the HTTP API port cannot
-be derived from the `uri` (see below).
+With `ssh.enabled: true` and no `ssh.uri`, the SSH endpoint is derived as `ssh://git@<host>` from the provider's HTTP
+`uri`. Set `ssh.uri` explicitly when the upstream uses a non-`git` SSH username (GitHub Enterprise Cloud with data
+residency uses the enterprise slug: `ssh://{slug}@{tenant}.ghe.com`) or a non-standard SSH port. The path clients use is
+`ssh://fogwall-host:2222/<provider-host>/<org>/<repo>.git`, keyed on the provider's HTTP host.
 
-Permissions and access rules for SSH providers work identically to HTTP providers:
+Permissions, access rules, and SCM identities are all keyed by the single provider name and apply to both transports:
 
 ```yaml
 permissions:
   - username: alice
-    provider: gitea-ssh
+    provider: gitea # one entry covers HTTP and SSH pushes
     match:
       target: SLUG
       value: /myorg/.*
@@ -998,19 +1004,19 @@ permissions:
 
 ### SCM identity link for SSH
 
-Users must have an `scm-identities` entry for the SSH provider (in addition to any HTTP provider entry). The provider ID
-is the provider's name in the `providers:` block:
+Because HTTP and SSH share one provider entry, a user needs only **one** `scm-identities` entry — it applies to both
+transports. The provider ID is the provider's name in the `providers:` block:
 
 ```yaml
 users:
   - username: alice
     scm-identities:
-      - provider: gitea-ssh # must match the provider name exactly
+      - provider: gitea # applies to HTTP and SSH pushes alike
         username: alice-gitea
 ```
 
-This is separate from any HTTP provider identity because the provider IDs are different. A user pushing via both HTTP
-and SSH will have two identity entries — one for the HTTP provider, one for the SSH provider.
+An identity linked via OAuth (see [SCM OAuth](#scm-oauth-account-linking)) likewise applies to both transports — a user
+who links their account over HTTP can then push over SSH with no extra configuration.
 
 ### Upstream host key verification
 
@@ -1025,13 +1031,23 @@ Trust is resolved in this order:
    bitbucket.org, gitea.com — so they work out of the box. Regenerate with `scripts/pin-ssh-host-keys.sh` when a
    provider rotates its key.
 2. **Pinned in config (recommended for custom providers).** Pin a private/internal SCM's host key with a standard
-   `known_hosts` line:
+   `known_hosts` line — globally under `server.ssh.extra-known-hosts`, or per-provider under that provider's
+   `ssh.known-hosts` (scoped to its upstream, since known_hosts lines are host-keyed):
 
    ```yaml
    server:
      ssh:
        extra-known-hosts:
          - "git.internal.example.com ssh-ed25519 AAAA..."
+
+   providers:
+     gitea:
+       uri: https://gitea.corp.example.com
+       ssh:
+         enabled: true
+         known-hosts:
+           - "gitea.corp.example.com ssh-ed25519 AAAA..."
+         # known-hosts-path: /etc/fogwall/gitea_known_hosts  # or point at a file
    ```
 
 3. **Operator-supplied file.** Point `server.ssh.known-hosts-path` at a `known_hosts` file. The container image bakes
@@ -1057,10 +1073,12 @@ the provider config:
 
 ```yaml
 providers:
-  gitea-ssh:
-    type: forgejo
-    uri: ssh://git@gitea.corp.example.com
+  gitea:
+    type: gitea
+    uri: https://gitea.corp.example.com
     api-token: <service-account-PAT>
+    ssh:
+      enabled: true
 ```
 
 There is no environment variable override for `api-token` (the env var mechanism does not support hyphenated config
@@ -1069,23 +1087,26 @@ keys). Use a profile config file to supply the token outside of the checked-in b
 ```yaml
 # /app/conf/fogwall-local.yml  (mounted into the container, not committed)
 providers:
-  gitea-ssh:
+  gitea:
     api-token: gta_xxxxx
 ```
 
 ### `api-uri` — when it is needed
 
-For production deployments where SSH and HTTPS share the same hostname (the normal case), the HTTP API URL is derived
-automatically from the SSH URI: `ssh://git@host` → `https://host/api/v1`. No `api-uri` is needed.
+The provider's `uri` is the HTTP/HTTPS endpoint, so the REST API base is derived from it directly and no `api-uri` is
+needed in the normal case.
 
-`api-uri` is only required when the HTTP API runs on a non-standard port that cannot be inferred from the SSH URI — for
-example, a local development Gitea where SSH is on 3022 and HTTP is on 3000:
+`api-uri` is only required when the HTTP API runs on a non-standard port on the same host — for example a local
+development Gitea where HTTP is on 3000 and SSH on 3022:
 
 ```yaml
-gitea-ssh:
-  type: forgejo
-  uri: ssh://git@localhost:3022
+gitea:
+  type: gitea
+  uri: http://localhost:3000
   api-uri: http://localhost:3000
+  ssh:
+    enabled: true
+    uri: ssh://git@localhost:3022
 ```
 
 ### Requiring agent forwarding

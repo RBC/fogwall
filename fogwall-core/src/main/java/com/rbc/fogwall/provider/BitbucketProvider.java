@@ -45,12 +45,13 @@ public class BitbucketProvider extends AbstractFogwallProvider implements HttpTo
     public static final String NAME = "bitbucket";
 
     @Builder
-    public BitbucketProvider(String name, URI uri, String pathSuffix) {
+    public BitbucketProvider(String name, URI uri, String pathSuffix, URI sshUri) {
         super(name != null ? name : NAME, NAME, uri != null ? uri : DEFAULT_URI, pathSuffix);
+        this.sshUri = sshUri;
     }
 
     public BitbucketProvider(String pathSuffix) {
-        this(NAME, DEFAULT_URI, pathSuffix);
+        this(NAME, DEFAULT_URI, pathSuffix, null);
     }
 
     /**

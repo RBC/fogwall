@@ -1,10 +1,10 @@
-package com.rbc.fogwall.jetty;
+package com.rbc.fogwall.ssh;
 
 import com.rbc.fogwall.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.config.SshConfig;
+import com.rbc.fogwall.jetty.FogwallContext;
+import com.rbc.fogwall.jetty.FogwallServletRegistrar;
 import com.rbc.fogwall.provider.FogwallProvider;
-import com.rbc.fogwall.ssh.SshGitServer;
-import com.rbc.fogwall.ssh.SshProviderTarget;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -14,7 +14,9 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Starts and stops the MINA SSHD server. Symmetric to {@link FogwallServletRegistrar} for the HTTP path.
  *
- * <p>SSH providers are identified by an {@code ssh://} URI scheme. Every configured SSH provider is routed by its
+ * <p>A provider serves SSH when its {@code ssh:} config sub-block resolves an SSH endpoint — see
+ * {@link FogwallProvider#getSshUri()}. The same provider entry may also serve HTTP (via its {@code uri}); the two
+ * transports share one config entry (fogwall#531). Every SSH-enabled provider is routed by its
  * {@link FogwallProvider#servletPath()} (the same host/port/path-suffix key the HTTP path uses), so a single SSH server
  * instance can serve multiple upstream providers on one port — the client selects which one with the path segment in
  * the SSH command, e.g. {@code ssh://fogwall:2222/github.com/owner/repo.git}.
@@ -39,9 +41,8 @@ public class SshServerRegistrar {
             return null;
         }
 
-        List<FogwallProvider> sshProviders = allProviders.stream()
-                .filter(p -> !FogwallServletRegistrar.isHttpProvider(p))
-                .toList();
+        List<FogwallProvider> sshProviders =
+                allProviders.stream().filter(p -> p.getSshUri().isPresent()).toList();
 
         if (sshProviders.isEmpty()) {
             log.warn("SSH transport enabled but no SSH providers configured — SSH server will not start");
@@ -50,8 +51,13 @@ public class SshServerRegistrar {
 
         Map<String, SshProviderTarget> routes = buildRoutes(sshProviders, ctx, configBuilder);
 
-        SshGitServer server =
-                SshGitServer.create(sshConfig, routes, ctx.storeForwardCache(), ctx.userStore(), ctx.urlRuleRegistry());
+        SshGitServer server = SshGitServer.create(
+                sshConfig,
+                routes,
+                ctx.storeForwardCache(),
+                ctx.userStore(),
+                ctx.urlRuleRegistry(),
+                configBuilder.buildUpstreamKnownHosts());
         server.start();
         return server;
     }
