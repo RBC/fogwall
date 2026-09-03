@@ -800,6 +800,16 @@ it is rejected. Quarantine directories are deleted when the request ends, so thi
 but the volume holding the quarantine (the working directory by default) should be sized, or quota'd, with that worst
 case and `max-concurrent-requests` in mind rather than assuming pushes stay near their wire size.
 
+### Local mirror clone depth
+
+fogwall keeps a local bare mirror of each upstream repo to inspect push content. Its clone depth is configurable per
+proxy mode under `cache:` (see [CONFIGURATION.md](CONFIGURATION.md#local-mirror-cache)). Store-and-forward defaults to
+full history; the transparent proxy defaults to a shallow clone, because a first full clone of a very large repository
+through the proxy can exceed HTTP connection timeouts. If proxy-mode first-clones are timing out for a large repo, keep
+it shallow (the default) or tune `cache.proxy.shallow-since`; if you want the proxy to mirror full history and can
+absorb the first-clone cost, set `cache.proxy.clone-depth: 0`. A shallow default is safe: reachability and hidden-commit
+checks deepen the mirror to full history on demand before deciding.
+
 ---
 
 ## Production checklist

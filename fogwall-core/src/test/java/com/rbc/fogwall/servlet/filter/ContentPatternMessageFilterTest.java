@@ -186,4 +186,39 @@ class ContentPatternMessageFilterTest {
 
         assertTrue(details.getSteps().isEmpty());
     }
+
+    // ---- annotated tag messages (#474) ----
+
+    @Test
+    void matchInTagMessage_withNoCommits_recordsWarnStep() throws Exception {
+        // Tag push: no commits, only the annotation message carrying structured PII.
+        GitRequestDetails details = detailsWithCommits(List.of());
+        details.setBranch("refs/tags/v1.0.0");
+        details.setTagMessage("Release cut for customer, ssn: 212-96-7431");
+        var filter = new ContentPatternMessageFilter(enabledConfig());
+        FakeResponse resp = new FakeResponse();
+
+        filter.doHttpFilter(mockRequest(details), resp.mock);
+
+        assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult(), "WARN must never reject a push");
+        assertFalse(details.getSteps().isEmpty());
+        var step = details.getSteps().get(0);
+        assertEquals(StepStatus.WARN, step.getStatus());
+        assertTrue(step.getContent().contains("Social Security Number"));
+        assertFalse(step.getContent().contains("212-96-7431"), "raw matched value must never appear in step content");
+    }
+
+    @Test
+    void cleanTagMessage_recordsPassStep() throws Exception {
+        GitRequestDetails details = detailsWithCommits(List.of());
+        details.setBranch("refs/tags/v1.0.0");
+        details.setTagMessage("Release 1.0.0 — production ready");
+        var filter = new ContentPatternMessageFilter(enabledConfig());
+        FakeResponse resp = new FakeResponse();
+
+        filter.doHttpFilter(mockRequest(details), resp.mock);
+
+        assertFalse(details.getSteps().isEmpty());
+        assertEquals(StepStatus.PASS, details.getSteps().get(0).getStatus());
+    }
 }

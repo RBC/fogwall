@@ -29,6 +29,14 @@ public class GitRequestDetails {
     private String commitFrom; // Old ref SHA from the packet line (the push range start)
     private String commitTo; // New ref SHA from the packet line (the push range end)
     private List<Commit> pushedCommits = new ArrayList<>(); // All commits received in this push
+
+    /**
+     * The annotation message of an annotated tag push, or {@code null} for a branch push or a lightweight tag. Set by
+     * {@code EnrichPushCommitsFilter} (transparent proxy). Developer-authored free text that reaches the upstream repo
+     * and release notes, so it is validated by the same message-content filters as commit messages (#474).
+     */
+    private String tagMessage;
+
     private FogwallProvider provider; // this should never be null
     /**
      * Provider-specific upstream username to use when forwarding the push. Set by {@code BitbucketIdentityFilter}

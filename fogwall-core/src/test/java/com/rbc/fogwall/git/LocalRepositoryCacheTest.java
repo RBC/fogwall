@@ -5,11 +5,17 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.PersonIdent;
 import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.revwalk.RevCommit;
+import org.eclipse.jgit.revwalk.RevWalk;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -288,5 +294,83 @@ class LocalRepositoryCacheTest {
                     new File(cacheTempDir.toFile(), key).getName(),
                     "Key must resolve to a direct child of the cache directory: " + key);
         }
+    }
+
+    // ---- clone depth / shallow-since (#476) ----
+
+    /** Adds a commit dated {@code when} to the upstream repo (for shallow-since boundary tests). */
+    private void addUpstreamCommitAt(String message, Instant when) throws Exception {
+        File f = new File(remoteTempDir.toFile(), UUID.randomUUID() + ".txt");
+        Files.writeString(f.toPath(), message);
+        remoteGit.add().addFilepattern(".").call();
+        PersonIdent id = new PersonIdent("Dev", "dev@example.com", when, ZoneOffset.UTC);
+        remoteGit.commit().setAuthor(id).setCommitter(id).setMessage(message).call();
+    }
+
+    /** Counts commits reachable from HEAD in a (possibly shallow) mirror; the walk stops at the shallow boundary. */
+    private static int reachableCommitCount(Repository repo) throws Exception {
+        try (RevWalk walk = new RevWalk(repo)) {
+            walk.markStart(walk.parseCommit(repo.resolve("HEAD")));
+            int count = 0;
+            for (RevCommit ignored : walk) {
+                count++;
+            }
+            return count;
+        }
+    }
+
+    @Test
+    void fullClone_hasCompleteHistory() throws Exception {
+        addUpstreamCommit("second");
+        addUpstreamCommit("third");
+        // depth 0 = full history
+        LocalRepositoryCache cache = new LocalRepositoryCache(cacheTempDir, 0, false);
+
+        Repository mirror = cache.getOrClone(remoteUrl);
+        assertEquals(3, reachableCommitCount(mirror), "A full clone must mirror every commit");
+        mirror.close();
+    }
+
+    @Test
+    void shallowByDepth_truncatesHistory() throws Exception {
+        addUpstreamCommit("second");
+        addUpstreamCommit("third");
+        LocalRepositoryCache cache = new LocalRepositoryCache(cacheTempDir, 1, false);
+
+        Repository mirror = cache.getOrClone(remoteUrl);
+        assertEquals(1, reachableCommitCount(mirror), "depth=1 must mirror only the tip commit");
+        mirror.close();
+    }
+
+    @Test
+    void shallowSince_keepsOnlyCommitsWithinTheBoundary() throws Exception {
+        // Upstream already has the setUp "Initial commit" dated ~now. Add two old commits far outside the window.
+        Instant now = Instant.now();
+        addUpstreamCommitAt("old-1", now.minus(400, ChronoUnit.DAYS));
+        addUpstreamCommitAt("recent", now.minus(1, ChronoUnit.DAYS));
+
+        // shallow-since 90d: keep only history back to 90 days ago — the 400-day-old commit falls outside.
+        LocalRepositoryCache cache = new LocalRepositoryCache(cacheTempDir, 0, false, Duration.ofDays(90));
+
+        Repository mirror = cache.getOrClone(remoteUrl);
+        int count = reachableCommitCount(mirror);
+        assertTrue(count >= 1, "the recent tip must be present");
+        assertTrue(count < 3, "a commit older than the shallow-since boundary must be excluded, got " + count);
+        mirror.close();
+    }
+
+    @Test
+    void refreshNow_deepensAShallowSinceMirrorToFullHistory() throws Exception {
+        Instant now = Instant.now();
+        addUpstreamCommitAt("old-1", now.minus(400, ChronoUnit.DAYS));
+        addUpstreamCommitAt("recent", now.minus(1, ChronoUnit.DAYS));
+        LocalRepositoryCache cache = new LocalRepositoryCache(cacheTempDir, 0, false, Duration.ofDays(90));
+
+        Repository mirror = cache.getOrClone(remoteUrl, null, null, "alice:token");
+        assertTrue(reachableCommitCount(mirror) < 3, "starts shallow");
+
+        cache.refreshNow(remoteUrl, null, null, "alice:token");
+        assertEquals(3, reachableCommitCount(mirror), "refreshNow must unshallow a shallow-since mirror to full");
+        mirror.close();
     }
 }

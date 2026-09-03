@@ -191,6 +191,19 @@ public class ScmOAuthLinkController {
                     ? Instant.now().plusSeconds(tokenResponse.expiresInSeconds())
                     : null;
 
+            if (!(userStore instanceof UserStore mutable)) {
+                response.sendRedirect(profileUrl + "?scmOAuthError=store_not_mutable");
+                return;
+            }
+
+            // Ensure the user has a proxy_users row before storing the token. user_scm_tokens (like user_ssh_keys and
+            // repo_permissions) has an FK to proxy_users, but a config-declared user only gets a DB row when it is
+            // referenced by a permission or group. OAuth linking is the one per-user store with no config-side
+            // equivalent — tokens are encrypted secrets, DB-only — so a config user with no permission entry would
+            // otherwise fail the FK on save. Materialize the row here with the same idempotent upsert the
+            // permission/group paths already use.
+            mutable.upsertUser(currentUser);
+
             if (scmOAuthTokenStore != null) {
                 scmOAuthTokenStore.save(
                         currentUser,
@@ -199,11 +212,6 @@ public class ScmOAuthLinkController {
                         encryptedRefreshToken,
                         tokenResponse.scope(),
                         expiresAt);
-            }
-
-            if (!(userStore instanceof UserStore mutable)) {
-                response.sendRedirect(profileUrl + "?scmOAuthError=store_not_mutable");
-                return;
             }
             mutable.upsertVerifiedScmIdentity(currentUser, providerId, scmUsername);
             lockProviderVerifiedEmails(

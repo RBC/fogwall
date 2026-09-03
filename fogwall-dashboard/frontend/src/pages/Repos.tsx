@@ -26,9 +26,10 @@ interface Rule {
   source: 'CONFIG' | 'DB'
 }
 
-function CloneButton({ cloneUrl }: { cloneUrl: string }) {
+function CloneButton({ httpsUrl, sshUrl }: { httpsUrl: string; sshUrl?: string | null }) {
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [mode, setMode] = useState<'https' | 'ssh'>('https')
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -39,6 +40,8 @@ function CloneButton({ cloneUrl }: { cloneUrl: string }) {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
+
+  const cloneUrl = mode === 'ssh' && sshUrl ? sshUrl : httpsUrl
 
   const copy = () => {
     navigator.clipboard.writeText(`git clone ${cloneUrl}`)
@@ -63,17 +66,36 @@ function CloneButton({ cloneUrl }: { cloneUrl: string }) {
 
       {open && (
         <div className="absolute right-0 mt-1 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-10 p-4 dark:bg-slate-800 dark:border-slate-700">
-          <div className="flex items-center gap-1.5 mb-2">
-            <svg
-              className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400"
-              viewBox="0 0 16 16"
-              fill="currentColor"
-            >
-              <path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0 1 14.25 15H1.75A1.75 1.75 0 0 1 0 13.25Zm1.75-.25a.25.25 0 0 0-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V2.75a.25.25 0 0 0-.25-.25ZM7.25 8a.75.75 0 0 1-.22.53l-2.25 2.25a.75.75 0 1 1-1.06-1.06L5.44 8 3.72 6.28a.75.75 0 1 1 1.06-1.06l2.25 2.25c.141.14.22.331.22.53Zm1.5 1.5h3a.75.75 0 0 1 0 1.5h-3a.75.75 0 0 1 0-1.5Z" />
-            </svg>
-            <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-              Clone via proxy
-            </span>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-1.5">
+              <svg
+                className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+              >
+                <path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0 1 14.25 15H1.75A1.75 1.75 0 0 1 0 13.25Zm1.75-.25a.25.25 0 0 0-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V2.75a.25.25 0 0 0-.25-.25ZM7.25 8a.75.75 0 0 1-.22.53l-2.25 2.25a.75.75 0 1 1-1.06-1.06L5.44 8 3.72 6.28a.75.75 0 1 1 1.06-1.06l2.25 2.25c.141.14.22.331.22.53Zm1.5 1.5h3a.75.75 0 0 1 0 1.5h-3a.75.75 0 0 1 0-1.5Z" />
+              </svg>
+              <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                {mode === 'ssh' ? 'Clone via SSH' : 'Clone via proxy'}
+              </span>
+            </div>
+            {sshUrl && (
+              <div className="flex rounded border border-gray-300 overflow-hidden dark:border-slate-600">
+                {(['https', 'ssh'] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setMode(m)}
+                    className={`px-2 py-0.5 text-[11px] font-semibold uppercase transition-colors ${
+                      mode === m
+                        ? 'bg-green-600 text-white'
+                        : 'bg-white text-gray-600 hover:bg-gray-100 dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600'
+                    }`}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2 px-2 py-1.5 border border-gray-300 rounded font-mono text-xs text-gray-700 bg-gray-50 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-300">
             <span className="flex-1 truncate">{cloneUrl}</span>
@@ -733,9 +755,16 @@ export function Repos() {
                         </div>
                       )}
                     </div>
-                    <CloneButton
-                      cloneUrl={`${window.location.origin}${providers.find((p) => p.id === repo.provider)?.proxyPath ?? '/proxy/' + repo.provider}/${repo.owner}/${repo.repoName}.git`}
-                    />
+                    {(() => {
+                      const provider = providers.find((p) => p.id === repo.provider)
+                      const httpsUrl = `${window.location.origin}${provider?.proxyPath ?? '/proxy/' + repo.provider}/${repo.owner}/${repo.repoName}.git`
+                      // ssh://<fogwall-host>:<port><route>/<owner>/<repo>.git — the standard port 22 is left implicit.
+                      const sshUrl =
+                        provider?.sshEnabled && provider.sshPath
+                          ? `ssh://${window.location.hostname}${provider.sshPort === 22 ? '' : ':' + provider.sshPort}${provider.sshPath}/${repo.owner}/${repo.repoName}.git`
+                          : null
+                      return <CloneButton httpsUrl={httpsUrl} sshUrl={sshUrl} />
+                    })()}
                   </div>
                 </div>
               ))}

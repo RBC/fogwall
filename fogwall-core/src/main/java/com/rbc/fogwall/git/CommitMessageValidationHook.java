@@ -39,7 +39,13 @@ public class CommitMessageValidationHook implements FogwallHook {
         for (ReceiveCommand cmd : commands) {
             if (cmd.getType() == ReceiveCommand.Type.DELETE) continue;
             try {
-                List<Violation> violations = check.check(getCommits(repo, cmd));
+                // getCommits peels annotated tags to their target commit, so the tag's own annotation message is never
+                // seen. It is authored text like a commit message, so validate it through the same check (#474).
+                List<Commit> toCheck = new ArrayList<>(getCommits(repo, cmd));
+                CommitInspectionService.getAnnotatedTagMessage(repo, cmd.getNewId())
+                        .ifPresent(
+                                msg -> toCheck.add(Commit.builder().message(msg).build()));
+                List<Violation> violations = check.check(toCheck);
                 for (Violation v : violations) {
                     validationContext.addIssue("checkCommitMessages", v.reason(), v.formattedDetail());
                     allViolations.add(v);

@@ -7,6 +7,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.Map;
@@ -58,6 +60,15 @@ public class LocalRepositoryCache {
     private final Path cacheDirectory;
     private final Map<String, CachedRepository> cache = new ConcurrentHashMap<>();
     private final int cloneDepth;
+
+    /**
+     * Time-based shallow boundary (#476). When non-null it takes precedence over {@link #cloneDepth}: clones and first
+     * fetches keep history back to {@code now - shallowSince} rather than a fixed commit count. The boundary is
+     * computed fresh at each clone so it tracks wall-clock time over a long-running process rather than freezing at
+     * startup.
+     */
+    private final Duration shallowSince;
+
     private final boolean registerShutdownHook;
     private final long fetchCooldownMs;
 
@@ -88,7 +99,21 @@ public class LocalRepositoryCache {
     }
 
     /**
-     * Full constructor with all options.
+     * Constructor with a time-based shallow boundary (#476). When {@code shallowSince} is non-null it takes precedence
+     * over {@code cloneDepth}. Uses the default fetch cooldown.
+     *
+     * @param cacheDirectory The directory to use for caching repositories
+     * @param cloneDepth The depth for shallow clones (0 for full clone); ignored when {@code shallowSince} is set
+     * @param registerShutdownHook Whether to register shutdown hook (false for Spring apps)
+     * @param shallowSince Keep history back to {@code now - shallowSince}, or {@code null} to use {@code cloneDepth}
+     */
+    public LocalRepositoryCache(
+            Path cacheDirectory, int cloneDepth, boolean registerShutdownHook, Duration shallowSince) {
+        this(cacheDirectory, cloneDepth, registerShutdownHook, DEFAULT_FETCH_COOLDOWN_MS, shallowSince);
+    }
+
+    /**
+     * Full constructor with cooldown but no time-based boundary. Retained for callers that pass a custom cooldown.
      *
      * @param cacheDirectory The directory to use for caching repositories
      * @param cloneDepth The depth for shallow clones (0 for full clone)
@@ -97,14 +122,48 @@ public class LocalRepositoryCache {
      */
     public LocalRepositoryCache(
             Path cacheDirectory, int cloneDepth, boolean registerShutdownHook, long fetchCooldownMs) {
+        this(cacheDirectory, cloneDepth, registerShutdownHook, fetchCooldownMs, null);
+    }
+
+    /**
+     * Full constructor with all options.
+     *
+     * @param cacheDirectory The directory to use for caching repositories
+     * @param cloneDepth The depth for shallow clones (0 for full clone); ignored when {@code shallowSince} is set
+     * @param registerShutdownHook Whether to register shutdown hook (false for Spring apps)
+     * @param fetchCooldownMs Minimum milliseconds between upstream re-fetches for the same repository
+     * @param shallowSince Keep history back to {@code now - shallowSince}, or {@code null} to use {@code cloneDepth}
+     */
+    public LocalRepositoryCache(
+            Path cacheDirectory,
+            int cloneDepth,
+            boolean registerShutdownHook,
+            long fetchCooldownMs,
+            Duration shallowSince) {
         this.cacheDirectory = cacheDirectory;
         this.cloneDepth = cloneDepth;
+        this.shallowSince = shallowSince;
         this.registerShutdownHook = registerShutdownHook;
         this.fetchCooldownMs = fetchCooldownMs;
-        log.info("Initialized LocalRepositoryCache at: {} with clone depth: {}", cacheDirectory, cloneDepth);
+        if (shallowSince != null) {
+            log.info("Initialized LocalRepositoryCache at: {} with shallow-since: {}", cacheDirectory, shallowSince);
+        } else {
+            log.info("Initialized LocalRepositoryCache at: {} with clone depth: {}", cacheDirectory, cloneDepth);
+        }
         if (registerShutdownHook) {
             Runtime.getRuntime().addShutdownHook(new Thread(this::cleanup));
         }
+    }
+
+    /** True when this cache clones shallow — by a time boundary or a positive commit depth. */
+    private boolean isShallow() {
+        return shallowSince != null || cloneDepth > 0;
+    }
+
+    /** Human-readable description of the shallow strategy for log lines. */
+    private String describeShallow() {
+        if (shallowSince != null) return "shallow-since " + shallowSince;
+        return cloneDepth > 0 ? "depth " + cloneDepth : "full history";
     }
 
     /**
@@ -200,7 +259,7 @@ public class LocalRepositoryCache {
                         .setRemoveDeletedRefs(true)
                         .setCredentialsProvider(credentials);
                 if (transportConfig != null) fetch.setTransportConfigCallback(transportConfig);
-                if (cloneDepth > 0 && !cached.unshallowed) {
+                if (isShallow() && !cached.unshallowed) {
                     // Only meaningful on a mirror that was cloned shallow; harmless but pointless otherwise.
                     fetch.setUnshallow(true);
                 }
@@ -307,18 +366,26 @@ public class LocalRepositoryCache {
             var fetchCmd = git.fetch().setRemote("origin");
             if (credentials != null) fetchCmd.setCredentialsProvider(credentials);
             if (transportConfig != null) fetchCmd.setTransportConfigCallback(transportConfig);
-            if (cloneDepth > 0) fetchCmd.setDepth(cloneDepth);
+            if (shallowSince != null) {
+                fetchCmd.setShallowSince(Instant.now().minus(shallowSince));
+            } else if (cloneDepth > 0) {
+                fetchCmd.setDepth(cloneDepth);
+            }
             fetchCmd.call();
             repository = git.getRepository();
         } else {
-            log.debug("Cloning repository to: {} with depth: {}", repoDir, cloneDepth);
+            log.debug("Cloning repository to: {} ({})", repoDir, describeShallow());
             var cloneCommand = Git.cloneRepository()
                     .setURI(remoteUrl)
                     .setDirectory(repoDir)
                     .setBare(true);
             if (credentials != null) cloneCommand.setCredentialsProvider(credentials);
             if (transportConfig != null) cloneCommand.setTransportConfigCallback(transportConfig);
-            if (cloneDepth > 0) cloneCommand.setDepth(cloneDepth);
+            if (shallowSince != null) {
+                cloneCommand.setShallowSince(Instant.now().minus(shallowSince));
+            } else if (cloneDepth > 0) {
+                cloneCommand.setDepth(cloneDepth);
+            }
 
             Git git = cloneCommand.call();
             repository = git.getRepository();

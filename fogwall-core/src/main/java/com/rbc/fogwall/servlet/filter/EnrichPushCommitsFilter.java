@@ -216,7 +216,15 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
                             response,
                             "Push rejected: the tag references commits that were not validated through a branch"
                                     + " push. Push the branch first, then re-create the tag.");
+                    return;
                 }
+
+                // The tag's target commit was validated when its branch was pushed; the tag's own annotation message
+                // was not. Expose it so the message-content filters (checkCommitMessages, scanContentPatternsMessages)
+                // validate it exactly as they do a commit message (#474). Lightweight tags carry no message.
+                ObjectId tagObjectId = repository.resolve(toCommit);
+                CommitInspectionService.getAnnotatedTagMessage(repository, tagObjectId)
+                        .ifPresent(requestDetails::setTagMessage);
                 return;
             }
 
