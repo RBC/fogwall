@@ -20,6 +20,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collection;
@@ -296,6 +297,9 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
         pushContext.setPushUser(pushUser);
         pushContext.setPushToken(pushToken);
         pushContext.setPushId(pushId);
+        // Fix the receipt time at this handoff (transport request deserialized → fogwall business logic), so the
+        // lifecycle record's receivedAt reflects when the push arrived, not when the record is first persisted.
+        pushContext.setReceivedAt(Instant.now());
         pushContext.setRepoSlug(repoSlug);
         pushContext.setUpstreamUrl(upstreamUrl);
         pushContext.setTransport(transport);
@@ -328,14 +332,13 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
         //   ContentPatternDiffHook          (345) - WARN-only PII/identifier scan of the diff
         //
         // Pinned lifecycle hooks (not orderable):
-        //   [pre]  PushStorePersistenceHook.preReceive      - record RECEIVED
-        //   [post-validation] PushStorePersistenceHook.validationResult - save APPROVED/PENDING
+        //   [post-validation] PushStorePersistenceHook.validationResult - creates the single record (PENDING/REJECTED)
         //   [post-validation] ApprovalPreReceiveHook        - blocks until approved or timeout
         //   [last]  QuarantinePromotionHook                  - moves objects into the mirror once nothing rejected
         //
         // Post-receive:
         //   ForwardingPostReceiveHook       - forwards to upstream
-        //   PushStorePersistenceHook.postReceive - save FORWARDED/ERROR
+        //   PushStorePersistenceHook.postReceive - transitions that same record to FORWARDED/ERROR
 
         // Snapshot current config for this push — all hooks in one push see the same config even if a reload fires
         // mid-push.
@@ -386,7 +389,6 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
         PreReceiveHook[] preHooks;
         if (persistenceHook != null) {
             List<PreReceiveHook> hooks = new ArrayList<>();
-            hooks.add(persistenceHook.preReceiveHook());
             hooks.addAll(validationHooks);
             hooks.add(persistenceHook.validationResultHook(validationContext));
             hooks.add(new ApprovalPreReceiveHook(
@@ -403,8 +405,10 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
         if (persistenceHook != null) {
             final PushContext capturedContext = pushContext;
             disconnectCallback = () -> {
+                // Only a submission that reached PENDING has a persisted lifecycle record to cancel. A disconnect
+                // before that — during the synchronous receive/validation phase — has no record yet, and the spec
+                // state machine has no received->canceled transition, so there is nothing to record.
                 String recordId = capturedContext.getValidationRecordId();
-                if (recordId == null) recordId = capturedContext.getPushId();
                 if (recordId != null) {
                     try {
                         pushStore.cancel(recordId, null);
