@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for {@link UrlRuleEvaluator}. Each test exercises a specific branch of the evaluation algorithm without
- * any Servlet or JGit machinery, confirming that the same logic applies to both proxy-mode and store-and-forward mode.
+ * any Servlet or JGit machinery, confirming that the same logic applies to both proxy-mode and server mode.
  */
 class UrlRuleEvaluatorTest {
 

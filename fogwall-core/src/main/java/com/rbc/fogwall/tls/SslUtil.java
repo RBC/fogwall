@@ -27,7 +27,7 @@ public final class SslUtil {
     /**
      * Builds an {@link UpstreamTls} containing an {@link SSLContext} and the underlying {@link TrustManager} array.
      * Both are needed: the {@code SSLContext} for Jetty's {@code HttpClient} (transparent proxy), and the
-     * {@code TrustManager[]} for JGit's {@code HttpConnection.configure()} (store-and-forward).
+     * {@code TrustManager[]} for JGit's {@code HttpConnection.configure()} (server mode).
      *
      * <p>The resulting context trusts the CAs in {@code caBundlePem} in addition to the JVM's built-in trust anchors.
      * Public hosts (GitHub, GitLab, Bitbucket) continue to work without modifying the JVM truststore.

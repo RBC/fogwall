@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Failure-path store-and-forward push to local Gitea via fogwall.
+# Failure-path server mode push to local Gitea via fogwall.
 # Verifies secret scanning correctly rejects a commit containing an AWS key.
 # Requires: docker compose stack up + docker/gitea-setup.sh already run.
 set -euo pipefail
@@ -10,7 +10,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/gitea/tokens.env"
 GITEA_HOST="${GITEA_HOST:-localhost:3000}"
 GIT_USERNAME="${GIT_USERNAME:-me}"
 GIT_PASSWORD="${GITEA_TESTUSER_TOKEN}"
-PUSH_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/push/${GITEA_HOST}/test-owner/test-repo.git"
+PUSH_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/server/${GITEA_HOST}/test-owner/test-repo.git"
 TEST_BRANCH="test/gitea-fail-$(date +%s)"
 REPO_DIR=$(mktemp -d "${_SYS_TMPDIR}/gitea-push-fail-XXXX")
 

@@ -25,8 +25,8 @@ import org.eclipse.jgit.lib.Repository;
  * MIME type. Runs in the transparent proxy pipeline after {@link EnrichPushCommitsFilter} (which has already cloned the
  * repo and unpacked push objects), so the local repository is available as a cache hit.
  *
- * <p>Two scan passes run, mirroring {@link ScanDiffFilter} and the store-and-forward {@code BinaryBlobDetectionHook}:
- * an aggregate scan of the old..new diff, and a per-commit scan of every individually introduced commit. The per-commit
+ * <p>Two scan passes run, mirroring {@link ScanDiffFilter} and the server mode {@code BinaryBlobDetectionHook}: an
+ * aggregate scan of the old..new diff, and a per-commit scan of every individually introduced commit. The per-commit
  * pass exists so that a binary blob added in one commit and removed by a later commit in the same push is still caught
  * — otherwise the aggregate diff alone would look clean (see RBC/fogwall#339). See {@link BinaryBlobCheck} for the
  * detection logic.

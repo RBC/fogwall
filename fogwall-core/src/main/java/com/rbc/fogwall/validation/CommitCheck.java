@@ -11,14 +11,14 @@ import java.util.List;
  * responsibility of the adapter that invokes the check.
  *
  * <p>This separation means each rule is written once and reused by both the transparent-proxy filter chain and the
- * store-and-forward pre-receive hook chain. Future transport modes (SSH, etc.) plug into the same implementations.
+ * server mode pre-receive hook chain. Future transport modes (SSH, etc.) plug into the same implementations.
  *
  * <h2>Adding a new commit-level validation rule</h2>
  *
  * <ol>
  *   <li>Implement this interface.
- *   <li>Wire the implementation into {@code StoreAndForwardReceivePackFactory} (hook chain) and
- *       {@code fogwallServletRegistrar} (filter chain).
+ *   <li>Wire the implementation into {@code ServerReceivePackFactory} (hook chain) and {@code fogwallServletRegistrar}
+ *       (filter chain).
  *   <li>Add the step name to {@code STEP_DISPLAY_NAMES} in {@code index.html}.
  * </ol>
  *

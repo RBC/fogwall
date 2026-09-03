@@ -40,7 +40,7 @@ public class GitRequestDetails {
     private FogwallProvider provider; // this should never be null
     /**
      * Provider-specific upstream username to use when forwarding the push. Set by {@code BitbucketIdentityFilter}
-     * (transparent proxy) or {@code BitbucketCredentialRewriteHook} (store-and-forward) when the push username needs
+     * (transparent proxy) or {@code BitbucketCredentialRewriteHook} (server mode) when the push username needs
      * rewriting before forwarding. {@code null} for all non-Bitbucket providers.
      */
     private String upstreamUsername;

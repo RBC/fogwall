@@ -3,7 +3,7 @@ package com.rbc.fogwall.git;
 import org.eclipse.jgit.transport.PreReceiveHook;
 
 /**
- * A {@link PreReceiveHook} with an associated order value, used to sort hooks in the store-and-forward receive chain.
+ * A {@link PreReceiveHook} with an associated order value, used to sort hooks in the server mode receive chain.
  *
  * <p>Hooks are executed in ascending order of their {@link #getOrder()} value. The following ranges mirror the filter
  * order scheme and are reserved:
@@ -19,7 +19,7 @@ import org.eclipse.jgit.transport.PreReceiveHook;
  * </ul>
  *
  * <p>Lifecycle hooks ({@code PushStorePersistenceHook}, {@code ApprovalPreReceiveHook}) do not implement this interface
- * and are always pinned at fixed positions in the chain by {@link StoreAndForwardReceivePackFactory}.
+ * and are always pinned at fixed positions in the chain by {@link ServerReceivePackFactory}.
  */
 public interface FogwallHook extends PreReceiveHook {
 

@@ -41,7 +41,7 @@ providers:
     enabled: false
 
   # Local Gitea instance.
-  # Push (store-and-forward):  http://localhost:8080/push/gitea/<owner>/<repo>.git
+  # Push (server mode):  http://localhost:8080/server/gitea/<owner>/<repo>.git
   # Proxy (transparent):       http://localhost:8080/proxy/gitea/<owner>/<repo>.git
   gitea:
     enabled: true

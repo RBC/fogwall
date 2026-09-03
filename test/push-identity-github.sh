@@ -12,7 +12,7 @@ GIT_USERNAME=${GIT_USERNAME:-"me"}
 source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
 resolve_pat ~/.github-pat
 GITHUB_REPO=${GITHUB_REPO:-"github.com/coopernetes/test-repo.git"}
-PUSH_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/push/${GITHUB_REPO}"
+PUSH_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/server/${GITHUB_REPO}"
 TEST_BRANCH="test/identity-github-$(date +%s)"
 REPO_DIR=$(mktemp -d "${TMPDIR:-/tmp}/push-identity-github-XXXX")
 

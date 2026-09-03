@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Test script: diff content scanning failures (internal URL patterns) via store-and-forward
-# Uses the push path (/push/...) which runs JGit ReceivePack with sideband
+# Test script: diff content scanning failures (internal URL patterns) via server mode
+# Uses the push path (/server/...) which runs JGit ReceivePack with sideband
 # Tests the diff.block.literals and diff.block.patterns config
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-PUSH_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/push/${GIT_REPO}"
+PUSH_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/server/${GIT_REPO}"
 
 # --- Test functions ---
 
@@ -34,7 +34,7 @@ EOF
 
 # --- Run tests ---
 
-print_header "STORE-AND-FORWARD: DIFF CONTENT SCANNING FAILURES" "${PUSH_URL}"
+print_header "SERVER MODE: DIFF CONTENT SCANNING FAILURES" "${PUSH_URL}"
 
 # Helper for running failure tests (sets up branch for each test)
 run_test() {

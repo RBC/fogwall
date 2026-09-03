@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
-import com.rbc.fogwall.git.StoreAndForwardReceivePackFactory;
+import com.rbc.fogwall.git.ServerReceivePackFactory;
 import com.rbc.fogwall.provider.ForgejoProvider;
 import com.rbc.fogwall.ssh.SshGitReceiveCommand.RepoRoute;
 import java.net.URI;
@@ -28,7 +28,7 @@ class SshGitReceiveCommandTest {
                 .sshUri(sshUri)
                 .pathSuffix(pathSuffix)
                 .build();
-        return new SshProviderTarget(provider, mock(StoreAndForwardReceivePackFactory.class));
+        return new SshProviderTarget(provider, mock(ServerReceivePackFactory.class));
     }
 
     private static Map<String, SshProviderTarget> singleRoute() {

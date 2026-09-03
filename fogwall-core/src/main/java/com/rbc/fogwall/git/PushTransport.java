@@ -51,7 +51,7 @@ public sealed interface PushTransport permits PushTransport.Http, PushTransport.
      */
     ClientLivenessCheck livenessCheck();
 
-    /** HTTP store-and-forward: no pre-authenticated user, upstream auth via credentials. */
+    /** HTTP server mode: no pre-authenticated user, upstream auth via credentials. */
     record Http() implements PushTransport {
         @Override
         public String name() {
@@ -80,7 +80,7 @@ public sealed interface PushTransport permits PushTransport.Http, PushTransport.
     }
 
     /**
-     * SSH store-and-forward: user resolved from public-key auth, upstream auth via forwarded agent.
+     * SSH server mode: user resolved from public-key auth, upstream auth via forwarded agent.
      *
      * @param user the proxy user resolved from the connecting key at MINA auth time
      * @param connectingFingerprint SHA-256 fingerprint of the key the client authenticated with — used by

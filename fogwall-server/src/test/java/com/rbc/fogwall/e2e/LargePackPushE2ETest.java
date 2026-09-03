@@ -18,10 +18,9 @@ import org.junit.jupiter.api.*;
  * <h2>Production bug</h2>
  *
  * Pushes whose pack exceeded Jetty's socket buffer size (typically ~1 MiB in production, controlled by
- * {@code http.postBuffer} on the git client) failed with either a silent connection drop (store-and-forward) or an
- * "Empty Branch" rejection (transparent proxy). Both failures were caused by {@code RequestBodyWrapper} reading a
- * truncated or empty body because Jetty 12's EPC dispatch model invoked the filter chain before the full HTTP body had
- * arrived.
+ * {@code http.postBuffer} on the git client) failed with either a silent connection drop (server mode) or an "Empty
+ * Branch" rejection (transparent proxy). Both failures were caused by {@code RequestBodyWrapper} reading a truncated or
+ * empty body because Jetty 12's EPC dispatch model invoked the filter chain before the full HTTP body had arrived.
  *
  * <h2>Fix</h2>
  *
@@ -165,11 +164,11 @@ class LargePackPushE2ETest {
         }
     }
 
-    // ── Store-and-forward mode ────────────────────────────────────────────────
+    // ── Server mode ────────────────────────────────────────────────
 
     @Nested
     @Tag("e2e")
-    class StoreAndForwardMode {
+    class ServerMode {
 
         JettyProxyFixture proxy;
 
@@ -184,7 +183,7 @@ class LargePackPushE2ETest {
         }
 
         @Test
-        void largePack_newBranch_storeAndForward_passesValidationAndForwards() throws Exception {
+        void largePack_newBranch_serverMode_passesValidationAndForwards() throws Exception {
             String repoUrl = credUrl(
                     proxy.getPort(),
                     "/push/" + proxy.getGiteaHostPort() + "/" + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO
@@ -202,7 +201,8 @@ class LargePackPushE2ETest {
 
             GitHelper.PushResult result = git.pushRefWithResult(repo, branchName);
 
-            assertTrue(result.succeeded(), "Large pack push via S&F mode should succeed.\nOutput:\n" + result.output());
+            assertTrue(
+                    result.succeeded(), "Large pack push via server mode should succeed.\nOutput:\n" + result.output());
 
             var records = proxy.getPushStore().find(PushQuery.builder().limit(1).build());
             assertFalse(records.isEmpty(), "Push record should exist in store");

@@ -128,7 +128,7 @@ class BasicAuthChallengeFilterTest {
         verify(resp, never()).sendError(anyInt());
     }
 
-    // ---- fetch (upload-pack) without auth → 401 (store-and-forward clones upstream on every open,
+    // ---- fetch (upload-pack) without auth → 401 (server mode clones upstream on every open,
     // including fetches, so private repos need a chance to send credentials on this path too) ----
 
     @Test

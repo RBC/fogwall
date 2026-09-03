@@ -35,7 +35,7 @@ providers:
   #   1. Add your real public key under dev's ssh-keys below (replace the placeholder test key, or add a second entry).
   #   2. Add your GitHub username under dev's scm-identities for provider: github (see below).
   #   3. Add an allow rule + permission for a repo you actually control (see rules/permissions below).
-  #   4. HTTPS: git clone http://localhost:8080/push/github.com/<org>/<repo>.git
+  #   4. HTTPS: git clone http://localhost:8080/server/github.com/<org>/<repo>.git
   #      SSH:   git clone ssh://localhost:2222/github.com/<org>/<repo>.git   (agent forwarding required: ssh -A)
   github:
     enabled: true

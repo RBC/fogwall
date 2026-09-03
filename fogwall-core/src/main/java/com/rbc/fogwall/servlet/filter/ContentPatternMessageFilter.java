@@ -20,7 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Proxy-mode content-pattern scanning of commit messages (structured PII/identifier detection - SIN, SSN, NINO, etc),
- * mirroring the store-and-forward {@link com.rbc.fogwall.git.ContentPatternCommitMessageHook}.
+ * mirroring the server mode {@link com.rbc.fogwall.git.ContentPatternCommitMessageHook}.
  *
  * <p>Always WARN, never blocks - see {@link ContentPatternConfig}.
  *

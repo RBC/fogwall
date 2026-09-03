@@ -36,13 +36,13 @@ import org.eclipse.jgit.transport.resolver.ServiceNotAuthorizedException;
 import org.eclipse.jgit.transport.resolver.ServiceNotEnabledException;
 
 /**
- * Factory that creates {@link ReceivePack} instances for store-and-forward push handling. Extracts credentials from the
- * HTTP request's Basic auth header and wires up the pre/post receive hooks.
+ * Factory that creates {@link ReceivePack} instances for server mode push handling. Extracts credentials from the HTTP
+ * request's Basic auth header and wires up the pre/post receive hooks.
  *
  * <p>This factory creates new hook instances per request since each push has its own credentials.
  */
 @Slf4j
-public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<HttpServletRequest> {
+public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletRequest> {
 
     private static final Duration DEFAULT_HEARTBEAT_INTERVAL = Duration.ofSeconds(10);
     private static final Duration DEFAULT_APPROVAL_TIMEOUT = Duration.ofMinutes(30);
@@ -125,7 +125,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
     }
 
     /** Fixed-config constructors for use in tests and simple setups (no URL rule enforcement). */
-    public StoreAndForwardReceivePackFactory(
+    public ServerReceivePackFactory(
             FogwallProvider provider, CommitConfig commitConfig, PushStore pushStore, ApprovalGateway approvalGateway) {
         this(
                 provider,
@@ -144,7 +144,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
                 null);
     }
 
-    public StoreAndForwardReceivePackFactory(
+    public ServerReceivePackFactory(
             FogwallProvider provider,
             CommitConfig commitConfig,
             GpgConfig gpgConfig,
@@ -171,7 +171,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
                 null);
     }
 
-    public StoreAndForwardReceivePackFactory(
+    public ServerReceivePackFactory(
             FogwallProvider provider,
             Supplier<CommitConfig> commitConfigSupplier,
             Supplier<DiffScanConfig> diffScanConfigSupplier,
@@ -211,7 +211,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
             throws ServiceNotEnabledException, ServiceNotAuthorizedException {
 
         CredentialsProvider creds =
-                (CredentialsProvider) req.getAttribute(StoreAndForwardRepositoryResolver.CREDENTIALS_ATTRIBUTE);
+                (CredentialsProvider) req.getAttribute(ServerRepositoryResolver.CREDENTIALS_ATTRIBUTE);
         if (creds == null) {
             creds = extractBasicAuth(req);
         }
@@ -231,7 +231,7 @@ public class StoreAndForwardReceivePackFactory implements ReceivePackFactory<Htt
             repoSlug = slug;
         }
 
-        String upstreamUrl = (String) req.getAttribute(StoreAndForwardRepositoryResolver.UPSTREAM_URL_ATTRIBUTE);
+        String upstreamUrl = (String) req.getAttribute(ServerRepositoryResolver.UPSTREAM_URL_ATTRIBUTE);
 
         // Mint the push record's id here rather than in PushStorePersistenceHook, so the quarantine directory
         // on disk carries the same id an operator will see in the audit record.

@@ -13,7 +13,7 @@ import java.util.Set;
  * content-pattern findings (SIN/SSN/NINO, etc. - see {@code ContentPatternFinding}), which is why commit messages are
  * redacted here too, not just step content - a content-pattern match against a commit message is exactly as likely as
  * one against diff content. Called synchronously before {@code pushStore.save(record)} in both proxy modes - see
- * {@code PushStorePersistenceHook} (store-and-forward) and {@code PushStoreAuditFilter} (transparent proxy).
+ * {@code PushStorePersistenceHook} (server mode) and {@code PushStoreAuditFilter} (transparent proxy).
  *
  * <p>A unified diff interleaves a {@code +}/{@code -}/space prefix between every original line, so a multi-line secret
  * (e.g. a PEM key) never appears contiguously in stored diff text - it has to be redacted line-by-line. Each secret is

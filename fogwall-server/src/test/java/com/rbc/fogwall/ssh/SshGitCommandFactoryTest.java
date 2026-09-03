@@ -6,7 +6,7 @@ import static org.mockito.Mockito.mock;
 
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.git.LocalRepositoryCache;
-import com.rbc.fogwall.git.StoreAndForwardReceivePackFactory;
+import com.rbc.fogwall.git.ServerReceivePackFactory;
 import com.rbc.fogwall.provider.FogwallProvider;
 import java.io.IOException;
 import java.util.Map;
@@ -22,8 +22,8 @@ class SshGitCommandFactoryTest {
     @BeforeEach
     void setUp() {
         FogwallProvider provider = mock(FogwallProvider.class);
-        Map<String, SshProviderTarget> routes = Map.of(
-                "/localhost:3022", new SshProviderTarget(provider, mock(StoreAndForwardReceivePackFactory.class)));
+        Map<String, SshProviderTarget> routes =
+                Map.of("/localhost:3022", new SshProviderTarget(provider, mock(ServerReceivePackFactory.class)));
         factory = new SshGitCommandFactory(
                 routes,
                 mock(LocalRepositoryCache.class),

@@ -11,7 +11,7 @@ import com.rbc.fogwall.db.model.AccessRule;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
 import com.rbc.fogwall.git.LocalRepositoryCache;
-import com.rbc.fogwall.git.StoreAndForwardReceivePackFactory;
+import com.rbc.fogwall.git.ServerReceivePackFactory;
 import com.rbc.fogwall.permission.InMemoryRepoPermissionStore;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.permission.RepoPermissionService;
@@ -157,7 +157,7 @@ class SshProxyFixture implements AutoCloseable {
 
         Map<String, SshProviderTarget> routes = new LinkedHashMap<>();
         for (FogwallProvider p : List.of(provider, aliasProvider)) {
-            var receivePackFactory = new StoreAndForwardReceivePackFactory(
+            var receivePackFactory = new ServerReceivePackFactory(
                     p,
                     JettyProxyFixture::buildCommitConfig,
                     null,

@@ -122,7 +122,7 @@ public class CommitInspectionService {
 
     /**
      * Returns all commits reachable from {@code toCommit} with no lower-bound exclusion. Used when a branch is being
-     * re-pushed to S&F mode after a prior push was canceled or rejected — the local cache already has the branch tip
+     * re-pushed to server mode after a prior push was canceled or rejected — the local cache already has the branch tip
      * but the upstream has nothing, so the full ancestor chain must be enumerated.
      *
      * <p>Unlike {@link #getCommitRange}, this does NOT exclude commits reachable from existing local refs, so it

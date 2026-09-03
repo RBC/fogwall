@@ -35,7 +35,7 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * End-to-end test for #152: a secret committed in a push must never reach the persisted push record verbatim.
  *
- * <p>Runs the real gitleaks binary (skipped if unavailable) through the actual hook/filter chains - store-and-forward
+ * <p>Runs the real gitleaks binary (skipped if unavailable) through the actual hook/filter chains - server mode
  * ({@link DiffGenerationHook} → {@link SecretScanningHook} → {@link PushStorePersistenceHook}) and transparent proxy
  * ({@link SecretScanningFilter} → {@link PushStoreAuditFilter}) - against repos containing real, detectable secrets of
  * different shapes, then inspects the record written to a real {@link PushStore} (H2). Deliberately not mocked: the
@@ -106,25 +106,25 @@ class SecretRedactionIntegrationTest {
                 .call();
     }
 
-    // ---- store-and-forward path ----
+    // ---- server mode path ----
 
     @Test
-    void multiLineSecret_redactedFromStoredDiff_storeAndForward() throws Exception {
+    void multiLineSecret_redactedFromStoredDiff_serverMode() throws Exception {
         RevCommit base = commit("readme.txt", "hello\n");
         RevCommit withSecret = commit("private.key", FAKE_PKCS8_KEY);
 
-        PushRecord record = runStoreAndForward(base, withSecret);
+        PushRecord record = runServerMode(base, withSecret);
 
         assertRedactedEverywhere(record);
         assertDiffStepRedacted(record);
     }
 
     @Test
-    void singleLineSecret_redactedFromStoredDiff_storeAndForward() throws Exception {
+    void singleLineSecret_redactedFromStoredDiff_serverMode() throws Exception {
         RevCommit base = commit("readme.txt", "hello\n");
         RevCommit withSecret = commit("config.txt", "stripe_key = \"" + FAKE_STRIPE_KEY + "\"\n");
 
-        PushRecord record = runStoreAndForward(base, withSecret);
+        PushRecord record = runServerMode(base, withSecret);
 
         assertRedactedEverywhere(record);
         assertDiffStepRedacted(record);
@@ -163,7 +163,7 @@ class SecretRedactionIntegrationTest {
         assertTrue(diffIntact, "diff content must be untouched when secret-scan found nothing");
     }
 
-    private PushRecord runStoreAndForward(RevCommit base, RevCommit withSecret) throws Exception {
+    private PushRecord runServerMode(RevCommit base, RevCommit withSecret) throws Exception {
         ReceivePack rp = new ReceivePack(repo);
         ReceiveCommand cmd =
                 new ReceiveCommand(base.getId(), withSecret.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);

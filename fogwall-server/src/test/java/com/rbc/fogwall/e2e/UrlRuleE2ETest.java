@@ -16,7 +16,7 @@ import org.junit.jupiter.api.*;
 
 /**
  * End-to-end tests for URL allow/deny rule enforcement through both the transparent proxy path ({@code /proxy/...}) and
- * the store-and-forward path ({@code /push/...}).
+ * the server mode path ({@code /push/...}).
  *
  * <p>Rule set mirrors {@code docker/fogwall-docker-default.yml}:
  *
@@ -28,7 +28,7 @@ import org.junit.jupiter.api.*;
  *   <li>Deny name regex {@code (?i)(^|-)secret(-|$).*} — PUSH only
  * </ul>
  *
- * <p>Each major rule scenario is validated through both proxy and S&F modes to confirm the shared
+ * <p>Each major rule scenario is validated through both proxy and server modes to confirm the shared
  * {@link UrlRuleEvaluator} behaves identically in both.
  */
 @Tag("e2e")
@@ -89,7 +89,7 @@ class UrlRuleE2ETest {
         return cloneCommitPush(proxyUrl(org, repo), suffix, message);
     }
 
-    /** Clone → commit → push through the store-and-forward path. Returns true if push exited 0. */
+    /** Clone → commit → push through the server mode path. Returns true if push exited 0. */
     private boolean sfPush(String suffix, String org, String repo, String message) throws Exception {
         return cloneCommitPush(pushUrl(org, repo), suffix, message);
     }
@@ -169,8 +169,8 @@ class UrlRuleE2ETest {
                         "sf-allow-slug",
                         GiteaContainer.TEST_ORG,
                         GiteaContainer.TEST_REPO,
-                        "feat: allowed by slug rule in S&F"),
-                "push to /test-owner/test-repo should be allowed in S&F mode");
+                        "feat: allowed by slug rule in server mode"),
+                "push to /test-owner/test-repo should be allowed in server mode");
     }
 
     @Test
@@ -185,8 +185,8 @@ class UrlRuleE2ETest {
     @Order(13)
     void sf_allowedOwnerGlob_passes() throws Exception {
         assertTrue(
-                sfPush("sf-allow-glob", "otherorg", "allowed-repo", "feat: allowed by owner glob in S&F"),
-                "push to otherorg/allowed-repo should be allowed in S&F mode");
+                sfPush("sf-allow-glob", "otherorg", "allowed-repo", "feat: allowed by owner glob in server mode"),
+                "push to otherorg/allowed-repo should be allowed in server mode");
     }
 
     // ── Not in allow list ────────────────────────────────────────────────────
@@ -214,7 +214,7 @@ class UrlRuleE2ETest {
                 pushUrl("unknown-org", "some-repo"),
                 "sf-notallowed",
                 "feat: this org has no allow rule");
-        assertFalse(result.succeeded(), "S&F push to unconfigured org/repo should be blocked");
+        assertFalse(result.succeeded(), "server mode push to unconfigured org/repo should be blocked");
     }
 
     // ── Deny overrides allow ──────────────────────────────────────────────────
@@ -244,7 +244,7 @@ class UrlRuleE2ETest {
                 pushUrl("otherorg", "other-secret"),
                 "sf-deny-slug",
                 "feat: this repo is explicitly denied");
-        assertFalse(result.succeeded(), "S&F push to /otherorg/other-secret should be denied");
+        assertFalse(result.succeeded(), "server mode push to /otherorg/other-secret should be denied");
     }
 
     // ── Deny by name glob (*-readonly, push only) ─────────────────────────────
@@ -271,7 +271,7 @@ class UrlRuleE2ETest {
                 pushUrl(GiteaContainer.TEST_ORG, "test-repo-readonly"),
                 "sf-deny-glob",
                 "feat: readonly repos should not accept pushes");
-        assertFalse(result.succeeded(), "S&F push to *-readonly repo should be blocked");
+        assertFalse(result.succeeded(), "server mode push to *-readonly repo should be blocked");
     }
 
     // ── Deny by name regex (push only) ───────────────────────────────────────
@@ -297,7 +297,7 @@ class UrlRuleE2ETest {
                 pushUrl(GiteaContainer.TEST_ORG, "secret-store"),
                 "sf-deny-regex",
                 "feat: secret repos should not accept pushes");
-        assertFalse(result.succeeded(), "S&F push to secret-store should be blocked by regex deny rule");
+        assertFalse(result.succeeded(), "server mode push to secret-store should be blocked by regex deny rule");
     }
 
     // ── Rule set — mirrors docker/fogwall-docker-default.yml ───────────────

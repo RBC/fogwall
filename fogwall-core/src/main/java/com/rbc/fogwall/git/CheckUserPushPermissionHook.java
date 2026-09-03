@@ -23,14 +23,14 @@ import org.eclipse.jgit.transport.ReceivePack;
 
 /**
  * Pre-receive hook that validates the pushing user has permission to push to this repository. Mirrors the behaviour of
- * {@link CheckUserPushPermissionFilter} for store-and-forward mode.
+ * {@link CheckUserPushPermissionFilter} for server mode.
  *
  * <p>Fail-closed: if no permission grants exist for the repository the push is denied. Skipped entirely when
  * {@link PushIdentityResolver} is {@code null} (open mode, no user store configured).
  *
  * <p>The push user is the authenticated HTTP Basic-auth username, stored in the repository config under
- * {@code fogwall.pushUser} by {@link StoreAndForwardReceivePackFactory}. The repo slug is stored under
- * {@code fogwall.repoSlug} by the same factory.
+ * {@code fogwall.pushUser} by {@link ServerReceivePackFactory}. The repo slug is stored under {@code fogwall.repoSlug}
+ * by the same factory.
  */
 @Slf4j
 public class CheckUserPushPermissionHook implements FogwallHook {

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run all store-and-forward (push) tests that should succeed
+# Run all server mode (push) tests that should succeed
 # Each script is independent — failure of one does not stop the others
 set -euo pipefail
 

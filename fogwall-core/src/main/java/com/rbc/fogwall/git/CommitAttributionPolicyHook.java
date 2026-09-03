@@ -24,8 +24,8 @@ import org.eclipse.jgit.transport.ReceivePack;
  * Pre-receive hook enforcing the <b>commit attribution policy</b>: each pushed commit's committer and/or author email
  * must be a registered email of the resolved push identity. This inspects client-controlled commit metadata — it is a
  * policy conformance check on commit provenance, <em>not</em> authentication of the pusher (that is
- * {@link CheckUserPushPermissionHook} at order 150). Runs in store-and-forward mode at order 160, before
- * content-validation hooks (200+).
+ * {@link CheckUserPushPermissionHook} at order 150). Runs in server mode at order 160, before content-validation hooks
+ * (200+).
  *
  * <p>Behaviour is controlled per field (committer, author) by {@link CommitConfig#getAttributionPolicy()}:
  *

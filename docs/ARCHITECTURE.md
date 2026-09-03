@@ -45,7 +45,7 @@ whether the dashboard is present.
 
 ## Two proxy modes
 
-### Store-and-forward (`/push/<provider>/<owner>/<repo>.git`)
+### Server mode (`/server/<provider>/<owner>/<repo>.git`)
 
 The upstream repository is cloned locally on first access. When a developer pushes, JGit's `ReceivePack` receives the
 entire pack locally before anything is forwarded. Pre-receive hooks validate the push; if it passes (and any required
@@ -53,6 +53,9 @@ approval is granted), a post-receive hook forwards it to upstream using the deve
 
 This mode can stream progress messages to the git client in real time via JGit sideband packets — so the developer sees
 `remote: [step] author email OK` lines as each validation step completes.
+
+> **Naming:** this mode was formerly called _store-and-forward_. It is served under the canonical `/server/…` prefix as
+> of 1.4.0; the legacy `/push/…` prefix still routes to it as a deprecated alias, so existing git remotes keep working.
 
 ### Transparent proxy (`/proxy/<provider>/<owner>/<repo>.git`)
 
@@ -65,13 +68,13 @@ push is forwarded via HTTP proxy rather than a JGit `push` command.
 This mode cannot stream incremental feedback. The reason is structural: an HTTP response is a single buffered reply. The
 filter chain runs to completion inside one request/response cycle — there is no mechanism to flush partial output to the
 git client mid-chain. Validation filters accumulate their results; `ValidationSummaryFilter` and `PushFinalizerFilter`
-collect everything and write one response at the end. Store-and-forward avoids this constraint entirely because JGit's
+collect everything and write one response at the end. Server mode avoids this constraint entirely because JGit's
 `ReceivePack` owns the connection and can call `sendMessage()` at any point, streaming sideband packets to the client as
 each hook completes.
 
 ### Choosing a mode
 
-| Concern                       | Store-and-forward                          | Transparent proxy                                                         |
+| Concern                       | Server mode                                | Transparent proxy                                                         |
 | ----------------------------- | ------------------------------------------ | ------------------------------------------------------------------------- |
 | Live progress feedback        | Yes — per-step sideband messages           | No — single terminal response                                             |
 | Local storage required        | Yes — receives the push into a local clone | Yes — clone needed for pack inspection                                    |
@@ -86,18 +89,18 @@ is currently no per-provider toggle to disable one mode.
 
 ## Request flow
 
-### Store-and-forward push
+### Server mode push
 
 ```
-git push → /push/<provider>/<owner>/<repo>.git
+git push → /server/<provider>/<owner>/<repo>.git
              │
              ▼
-     StoreAndForwardRepositoryResolver
+     ServerRepositoryResolver
        • clone/fetch upstream repo locally
        • extract credentials from Authorization header
              │
              ▼
-     StoreAndForwardReceivePackFactory
+     ServerReceivePackFactory
        • assemble hook chain (see below)
              │
        ┌─────┴──────────────────────────────────┐
@@ -115,10 +118,10 @@ git push → /push/<provider>/<owner>/<repo>.git
        └─────────────────────────────────────────┘
 ```
 
-### Authenticating a store-and-forward request
+### Authenticating a server mode request
 
-Store-and-forward cannot forward a request it has no credentials for, and a git client only sends credentials after a
-401 challenge — so `BasicAuthChallengeFilter` has to decide, before the servlet runs, whether this request needs one.
+Server mode cannot forward a request it has no credentials for, and a git client only sends credentials after a 401
+challenge — so `BasicAuthChallengeFilter` has to decide, before the servlet runs, whether this request needs one.
 
 Push is unambiguous: the push is forwarded upstream using the developer's own token, so it is always challenged.
 
@@ -183,9 +186,9 @@ request ends.
 
 In this mode nothing is ever promoted back into the mirror. An accepted push's objects reach it the same way everything
 else does — by being fetched from upstream once they exist there — which keeps the mirror a reflection of upstream
-rather than an accumulation of everything anyone attempted. (Store-and-forward differs; see below.) If a quarantine
-cannot be created the filter logs a warning and falls back to the mirror: the loss is disk hygiene, not a validation
-result, so it is not worth failing a push over.
+rather than an accumulation of everything anyone attempted. (Server mode differs; see below.) If a quarantine cannot be
+created the filter logs a warning and falls back to the mirror: the loss is disk hygiene, not a validation result, so it
+is not worth failing a push over.
 
 This is the same shape as git's own `receive-pack` quarantine (`tmp_objdir`, exposed to hooks as `GIT_QUARANTINE_PATH`):
 temporary object directory, real one as an alternate, hooks run against that view. JGit has no equivalent, hence the
@@ -196,13 +199,13 @@ The one deliberate departure from git's version is the last step: git migrates o
 because for git the receive is authoritative and those objects have nowhere else to come from. Here the mirror is a
 cache of upstream, so not promoting is both simpler and a stronger guarantee.
 
-Store-and-forward quarantines too, with one difference. There JGit's `ReceivePack` applies the ref updates to the shared
-git directory once the pre-receive hooks pass, so the objects those refs name have to be in the mirror by then —
-discarding them would leave the mirror pointing at objects that no longer exist. `QuarantinePromotionHook` runs as the
-last pre-receive hook and moves the objects across only when nothing has been rejected; if it fails, it rejects the
-push, because a half-promoted push is worse than a refused one. The HTTP path's quarantine is torn down by
-`QuarantineCleanupFilter` on the `/push` mapping; the SSH path scopes it to `SshGitReceiveCommand`, which has no servlet
-request to hang it off.
+Server mode quarantines too, with one difference. There JGit's `ReceivePack` applies the ref updates to the shared git
+directory once the pre-receive hooks pass, so the objects those refs name have to be in the mirror by then — discarding
+them would leave the mirror pointing at objects that no longer exist. `QuarantinePromotionHook` runs as the last
+pre-receive hook and moves the objects across only when nothing has been rejected; if it fails, it rejects the push,
+because a half-promoted push is worse than a refused one. The HTTP path's quarantine is torn down by
+`QuarantineCleanupFilter` on the server-mode mapping; the SSH path scopes it to `SshGitReceiveCommand`, which has no
+servlet request to hang it off.
 
 So both modes discard a rejected push's objects. The transparent proxy additionally never promotes, because it never
 applies ref updates. There, JGit's `ReceivePack` owns the inserter and writes into the mirror before the pre-receive
@@ -319,7 +322,7 @@ Backends: static YAML list, JDBC (H2/Postgres), MongoDB, or a composite that che
 
 `FogwallJettyApplication` boots a plain Jetty server. It loads YAML config (base `fogwall.yml` + profile overlays +
 environment variable overrides), builds the `FogwallContext`, and registers both proxy modes for every provider. There
-is no Spring context, no dashboard, and no REST API — just the git servlets on `/push/*` and `/proxy/*`.
+is no Spring context, no dashboard, and no REST API — just the git servlets on `/server/*` and `/proxy/*`.
 
 The approval gateway defaults to `AutoApprovalGateway` — clean pushes go straight through with no human review. A
 `LiveConfigLoader` watches the config file and hot-reloads commit validation rules (email patterns, message patterns,
@@ -339,7 +342,7 @@ environments, or setups where an external system like ServiceNow handles approva
 
 `FogwallDashboardApplication` builds the same `FogwallContext` and calls the same `FogwallServletRegistrar`, then layers
 on a Spring MVC `DispatcherServlet` at `/*`. Jetty's servlet path-matching rules give the more-specific git paths
-(`/push/*`, `/proxy/*`) precedence, so the Spring servlet only handles `/api/*`, `/dashboard/*`, `/login`, and static
+(`/server/*`, `/proxy/*`) precedence, so the Spring servlet only handles `/api/*`, `/dashboard/*`, `/login`, and static
 assets.
 
 This is Spring MVC and Spring Security directly on a Jetty `Server` we construct and configure ourselves — not Spring
@@ -396,9 +399,9 @@ providers:
     uri: https://git.acquiredco.internal
 ```
 
-Pushes to `/push/internal-github/...` and `/push/acquired-gitlab/...` go through the same validation pipeline. The proxy
-validates identity, author email, commit messages, and diff content before forwarding to the appropriate internal host.
-This is useful for enforcing consistent push policy across multiple internally-hosted Git services.
+Pushes to `/server/internal-github/...` and `/server/acquired-gitlab/...` go through the same validation pipeline. The
+proxy validates identity, author email, commit messages, and diff content before forwarding to the appropriate internal
+host. This is useful for enforcing consistent push policy across multiple internally-hosted Git services.
 
 ### Credential rewriting (planned)
 
@@ -421,9 +424,9 @@ the `Authorization` header on the forwarded request.
 
 ## What this architecture enables
 
-The transparent proxy mode replicates what finos/git-proxy does today: intercept, inspect, and forward. The
-store-and-forward mode — where the proxy owns the full pack lifecycle via JGit — opens up use cases that are not
-possible with a pass-through HTTP proxy:
+The transparent proxy mode replicates what finos/git-proxy does today: intercept, inspect, and forward. The server mode
+— where the proxy owns the full pack lifecycle via JGit — opens up use cases that are not possible with a pass-through
+HTTP proxy:
 
 - **Deferred forwarding** — the developer's push is received and acknowledged immediately. The pack is stored locally
   while an approval process runs (hours, days); forwarding happens asynchronously once approved. This eliminates the
@@ -444,8 +447,7 @@ possible with a pass-through HTTP proxy:
   scanning, external policy engines) — the developer gets credit for work already done rather than waiting through the
   full chain again.
 
-- **Streaming LLM analysis** — the sideband channel in store-and-forward mode can stream an LLM's advisory review of the
-  diff back to the developer's terminal in real time, giving immediate feedback alongside the existing rule-based
-  checks.
+- **Streaming LLM analysis** — the sideband channel in server mode can stream an LLM's advisory review of the diff back
+  to the developer's terminal in real time, giving immediate feedback alongside the existing rule-based checks.
 
 These are tracked as individual issues in the backlog; the architecture is designed to support them incrementally.

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Test script: author email validation failures via store-and-forward
-# Uses the push path (/push/...) which runs JGit ReceivePack with sideband
+# Test script: author email validation failures via server mode
+# Uses the push path (/server/...) which runs JGit ReceivePack with sideband
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-PUSH_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/push/${GIT_REPO}"
+PUSH_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/server/${GIT_REPO}"
 
 # --- Test functions ---
 
@@ -35,7 +35,7 @@ test_github_noreply_email() {
 
 # --- Run tests ---
 
-print_header "STORE-AND-FORWARD: AUTHOR EMAIL VALIDATION FAILURES" "${PUSH_URL}"
+print_header "SERVER MODE: AUTHOR EMAIL VALIDATION FAILURES" "${PUSH_URL}"
 
 # Helper for running failure tests (sets up branch for each test)
 run_test() {

@@ -55,7 +55,7 @@ run() {
 
 # ── Tests ────────────────────────────────────────────────────────────────────
 
-# ── Store-and-forward failures (sideband rejection, no approval needed) ──────
+# ── Server mode failures (sideband rejection, no approval needed) ──────
 
 # 1. Author email validation failure
 run "push-fail-author" \

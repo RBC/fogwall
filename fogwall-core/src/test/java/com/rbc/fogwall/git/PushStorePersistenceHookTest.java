@@ -82,7 +82,7 @@ class PushStorePersistenceHookTest {
         return new ReceiveCommand(ObjectId.zeroId(), newCommit, "refs/heads/test");
     }
 
-    /** Stamps a push id into the context the way {@code StoreAndForwardReceivePackFactory} does in production. */
+    /** Stamps a push id into the context the way {@code ServerReceivePackFactory} does in production. */
     private String stampPushId() {
         String pushId = UUID.randomUUID().toString();
         pushContext.setPushId(pushId);
@@ -107,7 +107,7 @@ class PushStorePersistenceHookTest {
         assertEquals(
                 1,
                 pushStore.find(PushQuery.builder().build()).size(),
-                "a store-and-forward push must produce exactly one record");
+                "a server mode push must produce exactly one record");
     }
 
     @Test
@@ -164,7 +164,7 @@ class PushStorePersistenceHookTest {
         assertEquals(
                 ReceiveCommand.Result.NOT_ATTEMPTED,
                 cmd.getResult(),
-                "commands must not be rejected on a clean push (S&F doesn't reject here - it blocks in approval hook)");
+                "commands must not be rejected on a clean push (server mode doesn't reject here - it blocks in approval hook)");
     }
 
     // ---- validation-result hook: with issues → REJECTED ----

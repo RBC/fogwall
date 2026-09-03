@@ -18,7 +18,7 @@ import org.eclipse.jgit.transport.ReceiveCommand;
 import org.eclipse.jgit.transport.ReceivePack;
 
 /**
- * S&amp;F-mode secret scanning hook. Runs {@code gitleaks git} directly against the JGit bare repository so that
+ * server-mode secret scanning hook. Runs {@code gitleaks git} directly against the JGit bare repository so that
  * path-based allowlists and per-file context in gitleaks rules are applied correctly.
  *
  * <p>The commit range is derived from each {@link ReceiveCommand}: new-branch pushes use {@code commitTo --not --all}

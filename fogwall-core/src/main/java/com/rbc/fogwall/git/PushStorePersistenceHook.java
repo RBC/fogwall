@@ -24,9 +24,8 @@ import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.transport.*;
 
 /**
- * Persists the single lifecycle record for a store-and-forward push to the {@link PushStore}, keyed by the push id —
- * the correlation identifier minted in {@link StoreAndForwardReceivePackFactory} and reused for the on-disk quarantine
- * directory.
+ * Persists the single lifecycle record for a server mode push to the {@link PushStore}, keyed by the push id — the
+ * correlation identifier minted in {@link ServerReceivePackFactory} and reused for the on-disk quarantine directory.
  *
  * <p>One record per submission, transitioned in place: the same model transparent proxy uses, and the one the
  * git-proxy-spec push-lifecycle state machine requires (exactly one canonical state per submission; audit history
@@ -42,8 +41,8 @@ import org.eclipse.jgit.transport.*;
 public class PushStorePersistenceHook {
 
     /**
-     * Maps S&F hook names to canonical step orders matching the equivalent proxy filter. Used so REJECTED push records
-     * sort validation steps in the same order as proxy mode.
+     * Maps server mode hook names to canonical step orders matching the equivalent proxy filter. Used so REJECTED push
+     * records sort validation steps in the same order as proxy mode.
      */
     private static final Map<String, Integer> HOOK_STEP_ORDER = Map.of(
             "checkUrlRules", 100,

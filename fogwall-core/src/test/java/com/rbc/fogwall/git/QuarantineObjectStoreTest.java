@@ -199,7 +199,7 @@ class QuarantineObjectStoreTest {
                 new FileRepositoryBuilder().setGitDir(mirror.getDirectory()).build()) {
             assertTrue(
                     reopened.getObjectDatabase().has(blobId),
-                    "Store-and-forward updates the mirror's refs, so accepted objects must be promoted into it");
+                    "Server mode updates the mirror's refs, so accepted objects must be promoted into it");
         }
         mirror.close();
     }

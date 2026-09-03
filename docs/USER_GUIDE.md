@@ -56,13 +56,16 @@ http[s]://<proxy-host>/<mode>/<provider-host>/<owner>/<repo>.git
 For example, if you normally push to `https://github.com/myorg/myrepo`, the proxy remote is:
 
 ```text
-https://fogwall.corp.example.com/push/github.com/myorg/myrepo
+https://fogwall.corp.example.com/server/github.com/myorg/myrepo
 ```
+
+> The `/server/` prefix was previously `/push/` (when this mode was called _store-and-forward_). Remotes using `/push/`
+> still work — it is a deprecated alias — but new remotes should use `/server/`.
 
 Add it as a new remote (recommended — keeps your direct-to-GitHub remote as a fallback):
 
 ```shell
-git remote add proxy https://fogwall.corp.example.com/push/github.com/myorg/myrepo
+git remote add proxy https://fogwall.corp.example.com/server/github.com/myorg/myrepo
 ```
 
 Then push via the proxy:
@@ -73,10 +76,11 @@ git push proxy main
 
 ### Credentials in the remote URL
 
-The git push path (`/push/` and `/proxy/`) uses HTTP Basic authentication — this is what the git protocol requires, and
-it matches what the upstream SCM expects. Your upstream PAT is the password; the username can be any non-empty string —
-`me`, `git`, your name — it is not used for identity resolution (see [Identity verification](#identity-verification)
-below). It must not be empty or the upstream SCM will reject the request. The exception is Bitbucket — see below.
+The git push path (`/server/` and `/proxy/`) uses HTTP Basic authentication — this is what the git protocol requires,
+and it matches what the upstream SCM expects. Your upstream PAT is the password; the username can be any non-empty
+string — `me`, `git`, your name — it is not used for identity resolution (see
+[Identity verification](#identity-verification) below). It must not be empty or the upstream SCM will reject the
+request. The exception is Bitbucket — see below.
 
 This is separate from the dashboard: the dashboard login uses your proxy user account (via your org's IdP or local
 credentials), not your SCM token. The two credential sets are independent — one is for `git push`, the other is for the
@@ -85,7 +89,7 @@ web UI.
 Embed credentials directly in the URL if your git credential helper does not pick them up automatically:
 
 ```shell
-git remote add proxy https://me:ghp_yourtoken@fogwall.corp.example.com/push/github.com/myorg/myrepo
+git remote add proxy https://me:ghp_yourtoken@fogwall.corp.example.com/server/github.com/myorg/myrepo
 ```
 
 Or use `git credential store` / your OS keychain as you normally would.
@@ -192,11 +196,11 @@ key is the only credential.
 
 ---
 
-## Choosing a proxy mode: `/push/` vs `/proxy/`
+## Choosing a proxy mode: `/server/` vs `/proxy/`
 
 There are two URL prefixes, each with different behaviour:
 
-|                       | `/push/` (store-and-forward)                                                                      | `/proxy/` (transparent proxy)                                                                                                        |
+|                       | `/server/` (server mode)                                                                          | `/proxy/` (transparent proxy)                                                                                                        |
 | --------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | **How it works**      | The proxy receives your push locally, validates it, then forwards to upstream                     | The proxy forwards HTTP requests directly to upstream while inspecting them inline                                                   |
 | **Terminal feedback** | Live streaming — each validation step prints as it runs                                           | Silent until the end — one response after all checks complete                                                                        |
@@ -205,17 +209,17 @@ There are two URL prefixes, each with different behaviour:
 | **Local disk usage**  | Clones each repo to ephemeral pod storage for diff inspection — proportional to repo history size | None — git bytes stream directly through the proxy with no local storage                                                             |
 | **Recommendation**    | **Use this for most workflows**                                                                   | Use when network reliability or disk constraints are a concern                                                                       |
 
-For day-to-day use, `/push/` gives a better experience: you see each validation step in real time and the same
+For day-to-day use, `/server/` gives a better experience: you see each validation step in real time and the same
 `git push` command completes once approved.
 
 Prefer `/proxy/` if your network infrastructure is flaky or connections between client → proxy → upstream are
-unreliable. Store-and-forward keeps the client connection open for the full validation and approval cycle — a dropped
+unreliable. Server mode keeps the client connection open for the full validation and approval cycle — a dropped
 connection means starting over. Transparent proxy completes each HTTP request atomically, so a network hiccup during
 approval does not lose the push record.
 
-### Disk usage in store-and-forward mode
+### Disk usage in server mode
 
-In S&F mode, the proxy maintains local mirrors of each upstream repository on ephemeral pod storage (`emptyDir` in
+In server mode, the proxy maintains local mirrors of each upstream repository on ephemeral pod storage (`emptyDir` in
 Kubernetes/OpenShift). A full clone is kept for the serve path (so clients can fetch through the proxy) and a shallow
 clone (depth 100) for diff inspection. These are rebuilt automatically on pod restart — there is no durable state in the
 cache.
@@ -274,7 +278,7 @@ remote: ✅  Push approved by reviewer
 remote: 🔗  Forwarding to https://github.com/myorg/myrepo.git...
 remote:   ✅  refs/heads/my-feature -> OK
 remote: ✅  Forwarding complete
-To http://fogwall.corp.example.com/push/github.com/myorg/myrepo.git
+To http://fogwall.corp.example.com/server/github.com/myorg/myrepo.git
  * [new branch]      my-feature -> my-feature
 ```
 
@@ -319,7 +323,7 @@ remote: 🔗  Forwarding to https://github.com/myorg/myrepo.git...
 remote:   Pushing 1 ref(s) to upstream...
 remote:   ✅  refs/heads/my-feature -> OK
 remote: ✅  Forwarding complete
-To http://fogwall.corp.example.com/push/github.com/myorg/myrepo.git
+To http://fogwall.corp.example.com/server/github.com/myorg/myrepo.git
  * [new branch]      my-feature -> my-feature
 ```
 
@@ -380,8 +384,8 @@ or reject. Contact your administrator if you receive a 403 trying to approve a p
 
 ## When a push is blocked
 
-In store-and-forward mode (`/push/`), each validation step streams live and all failures are summarised at the end. A
-push with multiple issues across several commits looks like this:
+In server mode (`/server/`), each validation step streams live and all failures are summarised at the end. A push with
+multiple issues across several commits looks like this:
 
 ```text
 remote: 🔑  Checking URL allow rules...
@@ -422,9 +426,9 @@ remote:   commit: e9085c9
 remote:   match:  REDACTED
 remote: ────────────────────────────────────────
 remote: 🔗  View push record: http://fogwall.corp.example.com/dashboard/push/b65bee10-...
-To http://fogwall.corp.example.com/push/github.com/myorg/myrepo.git
+To http://fogwall.corp.example.com/server/github.com/myorg/myrepo.git
  ! [remote rejected] my-feature -> my-feature (5 validation issue(s) - see above)
-error: failed to push some refs to 'http://fogwall.corp.example.com/push/github.com/myorg/myrepo.git'
+error: failed to push some refs to 'http://fogwall.corp.example.com/server/github.com/myorg/myrepo.git'
 ```
 
 In transparent proxy mode (`/proxy/`), all validation runs first and the summary is returned in one response at the end.
@@ -656,7 +660,7 @@ If you already have a local clone pointed directly at the upstream, add the prox
 through it while keeping direct fetch:
 
 ```shell
-git remote set-url --push origin https://fogwall.corp.example.com/push/github.com/myorg/myrepo
+git remote set-url --push origin https://fogwall.corp.example.com/server/github.com/myorg/myrepo
 ```
 
 ### Private forks and internal mirrors
@@ -669,7 +673,7 @@ be proxied independently. A common three-remote setup:
 git remote add upstream https://github.com/someproject/somerepo
 
 # origin — your org's internal fork (all traffic through proxy)
-git remote add origin https://fogwall.corp.example.com/push/github.corp.example.com/myorg/somerepo
+git remote add origin https://fogwall.corp.example.com/server/github.corp.example.com/myorg/somerepo
 
 # The proxy URL reflects whichever provider hosts the fork —
 # it does not have to be the same provider as upstream.
@@ -684,8 +688,7 @@ The **Repositories** page in the dashboard lists every repo that has seen activi
 **Clone via proxy** button that copies the ready-to-use `git clone` command to your clipboard — useful when setting up a
 new local clone or adding a proxy remote to an existing one.
 
-The Clone button uses the `/proxy/` mode URL. Swap `/proxy/` for `/push/` if you want the store-and-forward path
-instead.
+The Clone button uses the `/proxy/` mode URL. Swap `/proxy/` for `/server/` if you want the server mode path instead.
 
 When the SSH listener is enabled and the provider serves SSH (see
 [CONFIGURATION.md](CONFIGURATION.md#serving-a-provider-over-ssh)), the Clone button also offers an **HTTPS / SSH**

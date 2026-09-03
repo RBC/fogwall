@@ -16,8 +16,8 @@ import org.eclipse.jgit.lib.Constants;
  * clients only send credentials after receiving a 401 challenge - without this, credentials embedded in the remote URL
  * (e.g. {@code http://user:token@proxy/...}) are never transmitted.
  *
- * <p><b>Push is always challenged.</b> Store-and-forward forwards the push upstream using the developer's own
- * credentials, so there is no such thing as an anonymous push through fogwall.
+ * <p><b>Push is always challenged.</b> Server mode forwards the push upstream using the developer's own credentials, so
+ * there is no such thing as an anonymous push through fogwall.
  *
  * <p><b>Fetch is challenged only when the upstream repository actually needs it.</b> The mirror is cloned from upstream
  * on every open, so a fetch of a private repository must be able to carry credentials — but challenging every fetch
@@ -97,8 +97,8 @@ public class BasicAuthChallengeFilter implements Filter {
 
     /**
      * Builds the upstream repository URL from the request path, or null if the path does not name a repository. Mirrors
-     * {@code StoreAndForwardRepositoryResolver}: the same slug validation applies, because an invalid segment must not
-     * reach an outbound URL here either.
+     * {@code ServerRepositoryResolver}: the same slug validation applies, because an invalid segment must not reach an
+     * outbound URL here either.
      */
     private String upstreamUrl(HttpServletRequest req) {
         String pathInfo = req.getPathInfo();

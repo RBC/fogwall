@@ -6,7 +6,7 @@ set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-PUSH_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/push/${GIT_REPO}"
+PUSH_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/server/${GIT_REPO}"
 
 # --- Test functions ---
 
@@ -63,7 +63,7 @@ EOF
 
 # --- Run tests ---
 
-print_header "STORE-AND-FORWARD: SECRET SCANNING FALSE-POSITIVE CHECK" "${PUSH_URL}"
+print_header "SERVER MODE: SECRET SCANNING FALSE-POSITIVE CHECK" "${PUSH_URL}"
 
 # Helper for running success tests that clean up after themselves
 run_test() {

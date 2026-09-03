@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Test fetch via store-and-forward path (/push/).
+# Test fetch via server mode path (/server/).
 #
-# The /push/ path uses JGit's GitServlet with StoreAndForwardRepositoryResolver,
+# The /server/ path uses JGit's GitServlet with ServerRepositoryResolver,
 # which syncs the repo from upstream then serves it locally via UploadPack.
 # There is no filter chain on this path — no whitelist, no content validation.
 set -euo pipefail
@@ -12,14 +12,14 @@ resolve_pat ~/.github-pat
 GIT_REPO=${GIT_REPO:-"github.com/coopernetes/test-repo.git"}
 
 
-PUSH_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/push/${GIT_REPO}"
+PUSH_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/server/${GIT_REPO}"
 REPO_DIR=$(mktemp -d "${TMPDIR:-/tmp}/push-test-fetch-XXXX")
 
 cleanup() { safe_rm_rf "${REPO_DIR}"; }
 trap cleanup EXIT INT TERM
 
 echo "=========================================================="
-echo "  STORE-AND-FORWARD: FETCH TEST"
+echo "  SERVER MODE: FETCH TEST"
 echo "  URL: ${PUSH_URL//${GIT_PASSWORD}/***}"
 echo "=========================================================="
 

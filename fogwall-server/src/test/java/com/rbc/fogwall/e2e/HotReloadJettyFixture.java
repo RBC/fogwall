@@ -9,9 +9,9 @@ import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.PushStoreFactory;
 import com.rbc.fogwall.db.memory.InMemoryUrlRuleRegistry;
 import com.rbc.fogwall.git.LocalRepositoryCache;
-import com.rbc.fogwall.git.StoreAndForwardReceivePackFactory;
-import com.rbc.fogwall.git.StoreAndForwardRepositoryResolver;
-import com.rbc.fogwall.git.StoreAndForwardUploadPackFactory;
+import com.rbc.fogwall.git.ServerReceivePackFactory;
+import com.rbc.fogwall.git.ServerRepositoryResolver;
+import com.rbc.fogwall.git.ServerUploadPackFactory;
 import com.rbc.fogwall.git.UpstreamAuthProbe;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.jetty.reload.LiveConfigLoader;
@@ -38,8 +38,8 @@ import org.eclipse.jgit.http.server.GitServlet;
  * {@link InMemoryUrlRuleRegistry}, enabling tests to verify that config changes take effect mid-test without restarting
  * the server.
  *
- * <p>Both the transparent proxy path ({@code /proxy/...}) and the store-and-forward path ({@code /push/...}) use
- * supplier references into the {@link ConfigHolder}. Updating the holder — via {@link #reloadSection(Path, Section)} —
+ * <p>Both the transparent proxy path ({@code /proxy/...}) and the server mode path ({@code /push/...}) use supplier
+ * references into the {@link ConfigHolder}. Updating the holder — via {@link #reloadSection(Path, Section)} —
  * immediately affects the next request on either path.
  *
  * <p>Uses {@link AutoApprovalGateway} so that allowed pushes go through without requiring a human review step.
@@ -68,7 +68,7 @@ class HotReloadJettyFixture implements AutoCloseable {
         server.addConnector(connector);
 
         pushStore = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
-        var storeForwardCache = new LocalRepositoryCache(Files.createTempDirectory("fogwall-hotreload-sf-"), 0, true);
+        var serverCache = new LocalRepositoryCache(Files.createTempDirectory("fogwall-hotreload-sf-"), 0, true);
         var proxyCache = new LocalRepositoryCache();
 
         var provider = GenericProxyProvider.builder()
@@ -81,11 +81,11 @@ class HotReloadJettyFixture implements AutoCloseable {
         var context = new ServletContextHandler("/", false, false);
         var approvalGateway = new AutoApprovalGateway(pushStore);
 
-        // Store-and-forward GitServlet on /push/...
-        var resolver = new StoreAndForwardRepositoryResolver(storeForwardCache, provider);
+        // Server mode GitServlet on /push/...
+        var resolver = new ServerRepositoryResolver(serverCache, provider);
         var gitServlet = new GitServlet();
         gitServlet.setRepositoryResolver(resolver);
-        gitServlet.setReceivePackFactory(new StoreAndForwardReceivePackFactory(
+        gitServlet.setReceivePackFactory(new ServerReceivePackFactory(
                 provider,
                 configHolder::getCommitConfig,
                 configHolder::getDiffScanConfig,
@@ -100,7 +100,7 @@ class HotReloadJettyFixture implements AutoCloseable {
                 null,
                 Duration.ofSeconds(30),
                 configRegistry));
-        gitServlet.setUploadPackFactory(new StoreAndForwardUploadPackFactory());
+        gitServlet.setUploadPackFactory(new ServerUploadPackFactory());
 
         String pushServletPath = PUSH_PREFIX + provider.servletPath();
         String pushMapping = pushServletPath + "/*";

@@ -14,7 +14,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 
-class StoreAndForwardRepositoryResolverTest {
+class ServerRepositoryResolverTest {
 
     @ParameterizedTest
     @ValueSource(
@@ -30,7 +30,7 @@ class StoreAndForwardRepositoryResolverTest {
         LocalRepositoryCache cache = mock(LocalRepositoryCache.class);
         FogwallProvider provider = mock(FogwallProvider.class);
         HttpServletRequest req = mock(HttpServletRequest.class);
-        var resolver = new StoreAndForwardRepositoryResolver(cache, provider);
+        var resolver = new ServerRepositoryResolver(cache, provider);
 
         assertThrows(RepositoryNotFoundException.class, () -> resolver.open(req, name));
 
@@ -55,7 +55,7 @@ class StoreAndForwardRepositoryResolverTest {
         HttpServletRequest req = mock(HttpServletRequest.class);
         when(req.getHeader("Authorization")).thenReturn(header);
 
-        new StoreAndForwardRepositoryResolver(cache, provider).open(req, "owner/repo.git");
+        new ServerRepositoryResolver(cache, provider).open(req, "owner/repo.git");
 
         ArgumentCaptor<String> principal = ArgumentCaptor.forClass(String.class);
         verify(cache).getOrClone(eq("https://upstream.example/owner/repo.git"), any(), isNull(), principal.capture());
@@ -77,9 +77,9 @@ class StoreAndForwardRepositoryResolverTest {
         when(req.getRequestURL())
                 .thenReturn(new StringBuffer("https://sneaky:token@fogwall.example/push/gh/owner/repo.git"));
 
-        new StoreAndForwardRepositoryResolver(cache, provider).open(req, "owner/repo.git");
+        new ServerRepositoryResolver(cache, provider).open(req, "owner/repo.git");
 
         verify(cache).getOrClone(anyString(), isNull(), isNull(), isNull());
-        verify(req, never()).setAttribute(eq(StoreAndForwardRepositoryResolver.CREDENTIALS_ATTRIBUTE), any());
+        verify(req, never()).setAttribute(eq(ServerRepositoryResolver.CREDENTIALS_ATTRIBUTE), any());
     }
 }

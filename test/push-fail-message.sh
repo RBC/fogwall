@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Test script: commit message validation failures via store-and-forward
-# Uses the push path (/push/...) which runs JGit ReceivePack with sideband
+# Test script: commit message validation failures via server mode
+# Uses the push path (/server/...) which runs JGit ReceivePack with sideband
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-PUSH_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/push/${GIT_REPO}"
+PUSH_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/server/${GIT_REPO}"
 
 # --- Test functions ---
 
@@ -41,7 +41,7 @@ test_token_in_message() {
 
 # --- Run tests ---
 
-print_header "STORE-AND-FORWARD: COMMIT MESSAGE VALIDATION FAILURES" "${PUSH_URL}"
+print_header "SERVER MODE: COMMIT MESSAGE VALIDATION FAILURES" "${PUSH_URL}"
 
 # Helper for running failure tests (sets up branch for each test)
 run_test() {

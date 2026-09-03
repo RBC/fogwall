@@ -155,7 +155,7 @@ jobs:
           export GIT_REPO="gitea:3000/test-owner/test-repo.git"
           export GIT_AUTHOR_NAME="test-user"
           export GIT_EMAIL="testuser@example.com"
-          # Proxy mode only — store-and-forward passes queue for approval and hang
+          # Proxy mode only — server mode passes queue for approval and hang
           bash test/proxy-pass.sh
           bash test/proxy-fail-secrets.sh
 

@@ -74,10 +74,10 @@ export function Providers() {
           >
             <div>
               <span className="text-gray-500 text-xs uppercase tracking-wide dark:text-gray-400">
-                Store &amp; Forward (push)
+                Server (push)
               </span>
               <div className="font-mono text-xs text-gray-700 mt-0.5 dark:text-gray-300">
-                {p.pushPath}/*
+                {p.serverPath}/*
               </div>
             </div>
             <div>

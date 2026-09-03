@@ -23,7 +23,7 @@ import org.apache.sshd.server.session.ServerSession;
 /**
  * Wraps an Apache MINA SSHD server that accepts {@code git push}/{@code git fetch} connections over SSH.
  * {@link SshGitCommandFactory} routes {@code git-receive-pack} to {@link SshGitReceiveCommand} (which runs the same
- * validation hook chain as the HTTP store-and-forward path) and {@code git-upload-pack} to {@link SshGitUploadCommand}.
+ * validation hook chain as the HTTP server mode path) and {@code git-upload-pack} to {@link SshGitUploadCommand}.
  *
  * <p>Upstream authentication uses SSH agent forwarding. Clients must connect with agent forwarding enabled ({@code ssh
  * -A}, or {@code ForwardAgent yes} in {@code ~/.ssh/config}). Fogwall relays the forwarded agent to authenticate with

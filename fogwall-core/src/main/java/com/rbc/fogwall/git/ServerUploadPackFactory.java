@@ -9,9 +9,9 @@ import org.eclipse.jgit.transport.resolver.UploadPackFactory;
 
 /**
  * Factory that creates {@link UploadPack} instances for serving fetches from the local mirror. Fetch freshness is
- * handled by the {@link StoreAndForwardRepositoryResolver} which syncs from upstream before opening.
+ * handled by the {@link ServerRepositoryResolver} which syncs from upstream before opening.
  */
-public class StoreAndForwardUploadPackFactory implements UploadPackFactory<HttpServletRequest> {
+public class ServerUploadPackFactory implements UploadPackFactory<HttpServletRequest> {
 
     @Override
     public UploadPack create(HttpServletRequest req, Repository db)

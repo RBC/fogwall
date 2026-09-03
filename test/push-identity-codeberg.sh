@@ -16,7 +16,7 @@ resolve_pat ~/.codeberg-pat
 CODEBERG_REPO=${CODEBERG_REPO:-"codeberg.org/coopernetes/test-repo-codeberg.git"}
 GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME:-"Thomas Cooper"}
 GIT_EMAIL=${GIT_EMAIL:-"unregistered@example.com"}
-PUSH_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/push/${CODEBERG_REPO}"
+PUSH_URL="http://${GIT_USERNAME}:${GIT_PASSWORD}@localhost:8080/server/${CODEBERG_REPO}"
 TEST_BRANCH="test/identity-codeberg-$(date +%s)"
 REPO_DIR=$(mktemp -d "${TMPDIR:-/tmp}/push-identity-codeberg-XXXX")
 

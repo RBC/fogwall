@@ -15,8 +15,8 @@ import java.util.regex.Pattern;
 import org.junit.jupiter.api.*;
 
 /**
- * End-to-end tests for the SSH store-and-forward path — both {@code git-receive-pack} (push) and
- * {@code git-upload-pack} (fetch/clone).
+ * End-to-end tests for the SSH server mode path — both {@code git-receive-pack} (push) and {@code git-upload-pack}
+ * (fetch/clone).
  *
  * <p>Push-focused tests clone the upstream test repo from Gitea over HTTP, switch the push remote to fogwall's SSH
  * port, and push a unique commit. Fetch-focused tests clone directly through fogwall's SSH endpoint. The test key is
@@ -130,7 +130,7 @@ class SshE2ETest {
         var git = sshGit();
         Path repo = prepareRepo("ssh-happy");
         git.writeAndStage(repo, "ssh-test.txt", "SSH push happy path");
-        git.commit(repo, "test: SSH store-and-forward happy path");
+        git.commit(repo, "test: SSH server mode happy path");
 
         var result = git.pushWithResult(repo);
         assertTrue(result.succeeded(), "Expected push to succeed\n" + result.output());
