@@ -687,6 +687,10 @@ new local clone or adding a proxy remote to an existing one.
 The Clone button uses the `/proxy/` mode URL. Swap `/proxy/` for `/push/` if you want the store-and-forward path
 instead.
 
+When the SSH listener is enabled and the provider serves SSH (see
+[CONFIGURATION.md](CONFIGURATION.md#serving-a-provider-over-ssh)), the Clone button also offers an **HTTPS / SSH**
+toggle — pick **SSH** to copy the `ssh://…` form instead.
+
 > The repository only appears in the list after it has been pushed to or fetched through the proxy at least once. If you
 > do not see it yet, push or fetch first.
 

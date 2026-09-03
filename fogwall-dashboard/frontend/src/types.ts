@@ -89,6 +89,12 @@ export interface Provider {
   host: string
   pushPath: string
   proxyPath: string
+  /** True when the SSH listener is enabled and this provider serves SSH (#442). */
+  sshEnabled: boolean
+  /** TCP port the fogwall SSH listener binds. */
+  sshPort: number
+  /** SSH route path (leading slash), keyed on the provider's host, e.g. `/github.com`. */
+  sshPath: string
   attestationQuestions: AttestationQuestion[]
   requireReviewPermission: boolean
 }
