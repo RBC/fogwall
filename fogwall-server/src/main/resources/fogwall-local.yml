@@ -8,6 +8,9 @@ server:
     enabled: true
     # port: 2222
     # SSH public keys are registered per-user on the profile page.
+    # Local dev: the Gitea test container regenerates its SSH host key on each start, so it can't be pinned
+    # ahead of time — trust it on first connect. Do NOT enable this in production; pin known-hosts instead.
+    trust-on-first-use: true
   # Allow the Vite dev server to make cross-origin requests to the backend.
   # Vite defaults to port 5173; adjust if you've changed it.
   allowed-origins:
@@ -16,28 +19,28 @@ server:
   session-store: jdbc
 
 providers:
+  # A single provider entry serves BOTH HTTP and SSH to the same upstream (#531) — there is no separate
+  # "gitea-ssh" entry, and an OAuth-linked identity applies to both transports automatically. The dashboard
+  # Clone button shows an HTTPS/SSH toggle for any entry with `ssh.enabled: true` (and the listener on above).
   gitea:
     enabled: true
-    uri: http://localhost:3000
-  gitea-ssh:
+    uri: http://localhost:3000          # HTTP/API endpoint
+    ssh:
+      enabled: true
+      uri: ssh://git@localhost:3022     # explicit: the local Gitea container exposes SSH on 3022, not the default 22
+      # api-token: <PAT>                # required when Gitea is configured with REQUIRE_SIGNIN_VIEW=true
+  # github over BOTH HTTPS and SSH from one entry (the SSH endpoint is derived as ssh://git@github.com).
+  # To actually push/fetch through it you need your OWN github.com SSH key loaded in ssh-agent — fogwall relays
+  # your forwarded agent (ssh -A), it never holds credentials itself. Steps:
+  #   1. Add your real public key under dev's ssh-keys below (replace the placeholder test key, or add a second entry).
+  #   2. Add your GitHub username under dev's scm-identities for provider: github (see below).
+  #   3. Add an allow rule + permission for a repo you actually control (see rules/permissions below).
+  #   4. HTTPS: git clone http://localhost:8080/push/github.com/<org>/<repo>.git
+  #      SSH:   git clone ssh://localhost:2222/github.com/<org>/<repo>.git   (agent forwarding required: ssh -A)
+  github:
     enabled: true
-    type: forgejo
-    uri: ssh://git@localhost:3022
-    api-uri: http://localhost:3000  # needed for SCM identity enrichment — SSH URI can't be used for HTTP API calls
-    # api-token: <PAT>  # required when Gitea is configured with REQUIRE_SIGNIN_VIEW=true
-    #                    # no env var override — set via external config file or FOGWALL_CONFIG_PROFILES
-  # Second SSH provider, to exercise multi-provider SSH routing (#447) against a real host — GitHub's SSH key
-  # listing endpoint (GET /users/{login}/keys) is public, so no api-token is needed here.
-  github-ssh:
-    enabled: true
-    type: github
-    uri: ssh://git@github.com
-    # To actually push/fetch through this provider you need your OWN github.com SSH key loaded in ssh-agent
-    # (fogwall relays your forwarded agent — it never holds credentials itself). Steps:
-    #   1. Add your real public key under dev's ssh-keys below (replace the placeholder test key, or add a second entry).
-    #   2. Add your GitHub username under dev's scm-identities for provider: github-ssh (see below).
-    #   3. Add an allow rule + permission for a repo you actually control (see rules/permissions below).
-    #   4. Push via: ssh://localhost:2222/github.com/<your-org>/<your-repo>.git (agent forwarding required: ssh -A)
+    ssh:
+      enabled: true
 # Three users for local development:
 #   admin    — full dashboard access, can approve any push
 #   dev      — a developer account; add your SCM identity here to push through the proxy
@@ -65,17 +68,15 @@ users:
     scm-identities:
       - provider: gitea
         username: test-user
-      - provider: gitea-ssh
-        username: test-user
-      # Uncomment and set to your real GitHub username to test the github-ssh provider above:
-      # - provider: github-ssh
+      # Uncomment and set to your real GitHub username to use the github provider above (HTTPS or SSH):
+      # - provider: github
       #   username: your-gh-handle
     emails:
       - dev@example.com
     ssh-keys:
         - public-key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILZutQPsqDrByIRlmp6JgAK8DSGzf7+SoKBzjCy+av2J fogwall-test@local"
         # Add your own real key here (the one loaded in your ssh-agent, already registered on github.com)
-        # to authenticate against the github-ssh provider — the placeholder key above only works for gitea-ssh
+        # to authenticate against the github provider over SSH — the placeholder key above only works for gitea
         # since it's pre-registered with the local Gitea test container, not with GitHub.
         # - public-key: "ssh-ed25519 AAAA... you@yourhost"
 
@@ -146,6 +147,7 @@ attestations:
 # reviewer: approve-only (can review any push dev submits)
 # admin:    can also approve via the dashboard by virtue of its ADMIN role
 permissions:
+  # One entry covers both transports now — the same `gitea` provider serves HTTP and SSH (#531).
   - username: dev
     provider: gitea
     match:
@@ -153,24 +155,9 @@ permissions:
       value: .*
       type: REGEX
     grant: PUSH
-  - username: dev
-    provider: gitea-ssh
-    match:
-      target: SLUG
-      value: .*
-      type: REGEX
-    grant: PUSH
-  # Add more permissions for your own repos, e.g.:
+  # For github (HTTPS or SSH — same entry), scope this to a repo you actually control:
   # - username: dev
   #   provider: github
-  #   match:
-  #     target: SLUG
-  #     value: /your-org/your-repo
-  #     type: LITERAL
-  #   operation: PUSH
-  # For github-ssh (see providers above), scope this to a repo you actually control:
-  # - username: dev
-  #   provider: github-ssh
   #   match:
   #     target: SLUG
   #     value: /your-org/your-repo
@@ -201,30 +188,12 @@ rules:
         target: SLUG
         value: .*
         type: REGEX
-    - enabled: true
-      order: 101
-      operation: PUSH
-      provider: gitea-ssh
-      match:
-        target: SLUG
-        value: .*
-        type: REGEX
 
-    # Add more allow rules for your own repos, e.g.:
+    # For github (HTTPS or SSH — same entry), scope this to a repo you actually control:
     # - enabled: true
     #   order: 110
     #   operation: BOTH
     #   provider: github
-    #   match:
-    #     target: SLUG
-    #     value: /your-org/your-repo
-    #     type: LITERAL
-
-    # For github-ssh (see providers above), scope this to a repo you actually control:
-    # - enabled: true
-    #   order: 111
-    #   operation: BOTH
-    #   provider: github-ssh
     #   match:
     #     target: SLUG
     #     value: /your-org/your-repo
