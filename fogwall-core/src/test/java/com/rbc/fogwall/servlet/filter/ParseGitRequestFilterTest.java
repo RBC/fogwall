@@ -446,6 +446,52 @@ class ParseGitRequestFilterTest {
         assertEquals(PUSH1_NEW, details.getCommitTo());
     }
 
+    // ---- signed pushes (push-cert blocks are rejected by name, not misdiagnosed) ----
+
+    @Test
+    void parse_signedPush_isRejectedWithAccurateReason() throws Exception {
+        // git push --signed sends a push-cert block instead of a bare ref-update line. It must be
+        // rejected as unsupported, not misreported as a multi-branch push.
+        byte[] body = buildBody(
+                new String[] {
+                    "push-cert\0 report-status agent=git/2.46.0",
+                    "certificate version 0.1",
+                    "pusher A U Thor <author@example.com> 1700000000 +0000",
+                    "pushee https://fogwall.example.com/owner/repo.git",
+                    "nonce 1700000000-abcdef",
+                    "",
+                    PUSH1_OLD + " " + PUSH1_NEW + " " + PUSH1_REF,
+                    "-----BEGIN PGP SIGNATURE-----",
+                    "-----END PGP SIGNATURE-----",
+                    "push-cert-end"
+                },
+                "PACK".getBytes());
+
+        RequestBodyWrapper wrapper = wrapBody(body, "/owner/repo.git/git-receive-pack");
+        GitRequestDetails details = makeFilter().parse(wrapper);
+
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+        assertTrue(details.getReason().contains("--signed"), "Reason must name signed pushes, not multi-branch");
+        assertNull(details.getCommitFrom(), "Nothing from the certificate may enter the push record");
+        assertNull(details.getCommitTo(), "Nothing from the certificate may enter the push record");
+    }
+
+    @Test
+    void parse_branchNamedPushCert_isNotMistakenForSignedPush() throws Exception {
+        // A ref update line always starts with a 40-hex object id, so a branch that happens to be
+        // called push-cert must still parse as a normal push.
+        byte[] existingBody = loadResource("push-sample-01-body.bin");
+        byte[] packData = extractPackData(existingBody);
+        byte[] body = buildBody(
+                new String[] {PUSH1_OLD + " " + PUSH1_NEW + " refs/heads/push-cert\0 report-status"}, packData);
+
+        RequestBodyWrapper wrapper = wrapBody(body, "/owner/repo.git/git-receive-pack");
+        GitRequestDetails details = makeFilter().parse(wrapper);
+
+        assertNotEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+        assertEquals("refs/heads/push-cert", details.getBranch());
+    }
+
     // ---- invalid repository path segments (rejected before any body parsing) ----
 
     @Test
