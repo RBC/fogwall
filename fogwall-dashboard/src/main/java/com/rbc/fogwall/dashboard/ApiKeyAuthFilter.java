@@ -5,7 +5,9 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -25,19 +27,21 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
     static final String HEADER = "X-Api-Key";
 
-    private final String expectedKey;
+    private final byte[] expectedKeyDigest;
 
     ApiKeyAuthFilter(String expectedKey) {
-        this.expectedKey = expectedKey;
+        this.expectedKeyDigest = expectedKey == null ? null : sha256(expectedKey);
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        if (expectedKey != null) {
+        if (expectedKeyDigest != null) {
             String provided = request.getHeader(HEADER);
+            // Compare digests rather than the raw values: MessageDigest.isEqual returns immediately on
+            // unequal lengths, so comparing raw keys would let response timing reveal the key's length.
             if (provided != null
-                    && MessageDigest.isEqual(expectedKey.getBytes(), provided.getBytes())
+                    && MessageDigest.isEqual(expectedKeyDigest, sha256(provided))
                     && SecurityContextHolder.getContext().getAuthentication() == null) {
                 var auth = new UsernamePasswordAuthenticationToken(
                         "api-key",
@@ -47,5 +51,13 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             }
         }
         chain.doFilter(request, response);
+    }
+
+    private static byte[] sha256(String value) {
+        try {
+            return MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is required by the JCA spec but is unavailable", e);
+        }
     }
 }

@@ -17,12 +17,14 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Set;
 import java.util.function.Predicate;
 import org.eclipse.jgit.http.server.GitSmartHttpTools;
 import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.transport.PacketLineOut;
 import org.eclipse.jgit.transport.SideBandOutputStream;
+import org.slf4j.LoggerFactory;
 
 /**
  * A {@link Filter} with additional methods that are designed to be registered with a {@link FogwallServlet} for the
@@ -296,12 +298,20 @@ public interface FogwallFilter extends Filter {
             return HttpOperation.INFO;
         } else {
             var headers = new HashMap<String, String>();
-            request.getHeaderNames().asIterator().forEachRemaining(name -> headers.put(name, request.getHeader(name)));
-            if (headers.containsKey("Authorization")) {
-                headers.put("Authorization", "REDACTED");
-            }
-            System.out.println("Unknown git operation. " + request.getRequestURI() + " " + request.getPathInfo() + " "
-                    + request.getQueryString() + " " + headers);
+            request.getHeaderNames().asIterator().forEachRemaining(name -> {
+                // Header names keep the client's casing, so match sensitive ones case-insensitively.
+                String lower = name.toLowerCase(Locale.ROOT);
+                boolean sensitive =
+                        lower.equals("authorization") || lower.equals("proxy-authorization") || lower.equals("cookie");
+                headers.put(name, sensitive ? "REDACTED" : request.getHeader(name));
+            });
+            LoggerFactory.getLogger(FogwallFilter.class)
+                    .warn(
+                            "Unknown git operation. uri={} pathInfo={} query={} headers={}",
+                            request.getRequestURI(),
+                            request.getPathInfo(),
+                            request.getQueryString(),
+                            headers);
             throw new IllegalArgumentException("Unknown git operation");
         }
     }
