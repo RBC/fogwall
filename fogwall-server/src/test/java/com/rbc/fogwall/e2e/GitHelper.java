@@ -42,6 +42,20 @@ class GitHelper {
     }
 
     /**
+     * Attempts to clone {@code remoteUrl} and returns the result (exit code + combined output) instead of throwing on
+     * failure — for asserting that a clone/fetch is refused (e.g. the #478 fetch toggle).
+     */
+    PushResult cloneWithResult(String remoteUrl, String dirName) throws IOException, InterruptedException {
+        Path dest = workDir.resolve(dirName);
+        ProcessBuilder pb = buildGitCommand(workDir, "clone", remoteUrl, dest.toString());
+        pb.redirectErrorStream(true);
+        Process p = pb.start();
+        String output = new String(p.getInputStream().readAllBytes());
+        int exitCode = p.waitFor();
+        return new PushResult(exitCode, output);
+    }
+
+    /**
      * Sets the local git author identity for subsequent commits made in {@code repoDir}. Git includes credentials in
      * the remote URL, so the author is the only identity that matters for validation purposes.
      */

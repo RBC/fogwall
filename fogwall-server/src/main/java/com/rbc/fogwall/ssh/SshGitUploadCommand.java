@@ -1,6 +1,7 @@
 package com.rbc.fogwall.ssh;
 
 import com.rbc.fogwall.db.UrlRuleRegistry;
+import com.rbc.fogwall.git.DisabledFetchUploadPackFactory;
 import com.rbc.fogwall.git.HttpOperation;
 import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.servlet.filter.UrlRuleEvaluator;
@@ -121,6 +122,19 @@ public class SshGitUploadCommand implements Command {
             String owner = route.owner();
             String repo = route.repo();
             String upstreamUrl = route.upstreamUrl();
+
+            // Fetch toggle (#478): honour the same serve-fetch switch the HTTP transport does, so a switch one
+            // transport honours and the other ignores can't happen. Refused before URL-rule evaluation — when fetch
+            // serving is off entirely there is nothing to evaluate. Same message as DisabledFetchUploadPackFactory.
+            if (!route.provider().isServeFetch()) {
+                log.debug(
+                        "SSH fetch refused for {}: fetch serving disabled for provider '{}'",
+                        repoPath,
+                        route.provider().getName());
+                writeError(DisabledFetchUploadPackFactory.MESSAGE);
+                exitCode = 128;
+                return;
+            }
 
             // Mirrors UrlRuleAggregateFilter's fetch-side gate — the only enforcement point for URL allow/deny
             // rules on this transport, since SSH has no servlet filter chain.

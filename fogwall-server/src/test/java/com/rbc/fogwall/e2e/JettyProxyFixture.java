@@ -15,6 +15,7 @@ import com.rbc.fogwall.db.memory.InMemoryUrlRuleRegistry;
 import com.rbc.fogwall.db.model.AccessRule;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
+import com.rbc.fogwall.git.DisabledFetchUploadPackFactory;
 import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.git.ServerReceivePackFactory;
 import com.rbc.fogwall.git.ServerRepositoryResolver;
@@ -111,7 +112,24 @@ class JettyProxyFixture implements AutoCloseable {
                 null,
                 null,
                 CommitConfig.CommitAttributionPolicyConfig.builder().build(),
-                configRules);
+                configRules,
+                true);
+    }
+
+    /**
+     * Create a fixture with the server mode clone/fetch toggle set (#478). {@code serveFetch=false} makes server mode
+     * push-only: {@code git-upload-pack} is not served and clone/fetch is refused, while push (receive-pack) still
+     * works.
+     */
+    JettyProxyFixture(URI giteaUri, boolean serveFetch) throws Exception {
+        this(
+                giteaUri,
+                UiApprovalGateway::new,
+                null,
+                null,
+                CommitConfig.CommitAttributionPolicyConfig.builder().build(),
+                List.of(),
+                serveFetch);
     }
 
     /**
@@ -124,7 +142,14 @@ class JettyProxyFixture implements AutoCloseable {
             RepoPermissionService permissionService,
             CommitConfig.CommitAttributionPolicyConfig attributionPolicyConfig)
             throws Exception {
-        this(giteaUri, proxyGatewayFactory, identityResolver, permissionService, attributionPolicyConfig, List.of());
+        this(
+                giteaUri,
+                proxyGatewayFactory,
+                identityResolver,
+                permissionService,
+                attributionPolicyConfig,
+                List.of(),
+                true);
     }
 
     /** Full constructor — all options. */
@@ -134,7 +159,8 @@ class JettyProxyFixture implements AutoCloseable {
             PushIdentityResolver identityResolver,
             RepoPermissionService permissionService,
             CommitConfig.CommitAttributionPolicyConfig attributionPolicyConfig,
-            List<AccessRule> configRules)
+            List<AccessRule> configRules,
+            boolean serveFetch)
             throws Exception {
         // Same thread model as production: bounded virtual-thread dispatch on top of the platform pool.
         var threadPool = new QueuedThreadPool();
@@ -151,6 +177,7 @@ class JettyProxyFixture implements AutoCloseable {
 
         var provider =
                 GenericProxyProvider.builder().name("gitea-e2e").uri(giteaUri).build();
+        provider.setServeFetch(serveFetch); // #478 fetch toggle
         this.providerId = provider.getProviderId();
         this.giteaHostPort = giteaUri.getHost() + ":" + giteaUri.getPort();
 
@@ -192,7 +219,9 @@ class JettyProxyFixture implements AutoCloseable {
                 null,
                 Duration.ofSeconds(30),
                 urlRuleRegistry));
-        gitServlet.setUploadPackFactory(new ServerUploadPackFactory());
+        // Mirrors FogwallServletRegistrar.registerGitServlet: serve fetches, or mount the refusing factory (#478).
+        gitServlet.setUploadPackFactory(
+                provider.isServeFetch() ? new ServerUploadPackFactory() : new DisabledFetchUploadPackFactory());
 
         String pushServletPath = PUSH_PREFIX + provider.servletPath();
         String pushMapping = pushServletPath + "/*";

@@ -135,6 +135,16 @@ server:
   # long steps (secret scanning, approval polling). Set to 0 to disable.
   heartbeat-interval-seconds: 10
 
+  # Whether server mode serves clone/fetch from its local mirror. Default true —
+  # a developer whose remote is the fogwall URL expects `git pull` to work against it.
+  # Applies to both server mode transports (HTTP and SSH). Set to false to make fogwall
+  # a push-only gateway that never serves a local mirror; fetches are then refused with
+  # a clear git-side error ("fetches are not served through this gateway"), not a 404
+  # that reads as a missing repository. Push (receive-pack) is unaffected either way.
+  # Transparent proxy mode is unaffected — it forwards to upstream, serving no local
+  # mirror. Override per provider with providers.<name>.serve-fetch.
+  serve-fetch: true
+
   # Maximum number of requests handled concurrently on virtual threads. Requests over
   # the limit wait for a slot. Each in-flight push holds its buffered pack data in
   # memory until the request completes, so size this to heap capacity and typical pack
@@ -824,16 +834,17 @@ providers:
 
 ### Provider properties
 
-| Property                   | Type    | Default                | Description                                                                                                                                                                                                                   |
-| -------------------------- | ------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `enabled`                  | boolean | `true`                 | Whether the provider is active                                                                                                                                                                                                |
-| `servlet-path`             | string  | `""`                   | Additional URL prefix for this provider                                                                                                                                                                                       |
-| `uri`                      | string  | _(built-in default)_   | Upstream base URI. Required for custom-named providers; omit for built-ins.                                                                                                                                                   |
-| `type`                     | string  | _(from name)_          | Provider implementation: `github`, `gitlab`, `bitbucket`, `codeberg`, `forgejo`, `gitea`. Required for any name that is not one of the five reserved names.                                                                   |
-| `api-uri`                  | string  | _(derived from `uri`)_ | HTTP base URI for provider REST API calls (identity resolution, SSH key lookup). Only needed when the HTTP API port can't be derived from `uri` — e.g. a self-hosted instance where the HTTP API runs on a non-standard port. |
-| `api-token`                | string  | _(none)_               | PAT used when the provider's SSH key listing API requires authentication (Forgejo/GitLab with `REQUIRE_SIGNIN_VIEW=true`). GitHub's equivalent endpoint is public and needs no token.                                         |
-| `ssh`                      | block   | _(disabled)_           | SSH transport for this provider — the same entry serves both HTTP and SSH. See [Serving a provider over SSH](#serving-a-provider-over-ssh).                                                                                   |
-| `blocked-info-refs-status` | int     | `403`                  | HTTP status returned when a blocked `/info/refs` discovery request is denied. `403` is unambiguous; `404` obscures whether the repo exists (security by obscurity).                                                           |
+| Property                   | Type    | Default                | Description                                                                                                                                                                                                                           |
+| -------------------------- | ------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`                  | boolean | `true`                 | Whether the provider is active                                                                                                                                                                                                        |
+| `servlet-path`             | string  | `""`                   | Additional URL prefix for this provider                                                                                                                                                                                               |
+| `uri`                      | string  | _(built-in default)_   | Upstream base URI. Required for custom-named providers; omit for built-ins.                                                                                                                                                           |
+| `type`                     | string  | _(from name)_          | Provider implementation: `github`, `gitlab`, `bitbucket`, `codeberg`, `forgejo`, `gitea`. Required for any name that is not one of the five reserved names.                                                                           |
+| `api-uri`                  | string  | _(derived from `uri`)_ | HTTP base URI for provider REST API calls (identity resolution, SSH key lookup). Only needed when the HTTP API port can't be derived from `uri` — e.g. a self-hosted instance where the HTTP API runs on a non-standard port.         |
+| `api-token`                | string  | _(none)_               | PAT used when the provider's SSH key listing API requires authentication (Forgejo/GitLab with `REQUIRE_SIGNIN_VIEW=true`). GitHub's equivalent endpoint is public and needs no token.                                                 |
+| `ssh`                      | block   | _(disabled)_           | SSH transport for this provider — the same entry serves both HTTP and SSH. See [Serving a provider over SSH](#serving-a-provider-over-ssh).                                                                                           |
+| `blocked-info-refs-status` | int     | `403`                  | HTTP status returned when a blocked `/info/refs` discovery request is denied. `403` is unambiguous; `404` obscures whether the repo exists (security by obscurity).                                                                   |
+| `serve-fetch`              | boolean | _(inherits global)_    | Per-provider override for whether server mode serves clone/fetch from the local mirror (both transports). Omit to inherit the global [`server.serve-fetch`](#server-settings); set `true`/`false` to override for this provider only. |
 
 The five reserved names (`github`, `gitlab`, `bitbucket`, `codeberg`, `gitea`) carry a built-in default URI and provider
 type. Any other name is opaque — the name is never parsed for type hints — so `type` and `uri` must both be set. The

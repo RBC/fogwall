@@ -51,11 +51,16 @@ class ServerModeE2ETest {
      * passes.
      */
     private String repoUrl() {
+        return repoUrlFor(proxy);
+    }
+
+    /** Server mode ({@code /push/…}) repo URL with admin credentials embedded, for an arbitrary fixture. */
+    private String repoUrlFor(JettyProxyFixture fixture) {
         String creds = URLEncoder.encode(GiteaContainer.ADMIN_USER, StandardCharsets.UTF_8)
                 + ":"
                 + URLEncoder.encode(GiteaContainer.ADMIN_PASSWORD, StandardCharsets.UTF_8);
-        return "http://" + creds + "@localhost:" + proxy.getPort()
-                + "/push/" + proxy.getGiteaHostPort() + "/"
+        return "http://" + creds + "@localhost:" + fixture.getPort()
+                + "/push/" + fixture.getGiteaHostPort() + "/"
                 + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO + ".git";
     }
 
@@ -101,6 +106,44 @@ class ServerModeE2ETest {
         git.commit(repo, "refactor: clean up internal logic");
 
         assertTrue(git.tryPush(repo), "multi-commit push should succeed");
+    }
+
+    // ---- fetch toggle (#478) ----
+
+    @Test
+    @Order(3)
+    void fetchEnabled_cloneSucceeds() throws Exception {
+        // The shared fixture runs with serve-fetch on (the default): server mode serves clone/fetch.
+        GitHelper git = new GitHelper(tempDir);
+        var result = git.cloneWithResult(repoUrl(), "sf-fetch-enabled");
+        assertTrue(
+                result.succeeded(),
+                "clone should succeed when serve-fetch is enabled (default). Output:\n" + result.output());
+    }
+
+    @Test
+    @Order(4)
+    void fetchDisabled_cloneRefusedButPushStillWorks() throws Exception {
+        // A separate fixture against the same Gitea with serve-fetch turned off — server mode is push-only.
+        try (JettyProxyFixture noFetch = new JettyProxyFixture(gitea.getBaseUri(), false)) {
+            GitHelper git = new GitHelper(tempDir);
+
+            // Clone/fetch is refused with a clear git-side message, not a 404 that reads as a missing repo.
+            var cloneResult = git.cloneWithResult(repoUrlFor(noFetch), "sf-nofetch-clone");
+            assertFalse(cloneResult.succeeded(), "clone should be refused when serve-fetch is off");
+            assertTrue(
+                    cloneResult.output().contains("fetches are not served through this gateway"),
+                    "refusal should carry the clear gateway message. Output:\n" + cloneResult.output());
+
+            // Push (receive-pack) is unaffected: get a working copy via the fetch-enabled shared proxy, then
+            // push it to the fetch-disabled gateway.
+            Path repo = git.clone(repoUrl(), "sf-nofetch-push");
+            git.setAuthor(repo, GiteaContainer.VALID_AUTHOR_NAME, GiteaContainer.VALID_AUTHOR_EMAIL);
+            git.setRemoteUrl(repo, "origin", repoUrlFor(noFetch));
+            git.writeAndStage(repo, "nofetch.txt", "push works with fetch disabled - " + Instant.now());
+            git.commit(repo, "feat: push still works when fetch serving is disabled");
+            assertTrue(git.tryPush(repo), "push should succeed even when serve-fetch is off (receive-pack unaffected)");
+        }
     }
 
     // ---- failing tests (mirrors test-push-fail.sh) ----

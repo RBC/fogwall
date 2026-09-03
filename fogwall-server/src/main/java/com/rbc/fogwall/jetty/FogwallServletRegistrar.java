@@ -14,6 +14,7 @@ import com.rbc.fogwall.config.SecretScanConfig;
 import com.rbc.fogwall.db.FetchStore;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.UrlRuleRegistry;
+import com.rbc.fogwall.git.DisabledFetchUploadPackFactory;
 import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.git.ServerReceivePackFactory;
 import com.rbc.fogwall.git.ServerRepositoryResolver;
@@ -256,7 +257,12 @@ public final class FogwallServletRegistrar {
             var gitServlet = new GitServlet();
             gitServlet.setRepositoryResolver(resolver);
             gitServlet.setReceivePackFactory(factory);
-            gitServlet.setUploadPackFactory(new ServerUploadPackFactory());
+            // Fetch toggle (#478): serve clone/fetch from the local mirror, or mount a factory that refuses
+            // git-upload-pack with a clear git-side error. Push (receive-pack) is unaffected either way. Note the
+            // refusing factory must be mounted explicitly — JGit's default upload-pack factory serves, so omitting
+            // this would leave fetches enabled.
+            gitServlet.setUploadPackFactory(
+                    provider.isServeFetch() ? new ServerUploadPackFactory() : new DisabledFetchUploadPackFactory());
             return gitServlet;
         };
 
