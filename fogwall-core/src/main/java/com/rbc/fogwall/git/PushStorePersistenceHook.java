@@ -18,27 +18,28 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.transport.*;
 
 /**
- * Combined pre-receive and post-receive hook that persists push records to the {@link PushStore} during
- * store-and-forward processing.
+ * Persists the single lifecycle record for a store-and-forward push to the {@link PushStore}, keyed by the push id —
+ * the correlation identifier minted in {@link StoreAndForwardReceivePackFactory} and reused for the on-disk quarantine
+ * directory.
  *
- * <p>The pre-receive hook creates the initial record with status RECEIVED. It should be placed at the beginning of the
- * hook chain. It also stores the push ID in the ReceivePack so downstream hooks and the post-receive hook can update
- * it.
+ * <p>One record per submission, transitioned in place: the same model transparent proxy uses, and the one the
+ * git-proxy-spec push-lifecycle state machine requires (exactly one canonical state per submission; audit history
+ * derived from evidence embedded in the record, not from separate per-transition rows).
  *
- * <p>The post-receive hook updates the record based on the final command results (FORWARDED, PENDING, or ERROR).
+ * <ul>
+ *   <li>{@link #validationResultHook} creates the record at its first decision — REJECTED (hard policy violation) or
+ *       PENDING (awaiting review) — and publishes its id as the validation record id the approval gate acts on.
+ *   <li>{@link #postReceiveHook} transitions that same record to FORWARDED or ERROR once forwarding completes.
+ * </ul>
  */
 @Slf4j
 public class PushStorePersistenceHook {
-
-    /** ReceivePack message key used to pass the push ID between pre/post hooks. */
-    private static final String PUSH_ID_KEY = "fogwall.pushId";
 
     /**
      * Maps S&F hook names to canonical step orders matching the equivalent proxy filter. Used so REJECTED push records
@@ -77,38 +78,19 @@ public class PushStorePersistenceHook {
         this.autoApproval = autoApproval;
     }
 
-    /** Returns a {@link PreReceiveHook} that creates the initial push record. Should be the first hook in the chain. */
-    public PreReceiveHook preReceiveHook() {
-        return (ReceivePack rp, Collection<ReceiveCommand> commands) -> {
-            // The id is minted before the push is received so the quarantine directory can be named after it;
-            // only fall back to generating one here for callers that did not pre-assign it.
-            String pushId = pushContext.getPushId() != null
-                    ? pushContext.getPushId()
-                    : UUID.randomUUID().toString();
-            pushContext.setPushId(pushId);
-
-            try {
-                PushRecord record = buildInitialRecord(pushId, rp, commands);
-                pushStore.save(record);
-                log.info("Created push record: id={}, repo={}", pushId, record.getUrl());
-            } catch (Exception e) {
-                log.error("Failed to create push record", e);
-            }
-        };
-    }
-
     /**
-     * Returns a {@link PreReceiveHook} that captures the validation results after all validation hooks have run. Should
-     * be placed after all validation hooks but before the forwarding post-receive hook.
+     * Returns a {@link PreReceiveHook} that persists the validation outcome as the push's single lifecycle record. Runs
+     * after all validation hooks and before the approval gate.
      *
-     * <p>Creates a new event-log record for the validation outcome, linked to the original push via the same upstream
-     * URL and commit range.
+     * <p>The record is keyed by the push id and created here (not at receive time), matching transparent proxy: a hard
+     * policy violation is saved as REJECTED, a clean push as PENDING. The saved id is published as the validation
+     * record id so {@link ApprovalPreReceiveHook} — and, after it, {@link #postReceiveHook} — act on this same row.
      */
     public PreReceiveHook validationResultHook(ValidationContext validationContext) {
         return (ReceivePack rp, Collection<ReceiveCommand> commands) -> {
             String pushId = pushContext != null ? pushContext.getPushId() : null;
             if (pushId == null) {
-                // The initial RECEIVED record was never created, so there is nothing to update and
+                // Without a push id there is nothing to key the lifecycle record on, so no record is created and
                 // validationRecordId stays unset. ApprovalPreReceiveHook rejects the push on that basis —
                 // see its fail-closed guard — so this is logged loudly rather than passed over in silence.
                 log.error("No pushId in push context - validation result cannot be recorded; approval gate will"
@@ -117,141 +99,103 @@ public class PushStorePersistenceHook {
             }
 
             // Read resolvedUser and scmUsername from pushContext — both are set by CheckUserPushPermissionHook
-            // (order 150) after preReceiveHook() ran, so they were not available when the RECEIVED record
-            // was written. validationResultHook fires after all validation hooks complete.
+            // (order 150) during the validation hook chain, so they are available here: validationResultHook fires
+            // after all validation hooks complete.
             String resolvedUserLate = pushContext.getResolvedUser();
             String scmUsernameLate = pushContext.getScmUsername();
 
             try {
-                pushStore.findById(pushId).ifPresent(initial -> {
-                    PushRecord record = copyBase(initial);
-                    if (resolvedUserLate != null) {
-                        record.setResolvedUser(resolvedUserLate);
-                    }
-                    if (scmUsernameLate != null) {
-                        record.setScmUsername(scmUsernameLate);
-                    }
+                // Build the record fresh, keyed by the push id — this is the single insert for the submission
+                // (there is no earlier RECEIVED row). buildInitialRecord defaults the status to RECEIVED; the
+                // branches below override it to the actual decision (REJECTED or PENDING) before saving.
+                PushRecord record = buildInitialRecord(pushId, rp, commands);
+                if (resolvedUserLate != null) {
+                    record.setResolvedUser(resolvedUserLate);
+                }
+                if (scmUsernameLate != null) {
+                    record.setScmUsername(scmUsernameLate);
+                }
 
-                    // If PriorPushEnrichmentHook detected a re-push with cached-but-not-forwarded commits,
-                    // rebuild the commit list using the effective upstream base so the PENDING/REJECTED
-                    // record shows the complete commit history relative to upstream, not just the local delta.
-                    enrichCommitsIfNeeded(record, rp, commands);
+                // If PriorPushEnrichmentHook detected a re-push with cached-but-not-forwarded commits,
+                // rebuild the commit list using the effective upstream base so the PENDING/REJECTED
+                // record shows the complete commit history relative to upstream, not just the local delta.
+                enrichCommitsIfNeeded(record, rp, commands);
 
-                    // Collect all steps: validation issues + push context (diffs, etc.)
-                    List<PushStep> steps = new ArrayList<>();
-                    String recordId = record.getId();
+                // Collect all steps: validation issues + push context (diffs, etc.)
+                List<PushStep> steps = new ArrayList<>();
+                String recordId = record.getId();
 
-                    // Validation issues → reject outright (no human review queue)
-                    if (validationContext.hasIssues()) {
-                        // Build merged step list: passing steps first, then failing steps
-                        List<PushStep> allSteps = new ArrayList<>();
-                        if (pushContext != null) {
-                            for (PushStep step : pushContext.getSteps()) {
-                                step.setPushId(recordId);
-                                allSteps.add(step);
-                            }
-                        }
-                        int fallbackOrder = 0;
-                        for (var issue : validationContext.getIssues()) {
-                            int stepOrder = HOOK_STEP_ORDER.getOrDefault(issue.hookName(), fallbackOrder);
-                            allSteps.add(PushStep.builder()
-                                    .pushId(recordId)
-                                    .stepName(issue.hookName())
-                                    .stepOrder(stepOrder)
-                                    .status(StepStatus.FAIL)
-                                    .content(GitClientUtils.stripColors(issue.detail()))
-                                    .errorMessage(issue.summary())
-                                    .build());
-                            fallbackOrder++;
-                        }
-
-                        allSteps.sort(Comparator.comparingInt(PushStep::getStepOrder));
-
-                        record.setStatus(PushStatus.REJECTED);
-                        record.setAutoRejected(true);
-                        record.setBlockedMessage(validationContext.getIssues().size() + " validation issue(s) found");
-                        record.setSteps(allSteps);
-                        if (pushContext != null) {
-                            SecretRedactor.redact(record, pushContext.getSecretsToRedact());
-                        }
-                        pushStore.save(record);
-                        if (pushContext != null) pushContext.setValidationRecordId(record.getId());
-                        log.debug(
-                                "Saved validation result record: id={}, status=REJECTED (auto-rejected)",
-                                record.getId());
-
-                        // Emit validation summary (passing steps + failing steps, sorted by order)
-                        String summary = GitClientUtils.buildValidationSummary(allSteps);
-                        if (!summary.isBlank()) {
-                            rp.sendMessage(summary);
-                        }
-                        // Compact rejection block. Policy violations and internal check errors are surfaced
-                        // separately so a developer can tell "my commit broke a rule" apart from "a control
-                        // could not run and an operator needs to look".
-                        var allIssues = validationContext.getIssues();
-                        var violations =
-                                allIssues.stream().filter(i -> !i.error()).toList();
-                        var errors = allIssues.stream()
-                                .filter(ValidationContext.ValidationIssue::error)
-                                .toList();
-
-                        rp.sendMessage("────────────────────────────────────────");
-                        if (!violations.isEmpty()) {
-                            rp.sendMessage(color(
-                                    RED,
-                                    "" + sym(NO_ENTRY) + "  Push Blocked - " + violations.size()
-                                            + " validation issue(s)"));
-                            for (var issue : violations) {
-                                rp.sendMessage("  " + issue.detail());
-                            }
-                        }
-                        if (!errors.isEmpty()) {
-                            rp.sendMessage(color(
-                                    YELLOW,
-                                    "" + sym(WARNING) + "  Push Blocked - " + errors.size()
-                                            + " validation check(s) could not complete (operator attention needed)"));
-                            for (var issue : errors) {
-                                rp.sendMessage("  " + issue.detail());
-                            }
-                        }
-                        rp.sendMessage("────────────────────────────────────────");
-
-                        if (serviceUrl != null && !autoApproval) {
-                            rp.sendMessage(color(
-                                    CYAN,
-                                    "" + sym(LINK) + "  View push record: " + serviceUrl + "/dashboard/push/"
-                                            + record.getId()));
-                        }
-
-                        // Reject all commands immediately - no approval wait
-                        String rejectMsg = validationContext.getIssues().size() + " validation issue(s) - see above";
-                        for (ReceiveCommand cmd : commands) {
-                            if (cmd.getResult() == ReceiveCommand.Result.NOT_ATTEMPTED) {
-                                cmd.setResult(ReceiveCommand.Result.REJECTED_OTHER_REASON, rejectMsg);
-                            }
-                        }
-                        return;
-                    }
-
-                    // No validation issues → PENDING human review
-                    record.setStatus(PushStatus.PENDING);
-
-                    // Steps from push context (diffs, scans, etc.)
+                // Validation issues → reject outright (no human review queue)
+                if (validationContext.hasIssues()) {
+                    // Build merged step list: passing steps first, then failing steps
+                    List<PushStep> allSteps = new ArrayList<>();
                     if (pushContext != null) {
                         for (PushStep step : pushContext.getSteps()) {
                             step.setPushId(recordId);
-                            steps.add(step);
+                            allSteps.add(step);
                         }
                     }
-                    steps.sort(Comparator.comparingInt(PushStep::getStepOrder));
-                    record.setSteps(steps);
+                    int fallbackOrder = 0;
+                    for (var issue : validationContext.getIssues()) {
+                        int stepOrder = HOOK_STEP_ORDER.getOrDefault(issue.hookName(), fallbackOrder);
+                        allSteps.add(PushStep.builder()
+                                .pushId(recordId)
+                                .stepName(issue.hookName())
+                                .stepOrder(stepOrder)
+                                .status(StepStatus.FAIL)
+                                .content(GitClientUtils.stripColors(issue.detail()))
+                                .errorMessage(issue.summary())
+                                .build());
+                        fallbackOrder++;
+                    }
 
-                    // Show validation summary before the approval wait message
-                    String summary = GitClientUtils.buildValidationSummary(steps);
+                    allSteps.sort(Comparator.comparingInt(PushStep::getStepOrder));
+
+                    record.setStatus(PushStatus.REJECTED);
+                    record.setAutoRejected(true);
+                    record.setBlockedMessage(validationContext.getIssues().size() + " validation issue(s) found");
+                    record.setSteps(allSteps);
+                    if (pushContext != null) {
+                        SecretRedactor.redact(record, pushContext.getSecretsToRedact());
+                    }
+                    pushStore.save(record);
+                    if (pushContext != null) pushContext.setValidationRecordId(record.getId());
+                    log.debug("Saved validation result record: id={}, status=REJECTED (auto-rejected)", record.getId());
+
+                    // Emit validation summary (passing steps + failing steps, sorted by order)
+                    String summary = GitClientUtils.buildValidationSummary(allSteps);
                     if (!summary.isBlank()) {
                         rp.sendMessage(summary);
                     }
+                    // Compact rejection block. Policy violations and internal check errors are surfaced
+                    // separately so a developer can tell "my commit broke a rule" apart from "a control
+                    // could not run and an operator needs to look".
+                    var allIssues = validationContext.getIssues();
+                    var violations = allIssues.stream().filter(i -> !i.error()).toList();
+                    var errors = allIssues.stream()
+                            .filter(ValidationContext.ValidationIssue::error)
+                            .toList();
+
                     rp.sendMessage("────────────────────────────────────────");
+                    if (!violations.isEmpty()) {
+                        rp.sendMessage(color(
+                                RED,
+                                "" + sym(NO_ENTRY) + "  Push Blocked - " + violations.size() + " validation issue(s)"));
+                        for (var issue : violations) {
+                            rp.sendMessage("  " + issue.detail());
+                        }
+                    }
+                    if (!errors.isEmpty()) {
+                        rp.sendMessage(color(
+                                YELLOW,
+                                "" + sym(WARNING) + "  Push Blocked - " + errors.size()
+                                        + " validation check(s) could not complete (operator attention needed)"));
+                        for (var issue : errors) {
+                            rp.sendMessage("  " + issue.detail());
+                        }
+                    }
+                    rp.sendMessage("────────────────────────────────────────");
+
                     if (serviceUrl != null && !autoApproval) {
                         rp.sendMessage(color(
                                 CYAN,
@@ -259,11 +203,45 @@ public class PushStorePersistenceHook {
                                         + record.getId()));
                     }
 
-                    pushStore.save(record);
-                    if (pushContext != null) pushContext.setValidationRecordId(record.getId());
-                    log.debug(
-                            "Saved validation result record: id={}, status=PENDING (awaiting review)", record.getId());
-                });
+                    // Reject all commands immediately - no approval wait
+                    String rejectMsg = validationContext.getIssues().size() + " validation issue(s) - see above";
+                    for (ReceiveCommand cmd : commands) {
+                        if (cmd.getResult() == ReceiveCommand.Result.NOT_ATTEMPTED) {
+                            cmd.setResult(ReceiveCommand.Result.REJECTED_OTHER_REASON, rejectMsg);
+                        }
+                    }
+                    return;
+                }
+
+                // No validation issues → PENDING human review
+                record.setStatus(PushStatus.PENDING);
+
+                // Steps from push context (diffs, scans, etc.)
+                if (pushContext != null) {
+                    for (PushStep step : pushContext.getSteps()) {
+                        step.setPushId(recordId);
+                        steps.add(step);
+                    }
+                }
+                steps.sort(Comparator.comparingInt(PushStep::getStepOrder));
+                record.setSteps(steps);
+
+                // Show validation summary before the approval wait message
+                String summary = GitClientUtils.buildValidationSummary(steps);
+                if (!summary.isBlank()) {
+                    rp.sendMessage(summary);
+                }
+                rp.sendMessage("────────────────────────────────────────");
+                if (serviceUrl != null && !autoApproval) {
+                    rp.sendMessage(color(
+                            CYAN,
+                            "" + sym(LINK) + "  View push record: " + serviceUrl + "/dashboard/push/"
+                                    + record.getId()));
+                }
+
+                pushStore.save(record);
+                if (pushContext != null) pushContext.setValidationRecordId(record.getId());
+                log.debug("Saved validation result record: id={}, status=PENDING (awaiting review)", record.getId());
             } catch (Exception e) {
                 // Swallowed deliberately: this hook must not abort the chain mid-way. The security
                 // consequence is handled downstream — the failure leaves validationRecordId unset, and
@@ -276,51 +254,46 @@ public class PushStorePersistenceHook {
     }
 
     /**
-     * Returns a {@link PostReceiveHook} that records the forwarding outcome. Should be placed after the forwarding
-     * hook.
+     * Returns a {@link PostReceiveHook} that transitions the push's lifecycle record to its terminal forwarding state —
+     * FORWARDED on success, ERROR on an upstream failure (spec LC-9(b)). Placed after the forwarding hook.
      *
-     * <p>Creates a new event-log record for the forwarding result.
+     * <p>Updates the same record {@link #validationResultHook} created, in place, via
+     * {@link PushStore#updateForwardStatus} — no new row is written.
      */
     public PostReceiveHook postReceiveHook() {
         return (ReceivePack rp, Collection<ReceiveCommand> commands) -> {
             String pushId = pushContext != null ? pushContext.getPushId() : null;
             if (pushId == null) return;
 
+            // JGit only passes Result.OK commands to post-receive. An empty list means every command was rejected
+            // in pre-receive — nothing was forwarded, so the record keeps the rejected/canceled state it already has.
+            if (commands.isEmpty()) {
+                log.debug("Skipping forward-status update: no OK commands (push was rejected)");
+                return;
+            }
+
+            // Command results stay OK in post-receive even when the upstream push fails, because JGit already
+            // accepted the objects locally. ForwardingPostReceiveHook records the real outcome in the push context.
+            boolean forwardFailed = pushContext != null
+                    && pushContext.getSteps().stream()
+                            .anyMatch(step ->
+                                    "forward".equals(step.getStepName()) && step.getStatus() == StepStatus.FAIL);
+
             try {
-                pushStore.findById(pushId).ifPresent(initial -> {
-                    // JGit only passes Result.OK commands to post-receive.
-                    // An empty list means all commands were rejected by pre-receive - nothing to record.
-                    if (commands.isEmpty()) {
-                        log.debug("Skipping post-receive record: no OK commands (push was rejected)");
-                        return;
-                    }
-
-                    // Check if the forwarding step failed (upstream rejected the push).
-                    // Command results stay OK in post-receive even when the upstream push fails,
-                    // because JGit already accepted the objects locally. The forwarding outcome
-                    // is recorded in pushContext by ForwardingPostReceiveHook.
-                    boolean forwardFailed = pushContext != null
-                            && pushContext.getSteps().stream()
-                                    .anyMatch(step -> "forward".equals(step.getStepName())
-                                            && step.getStatus() == StepStatus.FAIL);
-
-                    PushRecord record = copyBase(initial);
-                    if (forwardFailed) {
-                        record.setStatus(PushStatus.ERROR);
-                        pushContext.getSteps().stream()
-                                .filter(step ->
-                                        "forward".equals(step.getStepName()) && step.getStatus() == StepStatus.FAIL)
-                                .findFirst()
-                                .ifPresent(step -> record.setErrorMessage(step.getErrorMessage()));
-                    } else {
-                        record.setStatus(PushStatus.FORWARDED);
-                    }
-
-                    pushStore.save(record);
-                    log.info("Saved forwarding result record: id={}, status={}", record.getId(), record.getStatus());
-                });
+                if (forwardFailed) {
+                    String errorMessage = pushContext.getSteps().stream()
+                            .filter(step -> "forward".equals(step.getStepName()) && step.getStatus() == StepStatus.FAIL)
+                            .map(PushStep::getErrorMessage)
+                            .findFirst()
+                            .orElse("Forwarding to upstream failed");
+                    pushStore.updateForwardStatus(pushId, PushStatus.ERROR, errorMessage);
+                    log.info("Push record {} transitioned to ERROR: upstream forwarding failed", pushId);
+                } else {
+                    pushStore.updateForwardStatus(pushId, PushStatus.FORWARDED, null);
+                    log.info("Push record {} transitioned to FORWARDED", pushId);
+                }
             } catch (Exception e) {
-                log.error("Failed to save forwarding result record", e);
+                log.error("Failed to update forward status for push record {}", pushId, e);
             }
         };
     }
@@ -377,34 +350,6 @@ public class PushStorePersistenceHook {
         }
     }
 
-    /**
-     * Create a new record that copies the base fields (repo, branch, commits, author) from an existing record but with
-     * a fresh ID and timestamp. Used for event-log style persistence where each state transition is a separate row.
-     */
-    private PushRecord copyBase(PushRecord source) {
-        return PushRecord.builder()
-                .url(source.getUrl())
-                .upstreamUrl(source.getUpstreamUrl())
-                .provider(source.getProvider())
-                .project(source.getProject())
-                .repoName(source.getRepoName())
-                .branch(source.getBranch())
-                .commitFrom(source.getCommitFrom())
-                .commitTo(source.getCommitTo())
-                .message(source.getMessage())
-                .author(source.getAuthor())
-                .authorEmail(source.getAuthorEmail())
-                .committer(source.getCommitter())
-                .committerEmail(source.getCommitterEmail())
-                .user(source.getUser())
-                .userEmail(source.getUserEmail())
-                .resolvedUser(source.getResolvedUser())
-                .scmUsername(source.getScmUsername())
-                .method(source.getMethod())
-                .commits(source.getCommits())
-                .build();
-    }
-
     private PushRecord buildInitialRecord(String pushId, ReceivePack rp, Collection<ReceiveCommand> commands) {
         String providerUri = provider.getUri().toString();
         Repository repo = rp.getRepository();
@@ -427,6 +372,12 @@ public class PushStorePersistenceHook {
         }
         if (pushContext != null) {
             pushContext.getTransport().auditMethod().ifPresent(builder::method);
+            // Back-date the record to the handoff receipt time captured by the factory, rather than letting the
+            // timestamp default to now (when this record is first built). Mirrors transparent proxy, which carries
+            // GitRequestDetails' parse-time timestamp onto the record.
+            if (pushContext.getReceivedAt() != null) {
+                builder.timestamp(pushContext.getReceivedAt());
+            }
         }
 
         // Upstream URL and repo name, taken from this request's context and falling back to the shared mirror config.

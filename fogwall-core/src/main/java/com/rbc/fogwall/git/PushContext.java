@@ -1,6 +1,7 @@
 package com.rbc.fogwall.git;
 
 import com.rbc.fogwall.db.model.PushStep;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -44,8 +45,15 @@ public class PushContext {
     // Resolved upstream username for Bitbucket pushes — written by BitbucketCredentialRewriteHook.
     private String upstreamUser;
 
-    // Push record ID — written by PushStorePersistenceHook.preReceiveHook().
+    // Push record ID (the correlation identifier) — minted by StoreAndForwardReceivePackFactory and used as the id of
+    // the single lifecycle record created by PushStorePersistenceHook.validationResultHook().
     private String pushId;
+
+    // When fogwall received the submission — the transport → business-logic handoff, stamped by
+    // StoreAndForwardReceivePackFactory alongside the push id. Used as the lifecycle record's receivedAt (its
+    // timestamp), so receipt time is fixed at the handoff rather than when the record is first persisted. This mirrors
+    // transparent proxy, where GitRequestDetails stamps its timestamp at parse time.
+    private Instant receivedAt;
 
     // Identity resolved by CheckUserPushPermissionHook — written after permission check passes.
     private String resolvedUser;

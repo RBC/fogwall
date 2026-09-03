@@ -13,6 +13,7 @@ import com.rbc.fogwall.provider.GitHubProvider;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -30,8 +31,10 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * Integration tests for {@link PushStorePersistenceHook}.
  *
- * <p>Exercises the pre-receive hook (creates initial RECEIVED record) and the validation-result hook (transitions to
- * PENDING or REJECTED based on the {@link ValidationContext}).
+ * <p>Exercises the single-record lifecycle model: {@code validationResultHook} creates exactly one record keyed by the
+ * push id (PENDING for a clean push, REJECTED for a hard policy violation), and {@code postReceiveHook} transitions
+ * that same record in place to FORWARDED or ERROR. The push id is minted by the receive-pack factory in production; the
+ * tests stamp it into the {@link PushContext} directly to stand in for that.
  *
  * <p>Uses a real JGit repository (via {@code @TempDir}) and an H2 in-memory push store so there are no external
  * dependencies.
@@ -79,34 +82,59 @@ class PushStorePersistenceHookTest {
         return new ReceiveCommand(ObjectId.zeroId(), newCommit, "refs/heads/test");
     }
 
-    // ---- pre-receive hook: initial record creation ----
+    /** Stamps a push id into the context the way {@code StoreAndForwardReceivePackFactory} does in production. */
+    private String stampPushId() {
+        String pushId = UUID.randomUUID().toString();
+        pushContext.setPushId(pushId);
+        return pushId;
+    }
+
+    // ---- single-record creation, keyed by the correlation id ----
 
     @Test
-    void preReceiveHook_createsReceivedRecord() {
+    void validationResultHook_createsSingleRecordKeyedByPushId() {
         ReceivePack rp = makeReceivePack();
         ReceiveCommand cmd = newBranchCommand(commitId);
+        String pushId = stampPushId();
 
-        hook.preReceiveHook().onPreReceive(rp, List.of(cmd));
+        hook.validationResultHook(new ValidationContext()).onPreReceive(rp, List.of(cmd));
 
-        // The push ID is stored in the repo config by the pre-receive hook
-        String pushId = pushContext.getPushId();
-        assertNotNull(pushId, "push ID should be stamped into repo config");
-
+        // Exactly one record, keyed by the push id — no separate RECEIVED row, no fresh UUID.
         var record = pushStore.findById(pushId);
-        assertTrue(record.isPresent(), "RECEIVED record should be persisted");
-        assertEquals(PushStatus.RECEIVED, record.get().getStatus());
+        assertTrue(
+                record.isPresent(), "the lifecycle record must be keyed by the push id (the correlation identifier)");
+        assertEquals(pushId, pushContext.getValidationRecordId(), "validation record id must equal the push id");
+        assertEquals(
+                1,
+                pushStore.find(PushQuery.builder().build()).size(),
+                "a store-and-forward push must produce exactly one record");
     }
 
     @Test
-    void preReceiveHook_branchAndCommitToAreRecorded() {
+    void validationResultHook_stampsReceivedAtFromHandoff() {
         ReceivePack rp = makeReceivePack();
         ReceiveCommand cmd = newBranchCommand(commitId);
+        String pushId = stampPushId();
+        Instant received = Instant.parse("2020-01-01T00:00:00Z");
+        pushContext.setReceivedAt(received);
 
-        hook.preReceiveHook().onPreReceive(rp, List.of(cmd));
+        hook.validationResultHook(new ValidationContext()).onPreReceive(rp, List.of(cmd));
 
-        String pushId = pushContext.getPushId();
+        assertEquals(
+                received,
+                pushStore.findById(pushId).orElseThrow().getTimestamp(),
+                "receivedAt captured at the handoff must be carried onto the record, not overwritten with build time");
+    }
+
+    @Test
+    void validationResultHook_recordsBranchAndCommitTo() {
+        ReceivePack rp = makeReceivePack();
+        ReceiveCommand cmd = newBranchCommand(commitId);
+        String pushId = stampPushId();
+
+        hook.validationResultHook(new ValidationContext()).onPreReceive(rp, List.of(cmd));
+
         var record = pushStore.findById(pushId).orElseThrow();
-
         assertEquals("refs/heads/test", record.getBranch());
         assertEquals(commitId.name(), record.getCommitTo());
     }
@@ -114,30 +142,23 @@ class PushStorePersistenceHookTest {
     // ---- validation-result hook: no issues → PENDING ----
 
     @Test
-    void validationResultHook_noIssues_transitionsToBlocked() {
+    void validationResultHook_noIssues_transitionsToPending() {
         ReceivePack rp = makeReceivePack();
         ReceiveCommand cmd = newBranchCommand(commitId);
+        String pushId = stampPushId();
 
-        // Pre-receive must run first to stamp the push ID
-        hook.preReceiveHook().onPreReceive(rp, List.of(cmd));
+        hook.validationResultHook(new ValidationContext()).onPreReceive(rp, List.of(cmd));
 
-        ValidationContext ctx = new ValidationContext(); // no issues
-        hook.validationResultHook(ctx).onPreReceive(rp, List.of(cmd));
-
-        String pushId = pushContext.getPushId();
-        // The validation-result hook creates a new record with a fresh UUID (copyBase pattern);
-        // we verify by querying for PENDING status rather than by ID.
-        var records =
-                pushStore.find(PushQuery.builder().status(PushStatus.PENDING).build());
-        assertFalse(records.isEmpty(), "a PENDING record should exist");
+        var record = pushStore.findById(pushId).orElseThrow();
+        assertEquals(PushStatus.PENDING, record.getStatus(), "a clean push must be PENDING awaiting review");
     }
 
     @Test
     void validationResultHook_noIssues_commandsNotRejected() {
         ReceivePack rp = makeReceivePack();
         ReceiveCommand cmd = newBranchCommand(commitId);
+        stampPushId();
 
-        hook.preReceiveHook().onPreReceive(rp, List.of(cmd));
         hook.validationResultHook(new ValidationContext()).onPreReceive(rp, List.of(cmd));
 
         assertEquals(
@@ -152,25 +173,22 @@ class PushStorePersistenceHookTest {
     void validationResultHook_withIssues_transitionsToRejected() {
         ReceivePack rp = makeReceivePack();
         ReceiveCommand cmd = newBranchCommand(commitId);
-
-        hook.preReceiveHook().onPreReceive(rp, List.of(cmd));
+        String pushId = stampPushId();
 
         ValidationContext ctx = new ValidationContext();
         ctx.addIssue("checkAuthorEmails", "Email blocked", "noreply@ address is not allowed");
         hook.validationResultHook(ctx).onPreReceive(rp, List.of(cmd));
 
-        String pushId = pushContext.getPushId();
-        var records =
-                pushStore.find(PushQuery.builder().status(PushStatus.REJECTED).build());
-        assertFalse(records.isEmpty(), "a REJECTED record should exist");
+        var record = pushStore.findById(pushId).orElseThrow();
+        assertEquals(PushStatus.REJECTED, record.getStatus());
+        assertTrue(record.isAutoRejected(), "a hard policy violation is auto-rejected");
     }
 
     @Test
     void validationResultHook_withIssues_commandsAreRejected() {
         ReceivePack rp = makeReceivePack();
         ReceiveCommand cmd = newBranchCommand(commitId);
-
-        hook.preReceiveHook().onPreReceive(rp, List.of(cmd));
+        stampPushId();
 
         ValidationContext ctx = new ValidationContext();
         ctx.addIssue("checkCommitMessages", "WIP commit", "message contains blocked term");
@@ -186,17 +204,13 @@ class PushStorePersistenceHookTest {
     void validationResultHook_withIssues_rejectedRecordHasBlockedMessage() {
         ReceivePack rp = makeReceivePack();
         ReceiveCommand cmd = newBranchCommand(commitId);
-
-        hook.preReceiveHook().onPreReceive(rp, List.of(cmd));
+        String pushId = stampPushId();
 
         ValidationContext ctx = new ValidationContext();
         ctx.addIssue("checkAuthorEmails", "Email blocked", "some detail");
         hook.validationResultHook(ctx).onPreReceive(rp, List.of(cmd));
 
-        var records =
-                pushStore.find(PushQuery.builder().status(PushStatus.REJECTED).build());
-        assertFalse(records.isEmpty());
-        String blocked = records.get(0).getBlockedMessage();
+        String blocked = pushStore.findById(pushId).orElseThrow().getBlockedMessage();
         assertNotNull(blocked, "blockedMessage should describe the rejection");
         assertTrue(blocked.contains("validation issue"), "blockedMessage should mention validation issue(s)");
     }
@@ -207,8 +221,7 @@ class PushStorePersistenceHookTest {
     void validationResultHook_multipleIssues_allRecorded() {
         ReceivePack rp = makeReceivePack();
         ReceiveCommand cmd = newBranchCommand(commitId);
-
-        hook.preReceiveHook().onPreReceive(rp, List.of(cmd));
+        String pushId = stampPushId();
 
         ValidationContext ctx = new ValidationContext();
         ctx.addIssue("checkAuthorEmails", "Email blocked", "noreply@ address");
@@ -216,11 +229,7 @@ class PushStorePersistenceHookTest {
 
         hook.validationResultHook(ctx).onPreReceive(rp, List.of(cmd));
 
-        var records =
-                pushStore.find(PushQuery.builder().status(PushStatus.REJECTED).build());
-        assertFalse(records.isEmpty());
-        // Expect a blocked message mentioning both issues
-        String msg = records.get(0).getBlockedMessage();
+        String msg = pushStore.findById(pushId).orElseThrow().getBlockedMessage();
         assertTrue(msg.contains("2"), "blockedMessage should mention two validation issues");
     }
 
@@ -231,29 +240,25 @@ class PushStorePersistenceHookTest {
         hook.setServiceUrl("http://dashboard:8080");
         ReceivePack rp = makeReceivePack();
         ReceiveCommand cmd = newBranchCommand(commitId);
-
-        hook.preReceiveHook().onPreReceive(rp, List.of(cmd));
+        String pushId = stampPushId();
 
         // Clean push → PENDING with dashboard link (verified indirectly through record status)
         hook.validationResultHook(new ValidationContext()).onPreReceive(rp, List.of(cmd));
 
-        var records =
-                pushStore.find(PushQuery.builder().status(PushStatus.PENDING).build());
-        assertFalse(records.isEmpty(), "should have a PENDING record");
+        assertEquals(
+                PushStatus.PENDING, pushStore.findById(pushId).orElseThrow().getStatus());
     }
 
-    // ---- post-receive hook: forwarding outcome ----
+    // ---- post-receive hook: forwarding outcome updates the same record in place ----
 
     @Test
-    void postReceiveHook_forwardFailed_savesErrorStatus() {
-        var pushContext = new PushContext();
-        hook.setPushContext(pushContext);
-
+    void postReceiveHook_forwardFailed_transitionsRecordToError() {
         ReceivePack rp = makeReceivePack();
         ReceiveCommand cmd = newBranchCommand(commitId);
+        String pushId = stampPushId();
 
-        // Pre-receive creates the initial RECEIVED record
-        hook.preReceiveHook().onPreReceive(rp, List.of(cmd));
+        // The record must exist (PENDING) before the forward transition can update it in place.
+        hook.validationResultHook(new ValidationContext()).onPreReceive(rp, List.of(cmd));
 
         // Simulate a failed forward step (upstream rejected the push)
         pushContext.addStep(PushStep.builder()
@@ -267,21 +272,22 @@ class PushStorePersistenceHookTest {
 
         hook.postReceiveHook().onPostReceive(rp, List.of(cmd));
 
-        var records =
-                pushStore.find(PushQuery.builder().status(PushStatus.ERROR).build());
-        assertFalse(records.isEmpty(), "a failed forward should produce an ERROR record");
-        assertNotNull(records.get(0).getErrorMessage(), "ERROR record should have an error message");
+        var record = pushStore.findById(pushId).orElseThrow();
+        assertEquals(PushStatus.ERROR, record.getStatus(), "a failed forward must transition the record to ERROR");
+        assertNotNull(record.getErrorMessage(), "ERROR record should carry the upstream failure cause");
+        assertEquals(
+                1,
+                pushStore.find(PushQuery.builder().build()).size(),
+                "the record is updated in place — still exactly one record");
     }
 
     @Test
-    void postReceiveHook_forwardSucceeded_savesForwardedStatus() {
-        var pushContext = new PushContext();
-        hook.setPushContext(pushContext);
-
+    void postReceiveHook_forwardSucceeded_transitionsRecordToForwarded() {
         ReceivePack rp = makeReceivePack();
         ReceiveCommand cmd = newBranchCommand(commitId);
+        String pushId = stampPushId();
 
-        hook.preReceiveHook().onPreReceive(rp, List.of(cmd));
+        hook.validationResultHook(new ValidationContext()).onPreReceive(rp, List.of(cmd));
 
         pushContext.addStep(
                 PushStep.builder().stepName("forward").status(StepStatus.PASS).build());
@@ -290,9 +296,13 @@ class PushStorePersistenceHookTest {
 
         hook.postReceiveHook().onPostReceive(rp, List.of(cmd));
 
-        var records =
-                pushStore.find(PushQuery.builder().status(PushStatus.FORWARDED).build());
-        assertFalse(records.isEmpty(), "a successful forward should produce a FORWARDED record");
+        var record = pushStore.findById(pushId).orElseThrow();
+        assertEquals(PushStatus.FORWARDED, record.getStatus());
+        assertNotNull(record.getForwardedAt(), "forwardedAt must be stamped on the forwarded transition");
+        assertEquals(
+                1,
+                pushStore.find(PushQuery.builder().build()).size(),
+                "the record is updated in place — still exactly one record");
     }
 
     // ---- commit enrichment on re-push (PriorPushEnrichmentHook integration) ----
@@ -323,18 +333,14 @@ class PushStorePersistenceHookTest {
         ReceivePack rp = makeReceivePack();
         // cmd represents the local-cache delta: c2 → c3
         ReceiveCommand cmd = new ReceiveCommand(c2.getId(), c3.getId(), "refs/heads/test", ReceiveCommand.Type.UPDATE);
-
-        hook.preReceiveHook().onPreReceive(rp, List.of(cmd));
+        String pushId = stampPushId();
 
         // Enrichment hook detected: c2 not forwarded, effectiveFrom = commitId (the first commit, c1)
         pushContext.setEffectiveFromId("refs/heads/test", commitId.name());
 
         hook.validationResultHook(new ValidationContext()).onPreReceive(rp, List.of(cmd));
 
-        var records =
-                pushStore.find(PushQuery.builder().status(PushStatus.PENDING).build());
-        assertFalse(records.isEmpty());
-        var commits = records.get(0).getCommits();
+        var commits = pushStore.findById(pushId).orElseThrow().getCommits();
         // Should include both c2 and c3 (range from commitId to c3), not just c3
         assertTrue(commits.size() >= 2, "enriched PENDING record must include commits from effectiveFrom..c3");
         var shas = commits.stream().map(pc -> pc.getSha()).toList();

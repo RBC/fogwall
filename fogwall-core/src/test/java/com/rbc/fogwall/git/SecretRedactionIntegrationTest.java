@@ -147,7 +147,7 @@ class SecretRedactionIntegrationTest {
 
         var persistenceHook = new PushStorePersistenceHook(pushStore, new GitHubProvider("/push"));
         persistenceHook.setPushContext(pushContext);
-        persistenceHook.preReceiveHook().onPreReceive(rp, List.of(cmd));
+        pushContext.setPushId(UUID.randomUUID().toString());
         persistenceHook.validationResultHook(validationContext).onPreReceive(rp, List.of(cmd));
 
         List<PushRecord> notRejected =
@@ -180,7 +180,7 @@ class SecretRedactionIntegrationTest {
                 "gitleaks must flag the injected secret - test fixture is broken otherwise");
         assertFalse(pushContext.getSecretsToRedact().isEmpty(), "raw secret value must be captured for redaction");
 
-        persistenceHook.preReceiveHook().onPreReceive(rp, List.of(cmd));
+        pushContext.setPushId(UUID.randomUUID().toString());
         persistenceHook.validationResultHook(validationContext).onPreReceive(rp, List.of(cmd));
 
         List<PushRecord> rejected =
