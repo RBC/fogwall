@@ -15,3 +15,10 @@ echo "[pre-commit] Running formatAll (spotless, prettier, eslint)..."
 ./gradlew formatAll --quiet --no-daemon
 git diff --name-only -- '*.java' fogwall-dashboard/frontend/src '*.md' | xargs -r git add
 echo "[pre-commit] formatAll: OK"
+
+# Report-only for now (pmd.ignoreFailures = true in build.gradle) while the ruleset in
+# config/pmd/ruleset.xml is still being tuned against real findings — see issue #383.
+# Never blocks a commit until that's flipped off.
+echo "[pre-commit] Running PMD static analysis..."
+./gradlew pmdAll --quiet --no-daemon || true
+echo "[pre-commit] PMD: done (report-only — see build/reports/pmd/*.html per module)"

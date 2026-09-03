@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset name="fogwall"
+         xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+
+    <description>
+        fogwall PMD rules. Starter set (see issue #383) — findings are being reviewed before this
+        can fail a build or block a commit (pmd.ignoreFailures = true in build.gradle). Add/remove
+        rules here as false positives or gaps turn up; this file is the single source of truth for
+        every module.
+    </description>
+
+    <!-- Directly the smell called out in #112: "use of inline fully-qualified class names
+         instead of importing them at the top of each class". -->
+    <rule ref="category/java/codestyle.xml/UnnecessaryFullyQualifiedName"/>
+
+    <!-- #112: "not using method references in lambdas or function chains". -->
+    <rule ref="category/java/codestyle.xml/LambdaCanBeMethodReference"/>
+
+    <!-- #112: "remove unused constructors and method arguments" (parameter half; PMD has no rule
+         for a literally-unused constructor as opposed to unused params within one). -->
+    <rule ref="category/java/bestpractices.xml/UnusedFormalParameter"/>
+
+    <rule ref="category/java/bestpractices.xml/UnusedLocalVariable"/>
+    <rule ref="category/java/bestpractices.xml/UnusedPrivateField"/>
+    <rule ref="category/java/bestpractices.xml/UnusedPrivateMethod"/>
+    <rule ref="category/java/codestyle.xml/UnnecessaryImport"/>
+    <!-- allowCommentedBlocks: a catch with a comment explaining why it's empty is a deliberate,
+         documented no-op, not a silent swallow — the thing this rule exists to catch. -->
+    <rule ref="category/java/errorprone.xml/EmptyCatchBlock">
+        <properties>
+            <property name="allowCommentedBlocks" value="true"/>
+        </properties>
+    </rule>
+
+    <!-- Replaces the old EmptyIfStmt/EmptyWhileStmt/etc. rules, removed in PMD 7 and merged into
+         this one rule covering every empty control-statement body (if/while/try/switch/...). -->
+    <rule ref="category/java/codestyle.xml/EmptyControlStatement"/>
+
+</ruleset>

@@ -23,6 +23,7 @@ plugins {
 ext {
     // Tooling
     palantirJavaFormatVersion = '2.91.0'
+    pmdVersion = '7.27.0'
 
     // JGit
     jgitVersion = '7.7.1.202607240634-r'
@@ -122,6 +123,14 @@ tasks.register('formatAll') {
             ':fogwall-dashboard:npmLint'
 }
 
+// Single entry point for the PMD static analysis check across every subproject, so
+// .githooks/pre-commit and CI need one Gradle invocation instead of enumerating modules.
+tasks.register('pmdAll') {
+    group = 'verification'
+    description = 'Runs PMD static analysis (pmdMain, pmdTest) across all subprojects.'
+    dependsOn subprojects.collectMany { [":${it.name}:pmdMain", ":${it.name}:pmdTest"] }
+}
+
 subprojects {
     apply plugin: 'com.diffplug.spotless'
     apply plugin: 'jacoco-report-aggregation'
@@ -164,6 +173,19 @@ subprojects {
     spotless {
         java {
             palantirJavaFormat("${palantirJavaFormatVersion}").formatJavadoc(true)
+        }
+    }
+
+    plugins.withId('java') {
+        apply plugin: 'pmd'
+
+        pmd {
+            toolVersion = pmdVersion
+            ruleSetFiles = rootProject.files('config/pmd/ruleset.xml')
+            ruleSets = []
+            // Findings are being reviewed and the ruleset tuned before this can fail a build or
+            // block a commit — see issue #383. Flip to false once the rule set has settled.
+            ignoreFailures = true
         }
     }
 
