@@ -133,4 +133,28 @@ class ContentPatternCommitMessageHookTest {
         assertFalse(pushCtx.getSteps().isEmpty());
         assertEquals(StepStatus.PASS, pushCtx.getSteps().get(0).getStatus());
     }
+
+    // ---- annotated tag messages (#474) ----
+
+    @Test
+    void matchInTagMessage_recordsWarnStep() throws Exception {
+        // Tag points at the clean initial commit; the PII lives only in the annotation message.
+        Git git = Git.open(tempDir.toFile());
+        var ref = git.tag()
+                .setName("v1.0.0")
+                .setMessage("Release cut for customer, ssn: 212-96-7431")
+                .setAnnotated(true)
+                .call();
+        ReceiveCommand tagCmd = new ReceiveCommand(ObjectId.zeroId(), ref.getObjectId(), "refs/tags/v1.0.0");
+        PushContext pushCtx = new PushContext();
+        var hook = new ContentPatternCommitMessageHook(enabledConfig(), pushCtx);
+
+        hook.onPreReceive(new ReceivePack(repo), List.of(tagCmd));
+
+        assertFalse(pushCtx.getSteps().isEmpty());
+        var step = pushCtx.getSteps().get(0);
+        assertEquals(StepStatus.WARN, step.getStatus());
+        assertTrue(step.getContent().contains("Social Security Number"));
+        assertFalse(step.getContent().contains("212-96-7431"), "raw matched value must never appear in step content");
+    }
 }

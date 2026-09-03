@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.LogCommand;
@@ -21,6 +22,8 @@ import org.eclipse.jgit.lib.PersonIdent;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
+import org.eclipse.jgit.revwalk.RevObject;
+import org.eclipse.jgit.revwalk.RevTag;
 import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.treewalk.CanonicalTreeParser;
 
@@ -138,6 +141,35 @@ public class CommitInspectionService {
             }
         }
         return commits;
+    }
+
+    /**
+     * Returns the annotation message of an annotated tag object, or empty for a lightweight tag (a ref pointing
+     * straight at a commit, which carries no message of its own) or any non-tag object.
+     *
+     * <p>An annotated tag's message is developer-authored free text that reaches the upstream repository and release
+     * notes exactly as a commit message does, so it is subject to the same message-content validation (#474). The
+     * commit-inspection paths ({@link #getCommitDetails}, {@link #getCommitRange}) all peel {@code ^{commit}} and so
+     * only ever see the tag's target commit — never the annotation text — which is why it needs extracting separately.
+     *
+     * @param repository the JGit repository holding the tag object
+     * @param tagObjectId the object id the tag ref points at (the tag object itself, not its peeled commit)
+     * @return the tag's full message, or empty if it is a lightweight tag, a non-tag object, or has a blank message
+     * @throws IOException if the object cannot be read
+     */
+    public static Optional<String> getAnnotatedTagMessage(Repository repository, ObjectId tagObjectId)
+            throws IOException {
+        if (tagObjectId == null) {
+            return Optional.empty();
+        }
+        try (RevWalk revWalk = new RevWalk(repository)) {
+            RevObject object = revWalk.parseAny(tagObjectId);
+            if (object instanceof RevTag tag) {
+                String message = tag.getFullMessage();
+                return (message == null || message.isBlank()) ? Optional.empty() : Optional.of(message);
+            }
+            return Optional.empty();
+        }
     }
 
     /**

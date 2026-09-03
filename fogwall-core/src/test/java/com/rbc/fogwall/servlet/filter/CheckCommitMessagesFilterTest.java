@@ -334,4 +334,60 @@ class CheckCommitMessagesFilterTest {
 
         assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
     }
+
+    // ---- annotated tag messages (#474) ----
+
+    @Test
+    void blockedTagMessage_withNoCommits_blocks() throws Exception {
+        // The tag push carries no commits (its target was validated on its branch), only the annotation message.
+        GitRequestDetails details = makeRequestDetails(List.of());
+        details.setBranch("refs/tags/v1.0.0");
+        details.setTagMessage("WIP: release candidate, do not ship");
+        CheckCommitMessagesFilter filter = new CheckCommitMessagesFilter(testConfig());
+        FakeResponse fakeResponse = new FakeResponse();
+
+        filter.doHttpFilter(mockPushRequest(details), fakeResponse.mock);
+
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+    }
+
+    @Test
+    void secretPatternInTagMessage_blocks() throws Exception {
+        GitRequestDetails details = makeRequestDetails(List.of());
+        details.setBranch("refs/tags/v1.0.0");
+        details.setTagMessage("Release 1.0 — deploy token: abc123xyz");
+        CheckCommitMessagesFilter filter = new CheckCommitMessagesFilter(testConfig());
+        FakeResponse fakeResponse = new FakeResponse();
+
+        filter.doHttpFilter(mockPushRequest(details), fakeResponse.mock);
+
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+    }
+
+    @Test
+    void cleanTagMessage_passes() throws Exception {
+        GitRequestDetails details = makeRequestDetails(List.of());
+        details.setBranch("refs/tags/v1.0.0");
+        details.setTagMessage("Release 1.0.0 — production ready");
+        CheckCommitMessagesFilter filter = new CheckCommitMessagesFilter(testConfig());
+        FakeResponse fakeResponse = new FakeResponse();
+
+        filter.doHttpFilter(mockPushRequest(details), fakeResponse.mock);
+
+        assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
+    }
+
+    @Test
+    void blockedTagMessage_alongsideCleanCommit_blocks() throws Exception {
+        // A clean commit does not save a tag whose annotation carries a blocked term.
+        GitRequestDetails details = makeRequestDetails(List.of(commitWithMessage("Fix login bug")));
+        details.setBranch("refs/tags/v1.0.0");
+        details.setTagMessage("DO NOT MERGE placeholder tag");
+        CheckCommitMessagesFilter filter = new CheckCommitMessagesFilter(testConfig());
+        FakeResponse fakeResponse = new FakeResponse();
+
+        filter.doHttpFilter(mockPushRequest(details), fakeResponse.mock);
+
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+    }
 }

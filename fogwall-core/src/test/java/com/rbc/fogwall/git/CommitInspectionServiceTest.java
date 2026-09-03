@@ -87,4 +87,46 @@ class CommitInspectionServiceTest {
 
         assertEquals(2, commits.size(), "must include c1 even though it's reachable from a local ref");
     }
+
+    // ---- getAnnotatedTagMessage (#474) ----
+
+    @Test
+    void getAnnotatedTagMessage_annotatedTag_returnsMessage() throws Exception {
+        createCommit("init");
+        var ref = git.tag()
+                .setName("v1.0.0")
+                .setMessage("Release 1.0.0 notes")
+                .setAnnotated(true)
+                .call();
+
+        var message = CommitInspectionService.getAnnotatedTagMessage(repo, ref.getObjectId());
+
+        assertTrue(message.isPresent());
+        assertTrue(message.get().contains("Release 1.0.0 notes"));
+    }
+
+    @Test
+    void getAnnotatedTagMessage_lightweightTag_returnsEmpty() throws Exception {
+        createCommit("init");
+        // A lightweight tag's ref points straight at the commit — there is no tag object or message.
+        var ref = git.tag().setName("v1.0.0").setAnnotated(false).call();
+
+        var message = CommitInspectionService.getAnnotatedTagMessage(repo, ref.getObjectId());
+
+        assertTrue(message.isEmpty());
+    }
+
+    @Test
+    void getAnnotatedTagMessage_commitObject_returnsEmpty() throws Exception {
+        RevCommit c = createCommit("a commit, not a tag");
+
+        var message = CommitInspectionService.getAnnotatedTagMessage(repo, c.getId());
+
+        assertTrue(message.isEmpty());
+    }
+
+    @Test
+    void getAnnotatedTagMessage_nullId_returnsEmpty() throws Exception {
+        assertTrue(CommitInspectionService.getAnnotatedTagMessage(repo, null).isEmpty());
+    }
 }

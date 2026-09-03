@@ -452,6 +452,10 @@ Common block reasons and what to do:
 
 After fixing the issue, push again normally — the proxy will re-validate from scratch.
 
+> **Annotated tags:** the message you pass to `git tag -a -m "…"` is validated the same way a commit message is — the
+> same blocked terms, patterns, and content-pattern (PII) checks apply. If a tag push is blocked for its message,
+> re-create the tag with a compliant message (`git tag -d <tag>` then `git tag -a <tag> -m "…"`) and push again.
+
 ---
 
 ## Identity verification

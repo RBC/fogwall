@@ -57,14 +57,23 @@ public class ContentPatternMessageFilter extends AbstractFogwallFilter {
         }
 
         var commits = requestDetails.getPushedCommits();
-        if (commits == null || commits.isEmpty()) {
-            log.debug("No commits to scan");
+        String tagMessage = requestDetails.getTagMessage();
+        boolean hasTagMessage = tagMessage != null && !tagMessage.isBlank();
+        if ((commits == null || commits.isEmpty()) && !hasTagMessage) {
+            log.debug("No commit or tag messages to scan");
             return;
         }
 
         var scanner = new PatternBundleScanner(ContentPatternBundleResolver.resolve(config));
         List<ContentPatternFinding> findings = new ArrayList<>();
-        commits.forEach(commit -> findings.addAll(scanner.scan(commit.getMessage())));
+        if (commits != null) {
+            commits.forEach(commit -> findings.addAll(scanner.scan(commit.getMessage())));
+        }
+        // An annotated tag's message is the same class of authored text as a commit message and can carry the same
+        // structured PII, so scan it too — the tag's target commit never enters pushedCommits (#474).
+        if (hasTagMessage) {
+            findings.addAll(scanner.scan(tagMessage));
+        }
 
         if (findings.isEmpty()) {
             recordStep(request, StepStatus.PASS, "", "");

@@ -56,6 +56,10 @@ public class ContentPatternCommitMessageHook implements FogwallHook {
                 for (Commit commit : getCommits(repo, cmd)) {
                     allFindings.addAll(scanner.scan(commit.getMessage()));
                 }
+                // getCommits peels annotated tags to their target commit; the tag's own message is authored text that
+                // can carry the same structured PII, so scan it too (#474).
+                CommitInspectionService.getAnnotatedTagMessage(repo, cmd.getNewId())
+                        .ifPresent(msg -> allFindings.addAll(scanner.scan(msg)));
             } catch (Exception e) {
                 // Fail-open per commit - a WARN-only visibility check should never itself block the push.
                 log.error("Failed to scan commit messages for content patterns on {}", cmd.getRefName(), e);

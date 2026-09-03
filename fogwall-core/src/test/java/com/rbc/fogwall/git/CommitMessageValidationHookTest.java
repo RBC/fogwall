@@ -71,6 +71,16 @@ class CommitMessageValidationHookTest {
         return new ReceiveCommand(ObjectId.zeroId(), newCommit, "refs/heads/test");
     }
 
+    /** Creates an annotated tag on HEAD (the clean initial commit) and returns a push command for its ref. */
+    private ReceiveCommand annotatedTagCommand(Git git, String tagName, String message) throws Exception {
+        var ref = git.tag()
+                .setName(tagName)
+                .setMessage(message)
+                .setAnnotated(true)
+                .call();
+        return new ReceiveCommand(ObjectId.zeroId(), ref.getObjectId(), "refs/tags/" + tagName);
+    }
+
     // ---- tests ----
 
     @Test
@@ -212,6 +222,53 @@ class CommitMessageValidationHookTest {
         hook.onPreReceive(rp, List.of(deleteCmd));
 
         assertFalse(ctx.hasIssues(), "DELETE command must not trigger message validation");
+    }
+
+    // ---- annotated tag messages (#474) ----
+
+    @Test
+    void annotatedTagMessage_wip_addsIssue() throws Exception {
+        // Tag points at the clean initial commit; only the annotation message carries the blocked term.
+        Git git = Git.open(tempDir.toFile());
+        ReceiveCommand tagCmd = annotatedTagCommand(git, "v1.0.0", "WIP: release candidate");
+
+        ValidationContext ctx = new ValidationContext();
+        PushContext pushCtx = new PushContext();
+        CommitMessageValidationHook hook = new CommitMessageValidationHook(blockWipConfig(), ctx, pushCtx);
+
+        hook.onPreReceive(makeReceivePack(), List.of(tagCmd));
+
+        assertTrue(ctx.hasIssues(), "Blocked term in annotated tag message must produce an issue");
+    }
+
+    @Test
+    void annotatedTagMessage_clean_noIssue() throws Exception {
+        Git git = Git.open(tempDir.toFile());
+        ReceiveCommand tagCmd = annotatedTagCommand(git, "v1.0.0", "Release 1.0.0 — production ready");
+
+        ValidationContext ctx = new ValidationContext();
+        PushContext pushCtx = new PushContext();
+        CommitMessageValidationHook hook = new CommitMessageValidationHook(blockWipConfig(), ctx, pushCtx);
+
+        hook.onPreReceive(makeReceivePack(), List.of(tagCmd));
+
+        assertFalse(ctx.hasIssues(), "Clean annotated tag message must not produce an issue");
+    }
+
+    @Test
+    void lightweightTag_noMessageToValidate() throws Exception {
+        // A lightweight tag points straight at the (clean) commit and carries no annotation message of its own.
+        Git git = Git.open(tempDir.toFile());
+        var ref = git.tag().setName("v1.0.0").setAnnotated(false).call();
+        ReceiveCommand tagCmd = new ReceiveCommand(ObjectId.zeroId(), ref.getObjectId(), "refs/tags/v1.0.0");
+
+        ValidationContext ctx = new ValidationContext();
+        PushContext pushCtx = new PushContext();
+        CommitMessageValidationHook hook = new CommitMessageValidationHook(blockWipConfig(), ctx, pushCtx);
+
+        hook.onPreReceive(makeReceivePack(), List.of(tagCmd));
+
+        assertFalse(ctx.hasIssues(), "Lightweight tag on a clean commit must not produce an issue");
     }
 
     @Test
