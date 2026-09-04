@@ -12,7 +12,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.Map;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,13 +20,12 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "Groups", description = "Permission group management — requires ROLE_ADMIN")
 @RestController
 @RequestMapping("/api/groups")
+@RequiredArgsConstructor
 public class GroupController {
 
-    @Autowired
-    private RepoPermissionService permissionService;
+    private final RepoPermissionService permissionService;
 
-    @Autowired
-    private ReadOnlyUserStore userStore;
+    private final ReadOnlyUserStore userStore;
 
     private GroupPermissionStore groupStore() {
         return permissionService.getGroupStore();

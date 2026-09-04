@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
+import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
 import com.rbc.fogwall.user.ScmIdentity;
 import com.rbc.fogwall.user.UserEntry;
@@ -46,6 +47,9 @@ class AuthControllerTest {
 
         @Mock
         UserStore userStore; // injected into the ReadOnlyUserStore field
+
+        @Mock
+        RepoPermissionService repoPermissionService;
 
         @Test
         void mutableStore_returnsVerifiedEmailsAndIdentities() {
@@ -116,6 +120,9 @@ class AuthControllerTest {
         // ReadOnlyUserStore — simulates StaticUserStore
         @Mock
         ReadOnlyUserStore userStore;
+
+        @Mock
+        RepoPermissionService repoPermissionService;
 
         @Test
         void staticStore_emailsUnverifiedAndLocal() {

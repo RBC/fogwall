@@ -13,7 +13,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.Map;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -22,16 +22,14 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "Users", description = "User management — requires ROLE_ADMIN")
 @RestController
 @RequestMapping("/api/users")
+@RequiredArgsConstructor
 public class UserController {
 
-    @Autowired
-    private ReadOnlyUserStore userStore;
+    private final ReadOnlyUserStore userStore;
 
-    @Autowired
-    private PushStore pushStore;
+    private final PushStore pushStore;
 
-    @Autowired
-    private PasswordEncoder passwordEncoder;
+    private final PasswordEncoder passwordEncoder;
 
     @Operation(
             operationId = "listUsers",

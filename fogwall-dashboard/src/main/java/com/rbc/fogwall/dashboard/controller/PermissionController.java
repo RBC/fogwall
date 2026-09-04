@@ -11,7 +11,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.Map;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,13 +19,12 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "Users", description = "User management — requires ROLE_ADMIN")
 @RestController
 @RequestMapping("/api/users/{username}/permissions")
+@RequiredArgsConstructor
 public class PermissionController {
 
-    @Autowired
-    private RepoPermissionService permissionService;
+    private final RepoPermissionService permissionService;
 
-    @Autowired
-    private ReadOnlyUserStore userStore;
+    private final ReadOnlyUserStore userStore;
 
     @Operation(operationId = "listUserPermissions", summary = "List permissions for a user")
     @GetMapping

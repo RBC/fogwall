@@ -8,7 +8,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.Map;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -24,16 +24,14 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "System", description = "Health check and API metadata")
 @RestController
 @RequestMapping("/api")
+@RequiredArgsConstructor
 public class RuntimeConfigController {
 
-    @Autowired
-    private FogwallConfig fogwallConfig;
+    private final FogwallConfig fogwallConfig;
 
-    @Autowired
-    private TokenCipherProvider tokenCipherProvider;
+    private final TokenCipherProvider tokenCipherProvider;
 
-    @Autowired
-    private ProviderRegistry providerRegistry;
+    private final ProviderRegistry providerRegistry;
 
     /**
      * One enabled-for-OAuth provider, as the frontend needs it to render a "Link via OAuth" button: {@code type} picks

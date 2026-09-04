@@ -9,7 +9,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -20,13 +20,12 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Auth", description = "Current user profile and session information")
 @RestController
 @RequestMapping("/api")
+@RequiredArgsConstructor
 public class AuthController {
 
-    @Autowired
-    private ReadOnlyUserStore userStore;
+    private final ReadOnlyUserStore userStore;
 
-    @Autowired(required = false)
-    private RepoPermissionService repoPermissionService;
+    private final RepoPermissionService repoPermissionService;
 
     /**
      * Returns the currently authenticated user's full profile: username, emails (with verified flag), SCM identities,
@@ -68,9 +67,7 @@ public class AuthController {
                                 .toList()
                         : List.of());
 
-        var permissions = username != null && repoPermissionService != null
-                ? repoPermissionService.findByUsername(username)
-                : List.of();
+        var permissions = username != null ? repoPermissionService.findByUsername(username) : List.of();
 
         return Map.of(
                 "username", username != null ? username : "",

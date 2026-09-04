@@ -6,10 +6,10 @@ import com.rbc.fogwall.config.ServerConfig.RedisConfig;
 import com.rbc.fogwall.dashboard.session.MongoSessionRepository;
 import jakarta.servlet.Filter;
 import java.time.Duration;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -44,20 +44,31 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Configuration
 public class SessionStoreConfig {
 
-    @Autowired
-    private FogwallConfig fogwallConfig;
+    private final FogwallConfig fogwallConfig;
 
-    /** Injected only for JDBC backends — null for MongoDB deployments. */
-    @Autowired(required = false)
-    private DataSource dataSource;
+    /** Present only for JDBC backends — empty for MongoDB deployments. */
+    private final Optional<DataSource> dataSource;
 
-    /** Injected only for MongoDB deployments — null for JDBC deployments. */
-    @Autowired(required = false)
-    private MongoClient mongoClient;
+    /** Present only for MongoDB deployments — empty for JDBC deployments. */
+    private final Optional<MongoClient> mongoClient;
 
-    @Autowired(required = false)
-    @Qualifier("mongoDatabaseName")
-    private String mongoDatabaseName;
+    private final Optional<String> mongoDatabaseName;
+
+    /**
+     * Explicit constructor rather than Lombok because the storage-backend beans are genuinely deployment-conditional
+     * (JDBC and Mongo registrations are mutually exclusive) and {@code mongoDatabaseName} needs its qualifier. The
+     * build methods turn an empty optional into a config error naming the fix.
+     */
+    SessionStoreConfig(
+            FogwallConfig fogwallConfig,
+            Optional<DataSource> dataSource,
+            Optional<MongoClient> mongoClient,
+            @Qualifier("mongoDatabaseName") Optional<String> mongoDatabaseName) {
+        this.fogwallConfig = fogwallConfig;
+        this.dataSource = dataSource;
+        this.mongoClient = mongoClient;
+        this.mongoDatabaseName = mongoDatabaseName;
+    }
 
     @Bean
     @SuppressWarnings("unchecked")
@@ -86,14 +97,12 @@ public class SessionStoreConfig {
     // ── JDBC ─────────────────────────────────────────────────────────────────
 
     private JdbcIndexedSessionRepository buildJdbc(Duration timeout) {
-        if (dataSource == null) {
-            throw new IllegalStateException(
-                    "server.session-store=jdbc requires a JDBC database (h2-file, h2-mem, or postgres)."
-                            + " Current database.type is mongo — use session-store: mongo (or none/redis).");
-        }
+        DataSource ds = dataSource.orElseThrow(() -> new IllegalStateException(
+                "server.session-store=jdbc requires a JDBC database (h2-file, h2-mem, or postgres)."
+                        + " Current database.type is mongo — use session-store: mongo (or none/redis)."));
         log.info("Session store: JDBC (server.session-store=jdbc)");
-        var jdbcOps = new JdbcTemplate(dataSource);
-        var txOps = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
+        var jdbcOps = new JdbcTemplate(ds);
+        var txOps = new TransactionTemplate(new DataSourceTransactionManager(ds));
         var repo = new JdbcIndexedSessionRepository(jdbcOps, txOps);
         repo.setDefaultMaxInactiveInterval(timeout);
         return repo;
@@ -134,11 +143,11 @@ public class SessionStoreConfig {
     // ── MongoDB ───────────────────────────────────────────────────────────────
 
     private MongoSessionRepository buildMongo(Duration timeout) {
-        if (mongoClient == null || mongoDatabaseName == null) {
+        if (mongoClient.isEmpty() || mongoDatabaseName.isEmpty()) {
             throw new IllegalStateException("server.session-store=mongo requires database.type=mongo."
                     + " Current database.type is not mongo — use session-store: jdbc, redis, or none.");
         }
         log.info("Session store: MongoDB (server.session-store=mongo)");
-        return new MongoSessionRepository(mongoClient, mongoDatabaseName, timeout);
+        return new MongoSessionRepository(mongoClient.get(), mongoDatabaseName.get(), timeout);
     }
 }

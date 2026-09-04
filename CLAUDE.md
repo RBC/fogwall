@@ -141,6 +141,19 @@ Past the 1.0.0 line (current version well past it — see `build.gradle`) — re
 Before renaming a config key, table, column, or collection: pause and ask — the answer is almost always "ship a
 migration instead."
 
+## Dependency injection conventions
+
+- **Constructor injection only, everywhere** — `private final` fields via Lombok `@RequiredArgsConstructor`, or an
+  explicit constructor when a param needs `@Qualifier` or `Optional<T>`. Field `@Autowired` and `@Resource` are banned;
+  `@Autowired(required = false)` especially so.
+- **A genuinely optional collaborator is an explicit `Optional<T>` constructor param** (deployment-conditional beans
+  like the storage-backend split) **or a no-op implementation** — never a nullable field with use-site `!= null` guards.
+  A required control dependency is `Objects.requireNonNull`'d with a message naming the consequence.
+- **Conditionality lives in the composition roots only** — `JettyConfigurationBuilder` (server) and
+  `FogwallDashboardApplication`'s `registerSingleton` block (dashboard). Everything they hand out is non-null; anything
+  conditional gets resolved inside them. No `BeanFactoryPostProcessor`, no conditional bean registration for beans that
+  always exist.
+
 ## Testing conventions
 
 - Always use JUnit assertions (`org.junit.jupiter.api.Assertions.*`) — not manual `if`/`throw` checks.

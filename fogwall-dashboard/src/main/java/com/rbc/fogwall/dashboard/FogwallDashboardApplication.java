@@ -25,6 +25,7 @@ import jakarta.servlet.ServletContextListener;
 import java.nio.file.Path;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jetty.ee11.servlet.FilterHolder;
 import org.eclipse.jetty.ee11.servlet.ServletContextHandler;
@@ -176,9 +177,14 @@ public class FogwallDashboardApplication {
                     TokenCipherProvider.initialize(
                             fogwallConfig.getScmOauth().getTokenEncryptionKeyPath(),
                             Path.of("./.data/scm-oauth-token-key")));
-            if (ctx.repoPermissionService() != null) {
-                bf.registerSingleton("repoPermissionService", ctx.repoPermissionService());
-            }
+            // The permission service is always constructed by JettyConfigurationBuilder; registering it
+            // conditionally forced @Autowired(required = false) and use-site null-guards onto every
+            // consumer for a case that cannot occur. Register unconditionally and fail loudly if the
+            // context ever stops providing it.
+            bf.registerSingleton(
+                    "repoPermissionService",
+                    Objects.requireNonNull(
+                            ctx.repoPermissionService(), "FogwallContext must always carry a RepoPermissionService"));
             // Expose the JDBC DataSource as a Spring bean so SessionStoreConfig can inject it
             // when session-store=jdbc. Null for MongoDB deployments (no JDBC DataSource available).
             if (jdbcDataSource != null) {

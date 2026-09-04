@@ -6,24 +6,21 @@ import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.provider.ProviderRegistry;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.annotation.Resource;
 import java.util.List;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Providers", description = "Configured upstream git providers")
 @RestController
+@RequiredArgsConstructor
 public class ProviderController {
 
-    @Resource(name = "providers")
-    private ProviderRegistry providers;
+    private final ProviderRegistry providers;
 
-    @Autowired
-    private ConfigHolder configHolder;
+    private final ConfigHolder configHolder;
 
-    @Resource(name = "fogwallConfig")
-    private FogwallConfig fogwallConfig;
+    private final FogwallConfig fogwallConfig;
 
     @Operation(operationId = "listProviders", summary = "List configured providers")
     @GetMapping("/api/providers")
