@@ -81,18 +81,35 @@ public class CompositeUserStore implements UserStore {
         var configUser = configStore.findByUsername(username);
         List<Map<String, Object>> result = new ArrayList<>();
 
+        // JDBC rows, keyed by email. A config-declared email can ALSO have a JDBC row: OAuth linking upserts the
+        // addresses a provider reports as verified, under the same username. The config entry stays locked, but its
+        // verified flag and provider sources come from that row — otherwise linking looks like it did nothing.
+        Map<String, Map<String, Object>> jdbcByEmail = new LinkedHashMap<>();
+        if (mutableStore.findByUsername(username).isPresent()) {
+            mutableStore.findEmailsWithVerified(username).forEach(e -> jdbcByEmail.put((String) e.get("email"), e));
+        }
+
         // Config emails are always included as locked
-        configUser.ifPresent(u -> u.getEmails()
-                .forEach(e -> result.add(Map.of("email", e, "verified", false, "locked", true, "source", "config"))));
+        configUser.ifPresent(u -> u.getEmails().forEach(e -> {
+            Map<String, Object> row = jdbcByEmail.get(e);
+            boolean verified = row != null && Boolean.TRUE.equals(row.get("verified"));
+            result.add(Map.of(
+                    "email",
+                    e,
+                    "verified",
+                    verified,
+                    "locked",
+                    true,
+                    "source",
+                    verified ? row.get("source") : "config"));
+        }));
 
         // Supplemental JDBC emails (skip any that overlap with config)
         Set<String> configEmails =
                 configUser.<Set<String>>map(u -> new HashSet<>(u.getEmails())).orElse(Set.of());
-        if (mutableStore.findByUsername(username).isPresent()) {
-            mutableStore.findEmailsWithVerified(username).stream()
-                    .filter(e -> !configEmails.contains(e.get("email")))
-                    .forEach(result::add);
-        }
+        jdbcByEmail.values().stream()
+                .filter(e -> !configEmails.contains(e.get("email")))
+                .forEach(result::add);
 
         return result;
     }
@@ -102,18 +119,31 @@ public class CompositeUserStore implements UserStore {
         var configUser = configStore.findByUsername(username);
         List<Map<String, Object>> result = new ArrayList<>();
 
+        // JDBC rows keyed by provider:username. Same collision as emails: linking a provider account whose login is
+        // already config-declared marks the JDBC row verified; the config entry must reflect that or the profile
+        // page reports the account as "Not linked" right after a successful link.
+        Map<String, Map<String, Object>> jdbcByKey = new LinkedHashMap<>();
+        if (mutableStore.findByUsername(username).isPresent()) {
+            mutableStore
+                    .findScmIdentitiesWithVerified(username)
+                    .forEach(id -> jdbcByKey.put(id.get("provider") + ":" + id.get("username"), id));
+        }
+
         // Config identities are always included as locked
         configUser.ifPresent(u -> u.getScmIdentities().stream()
                 .filter(id -> !"proxy".equals(id.getProvider()))
-                .forEach(id -> result.add(Map.of(
-                        "provider",
-                        id.getProvider(),
-                        "username",
-                        id.getUsername(),
-                        "verified",
-                        false,
-                        "source",
-                        "config"))));
+                .forEach(id -> {
+                    Map<String, Object> row = jdbcByKey.get(id.getProvider() + ":" + id.getUsername());
+                    result.add(Map.of(
+                            "provider",
+                            id.getProvider(),
+                            "username",
+                            id.getUsername(),
+                            "verified",
+                            row != null && Boolean.TRUE.equals(row.get("verified")),
+                            "source",
+                            "config"));
+                }));
 
         // Supplemental JDBC identities (skip any that overlap with config)
         Set<String> configKeys = configUser
@@ -121,11 +151,9 @@ public class CompositeUserStore implements UserStore {
                         .map(id -> id.getProvider() + ":" + id.getUsername())
                         .collect(Collectors.toSet()))
                 .orElse(Set.of());
-        if (mutableStore.findByUsername(username).isPresent()) {
-            mutableStore.findScmIdentitiesWithVerified(username).stream()
-                    .filter(id -> !configKeys.contains(id.get("provider") + ":" + id.get("username")))
-                    .forEach(result::add);
-        }
+        jdbcByKey.values().stream()
+                .filter(id -> !configKeys.contains(id.get("provider") + ":" + id.get("username")))
+                .forEach(result::add);
 
         return result;
     }
@@ -256,20 +284,8 @@ public class CompositeUserStore implements UserStore {
                 .filter(e -> !cfg.getEmails().contains(e))
                 .forEach(mergedEmails::add);
 
-        Set<String> configScmKeys = cfg.getScmIdentities().stream()
-                .map(id -> id.getProvider() + ":" + id.getUsername())
-                .collect(Collectors.toSet());
-        List<ScmIdentity> mergedScmIdentities = new ArrayList<>(cfg.getScmIdentities());
-        fromMutable.getScmIdentities().stream()
-                .filter(id -> !configScmKeys.contains(id.getProvider() + ":" + id.getUsername()))
-                .forEach(mergedScmIdentities::add);
-
-        Set<String> configFingerprints =
-                cfg.getSshKeys().stream().map(SshKeyEntry::getFingerprint).collect(Collectors.toSet());
-        List<SshKeyEntry> mergedSshKeys = new ArrayList<>(cfg.getSshKeys());
-        fromMutable.getSshKeys().stream()
-                .filter(k -> !configFingerprints.contains(k.getFingerprint()))
-                .forEach(mergedSshKeys::add);
+        List<ScmIdentity> mergedScmIdentities = mergeScmIdentities(cfg, fromMutable);
+        List<SshKeyEntry> mergedSshKeys = mergeSshKeys(cfg, fromMutable);
 
         return UserEntry.builder()
                 .username(fromMutable.getUsername())
@@ -279,6 +295,48 @@ public class CompositeUserStore implements UserStore {
                 .sshKeys(mergedSshKeys)
                 .roles(fromMutable.getRoles())
                 .build();
+    }
+
+    /**
+     * Config identities first, then mutable-only ones. On a provider:login collision the mutable row wins when it is
+     * OAuth-verified: linking an account whose login is already config-declared is exactly how a config user gets a
+     * verified identity, and strict identity mode (#40) only honours verified ones — the config snapshot must not mask
+     * it.
+     */
+    private static List<ScmIdentity> mergeScmIdentities(UserEntry cfg, UserEntry mutable) {
+        Map<String, ScmIdentity> mutableVerified = new LinkedHashMap<>();
+        mutable.getScmIdentities().stream()
+                .filter(ScmIdentity::isVerified)
+                .forEach(id -> mutableVerified.put(id.getProvider() + ":" + id.getUsername(), id));
+        Set<String> configKeys = cfg.getScmIdentities().stream()
+                .map(id -> id.getProvider() + ":" + id.getUsername())
+                .collect(Collectors.toSet());
+        List<ScmIdentity> merged = new ArrayList<>();
+        cfg.getScmIdentities()
+                .forEach(id -> merged.add(mutableVerified.getOrDefault(id.getProvider() + ":" + id.getUsername(), id)));
+        mutable.getScmIdentities().stream()
+                .filter(id -> !configKeys.contains(id.getProvider() + ":" + id.getUsername()))
+                .forEach(merged::add);
+        return merged;
+    }
+
+    /**
+     * Same shape for SSH keys: a config-declared key that a linked provider also reports keeps the provider-sourced
+     * (locked, verified) mutable entry rather than the bare config one.
+     */
+    private static List<SshKeyEntry> mergeSshKeys(UserEntry cfg, UserEntry mutable) {
+        Map<String, SshKeyEntry> mutableLocked = new LinkedHashMap<>();
+        mutable.getSshKeys().stream()
+                .filter(SshKeyEntry::isLocked)
+                .forEach(k -> mutableLocked.put(k.getFingerprint(), k));
+        Set<String> configFingerprints =
+                cfg.getSshKeys().stream().map(SshKeyEntry::getFingerprint).collect(Collectors.toSet());
+        List<SshKeyEntry> merged = new ArrayList<>();
+        cfg.getSshKeys().forEach(k -> merged.add(mutableLocked.getOrDefault(k.getFingerprint(), k)));
+        mutable.getSshKeys().stream()
+                .filter(k -> !configFingerprints.contains(k.getFingerprint()))
+                .forEach(merged::add);
+        return merged;
     }
 
     /**
@@ -302,20 +360,8 @@ public class CompositeUserStore implements UserStore {
         List<String> mergedEmails = new ArrayList<>(cfg.getEmails());
         mutable.getEmails().stream().filter(e -> !cfg.getEmails().contains(e)).forEach(mergedEmails::add);
 
-        Set<String> configScmKeys = cfg.getScmIdentities().stream()
-                .map(id -> id.getProvider() + ":" + id.getUsername())
-                .collect(Collectors.toSet());
-        List<ScmIdentity> mergedScmIdentities = new ArrayList<>(cfg.getScmIdentities());
-        mutable.getScmIdentities().stream()
-                .filter(id -> !configScmKeys.contains(id.getProvider() + ":" + id.getUsername()))
-                .forEach(mergedScmIdentities::add);
-
-        Set<String> configFingerprints =
-                cfg.getSshKeys().stream().map(SshKeyEntry::getFingerprint).collect(Collectors.toSet());
-        List<SshKeyEntry> mergedSshKeys = new ArrayList<>(cfg.getSshKeys());
-        mutable.getSshKeys().stream()
-                .filter(k -> !configFingerprints.contains(k.getFingerprint()))
-                .forEach(mergedSshKeys::add);
+        List<ScmIdentity> mergedScmIdentities = mergeScmIdentities(cfg, mutable);
+        List<SshKeyEntry> mergedSshKeys = mergeSshKeys(cfg, mutable);
 
         return UserEntry.builder()
                 .username(cfg.getUsername())

@@ -2,6 +2,7 @@ package com.rbc.fogwall.permission;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -79,6 +80,26 @@ class GroupPermissionServiceTest {
 
         assertTrue(svc.isAllowedToPush("alice", "github", "/acme/repo"));
         assertTrue(svc.isAllowedToReview("alice", "github", "/acme/repo"));
+    }
+
+    // ---- match target: OWNER on a group rule (previously ignored) ----
+
+    @Test
+    void groupRule_ownerTarget_matchesAllReposUnderOwner() {
+        PermissionGroup g = group("org-admins");
+        GroupPermissionRule r = GroupPermissionRule.builder()
+                .groupId(g.getId())
+                .provider("github")
+                .target(MatchTarget.OWNER)
+                .value("myorg")
+                .matchType(MatchType.LITERAL)
+                .grant(RepoPermission.Grant.PUSH_AND_REVIEW)
+                .build();
+        groupStore.saveRule(r);
+        groupStore.addMember(g.getId(), "alice");
+
+        assertTrue(svc.isAllowedToPush("alice", "github", "/myorg/anything"));
+        assertFalse(svc.isAllowedToPush("alice", "github", "/other/anything"));
     }
 
     // ---- non-member cannot use group rules ----

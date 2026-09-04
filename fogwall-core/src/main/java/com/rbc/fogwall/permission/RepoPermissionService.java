@@ -1,5 +1,6 @@
 package com.rbc.fogwall.permission;
 
+import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
 import java.nio.file.FileSystems;
 import java.nio.file.PathMatcher;
@@ -252,19 +253,57 @@ public class RepoPermissionService {
     }
 
     private boolean matchesPath(RepoPermission perm, String path) {
-        return matchesPattern(perm.getValue(), perm.getMatchType(), path);
+        return matchesPattern(perm.getTarget(), perm.getValue(), perm.getMatchType(), path);
     }
 
     private boolean matchesPathRule(GroupPermissionRule rule, String path) {
-        return matchesPattern(rule.getValue(), rule.getMatchType(), path);
+        return matchesPattern(rule.getTarget(), rule.getValue(), rule.getMatchType(), path);
     }
 
-    private boolean matchesPattern(String value, MatchType matchType, String path) {
+    /**
+     * Matches {@code value} against the part of {@code path} named by {@code target}. Without this, an {@code OWNER} or
+     * {@code NAME} grant was always compared against the full {@code /owner/repo} slug and so never matched — the
+     * target column landed in the model and stores (V5/V9) but the evaluator kept comparing the whole slug. Mirrors
+     * {@code UrlRuleEvaluator.matchesRepo}, which already picks the subject per target on the URL-rule side.
+     */
+    private boolean matchesPattern(MatchTarget target, String value, MatchType matchType, String path) {
+        String subject = subjectFor(target, path);
         return switch (matchType) {
-            case LITERAL -> value.equals(path);
-            case GLOB -> matchesGlob(value, path);
-            case REGEX -> matchesRegex(value, path);
+            case LITERAL -> value.equals(subject);
+            case GLOB -> matchesGlob(value, subject);
+            case REGEX -> matchesRegex(value, subject);
         };
+    }
+
+    /**
+     * Picks the comparison subject for a permission path. Permission paths use the {@code /owner/repo} convention, so
+     * {@code OWNER} takes the first segment and {@code NAME} the second — split the same way
+     * {@code RepositoryUrlRuleHook} derives owner/name from the server-mode slug, so permission and URL-rule matching
+     * agree. A {@code null} target defaults to {@code SLUG} (the model default), matching the whole path.
+     */
+    private static String subjectFor(MatchTarget target, String path) {
+        return switch (target == null ? MatchTarget.SLUG : target) {
+            case SLUG -> path;
+            case OWNER -> ownerOf(path);
+            case NAME -> nameOf(path);
+        };
+    }
+
+    /** First path segment of a {@code /owner/repo} slug, e.g. {@code "/myorg/repo"} → {@code "myorg"}. */
+    private static String ownerOf(String path) {
+        String[] parts = stripLeadingSlash(path).split("/", 3);
+        return parts.length >= 1 ? parts[0] : "";
+    }
+
+    /** Second path segment of a {@code /owner/repo} slug, e.g. {@code "/myorg/repo"} → {@code "repo"}. */
+    private static String nameOf(String path) {
+        String[] parts = stripLeadingSlash(path).split("/", 3);
+        return parts.length >= 2 ? parts[1] : "";
+    }
+
+    private static String stripLeadingSlash(String s) {
+        if (s == null) return "";
+        return s.startsWith("/") ? s.substring(1) : s;
     }
 
     private boolean matchesGlob(String pattern, String value) {
