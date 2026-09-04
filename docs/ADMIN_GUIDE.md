@@ -865,6 +865,22 @@ it shallow (the default) or tune `cache.proxy.shallow-since`; if you want the pr
 absorb the first-clone cost, set `cache.proxy.clone-depth: 0`. A shallow default is safe: reachability and hidden-commit
 checks deepen the mirror to full history on demand before deciding.
 
+### Inspecting and invalidating the local mirror cache
+
+The **Admin → Local mirror cache** page (requires `ROLE_ADMIN`) shows the mirrors each mode currently holds — server
+mode and transparent proxy are listed separately — with each mirror's upstream URL, on-disk size, ref count (expandable
+to the branches and tags present), when it was first cloned, and when it last fetched upstream. Two actions are
+available: **Invalidate** removes one mirror, and **Invalidate all** clears a mode's cache. Either way the local clone
+is deleted and re-created from upstream on the repo's next push/fetch, so this is the fix for a mirror that has gone
+stale or been poisoned (e.g. a failed upstream forward left objects upstream never received) — recovery that previously
+required a pod restart. Invalidation is safe on a running server: it deletes the per-repo clone but keeps the cache
+directory, and every invalidation is logged with the acting admin's login.
+
+This state is **per-pod** — each pod serves its own in-memory cache, so the page reflects the cache of whichever pod
+handled the request. To inspect or invalidate a specific pod's cache in a multi-pod deployment, reach that pod directly
+(e.g. via `kubectl port-forward` to the pod). The same operations are exposed over REST under `/api/admin/cache` for
+scripting.
+
 ---
 
 ## Production checklist

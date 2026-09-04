@@ -8,6 +8,7 @@ import com.rbc.fogwall.dashboard.SpringWebConfig;
 import com.rbc.fogwall.db.PushStoreFactory;
 import com.rbc.fogwall.db.memory.InMemoryFetchStore;
 import com.rbc.fogwall.db.memory.InMemoryUrlRuleRegistry;
+import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.jetty.reload.LiveConfigLoader;
 import com.rbc.fogwall.permission.InMemoryRepoPermissionStore;
 import com.rbc.fogwall.permission.RepoPermissionService;
@@ -18,6 +19,7 @@ import com.rbc.fogwall.user.UserEntry;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.ServletContextEvent;
 import jakarta.servlet.ServletContextListener;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.EnumSet;
 import java.util.List;
@@ -74,7 +76,17 @@ class DashboardFixture implements AutoCloseable {
         var configHolder = configBuilder.buildConfigHolder();
         var liveConfigLoader = new LiveConfigLoader(configHolder, config, config.getReload(), null, null);
 
+        // AdminCacheController constructor-injects both mirror caches by qualifier; the production context registers
+        // them from FogwallContext, so this fixture must supply the same two singletons. Empty caches are fine — the
+        // dashboard e2e/startup tests never push through, they only need the beans to exist so the context wires up.
+        var serverCache = new LocalRepositoryCache(
+                Files.createTempDirectory("fogwall-test-server-cache-" + UUID.randomUUID()), false);
+        var proxyCache = new LocalRepositoryCache(
+                Files.createTempDirectory("fogwall-test-proxy-cache-" + UUID.randomUUID()), false);
+
         appContext.addBeanFactoryPostProcessor(bf -> {
+            bf.registerSingleton("serverCache", serverCache);
+            bf.registerSingleton("proxyCache", proxyCache);
             bf.registerSingleton("userStore", userStore);
             bf.registerSingleton("fogwallConfig", config);
             bf.registerSingleton("pushStore", PushStoreFactory.h2InMemory("test-" + UUID.randomUUID()));

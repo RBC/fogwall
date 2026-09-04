@@ -83,6 +83,32 @@ export interface PushRecord {
   canCurrentUserSelfCertify?: boolean
 }
 
+/** One cached local mirror, from GET /api/admin/cache (#340). */
+export interface CacheEntry {
+  cacheKey: string
+  remoteUrl: string
+  cachedAtMillis: number
+  lastFetchedAtMillis: number
+  sizeBytes: number
+  /** Ref count, or -1 when the mirror's refs could not be read. */
+  refCount: number
+  shallow: boolean
+  unshallowed: boolean
+}
+
+/** One ref in a cached mirror, from GET /api/admin/cache/refs (#340). */
+export interface CacheRef {
+  name: string
+  objectId: string
+  type: 'branch' | 'tag' | 'other' | string
+}
+
+/** GET /api/admin/cache response: mirrors grouped by proxy mode. */
+export interface CacheListResponse {
+  server: CacheEntry[]
+  proxy: CacheEntry[]
+}
+
 export interface Provider {
   name: string
   id: string
