@@ -143,6 +143,67 @@ tasks.named('run') {
     environment 'FOGWALL_API_KEY', System.getenv('FOGWALL_API_KEY') ?: 'change-me-in-production'
     jvmArgs "-Dlog4j2.configurationFile=${rootDir}/fogwall-server/src/main/resources/log4j2-local.xml"
     jvmArgs "-Dfogwall.pidfile=${buildDir}/fogwall.pid"
+    // Prepend an extra directory to the runtime classpath so `fogwall-<profile>.yml` files that live OUTSIDE
+    // src/main/resources (and therefore never ship in the jar) can be picked up by FOGWALL_CONFIG_PROFILES.
+    // Used by the Playwright fixture profile and the fixture capture script.
+    // Usage: ./gradlew :fogwall-dashboard:run -PconfigDir=path/to/dir   (relative paths resolve against the repo root)
+    if (project.hasProperty('configDir')) {
+        classpath = files(rootProject.file(project.property('configDir'))) + classpath
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Playwright fixture database (see docs/CONTRIBUTING.md "UI regression fixtures").
+//
+// The UI regression suite boots the dashboard against a real, pre-populated H2 database rather than seeding data
+// through the app. The database is committed as a plain SQL dump (schema + rows + schema_migrations), produced by
+// test/capture/capture.py from real pushes through real providers and then scrubbed of personal values.
+// `restoreFixtureDb` turns that dump back into a fresh H2 file before the app boots; the migrator then applies only
+// migrations newer than the capture.
+// ---------------------------------------------------------------------------------------------------------------
+configurations {
+    h2Tool
+}
+
+def fixtureDir = file('frontend/tests/fixtures')
+def fixtureDbDir = layout.buildDirectory.dir('playwright-db')
+def fixtureDbPath = fixtureDbDir.map { it.file('fogwall').asFile.absolutePath }
+
+tasks.register('restoreFixtureDb', JavaExec) {
+    group = 'verification'
+    description = 'Recreates the Playwright H2 fixture database from frontend/tests/fixtures/fogwall.sql'
+    classpath = configurations.h2Tool
+    mainClass = 'org.h2.tools.RunScript'
+    inputs.file(new File(fixtureDir, 'fogwall.sql'))
+    outputs.dir(fixtureDbDir)
+    doFirst {
+        delete fixtureDbDir
+        fixtureDbDir.get().asFile.mkdirs()
+    }
+    args = ['-url', "jdbc:h2:file:${fixtureDbPath.get()}", '-script', new File(fixtureDir, 'fogwall.sql').absolutePath]
+}
+
+// Dumps an arbitrary H2 file database to SQL. Used by test/capture/capture.py; not part of any build.
+// Usage: ./gradlew :fogwall-dashboard:dumpH2 -Ph2Path=/abs/path/no-extension -Ph2Out=/abs/path/out.sql
+tasks.register('dumpH2', JavaExec) {
+    group = 'verification'
+    description = 'Dumps an H2 file database (-Ph2Path) to a SQL script (-Ph2Out)'
+    classpath = configurations.h2Tool
+    mainClass = 'org.h2.tools.Script'
+    // Paths resolve against the repo root (JavaExec's working dir is the module dir, so relative paths would otherwise surprise).
+    args = ['-url', "jdbc:h2:file:${rootProject.file(project.findProperty('h2Path') ?: 'unset').absolutePath}",
+            '-script', rootProject.file(project.findProperty('h2Out') ?: 'unset').absolutePath]
+}
+
+// Runs a SQL script against an arbitrary H2 file database. Used by capture.py to strip secret/session tables
+// before dumping. Usage: ./gradlew :fogwall-dashboard:runH2Script -Ph2Path=... -Ph2Script=...
+tasks.register('runH2Script', JavaExec) {
+    group = 'verification'
+    description = 'Runs a SQL script (-Ph2Script) against an H2 file database (-Ph2Path)'
+    classpath = configurations.h2Tool
+    mainClass = 'org.h2.tools.RunScript'
+    args = ['-url', "jdbc:h2:file:${rootProject.file(project.findProperty('h2Path') ?: 'unset').absolutePath}",
+            '-script', rootProject.file(project.findProperty('h2Script') ?: 'unset').absolutePath]
 }
 
 tasks.register('stop') {
@@ -235,6 +296,9 @@ dependencies {
     // Include core + server coverage in the aggregated JaCoCo report
     jacocoAggregation project(':fogwall-core')
     jacocoAggregation project(':fogwall-server')
+
+    // H2 command-line tools for the Playwright fixture database tasks above (not on the app classpath)
+    h2Tool "com.h2database:h2:${h2Version}"
 }
 
 tasks.withType(JavaCompile).configureEach {

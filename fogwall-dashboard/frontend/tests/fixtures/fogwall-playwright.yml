@@ -1,0 +1,311 @@
+# Playwright UI-regression profile.
+#
+# This ONE file serves two purposes:
+#   * replay — the Playwright webServer boots the dashboard with FOGWALL_CONFIG_PROFILES=playwright and this directory
+#     on the classpath (-PconfigDir), against the H2 database restored from fogwall.sql next to it. No credentials,
+#     no network: nothing here is ever contacted.
+#   * capture — test/capture/capture.py rewrites every placeholder below to its real value (test/capture/mapping.env),
+#     boots the dashboard with that real profile, runs real pushes through real providers, then scrubs the resulting
+#     database back to the placeholders and commits it as fogwall.sql.
+#
+# Placeholders (see test/capture/mapping.env.example). Keep them stable — the Playwright specs assert on them:
+#   fixture-dev              the developer's SCM handle on every provider AND the owner of the test repos
+#   Fixture Developer        the developer's display name
+#   fixture-dev@example.com  the developer's primary (provider-registered) email
+#   fixture-alt@example.com  a second email registered on the developer's provider account
+#   the ssh-ed25519 key below — the developer's real key, registered on github.com
+#
+# Everything else (users, permissions, groups, rules, validation policy) is fixture content in its own right and is
+# what the specs on the config pages assert against. Change it deliberately; re-capture afterwards.
+
+server:
+  service-url: http://localhost:8080
+  ssh:
+    enabled: true
+    port: 2222
+    host-key-path: .ssh/fogwall_host_key
+    trust-on-first-use: true
+  allowed-origins:
+    - http://localhost:5173
+
+# Four real providers plus one disabled built-in and one custom-typed instance, so the providers page shows every
+# shape: HTTP-only, HTTP+SSH, disabled, custom name/type/uri. The placeholder OAuth client-id keeps the profile page's
+# "Connected accounts" section rendering on replay (a blank id hides it); capture.py overrides it via env vars.
+providers:
+  github:
+    enabled: true
+    ssh:
+      enabled: true
+    oauth:
+      enabled: true
+      client-id: playwright-placeholder-client-id # replaced by env override during capture; never used on replay
+  gitlab:
+    enabled: true
+    oauth:
+      enabled: true
+      client-id: playwright-placeholder-client-id # replaced by env override during capture; never used on replay
+  codeberg:
+    enabled: true
+    oauth:
+      enabled: true
+      client-id: playwright-placeholder-client-id # replaced by env override during capture; never used on replay
+  gitea:
+    enabled: true
+    oauth:
+      enabled: true
+      client-id: playwright-placeholder-client-id # replaced by env override during capture; never used on replay
+  bitbucket:
+    enabled: false
+  corp-forge:
+    enabled: true
+    type: forgejo
+    uri: https://forge.corp.example.com
+
+scm-oauth:
+  identity-mode: permissive
+
+auth:
+  provider: local
+
+# admin    — ADMIN role; approves anything.
+# dev      — the pusher. SELF_CERTIFY role + grant on the primary test repo. All captured pushes resolve to this user.
+# reviewer — no roles; REVIEW grant on the fixture-dev org via permissions + a group.
+# observer — no roles, no grants; exists so a "can see but can't act" login is available to specs.
+users:
+  - username: admin
+    password-hash: '{noop}admin'
+    roles: [ADMIN]
+    emails:
+      - admin@example.com
+
+  - username: dev
+    password-hash: '{noop}password'
+    roles: [SELF_CERTIFY]
+    # github and gitlab identities are deliberately NOT declared here: capture.py has you link them via OAuth
+    # before the pushes, so their rows are OAuth-verified in the dump. gitea stays config-declared as the
+    # "locked (config)" example. codeberg is never linked — the "unmapped identity" rejection depends on it.
+    scm-identities:
+      - provider: gitea
+        username: fixture-dev
+    emails:
+      - fixture-dev@example.com
+    ssh-keys:
+      - public-key: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGrb6zV8OUX9sq8O63K8IX7P3/UnhrFc29iEoS1qsN6A fixture-dev@example.com'
+
+  - username: reviewer
+    password-hash: '{noop}password'
+    emails:
+      - reviewer@example.com
+
+  - username: observer
+    password-hash: '{noop}password'
+
+groups:
+  - name: platform-reviewers
+    description: 'Reviewers for the fixture-dev org'
+    members:
+      - reviewer
+      - admin
+    grants:
+      - provider: github
+        match:
+          target: SLUG
+          value: /fixture-dev/.*
+          type: REGEX
+        grant: REVIEW
+  - name: gitlab-contributors
+    description: 'Push access to GitLab test repos'
+    members:
+      - dev
+    grants:
+      - provider: gitlab
+        match:
+          target: SLUG
+          value: /fixture-dev/*
+          type: GLOB
+        grant: PUSH
+
+# Grants are SLUG-based. (OWNER / NAME targets were silently ignored by the permission matcher until #559; once a
+# re-capture is due anyway, switch one grant to OWNER so the fixture covers that shape too.)
+permissions:
+  - username: dev
+    provider: github
+    match:
+      target: SLUG
+      value: /fixture-dev/*
+      type: GLOB
+    grant: PUSH
+  - username: dev
+    provider: github
+    match:
+      target: SLUG
+      value: /fixture-dev/fogwall-fixture
+      type: LITERAL
+    grant: SELF_CERTIFY
+  - username: dev
+    provider: gitea
+    match:
+      target: SLUG
+      value: /fixture-dev/.*
+      type: REGEX
+    grant: PUSH
+  - username: reviewer
+    provider: github
+    match:
+      target: SLUG
+      value: /fixture-dev/*
+      type: GLOB
+    grant: REVIEW
+  - username: reviewer
+    provider: gitlab
+    match:
+      target: SLUG
+      value: /fixture-dev/fogwall-fixture
+      type: LITERAL
+    grant: PUSH_AND_REVIEW
+
+commit:
+  author:
+    email:
+      # Unified email-policy rules (the deprecated domain.allow / local.block keys are intentionally NOT used here).
+      # example.org stands in for the developer's real email domain during capture (capture.py swaps it).
+      rules:
+        - {
+            action: allow,
+            field: domain,
+            match: regex,
+            value: "(proton\\.me|gmail\\.com|outlook\\.com|yahoo\\.com|example\\.com|example\\.org)$",
+          }
+        - { action: allow, field: address, match: literal, value: 'release-bot@ci.example.net' }
+        - { action: block, field: local, match: regex, value: '^(noreply|no-reply|bot|nobody)$' }
+  # Commit-trailer policy: DCO sign-off is required and must match the author; co-authors are allow-listed.
+  # Every "clean" scenario commit in capture.py is therefore created with `git commit -s`.
+  trailers:
+    signed-off-by:
+      require: true
+      require-author-match: true
+    co-authored-by:
+      policy: allowlist
+      email:
+        rules:
+          - { action: allow, field: domain, match: regex, value: "example\\.com$" }
+          - { action: allow, field: address, match: literal, value: 'noreply@anthropic.com' }
+  message:
+    block:
+      literals:
+        - 'WIP'
+        - 'DO NOT MERGE'
+        - 'fixup!'
+        - 'squash!'
+      patterns:
+        - '(?i)(password|secret|token)\s*[=:]\s*\S+'
+
+diff-scan:
+  block:
+    literals:
+      - 'internal.corp.example.com'
+    patterns:
+      - '(?i)https?://[a-z0-9.-]*\.corp\.example\.com\b'
+
+secret-scan:
+  enabled: true
+
+binary-blob:
+  enabled: true
+  max-size-bytes: 52428800
+  deny-mime-types:
+    - application/pdf
+    - application/zip
+
+attestations:
+  - id: reviewed-content
+    type: checkbox
+    label: 'I have reviewed the diff and it contains no sensitive or proprietary information'
+    required: true
+    links:
+      - text: 'Data classification policy'
+        url: 'https://policies.corp.example.com/data-classification'
+  - id: policy-compliance
+    type: checkbox
+    label: 'This push complies with our open source contribution policy'
+    required: true
+    links:
+      - text: 'Open source contribution policy'
+        url: 'https://policies.corp.example.com/open-source-contribution'
+      - text: 'Approved license list'
+        url: 'https://policies.corp.example.com/approved-licenses'
+  - id: ticket-ref
+    type: text
+    label: 'Internal ticket or justification reference'
+    required: false
+
+# Evaluated like firewall rules: allow + deny merged, sorted by order, first match wins.
+# Every match type (LITERAL / GLOB / REGEX) and target (SLUG / OWNER / NAME) appears at least once, for both
+# operations, so the rules page has every shape to render.
+rules:
+  deny:
+    - enabled: true
+      order: 10
+      operation: PUSH
+      provider: github
+      match:
+        target: NAME
+        value: '*.github.io'
+        type: GLOB
+    - enabled: true
+      order: 20
+      operation: BOTH
+      provider: github
+      match:
+        target: SLUG
+        value: /fixture-dev/archived-repo
+        type: LITERAL
+    - enabled: false
+      order: 30
+      operation: FETCH
+      provider: gitlab
+      match:
+        target: OWNER
+        value: '^(legacy|deprecated)-.*'
+        type: REGEX
+  allow:
+    - enabled: true
+      order: 100
+      operation: BOTH
+      provider: github
+      match:
+        target: OWNER
+        value: fixture-dev
+        type: LITERAL
+    - enabled: true
+      order: 110
+      operation: BOTH
+      provider: gitlab
+      match:
+        target: SLUG
+        value: /fixture-dev/*
+        type: GLOB
+    - enabled: true
+      order: 120
+      operation: BOTH
+      provider: codeberg
+      match:
+        target: SLUG
+        value: /fixture-dev/.*
+        type: REGEX
+    - enabled: true
+      order: 130
+      operation: BOTH
+      provider: gitea
+      match:
+        target: SLUG
+        value: /fixture-dev/.*
+        type: REGEX
+    - enabled: true
+      order: 900
+      operation: FETCH
+      provider: github
+      match:
+        target: NAME
+        value: '*'
+        type: GLOB
