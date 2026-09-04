@@ -99,6 +99,40 @@ export interface Provider {
   requireReviewPermission: boolean
 }
 
+/** One provider's generated git setup config, from the public `/api/setup` endpoint (#475). Push-only by default. */
+export interface SetupProvider {
+  name: string
+  id: string
+  type: string
+  /** Upstream host this config routes through fogwall, e.g. `github.com`. */
+  host: string
+  /** Upstream base URL, trailing slash stripped, e.g. `https://github.com`. */
+  upstreamUrl: string
+  /** The `/server` clone/push URL prefix through fogwall, e.g. `https://fogwall/server/github.com/`. */
+  serverUrl: string
+  /** Global push-only `~/.gitconfig` block (HTTPS): reroutes pushes to /server; clones/fetches stay direct. */
+  httpPush: string
+  /** Opt-in global `~/.gitconfig` block (HTTPS) to also route fetches through fogwall's /proxy. */
+  httpRead: string
+  /** Per-repository HTTPS commands: clone from upstream, then `git remote set-url --push` to fogwall. */
+  httpPerRepo: string
+  /** True when this provider serves SSH and SSH config blocks are available. */
+  sshEnabled: boolean
+  /** Global push-only SSH `~/.gitconfig` block, or null when the provider does not serve SSH. */
+  sshPush: string | null
+  /** Per-repository SSH commands, or null when the provider does not serve SSH. */
+  sshPerRepo: string | null
+}
+
+/** Response of the public `/api/setup` endpoint (#475) — the in-app developer setup guide. */
+export interface SetupInfo {
+  /** Base URL the generated config routes to (service-url if set, else derived from the request). */
+  serviceUrl: string
+  /** False when `server.service-url` is unset and the base URL was derived from the request (may be wrong behind a proxy). */
+  serviceUrlConfigured: boolean
+  providers: SetupProvider[]
+}
+
 export interface EmailEntry {
   email: string
   verified: boolean

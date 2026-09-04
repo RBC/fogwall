@@ -10,6 +10,7 @@ import { PushDiff } from './pages/PushDiff'
 import { PushList } from './pages/PushList'
 import { Profile } from './pages/Profile'
 import { Repos } from './pages/Repos'
+import { Setup } from './pages/Setup'
 import { Groups } from './pages/Groups'
 import { Legal } from './pages/Legal'
 import { Users } from './pages/Users'
@@ -48,6 +49,7 @@ export default function App() {
             />
             <Route path="/push/:id/diff" element={<PushDiff dark={dark} />} />
             <Route path="/providers" element={<Providers />} />
+            <Route path="/setup" element={<Setup />} />
             <Route path="/repos" element={<Repos />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/users" element={<Users authProvider={authProvider} />} />

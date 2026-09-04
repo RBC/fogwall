@@ -1,4 +1,4 @@
-import type { GroupPermissionRule, RepoPermission, ScmOAuthProviderInfo } from './types'
+import type { GroupPermissionRule, RepoPermission, ScmOAuthProviderInfo, SetupInfo } from './types'
 
 /** Reads the XSRF-TOKEN cookie set by Spring Security's CookieCsrfTokenRepository. */
 function getCsrfToken(): string | null {
@@ -66,6 +66,13 @@ export async function triggerConfigReload(section: string = 'all'): Promise<{ me
     method: 'POST',
   })
   if (!res.ok) await parseErrorResponse(res, 'Config reload failed')
+  return res.json()
+}
+
+// Public endpoint (permitAll) — plain fetch, no auth redirect, so the setup guide works for logged-out developers.
+export async function fetchSetup(): Promise<SetupInfo> {
+  const res = await fetch('/api/setup')
+  if (!res.ok) throw new Error('Failed to fetch setup config')
   return res.json()
 }
 
