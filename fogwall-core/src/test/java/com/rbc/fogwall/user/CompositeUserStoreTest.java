@@ -88,6 +88,55 @@ class CompositeUserStoreTest {
     }
 
     @Test
+    void findByUsername_configIdentityLinkedViaOAuth_isVerifiedInMergedEntry() {
+        // Strict identity mode reads UserEntry.getScmIdentities(); the config-declared github:alice-config must be
+        // reported verified once OAuth has verified that same login, not masked by the config snapshot.
+        jdbcStore.upsertUser("alice");
+        jdbcStore.upsertVerifiedScmIdentity("alice", "github", "alice-config");
+
+        var entry = store.findByUsername("alice").orElseThrow();
+
+        assertEquals(1, entry.getScmIdentities().size());
+        assertTrue(entry.getScmIdentities().get(0).isVerified());
+    }
+
+    @Test
+    void findScmIdentitiesWithVerified_configIdentityLinkedViaOAuth_reportsVerified() {
+        // The config declares github:alice-config. The user then links github via OAuth and the provider reports the
+        // same login — the JDBC row is verified. The merged view must say verified (still config-sourced/locked),
+        // otherwise the profile page shows the account as "Not linked" right after a successful link.
+        jdbcStore.upsertUser("alice");
+        jdbcStore.upsertVerifiedScmIdentity("alice", "github", "alice-config");
+
+        var ids = store.findScmIdentitiesWithVerified("alice");
+
+        assertEquals(1, ids.size(), "config + verified JDBC row for the same identity must not duplicate");
+        assertEquals("config", ids.get(0).get("source"));
+        assertEquals(true, ids.get(0).get("verified"));
+    }
+
+    @Test
+    void findScmIdentitiesWithVerified_configIdentityNotLinked_staysUnverified() {
+        jdbcStore.upsertUser("alice");
+        var ids = store.findScmIdentitiesWithVerified("alice");
+        assertEquals(1, ids.size());
+        assertEquals(false, ids.get(0).get("verified"));
+    }
+
+    @Test
+    void findEmailsWithVerified_configEmailVerifiedByProvider_reportsVerifiedAndSources() {
+        jdbcStore.upsertUser("alice");
+        jdbcStore.upsertLockedEmail("alice", "alice@config.com", "github");
+
+        var emails = store.findEmailsWithVerified("alice");
+
+        assertEquals(1, emails.size());
+        assertEquals(true, emails.get(0).get("locked"));
+        assertEquals(true, emails.get(0).get("verified"));
+        assertEquals("github", emails.get(0).get("source"));
+    }
+
+    @Test
     void findByEmail_configUser_found() {
         assertTrue(store.findByEmail("alice@config.com").isPresent());
     }

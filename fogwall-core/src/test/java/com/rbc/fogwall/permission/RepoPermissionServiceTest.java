@@ -2,6 +2,7 @@ package com.rbc.fogwall.permission;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -214,6 +215,45 @@ class RepoPermissionServiceTest {
         assertTrue(svc.isAllowedToPush("alice", "github", "/acme/repo-a"));
         assertFalse(svc.isAllowedToPush("alice", "github", "/acme/repo-12"));
         assertFalse(svc.isAllowedToPush("alice", "github", "/acme/repo-"));
+    }
+
+    // ---- match target: OWNER / NAME (previously ignored — always compared against the full slug) ----
+
+    private RepoPermission targetGrant(
+            String username, String provider, MatchTarget target, String value, MatchType matchType) {
+        return RepoPermission.builder()
+                .username(username)
+                .provider(provider)
+                .target(target)
+                .value(value)
+                .matchType(matchType)
+                .grant(RepoPermission.Grant.PUSH_AND_REVIEW)
+                .source(RepoPermission.Source.DB)
+                .build();
+    }
+
+    @Test
+    void ownerTarget_literal_matchesAllReposUnderOwner() {
+        svc.save(targetGrant("alice", "github", MatchTarget.OWNER, "myorg", MatchType.LITERAL));
+        assertTrue(svc.isAllowedToPush("alice", "github", "/myorg/anything"));
+        assertTrue(svc.isAllowedToPush("alice", "github", "/myorg/other-repo"));
+        assertFalse(svc.isAllowedToPush("alice", "github", "/other/anything"));
+    }
+
+    @Test
+    void ownerTarget_glob_matchesOwnerPrefix() {
+        svc.save(targetGrant("alice", "github", MatchTarget.OWNER, "team-*", MatchType.GLOB));
+        assertTrue(svc.isAllowedToPush("alice", "github", "/team-alpha/x"));
+        assertTrue(svc.isAllowedToPush("alice", "github", "/team-beta/y"));
+        assertFalse(svc.isAllowedToPush("alice", "github", "/other/x"));
+    }
+
+    @Test
+    void nameTarget_literal_matchesRepoNameUnderAnyOwner() {
+        svc.save(targetGrant("alice", "github", MatchTarget.NAME, "repo", MatchType.LITERAL));
+        assertTrue(svc.isAllowedToPush("alice", "github", "/a/repo"));
+        assertTrue(svc.isAllowedToPush("alice", "github", "/b/repo"));
+        assertFalse(svc.isAllowedToPush("alice", "github", "/a/repo2"));
     }
 
     // ---- regex matching ----
