@@ -67,6 +67,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
+import org.eclipse.jgit.storage.file.WindowCacheConfig;
 
 /**
  * Constructs runtime objects ({@link FogwallProvider}, {@link CommitConfig}, {@link PushStore}, etc.) from the parsed
@@ -525,6 +526,41 @@ public class JettyConfigurationBuilder {
     }
 
     /**
+     * Tunes JGit's process-global pack-window cache for a long-running, many-mirror server rather than JGit's
+     * desktop-git defaults. This is the read-side counterpart to fogwall's push-side DoS guards
+     * ({@code maxPushBytes}/{@code maxObjectSize}): those bound what a client can push <em>through</em> the gateway,
+     * whereas these bound how efficiently JGit serves and mirrors content it already holds.
+     *
+     * <ul>
+     *   <li><b>packedGitLimit</b> 10&nbsp;MB&nbsp;&rarr;&nbsp;64&nbsp;MB — the memory budget (a cap, filled lazily) for
+     *       cached pack windows across the whole process. JGit's 10&nbsp;MB default is sized for one repo on a laptop;
+     *       a server holding many mirrors evicts and re-reads pack windows constantly at that size.
+     *   <li><b>packedGitOpenFiles</b> 128&nbsp;&rarr;&nbsp;256 — max pack files kept open at once. A gateway in front
+     *       of many repos, each with several packs, thrashes descriptors at 128.
+     *   <li><b>packedGitMMAP</b> left <b>false</b> — deliberately. True mmap can SIGBUS if a pack file is replaced
+     *       while mapped, which is exactly the concurrent-refresh scenario the serve path is intentionally left
+     *       lock-free for (see {@link com.rbc.fogwall.git.LocalRepositoryCache}); byte-array windows are safe under
+     *       that race.
+     *   <li><b>streamFileThreshold</b> left at the JGit default (50&nbsp;MB) — already a sane heap guard for large
+     *       blobs read out of a mirror.
+     * </ul>
+     *
+     * <p>These are deliberately <b>not</b> exposed as fogwall config keys: they are engine-tuning internals almost no
+     * operator should reason about, and keeping them out of the config file preserves its user-facing clarity. If a
+     * deployment ever needs to override them (e.g. a memory-constrained pod dialing {@code packedGitLimit} down), add a
+     * hidden environment variable rather than a config key. WindowCache is a JVM singleton, so this reconfigure is
+     * process-global and idempotent — calling it again simply re-applies the same values.
+     */
+    private static void tuneGitPackCacheForServerWorkload() {
+        WindowCacheConfig cfg = new WindowCacheConfig();
+        cfg.setPackedGitLimit(64 * 1024 * 1024);
+        cfg.setPackedGitOpenFiles(256);
+        cfg.setPackedGitMMAP(false);
+        cfg.install();
+        log.info("Tuned JGit pack cache for server workload: packedGitLimit=64MB, packedGitOpenFiles=256, mmap=false");
+    }
+
+    /**
      * Builds the complete {@link FogwallContext} using the config-derived {@link ApprovalGateway} (based on
      * {@code server.approval-mode}).
      */
@@ -542,6 +578,7 @@ public class JettyConfigurationBuilder {
     }
 
     private FogwallContext buildProxyContextWith(ApprovalGateway approvalGateway) throws IOException {
+        tuneGitPackCacheForServerWorkload();
         PushStore ps = buildPushStore();
         FetchStore fs = buildFetchStore();
         UserStore us = buildUserStore();

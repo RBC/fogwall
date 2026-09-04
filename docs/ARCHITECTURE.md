@@ -217,6 +217,19 @@ in-memory and per-pod, so this is a per-pod operational view, not distributed st
 local clone (keeping the cache root) so the next access re-clones from upstream — the recovery path for a stale or
 poisoned mirror without a restart.
 
+**Concurrency.** A mirror is shared across concurrent requests, so the cache coordinates access at three points. First
+clones are serialized on a **per-repository lock** (keyed on the cache key): threads racing on the first access to the
+same repo dedupe to one clone, while first clones of _different_ repos run in parallel. Upstream refreshes for a repo
+are serialized on that repo's own lock so two fetches never write the same bare repo at once. The **serve path is
+deliberately left lock-free**, though: a refresh (writer) may run while an upload/receive or content inspection (reader)
+uses the same mirror, and readers are not blocked. This is safe because a `git fetch` is additive — it never deletes the
+objects a concurrent reader is serving — so the worst normal outcome is that the reader sees a slightly stale snapshot
+and the client re-fetches. A read/write lock was rejected because, to be safe, it would either starve refreshes under
+sustained fetch traffic or tax the hot serve path; the full rationale (and the shallow-mirror `cloneDepth=0` escape
+hatch for the one transient edge case) lives on `LocalRepositoryCache`. Separately, JGit's process-global pack-window
+cache is tuned once at startup for a many-mirror server (larger `packedGitLimit`/open-file budget, mmap off) rather than
+its desktop-git defaults; these are engine internals, intentionally not fogwall config keys.
+
 ---
 
 ## Validation pipeline

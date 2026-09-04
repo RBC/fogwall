@@ -32,17 +32,40 @@ import org.eclipse.jgit.transport.URIish;
  *
  * <h2>Concurrency</h2>
  *
- * <p>Each cached repository has its own {@link ReentrantLock} ({@code CachedRepository.fetchLock}) that serializes
- * upstream fetches for that repository. The lock is acquired before any {@code git fetch} and released once the fetch
- * completes. A {@code fetchCooldownMs} guard ensures that a re-fetch is skipped when another thread has already
- * refreshed the mirror recently, avoiding redundant network round-trips.
+ * <p><b>First clones</b> are serialized per repository by a {@link ReentrantLock} keyed on the cache key
+ * ({@code cloneLocks}). Two threads racing on the first access to the same URL cannot both launch a {@code git clone}
+ * into the same mirror directory (which would interleave and fail): the winner clones, the loser double-checks the
+ * cache and is handed the same mirror. First clones of <em>different</em> repositories run concurrently — the lock is
+ * per key, not instance-wide.
  *
- * <p>Initial clones (first access for a URL) are still gated by an instance-level {@code synchronized} block to prevent
- * duplicate parallel clones of the same repository.
+ * <p><b>Upstream fetches</b> for one repository are serialized by that repository's own {@link ReentrantLock}
+ * ({@code CachedRepository.fetchLock}), so two {@code git fetch} operations never write the same bare repo at once. A
+ * {@code fetchCooldownMs} guard additionally skips a re-fetch when the mirror was refreshed recently, avoiding
+ * redundant network round-trips.
  *
- * <p>Note: upstream fetches are still possible while an {@code UploadPack} negotiation is in progress on the same
- * mirror. For deployments with high concurrent fetch traffic on shallow-cloned mirrors, consider using
- * {@code cloneDepth=0} for the serve cache to eliminate shallow-boundary reachability races entirely.
+ * <h3>Serve vs. fetch: intentionally lock-free</h3>
+ *
+ * <p>A refresh fetch (writer) can run while an {@code UploadPack}/{@code ReceivePack} or content inspection (reader) is
+ * using the same mirror. This is a <b>deliberate design decision, not an oversight</b>: readers are <em>not</em>
+ * blocked against the refreshing writer, keeping the serve path — fogwall's hot path — free of lock contention.
+ *
+ * <p>The trade is sound because a {@code git fetch} is <b>additive</b>: it writes new pack files and advances refs but
+ * never deletes the objects a concurrent reader is already serving (object removal only happens under {@code gc}/
+ * {@code prune}, which a plain fetch does not trigger). So the usual consequence of an overlap is merely that the
+ * reader serves a slightly <em>stale</em> snapshot — it doesn't yet see commits the refresh just added — and the client
+ * re-fetches later to pick them up. On a fogwall gateway in server mode this brief, self-healing staleness (bounded by
+ * the fetch cooldown) is acceptable.
+ *
+ * <p>A per-repository read/write lock was considered and rejected: to be safe it would either make refreshes wait for
+ * readers to drain — which under sustained automated fetch traffic (e.g. CI polling) can <em>starve the writer</em> so
+ * the mirror grows staler, the opposite of the intent — or make readers wait for refreshes, taxing the hot path. Paying
+ * either cost to prevent a consequence that is normally benign staleness is a poor trade.
+ *
+ * <p>The one non-benign residual is on <b>shallow</b> mirrors, where a reachability race near the shallow boundary can
+ * make a concurrent read fail with {@code want <sha> not valid}. That failure is a transient, retryable request error —
+ * not corruption, not data loss, not an authorization bypass — and the client simply retries. A deployment that serves
+ * high-churn shallow mirrors and wants to eliminate even that transient can set {@code cloneDepth=0} on the serve cache
+ * to remove the shallow boundary entirely.
  */
 @Slf4j
 public class LocalRepositoryCache {
@@ -63,6 +86,18 @@ public class LocalRepositoryCache {
 
     private final Path cacheDirectory;
     private final Map<String, CachedRepository> cache = new ConcurrentHashMap<>();
+
+    /**
+     * Per-cache-key locks that serialize the <em>first</em> clone/fetch of a repository without serializing across
+     * <em>different</em> repositories. Before, {@code cloneOrFetch} was {@code synchronized} on the whole cache, so a
+     * slow first clone of one repo (seconds over the network) blocked the first clone of every other repo behind the
+     * same monitor. Keying the lock on the cache key means two threads racing on the same new repo still dedupe (the
+     * loser double-checks the cache and returns the winner's clone), while first clones of distinct repos proceed in
+     * parallel. Entries are never removed: one {@link ReentrantLock} per distinct repository ever seen is a negligible,
+     * bounded footprint, and removal would reintroduce a race with a thread about to acquire the same key's lock.
+     */
+    private final Map<String, ReentrantLock> cloneLocks = new ConcurrentHashMap<>();
+
     private final int cloneDepth;
 
     /**
@@ -348,63 +383,70 @@ public class LocalRepositoryCache {
     }
 
     /**
-     * Clone or fetch a repository. Synchronized at the instance level to prevent duplicate parallel clones when
-     * multiple threads race on first access for the same URL.
+     * Clone or fetch a repository. Serialized on a <em>per-repository</em> lock (keyed by cache key) so that two
+     * threads racing on first access for the same URL don't produce duplicate parallel clones, while first clones of
+     * different repositories run concurrently instead of queueing behind a single instance-wide monitor.
      */
-    private synchronized Repository cloneOrFetch(
+    private Repository cloneOrFetch(
             String remoteUrl,
             String cacheKey,
             CredentialsProvider credentials,
             TransportConfigCallback transportConfig,
             String principalKey)
             throws GitAPIException, IOException {
-        // Double-check after acquiring lock — another thread may have cloned while we waited
-        CachedRepository cached = cache.get(cacheKey);
-        if (cached != null && cached.isValid()) {
-            cached.repository.incrementOpen();
-            return cached.repository;
-        }
-
-        File repoDir = new File(cacheDirectory.toFile(), cacheKey);
-
-        Repository repository;
-        if (repoDir.exists()) {
-            log.debug("Repository directory exists, opening and fetching: {}", repoDir);
-            Git git = Git.open(repoDir);
-            var fetchCmd = git.fetch().setRemote("origin");
-            if (credentials != null) fetchCmd.setCredentialsProvider(credentials);
-            if (transportConfig != null) fetchCmd.setTransportConfigCallback(transportConfig);
-            if (shallowSince != null) {
-                fetchCmd.setShallowSince(Instant.now().minus(shallowSince));
-            } else if (cloneDepth > 0) {
-                fetchCmd.setDepth(cloneDepth);
-            }
-            fetchCmd.call();
-            repository = git.getRepository();
-        } else {
-            log.debug("Cloning repository to: {} ({})", repoDir, describeShallow());
-            var cloneCommand = Git.cloneRepository()
-                    .setURI(remoteUrl)
-                    .setDirectory(repoDir)
-                    .setBare(true);
-            if (credentials != null) cloneCommand.setCredentialsProvider(credentials);
-            if (transportConfig != null) cloneCommand.setTransportConfigCallback(transportConfig);
-            if (shallowSince != null) {
-                cloneCommand.setShallowSince(Instant.now().minus(shallowSince));
-            } else if (cloneDepth > 0) {
-                cloneCommand.setDepth(cloneDepth);
+        ReentrantLock cloneLock = cloneLocks.computeIfAbsent(cacheKey, k -> new ReentrantLock());
+        cloneLock.lock();
+        try {
+            // Double-check after acquiring lock — another thread may have cloned while we waited
+            CachedRepository cached = cache.get(cacheKey);
+            if (cached != null && cached.isValid()) {
+                cached.repository.incrementOpen();
+                return cached.repository;
             }
 
-            Git git = cloneCommand.call();
-            repository = git.getRepository();
-        }
+            File repoDir = new File(cacheDirectory.toFile(), cacheKey);
 
-        var newCached = new CachedRepository(repository, remoteUrl);
-        // The clone/fetch above succeeded with this principal's credentials, so record them as verified.
-        newCached.lastFetchedByPrincipal.put(principalKey, System.currentTimeMillis());
-        newCached.lastSuccessfulFetchAt = newCached.cachedAt;
-        cache.put(cacheKey, newCached);
-        return repository;
+            Repository repository;
+            if (repoDir.exists()) {
+                log.debug("Repository directory exists, opening and fetching: {}", repoDir);
+                Git git = Git.open(repoDir);
+                var fetchCmd = git.fetch().setRemote("origin");
+                if (credentials != null) fetchCmd.setCredentialsProvider(credentials);
+                if (transportConfig != null) fetchCmd.setTransportConfigCallback(transportConfig);
+                if (shallowSince != null) {
+                    fetchCmd.setShallowSince(Instant.now().minus(shallowSince));
+                } else if (cloneDepth > 0) {
+                    fetchCmd.setDepth(cloneDepth);
+                }
+                fetchCmd.call();
+                repository = git.getRepository();
+            } else {
+                log.debug("Cloning repository to: {} ({})", repoDir, describeShallow());
+                var cloneCommand = Git.cloneRepository()
+                        .setURI(remoteUrl)
+                        .setDirectory(repoDir)
+                        .setBare(true);
+                if (credentials != null) cloneCommand.setCredentialsProvider(credentials);
+                if (transportConfig != null) cloneCommand.setTransportConfigCallback(transportConfig);
+                if (shallowSince != null) {
+                    cloneCommand.setShallowSince(Instant.now().minus(shallowSince));
+                } else if (cloneDepth > 0) {
+                    cloneCommand.setDepth(cloneDepth);
+                }
+
+                Git git = cloneCommand.call();
+                repository = git.getRepository();
+            }
+
+            var newCached = new CachedRepository(repository, remoteUrl);
+            // The clone/fetch above succeeded with this principal's credentials, so record them as verified.
+            newCached.lastFetchedByPrincipal.put(principalKey, System.currentTimeMillis());
+            newCached.lastSuccessfulFetchAt = newCached.cachedAt;
+            cache.put(cacheKey, newCached);
+            return repository;
+        } finally {
+            cloneLock.unlock();
+        }
     }
 
     /**
