@@ -7,6 +7,7 @@ on:
     branches: ["main", "release/*"]
   pull_request:
     branches: ["main"]
+  merge_group:
   schedule:
     - cron: '22 13 * * 3'
 
