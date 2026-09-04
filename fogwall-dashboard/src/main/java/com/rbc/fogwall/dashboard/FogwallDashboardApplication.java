@@ -65,6 +65,7 @@ public class FogwallDashboardApplication {
 
         var threadPool = new QueuedThreadPool();
         threadPool.setName("fogwall-dashboard");
+        FogwallJettyApplication.configureThreadPool(threadPool, configBuilder.getThreadsConfig());
 
         var server = new Server(threadPool);
         FogwallJettyApplication.enableVirtualThreads(

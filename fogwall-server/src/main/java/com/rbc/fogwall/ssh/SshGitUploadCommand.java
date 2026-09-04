@@ -101,10 +101,11 @@ public class SshGitUploadCommand implements Command {
         // SSH_AUTH_SOCK is set on the channel env by MINA SSHD when the client's ssh -A forwarding
         // channel is established. Capture it here before handing off to the worker thread.
         String authSocket = env.getEnv().get(SshAgent.SSH_AUTHSOCKET_ENV_NAME);
-        Thread worker = new Thread(
-                () -> runUploadPack(sshUser, connectingFingerprint, authSocket), "ssh-git-upload-" + repoPath);
-        worker.setDaemon(true);
-        worker.start();
+        // Virtual thread (matches the receive path): the worker can park on upstream fetch I/O without holding a
+        // platform thread, so a burst of concurrent clones/fetches doesn't exhaust the pool.
+        Thread.ofVirtual()
+                .name("ssh-git-upload-" + repoPath)
+                .start(() -> runUploadPack(sshUser, connectingFingerprint, authSocket));
     }
 
     private void runUploadPack(String sshUser, String connectingFingerprint, String authSocket) {
