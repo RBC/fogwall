@@ -59,6 +59,14 @@ public class ProviderConfig {
      */
     private int blockedInfoRefsStatus = 403;
 
+    /**
+     * Per-provider override for whether server mode serves clone/fetch from the local mirror (fogwall#478).
+     * {@code null} (default) inherits the global {@link ServerConfig#isServeFetch()} ({@code server.serve-fetch}); set
+     * {@code true} or {@code false} to override it for this provider only. Applies to both transports of server mode
+     * (HTTP and SSH).
+     */
+    private Boolean serveFetch = null;
+
     /** OAuth account-linking settings for this provider instance (#40). See docs/CONFIGURATION.md#scm-oauth. */
     private OAuthProviderSettings oauth = new OAuthProviderSettings();
 

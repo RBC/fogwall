@@ -49,6 +49,18 @@ public interface FogwallProvider {
     }
 
     /**
+     * Whether server mode serves clone/fetch from the local mirror for this provider (fogwall#478). Defaults to
+     * {@code true} — a developer whose remote is the fogwall URL expects {@code git pull} to work. When {@code false},
+     * the {@code git-upload-pack} capability is not mounted on either transport (HTTP and SSH) and fetches are refused
+     * with a clear git-side error; push (receive-pack) is unaffected. Resolved from {@code server.serve-fetch} with an
+     * optional per-provider {@code providers.<name>.serve-fetch} override. Transparent proxy mode ignores this — it
+     * forwards to upstream rather than serving a local mirror.
+     */
+    default boolean isServeFetch() {
+        return true;
+    }
+
+    /**
      * Builds a browsable web URL for the given repository on this provider's platform, e.g.
      * {@code https://github.com/owner/repo}. Returns {@link Optional#empty()} for providers with no stable public repo
      * URL shape (generic bare-git providers).

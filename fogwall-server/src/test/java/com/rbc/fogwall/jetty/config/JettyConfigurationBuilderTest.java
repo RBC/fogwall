@@ -385,6 +385,44 @@ class JettyConfigurationBuilderTest {
         assertTrue(ex.getMessage().contains("ssh.uri must use the ssh scheme"));
     }
 
+    // ---- serve-fetch toggle (#478) ----
+
+    @Test
+    void createProvider_serveFetch_defaultsEnabled() {
+        var providers = new JettyConfigurationBuilder(configWithSingleProvider("github", new ProviderConfig()))
+                .buildProviders();
+        assertEquals(1, providers.size());
+        assertTrue(providers.get(0).isServeFetch(), "serve-fetch defaults to enabled");
+    }
+
+    @Test
+    void createProvider_serveFetch_globalDisabledInheritedByProvider() {
+        var config = configWithSingleProvider("github", new ProviderConfig());
+        config.getServer().setServeFetch(false);
+        var providers = new JettyConfigurationBuilder(config).buildProviders();
+        assertEquals(1, providers.size());
+        assertFalse(providers.get(0).isServeFetch(), "provider with no override inherits the global default");
+    }
+
+    @Test
+    void createProvider_serveFetch_perProviderOverrideWinsOverGlobal() {
+        var config = configWithSingleProvider("github", new ProviderConfig());
+        config.getServer().setServeFetch(false); // global off
+        config.getProviders().get("github").setServeFetch(true); // provider re-enables
+        var providers = new JettyConfigurationBuilder(config).buildProviders();
+        assertEquals(1, providers.size());
+        assertTrue(providers.get(0).isServeFetch(), "per-provider serve-fetch override wins over the global default");
+    }
+
+    @Test
+    void createProvider_serveFetch_perProviderDisableOverridesGlobalDefault() {
+        var pc = new ProviderConfig();
+        pc.setServeFetch(false); // global default is enabled; provider opts out
+        var providers = new JettyConfigurationBuilder(configWithSingleProvider("github", pc)).buildProviders();
+        assertEquals(1, providers.size());
+        assertFalse(providers.get(0).isServeFetch(), "per-provider serve-fetch=false overrides the enabled default");
+    }
+
     @Test
     void createProvider_gitlabKey_inferredAsGitLabProvider() {
         var providers = new JettyConfigurationBuilder(configWithSingleProvider("gitlab", new ProviderConfig()))

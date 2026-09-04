@@ -1038,6 +1038,27 @@ public class JettyConfigurationBuilder {
     }
 
     private Optional<FogwallProvider> createProvider(String name, ProviderConfig providerConfig) {
+        Optional<FogwallProvider> provider = buildProvider(name, providerConfig);
+        // Resolve the fetch toggle (#478) after construction: a per-provider serve-fetch override wins over the
+        // global server.serve-fetch default. Carried on the provider so both transports (HTTP registrar, SSH command)
+        // read one source of truth.
+        provider.ifPresent(p -> {
+            if (p instanceof AbstractFogwallProvider afp) {
+                afp.setServeFetch(resolveServeFetch(providerConfig));
+            }
+        });
+        return provider;
+    }
+
+    /**
+     * Resolves the effective serve-fetch value for a provider: per-provider override if set, else the global default.
+     */
+    private boolean resolveServeFetch(ProviderConfig providerConfig) {
+        Boolean override = providerConfig.getServeFetch();
+        return override != null ? override : config.getServer().isServeFetch();
+    }
+
+    private Optional<FogwallProvider> buildProvider(String name, ProviderConfig providerConfig) {
         String explicitType = providerConfig.getType();
         // Use explicit type if set; otherwise accept only exact built-in names, not fuzzy name inference.
         String resolvedType = (explicitType != null && !explicitType.isBlank())

@@ -35,12 +35,29 @@ public abstract class AbstractFogwallProvider implements FogwallProvider {
     protected URI sshUri;
 
     /**
+     * Whether server mode serves clone/fetch from the local mirror for this provider (fogwall#478). Defaults to
+     * {@code true}; set from the resolved {@code server.serve-fetch} / per-provider {@code serve-fetch} config after
+     * construction via {@link #setServeFetch(boolean)}.
+     */
+    protected boolean serveFetch = true;
+
+    /**
      * The SSH transport endpoint to forward pushes to, if this provider serves SSH (configured via the {@code ssh:}
      * sub-block). Empty for HTTP-only providers.
      */
     @Override
     public Optional<URI> getSshUri() {
         return Optional.ofNullable(sshUri);
+    }
+
+    @Override
+    public boolean isServeFetch() {
+        return serveFetch;
+    }
+
+    /** Sets whether server mode serves clone/fetch for this provider (fogwall#478). See {@link #isServeFetch()}. */
+    public void setServeFetch(boolean serveFetch) {
+        this.serveFetch = serveFetch;
     }
 
     /**

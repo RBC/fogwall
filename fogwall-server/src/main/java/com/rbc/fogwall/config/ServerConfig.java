@@ -48,6 +48,18 @@ public class ServerConfig {
     private boolean failFast = false;
 
     /**
+     * Whether server mode serves clone/fetch from its local mirror (fogwall#478). Defaults to {@code true} — serving
+     * fetches is the right default so a developer whose remote is the fogwall URL can {@code git pull} against it.
+     * Applies to both transports of server mode (HTTP and SSH). Set to {@code false} to make fogwall a push-only
+     * gateway that never serves a local mirror; fetches are then refused with a clear git-side error rather than a
+     * response that reads as a missing repository. Override per provider with {@code providers.<name>.serve-fetch}.
+     *
+     * <p>Transparent proxy mode is unaffected: it forwards to upstream rather than serving a local mirror, so there is
+     * nothing to switch off.
+     */
+    private boolean serveFetch = true;
+
+    /**
      * Maximum number of requests handled concurrently on virtual threads. Request handling is dispatched to virtual
      * threads so that pushes blocked on approval waits or slow upstreams park cheaply instead of exhausting the
      * platform thread pool; this bound is the admission limit that replaces pool size as backpressure. Each in-flight
