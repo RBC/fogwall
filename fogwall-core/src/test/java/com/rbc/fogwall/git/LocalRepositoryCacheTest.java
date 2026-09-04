@@ -208,6 +208,103 @@ class LocalRepositoryCacheTest {
                 .getName();
     }
 
+    /** Creates a second independent upstream repo with one commit and returns its clone URL. */
+    private String createSecondRemote() throws Exception {
+        Path remote2Dir = cacheTempDir.getParent().resolve(UUID.randomUUID().toString());
+        Files.createDirectories(remote2Dir);
+        Git remote2 = Git.init().setDirectory(remote2Dir.toFile()).call();
+        remote2.getRepository().getConfig().setBoolean("commit", null, "gpgsign", false);
+        remote2.getRepository().getConfig().save();
+        File f2 = new File(remote2Dir.toFile(), "file.txt");
+        Files.writeString(f2.toPath(), "second");
+        remote2.add().addFilepattern(".").call();
+        remote2.commit()
+                .setAuthor(new PersonIdent("Dev", "dev@example.com"))
+                .setCommitter(new PersonIdent("Dev", "dev@example.com"))
+                .setMessage("init")
+                .call();
+        return remote2Dir.toUri().toString();
+    }
+
+    // ---- inspection / invalidation API (#340) ----
+
+    @Test
+    void listEntries_reportsMirrorMetadata() throws Exception {
+        LocalRepositoryCache cache = new LocalRepositoryCache(cacheTempDir, 0, false);
+        cache.getOrClone(remoteUrl).close();
+
+        var entries = cache.listEntries();
+        assertEquals(1, entries.size(), "One mirror was cloned");
+        LocalRepositoryCache.CacheEntrySummary e = entries.get(0);
+        assertEquals(cache.getCacheKey(remoteUrl), e.cacheKey());
+        assertEquals(remoteUrl, e.remoteUrl());
+        assertTrue(e.sizeBytes() > 0, "A cloned mirror occupies space on disk");
+        assertTrue(e.refCount() >= 1, "The mirror has at least the default branch, got " + e.refCount());
+        assertTrue(e.cachedAtMillis() > 0);
+        assertTrue(
+                e.lastFetchedAtMillis() >= e.cachedAtMillis(),
+                "The initial clone is itself a successful upstream fetch");
+        assertFalse(e.shallow(), "depth=0 is a full clone, not shallow");
+    }
+
+    @Test
+    void listEntries_emptyCache_isEmpty() throws Exception {
+        LocalRepositoryCache cache = new LocalRepositoryCache(cacheTempDir, false);
+        assertTrue(cache.listEntries().isEmpty());
+    }
+
+    @Test
+    void listRefs_returnsBranchesAndTags() throws Exception {
+        remoteGit.tag().setName("v1.0").call();
+        LocalRepositoryCache cache = new LocalRepositoryCache(cacheTempDir, 0, false);
+        cache.getOrClone(remoteUrl).close();
+
+        var refs = cache.listRefs(cache.getCacheKey(remoteUrl));
+        assertTrue(
+                refs.stream()
+                        .anyMatch(r -> "branch".equals(r.type()) && r.name().startsWith("refs/heads/")),
+                "The default branch should be listed as a branch");
+        assertTrue(
+                refs.stream().anyMatch(r -> "tag".equals(r.type()) && r.name().equals("refs/tags/v1.0")),
+                "The v1.0 tag should be listed as a tag");
+        assertTrue(refs.stream().allMatch(r -> !r.objectId().isEmpty()), "Every ref should resolve to an object id");
+    }
+
+    @Test
+    void listRefs_unknownKey_returnsEmpty() throws Exception {
+        LocalRepositoryCache cache = new LocalRepositoryCache(cacheTempDir, false);
+        assertTrue(cache.listRefs("no-such-mirror-key").isEmpty());
+    }
+
+    @Test
+    void removeByKey_evictsOneEntryAndKeepsTheRootAndOthers() throws Exception {
+        String remoteUrl2 = createSecondRemote();
+        LocalRepositoryCache cache = new LocalRepositoryCache(cacheTempDir, false);
+        cache.getOrClone(remoteUrl).close();
+        cache.getOrClone(remoteUrl2).close();
+
+        assertTrue(cache.removeByKey(cache.getCacheKey(remoteUrl)), "Removing a present entry returns true");
+        assertNull(cache.getCached(remoteUrl), "The removed entry is gone");
+        assertNotNull(cache.getCached(remoteUrl2), "Other entries are untouched");
+        assertTrue(cacheTempDir.toFile().exists(), "The cache root directory survives a single removal");
+        assertFalse(cache.removeByKey(cache.getCacheKey(remoteUrl)), "Removing an absent entry returns false");
+    }
+
+    @Test
+    void invalidateAll_clearsEntriesButKeepsTheRoot() throws Exception {
+        String remoteUrl2 = createSecondRemote();
+        LocalRepositoryCache cache = new LocalRepositoryCache(cacheTempDir, false);
+        cache.getOrClone(remoteUrl).close();
+        cache.getOrClone(remoteUrl2).close();
+
+        assertEquals(2, cache.invalidateAll(), "Both mirrors are invalidated");
+        assertTrue(cache.listEntries().isEmpty(), "No entries remain");
+        assertTrue(cacheTempDir.toFile().exists(), "invalidateAll keeps the root so the process can re-clone");
+        // A subsequent clone still works because the root directory was preserved.
+        cache.getOrClone(remoteUrl).close();
+        assertEquals(1, cache.listEntries().size());
+    }
+
     @Test
     void clear_removesAllEntriesAndDirectory() throws Exception {
         // Clone two different repos into the same cache

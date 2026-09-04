@@ -171,6 +171,10 @@ public class FogwallDashboardApplication {
             bf.registerSingleton("liveConfigLoader", liveConfigLoader);
             bf.registerSingleton("repoRegistry", urlRuleRegistry);
             bf.registerSingleton("fetchStore", ctx.fetchStore());
+            // #340: expose both local-mirror caches so AdminCacheController can inspect/invalidate them. Both are
+            // always constructed by JettyConfigurationBuilder (server-mode and transparent-proxy mirrors).
+            bf.registerSingleton("serverCache", ctx.serverCache());
+            bf.registerSingleton("proxyCache", ctx.proxyCache());
             // #40: OAuth token encryption never fails startup — see TokenCipherProvider javadoc. A missing/invalid
             // key only disables the /api/scm-oauth/{provider}/link|callback endpoints, never push authorization.
             bf.registerSingleton(

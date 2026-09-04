@@ -9,8 +9,10 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
@@ -18,6 +20,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.TransportConfigCallback;
 import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.lib.Ref;
+import org.eclipse.jgit.lib.RefDatabase;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.transport.CredentialsProvider;
 import org.eclipse.jgit.transport.URIish;
@@ -268,7 +272,9 @@ public class LocalRepositoryCache {
             cached.unshallowed = true;
             // The fetch reached upstream with these credentials, so this principal is verified — same
             // contract as refreshIfStale.
-            cached.lastFetchedByPrincipal.put(hashPrincipal(principal), System.currentTimeMillis());
+            long now = System.currentTimeMillis();
+            cached.lastFetchedByPrincipal.put(hashPrincipal(principal), now);
+            cached.lastSuccessfulFetchAt = now;
             return true;
         } finally {
             cached.fetchLock.unlock();
@@ -333,7 +339,9 @@ public class LocalRepositoryCache {
             // Recorded only after the fetch succeeds: reaching upstream with these credentials IS the
             // authorization proof. A failed fetch throws, so an unauthorized principal is never recorded
             // and never gets to skip the check on a subsequent request.
-            cached.lastFetchedByPrincipal.put(principalKey, System.currentTimeMillis());
+            long now = System.currentTimeMillis();
+            cached.lastFetchedByPrincipal.put(principalKey, now);
+            cached.lastSuccessfulFetchAt = now;
         } finally {
             cached.fetchLock.unlock();
         }
@@ -394,6 +402,7 @@ public class LocalRepositoryCache {
         var newCached = new CachedRepository(repository, remoteUrl);
         // The clone/fetch above succeeded with this principal's credentials, so record them as verified.
         newCached.lastFetchedByPrincipal.put(principalKey, System.currentTimeMillis());
+        newCached.lastSuccessfulFetchAt = newCached.cachedAt;
         cache.put(cacheKey, newCached);
         return repository;
     }
@@ -417,14 +426,140 @@ public class LocalRepositoryCache {
      * @throws IOException If deletion fails
      */
     public void remove(String remoteUrl) throws IOException {
-        String cacheKey = getCacheKey(remoteUrl);
+        removeByKey(getCacheKey(remoteUrl));
+    }
+
+    /**
+     * Remove a single mirror by its cache key (the stable identifier surfaced by {@link #listEntries()}), deleting its
+     * local clone from disk but leaving the cache root directory intact so subsequent clones still work.
+     *
+     * @param cacheKey the cache key, as produced by {@link #getCacheKey(String)} and reported in
+     *     {@link CacheEntrySummary#cacheKey()}
+     * @return {@code true} if an entry was present and removed, {@code false} if no entry matched the key
+     * @throws IOException If deletion fails
+     */
+    public boolean removeByKey(String cacheKey) throws IOException {
         CachedRepository cached = cache.remove(cacheKey);
-        if (cached != null) {
-            cached.close();
-            File repoDir = cached.repository.getDirectory();
-            if (repoDir.exists()) {
-                deleteDirectory(repoDir.toPath());
+        if (cached == null) {
+            return false;
+        }
+        cached.close();
+        File repoDir = cached.repository.getDirectory();
+        if (repoDir.exists()) {
+            deleteDirectory(repoDir.toPath());
+        }
+        return true;
+    }
+
+    /**
+     * Invalidate every mirror currently held, deleting each local clone but keeping the cache root directory (so the
+     * live process can immediately re-clone on the next request). Unlike {@link #clear()} — which removes the root
+     * directory and is intended for shutdown — this is safe to call on a running server.
+     *
+     * @return the number of mirrors invalidated
+     * @throws IOException If deletion of any mirror fails
+     */
+    public int invalidateAll() throws IOException {
+        int removed = 0;
+        for (String key : cache.keySet()) {
+            if (removeByKey(key)) {
+                removed++;
             }
+        }
+        return removed;
+    }
+
+    /**
+     * A read-only snapshot of every mirror currently held, for operator inspection (the admin cache view). Computing
+     * on-disk size walks each mirror's directory and counting refs opens its ref database, so this is deliberately an
+     * admin-triggered call, never on the push hot path. A mirror whose refs cannot be read (e.g. it was deleted out
+     * from under us) is still listed, with {@code refCount == -1}, rather than failing the whole snapshot.
+     *
+     * @return one {@link CacheEntrySummary} per valid cached mirror, in no particular order
+     */
+    public List<CacheEntrySummary> listEntries() {
+        List<CacheEntrySummary> entries = new ArrayList<>();
+        for (Map.Entry<String, CachedRepository> e : cache.entrySet()) {
+            CachedRepository cached = e.getValue();
+            if (!cached.isValid()) {
+                continue;
+            }
+            File repoDir = cached.repository.getDirectory();
+            long sizeBytes = directorySize(repoDir.toPath());
+            int refCount;
+            try {
+                refCount = cached.repository
+                        .getRefDatabase()
+                        .getRefsByPrefix(RefDatabase.ALL)
+                        .size();
+            } catch (IOException ex) {
+                log.warn("Could not read refs for cached mirror {}: {}", e.getKey(), ex.getMessage());
+                refCount = -1;
+            }
+            entries.add(new CacheEntrySummary(
+                    e.getKey(),
+                    cached.remoteUrl,
+                    cached.cachedAt,
+                    cached.lastSuccessfulFetchAt,
+                    sizeBytes,
+                    refCount,
+                    isShallow(),
+                    cached.unshallowed));
+        }
+        return entries;
+    }
+
+    /**
+     * List the branches and tags present in one cached mirror. Returns an empty list when the key does not match a
+     * valid entry, so a stale UICall (e.g. an entry invalidated between the list and the refs request) degrades to "no
+     * refs" rather than an error.
+     *
+     * @param cacheKey the cache key from {@link CacheEntrySummary#cacheKey()}
+     * @return the mirror's refs, or an empty list when the key is unknown or unreadable
+     */
+    public List<RefInfo> listRefs(String cacheKey) {
+        CachedRepository cached = cache.get(cacheKey);
+        if (cached == null || !cached.isValid()) {
+            return List.of();
+        }
+        List<RefInfo> refs = new ArrayList<>();
+        try {
+            for (Ref ref : cached.repository.getRefDatabase().getRefsByPrefix(RefDatabase.ALL)) {
+                String objectId = ref.getObjectId() != null ? ref.getObjectId().name() : "";
+                refs.add(new RefInfo(ref.getName(), objectId, refType(ref.getName())));
+            }
+        } catch (IOException ex) {
+            log.warn("Could not read refs for cached mirror {}: {}", cacheKey, ex.getMessage());
+            return List.of();
+        }
+        return refs;
+    }
+
+    /** Classifies a ref name into a coarse type for display. */
+    private static String refType(String name) {
+        if (name.startsWith("refs/heads/")) return "branch";
+        if (name.startsWith("refs/tags/")) return "tag";
+        return "other";
+    }
+
+    /** Sum of the sizes of every regular file under {@code directory}; {@code 0} if it cannot be walked. */
+    private static long directorySize(Path directory) {
+        if (!Files.exists(directory)) {
+            return 0L;
+        }
+        try (var stream = Files.walk(directory)) {
+            return stream.filter(Files::isRegularFile)
+                    .mapToLong(p -> {
+                        try {
+                            return Files.size(p);
+                        } catch (IOException ex) {
+                            return 0L;
+                        }
+                    })
+                    .sum();
+        } catch (IOException ex) {
+            log.warn("Could not compute size of cached mirror at {}: {}", directory, ex.getMessage());
+            return 0L;
         }
     }
 
@@ -526,6 +661,38 @@ public class LocalRepositoryCache {
                 .forEach(File::delete);
     }
 
+    /**
+     * A read-only summary of one cached mirror for operator inspection.
+     *
+     * @param cacheKey stable key identifying the mirror; pass to {@link #listRefs(String)} / {@link #removeByKey}
+     * @param remoteUrl the upstream URL this mirror clones
+     * @param cachedAtMillis epoch millis when the mirror was first cloned into this process
+     * @param lastFetchedAtMillis epoch millis of the last successful upstream fetch (equals {@code cachedAtMillis}
+     *     until a subsequent re-fetch happens)
+     * @param sizeBytes on-disk size of the local bare mirror
+     * @param refCount number of refs in the mirror, or {@code -1} if they could not be read
+     * @param shallow whether this cache clones shallow (by depth or time boundary)
+     * @param unshallowed whether this specific mirror has since been deepened to full history on demand
+     */
+    public record CacheEntrySummary(
+            String cacheKey,
+            String remoteUrl,
+            long cachedAtMillis,
+            long lastFetchedAtMillis,
+            long sizeBytes,
+            int refCount,
+            boolean shallow,
+            boolean unshallowed) {}
+
+    /**
+     * One ref present in a cached mirror.
+     *
+     * @param name the full ref name, e.g. {@code refs/heads/main}
+     * @param objectId the SHA the ref points at, or an empty string if unresolved
+     * @param type coarse classification: {@code branch}, {@code tag}, or {@code other}
+     */
+    public record RefInfo(String name, String objectId, String type) {}
+
     /** Cached repository holder with per-repo fetch serialization. */
     private static class CachedRepository {
         final Repository repository;
@@ -557,10 +724,20 @@ public class LocalRepositoryCache {
          */
         volatile boolean unshallowed = false;
 
+        /**
+         * Wall-clock time of the last successful upstream fetch, for operator display only. Unlike
+         * {@link #lastFetchedByPrincipal} (which is keyed by principal and purged after the cooldown), this is a single
+         * monotonically-updated timestamp that survives for the life of the entry, so the admin cache view can always
+         * show when the mirror last reached upstream. Never consulted for authorization. Initialised to
+         * {@link #cachedAt} because the initial clone/fetch is itself a successful upstream contact.
+         */
+        volatile long lastSuccessfulFetchAt;
+
         CachedRepository(Repository repository, String remoteUrl) {
             this.repository = repository;
             this.remoteUrl = remoteUrl;
             this.cachedAt = System.currentTimeMillis();
+            this.lastSuccessfulFetchAt = this.cachedAt;
         }
 
         /** Drops principals whose verification has aged past the cooldown; they must re-prove access on next use. */

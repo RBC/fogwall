@@ -211,6 +211,12 @@ So both modes discard a rejected push's objects. The transparent proxy additiona
 applies ref updates. There, JGit's `ReceivePack` owns the inserter and writes into the mirror before the pre-receive
 hooks run, so the same guarantee needs a different mechanism.
 
+Both mirrors — server mode's and the transparent proxy's — are held by a `LocalRepositoryCache`, and the dashboard
+exposes each one for operator inspection and manual invalidation over `/api/admin/cache` (`ROLE_ADMIN`). The cache is
+in-memory and per-pod, so this is a per-pod operational view, not distributed state; invalidating an entry deletes its
+local clone (keeping the cache root) so the next access re-clones from upstream — the recovery path for a stale or
+poisoned mirror without a restart.
+
 ---
 
 ## Validation pipeline

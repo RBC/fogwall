@@ -1,4 +1,11 @@
-import type { GroupPermissionRule, RepoPermission, ScmOAuthProviderInfo, SetupInfo } from './types'
+import type {
+  CacheListResponse,
+  CacheRef,
+  GroupPermissionRule,
+  RepoPermission,
+  ScmOAuthProviderInfo,
+  SetupInfo,
+} from './types'
 
 /** Reads the XSRF-TOKEN cookie set by Spring Security's CookieCsrfTokenRepository. */
 function getCsrfToken(): string | null {
@@ -66,6 +73,38 @@ export async function triggerConfigReload(section: string = 'all'): Promise<{ me
     method: 'POST',
   })
   if (!res.ok) await parseErrorResponse(res, 'Config reload failed')
+  return res.json()
+}
+
+// --- Admin: local mirror cache (#340) ---
+
+export async function fetchCache(): Promise<CacheListResponse> {
+  const res = await apiFetch('/api/admin/cache')
+  if (!res.ok) await parseErrorResponse(res, 'Failed to fetch cache')
+  return res.json()
+}
+
+export async function fetchCacheRefs(mode: string, key: string): Promise<CacheRef[]> {
+  const params = new URLSearchParams({ mode, key })
+  const res = await apiFetch(`/api/admin/cache/refs?${params}`)
+  if (!res.ok) await parseErrorResponse(res, 'Failed to fetch cache refs')
+  return res.json()
+}
+
+export async function invalidateCacheEntry(
+  mode: string,
+  key: string,
+): Promise<{ removed: boolean }> {
+  const params = new URLSearchParams({ mode, key })
+  const res = await apiFetch(`/api/admin/cache?${params}`, { method: 'DELETE' })
+  if (!res.ok) await parseErrorResponse(res, 'Cache invalidation failed')
+  return res.json()
+}
+
+export async function invalidateCacheAll(mode: string): Promise<{ invalidated: number }> {
+  const params = new URLSearchParams({ mode })
+  const res = await apiFetch(`/api/admin/cache/all?${params}`, { method: 'DELETE' })
+  if (!res.ok) await parseErrorResponse(res, 'Cache invalidation failed')
   return res.json()
 }
 
