@@ -26,6 +26,7 @@ import java.util.Base64;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
@@ -199,8 +200,14 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
         this.gpgConfig = gpgConfig != null ? gpgConfig : GpgConfig.defaultConfig();
         this.repoPermissionService = repoPermissionService;
         this.pushIdentityResolver = pushIdentityResolver;
-        this.pushStore = pushStore;
-        this.approvalGateway = approvalGateway;
+        // The push store and approval gateway are security controls, not optional collaborators: without the
+        // store there is no push record (no audit trail, no approval state), and without the gateway nothing
+        // gates forwarding. Failing here beats assembling a hook chain that silently skips both.
+        this.pushStore = Objects.requireNonNull(
+                pushStore,
+                "pushStore is required: without it pushes would forward with no record and no approval gate");
+        this.approvalGateway =
+                Objects.requireNonNull(approvalGateway, "approvalGateway is required: nothing else gates forwarding");
         this.serviceUrl = serviceUrl;
         this.heartbeatInterval = heartbeatInterval != null ? heartbeatInterval : DEFAULT_HEARTBEAT_INTERVAL;
         this.urlRuleRegistry = urlRuleRegistry;
@@ -304,13 +311,12 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
         pushContext.setUpstreamUrl(upstreamUrl);
         pushContext.setTransport(transport);
 
-        // Persistence hook (records push to database)
-        var persistenceHook = pushStore != null ? new PushStorePersistenceHook(pushStore, provider) : null;
-        if (persistenceHook != null) {
-            persistenceHook.setPushContext(pushContext);
-            persistenceHook.setServiceUrl(serviceUrl);
-            persistenceHook.setAutoApproval(approvalGateway != null && approvalGateway.approvesImmediately());
-        }
+        // Persistence hook (records push to database). The store and gateway are constructor-required, so the
+        // persistence and approval hooks are always in the chain — no wiring can assemble a push path without them.
+        var persistenceHook = new PushStorePersistenceHook(pushStore, provider);
+        persistenceHook.setPushContext(pushContext);
+        persistenceHook.setServiceUrl(serviceUrl);
+        persistenceHook.setAutoApproval(approvalGateway.approvesImmediately());
 
         // Orderable validation hooks - sorted by getOrder() before chaining.
         // Lifecycle hooks (persistence, approval) are pinned outside this list.
@@ -381,55 +387,38 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
         if (provider instanceof BitbucketProvider bitbucketProvider) {
             validationHooks.add(new BitbucketCredentialRewriteHook(bitbucketProvider, pushContext));
         }
-        if (pushStore != null) {
-            validationHooks.add(new PriorPushEnrichmentHook(pushStore, pushContext));
-        }
+        validationHooks.add(new PriorPushEnrichmentHook(pushStore, pushContext));
         validationHooks.sort(Comparator.comparingInt(FogwallHook::getOrder));
 
-        PreReceiveHook[] preHooks;
-        if (persistenceHook != null) {
-            List<PreReceiveHook> hooks = new ArrayList<>();
-            hooks.addAll(validationHooks);
-            hooks.add(persistenceHook.validationResultHook(validationContext));
-            hooks.add(new ApprovalPreReceiveHook(
-                    pushStore, approvalGateway, approvalTimeout, serviceUrl, repoPermissionService, pushContext));
-            if (quarantine != null) hooks.add(new QuarantinePromotionHook(quarantine));
-            preHooks = hooks.toArray(PreReceiveHook[]::new);
-        } else {
-            List<PreReceiveHook> hooks = new ArrayList<>(validationHooks);
-            if (quarantine != null) hooks.add(new QuarantinePromotionHook(quarantine));
-            preHooks = hooks.toArray(PreReceiveHook[]::new);
-        }
+        List<PreReceiveHook> hooks = new ArrayList<>(validationHooks);
+        hooks.add(persistenceHook.validationResultHook(validationContext));
+        hooks.add(new ApprovalPreReceiveHook(
+                pushStore, approvalGateway, approvalTimeout, serviceUrl, repoPermissionService, pushContext));
+        if (quarantine != null) hooks.add(new QuarantinePromotionHook(quarantine));
+        PreReceiveHook[] preHooks = hooks.toArray(PreReceiveHook[]::new);
 
-        Runnable disconnectCallback = null;
-        if (persistenceHook != null) {
-            final PushContext capturedContext = pushContext;
-            disconnectCallback = () -> {
-                // Only a submission that reached PENDING has a persisted lifecycle record to cancel. A disconnect
-                // before that — during the synchronous receive/validation phase — has no record yet, and the spec
-                // state machine has no received->canceled transition, so there is nothing to record.
-                String recordId = capturedContext.getValidationRecordId();
-                if (recordId != null) {
-                    try {
-                        pushStore.cancel(recordId, null);
-                        log.info("Push {} marked CANCELED: client disconnected mid-push", recordId);
-                    } catch (Exception e) {
-                        log.warn("Failed to mark push {} as CANCELED after client disconnect", recordId, e);
-                    }
+        final PushContext capturedContext = pushContext;
+        Runnable disconnectCallback = () -> {
+            // Only a submission that reached PENDING has a persisted lifecycle record to cancel. A disconnect
+            // before that — during the synchronous receive/validation phase — has no record yet, and the spec
+            // state machine has no received->canceled transition, so there is nothing to record.
+            String recordId = capturedContext.getValidationRecordId();
+            if (recordId != null) {
+                try {
+                    pushStore.cancel(recordId, null);
+                    log.info("Push {} marked CANCELED: client disconnected mid-push", recordId);
+                } catch (Exception e) {
+                    log.warn("Failed to mark push {} as CANCELED after client disconnect", recordId, e);
                 }
-            };
-        }
+            }
+        };
 
         rp.setPreReceiveHook(
                 chainPreReceiveHooks(heartbeatInterval, validationContext, failFast, disconnectCallback, preHooks));
 
         // Post-receive: forward to upstream, then record final status
         var forwardingHook = new ForwardingPostReceiveHook(creds, pushContext, connectTimeoutSeconds, cache);
-        if (persistenceHook != null) {
-            rp.setPostReceiveHook(chainPostReceiveHooks(forwardingHook, persistenceHook.postReceiveHook()));
-        } else {
-            rp.setPostReceiveHook(forwardingHook);
-        }
+        rp.setPostReceiveHook(chainPostReceiveHooks(forwardingHook, persistenceHook.postReceiveHook()));
 
         log.debug("Created ReceivePack for {} with {} auth", provider.getName(), creds != null ? "credentials" : "no");
 

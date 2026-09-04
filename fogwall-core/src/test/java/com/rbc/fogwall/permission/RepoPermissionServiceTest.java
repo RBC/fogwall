@@ -6,6 +6,7 @@ import com.rbc.fogwall.db.model.MatchType;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 /**
  * Unit tests for {@link RepoPermissionService} using an in-memory store.
@@ -240,6 +241,29 @@ class RepoPermissionServiceTest {
             assertTrue(svc.isAllowedToPush("alice", "github", "/org/repo-" + i));
             assertFalse(svc.isAllowedToPush("alice", "github", "/org/other"));
         }
+    }
+
+    @Test
+    @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void regexGrant_catastrophicBacktracking_timesOutAsNoMatch() {
+        // Composed greedy loops backtrack polynomially: this pattern against 2000 non-matching chars
+        // runs well past the 5s test timeout unguarded (verified on the current JDK). Textbook
+        // exponential patterns like (a+)+$ no longer work as fixtures — the JDK 9+ loop memoization
+        // neutralizes them — but multi-loop composition is not memoized, so admin-authored patterns
+        // can still hang an unguarded matcher. The deadline guard must abort and deny instead.
+        // SEPARATE_THREAD so a guard regression fails this test rather than hanging the suite: an
+        // interrupt (SAME_THREAD's mechanism) would never stop a regex match.
+        svc.save(grant(
+                "alice", "github", "a*a*a*a*a*a*a*a*a*a*$", MatchType.REGEX, RepoPermission.Grant.PUSH_AND_REVIEW));
+        String value = "a".repeat(2000) + "!";
+        assertFalse(svc.isAllowedToPush("alice", "github", value));
+    }
+
+    @Test
+    void regexGrant_overlongPattern_refusedAsNoMatch() {
+        String pattern = "/org/" + "x".repeat(2000);
+        svc.save(grant("alice", "github", pattern, MatchType.REGEX, RepoPermission.Grant.PUSH_AND_REVIEW));
+        assertFalse(svc.isAllowedToPush("alice", "github", "/org/repo"));
     }
 
     // ---- seedFromConfig ----
