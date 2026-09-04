@@ -1,0 +1,106 @@
+{
+  "reject-author-noreply": {
+    "id": "b87bf599-718d-42d8-817f-e152af63a26a",
+    "ref": "refs/heads/fixture/author-noreply-314189"
+  },
+  "reject-author-domain": {
+    "id": "c42c0000-a867-431e-b9c3-38ba5feeb309",
+    "ref": "refs/heads/fixture/author-domain-319315"
+  },
+  "reject-message-literal": {
+    "id": "300d9241-374e-4295-b2da-93eaf77a724b",
+    "ref": "refs/heads/fixture/message-wip-321389"
+  },
+  "reject-message-pattern": {
+    "id": "9e99502e-4e3c-4a03-9249-aefca1492d6e",
+    "ref": "refs/heads/fixture/message-pattern-323375"
+  },
+  "reject-secret": {
+    "id": "0fc5e35a-02b1-46ed-9344-d6dd011a457a",
+    "ref": "refs/heads/fixture/secret-aws-326385"
+  },
+  "reject-diff-literal": {
+    "id": "47cf6c3e-cff8-4d91-aa3e-4287bf720dcb",
+    "ref": "refs/heads/fixture/diff-literal-328366"
+  },
+  "reject-diff-pattern": {
+    "id": "80c0c60b-3d11-457d-a291-b9d25d560aae",
+    "ref": "refs/heads/fixture/diff-pattern-330002"
+  },
+  "reject-trailer-no-signoff": {
+    "id": "a141dd29-f637-47bb-a76b-6ed8b04fe2a4",
+    "ref": "refs/heads/fixture/no-signoff-332748"
+  },
+  "reject-trailer-signoff-mismatch": {
+    "id": "820d9d93-bdf8-41c4-b6a9-0239e7f3082d",
+    "ref": "refs/heads/fixture/signoff-mismatch-334621"
+  },
+  "reject-trailer-coauthor-denied": {
+    "id": "8e4efa12-756c-48db-9f76-513ce84ff245",
+    "ref": "refs/heads/fixture/coauthor-denied-336323"
+  },
+  "pending-trailer-coauthor-allowed": {
+    "id": "15106dea-fb5f-4f22-a711-b3497932bc2d",
+    "ref": "refs/heads/fixture/coauthor-ok-339411"
+  },
+  "reject-multiple": {
+    "id": "cd966354-5012-4826-8f1b-8548b89d8350",
+    "ref": "refs/heads/fixture/multi-fail-341234"
+  },
+  "reject-unmapped-identity": {
+    "id": "470f8a1e-1133-4ba4-a4f4-08ab171eced4",
+    "ref": "refs/heads/fixture/unmapped-344126"
+  },
+  "pending-branch": {
+    "id": "2756e624-5b3f-493f-b778-e68696e5b212",
+    "ref": "refs/heads/fixture/pending-branch-349210"
+  },
+  "pending-tag": {
+    "id": "2b344d35-8288-4689-9b3e-94556a446d57",
+    "ref": "refs/tags/v9.9.9-fixture-1788528352"
+  },
+  "pending-gitea": {
+    "id": "2b19a4e7-4f4f-455c-beeb-f1b8f7f8d5bc",
+    "ref": "refs/heads/fixture/gitea-353717"
+  },
+  "pending-gitlab-email-warning": {
+    "id": "479f6e01-8769-4394-bd4c-c02cf956ff59",
+    "ref": "refs/heads/fixture/gitlab-warn-357762"
+  },
+  "forwarded-multi-commit": {
+    "id": "35e887d9-3bf6-4305-aaa5-156f22a0fe2e",
+    "ref": "refs/heads/fixture/multi-commit-363725",
+    "reviewer": "reviewer",
+    "reason": "go"
+  },
+  "forwarded-lightweight-tag": {
+    "id": "d6a51e32-957f-4c16-ade2-0ced573009af",
+    "ref": "refs/tags/lightweight-fixture-1788528367",
+    "reviewer": "reviewer",
+    "reason": "go"
+  },
+  "rejected-by-reviewer": {
+    "id": "35d4c24b-854f-415d-8f3f-4785d190e760",
+    "ref": "refs/heads/fixture/reviewer-reject-368703",
+    "reviewer": "reviewer",
+    "reason": "stop"
+  },
+  "canceled": {
+    "id": "a0465faa-9794-4bd2-8b25-9fb3048ef5d4",
+    "ref": "refs/heads/fixture/canceled-370474",
+    "reviewer": "dev",
+    "reason": ""
+  },
+  "self-certified": {
+    "id": "0fb4b457-a7de-4936-86a4-23d6543c365c",
+    "ref": "refs/heads/fixture/self-certify-373602",
+    "reviewer": "dev",
+    "reason": "self certifying"
+  },
+  "ssh-server-forwarded": {
+    "id": "9334f10a-5dd9-486c-94e9-4ae60c1e74c2",
+    "ref": "refs/heads/fixture/ssh-server-375282",
+    "reviewer": "reviewer",
+    "reason": "yes"
+  }
+}

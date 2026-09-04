@@ -86,3 +86,8 @@ fogwall_test
 fogwall_test.pub
 fogwall-server/.ssh/
 fogwall-dashboard/.ssh/
+
+# Playwright fixture capture — personal identity mapping and OAuth app creds
+test/capture/mapping.env
+test/capture/secrets.env
+__pycache__/

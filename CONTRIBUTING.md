@@ -122,6 +122,34 @@ Unit tests live under each module's `src/test/`. They run without containers.
 These start a containerised Gitea instance and a live Jetty proxy in-process. They are tagged `@Tag("e2e")` and live in
 `fogwall-server/src/test/java/com/rbc/fogwall/e2e/`.
 
+### UI regression tests (Playwright, no Docker)
+
+```shell
+cd fogwall-dashboard/frontend && npx playwright install chromium && npx playwright test
+```
+
+Specs live in `fogwall-dashboard/frontend/tests/`. The Playwright web server boots the dashboard against a **real,
+pre-populated H2 database** — `tests/fixtures/fogwall.sql`, restored fresh into `build/playwright-db/` before every run
+by `:fogwall-dashboard:restoreFixtureDb` — with the matching profile `tests/fixtures/fogwall-playwright.yml` put on the
+classpath via `-PconfigDir`. Four local users exist (`admin`, `dev`, `reviewer`, `observer`); the `asRole` fixture in
+`tests/fixtures.ts` opens a page as any of them. No credentials or network are needed on replay.
+
+The database is produced by `test/capture/capture.py` from **real pushes through real providers** with your own tokens,
+then scrubbed to stable placeholders (`fixture-dev`, `fixture-dev@example.com`, `fogwall-fixture`, …) and committed.
+Push-detail specs read `tests/fixtures/manifest.json` (scenario → push id). Locally a missing scenario skips its spec,
+so a partial capture is workable; **on CI a missing scenario fails the job** (`process.env.CI`), because there it means
+someone dropped a scenario or forgot to re-capture.
+
+Specs that change the status of captured push records (approve / reject / cancel through the UI) are named
+`*.mutation.spec.ts` and run in the `mutations` project, which Playwright starts only after every read-only spec has
+passed; the same goes for CRUD specs that add grants to fixture users. Everything else may run in parallel.
+
+The suite runs on every PR in the `Playwright UI Tests` job; it needs no Docker, credentials, or network and takes under
+a minute on top of the app boot. **Re-capture** when a hook or filter changes what it records (step names, messages,
+content), when a scenario is added, or when the fixture profile changes push outcomes — commit the new `fogwall.sql` +
+`manifest.json` in the same PR as the change. Config-page changes (rules, providers, groups) only need the profile
+edited. See [test/capture/README.md](test/capture/README.md).
+
 ### Manual integration test scripts (`test/`)
 
 The `test/` directory contains bash scripts for exercising both proxy modes against a running server. They are the
