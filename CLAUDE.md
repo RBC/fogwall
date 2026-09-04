@@ -46,6 +46,18 @@ isn't actually providing security.
   size/scope-bounded (e.g. skip binary blobs, cap diff size) so an operator who does opt in can still bound the cost.
   When proposing a new validation feature, ask what it costs per push at high volume before asking whether it's a good
   idea.
+- **Parity across peer technologies is a feature requirement, not a nice-to-have.** fogwall is general-purpose even when
+  a given deployment only needs one driver. When a capability lands, it lands across the whole axis it sits on — or the
+  gap is named in a tracked issue at ship time, never just a code comment ("JDBC-only for now" in a comment is how gaps
+  get lost). Genuine exceptions exist (an upstream API that simply lacks the capability, a protocol difference that
+  makes a feature impossible in one mode) — those are fine, but they are documented and deliberate, not the silent
+  residue of implementing against whichever driver was convenient that day. The parity axes:
+  - **both proxy modes** — transparent proxy and server mode (formerly store-and-forward), including both of server
+    mode's transports (HTTP and SSH)
+  - **both database families** — JDBC and MongoDB get equivalent store implementations; and within JDBC, the SQL
+    derivatives (H2, Postgres, MySQL, MariaDB) behave consistently
+  - **all providers** — GitHub, GitLab, Forgejo/Gitea/Codeberg, Bitbucket do the same thing wherever possible and
+    reasonable
 
 ## Repository layout
 
