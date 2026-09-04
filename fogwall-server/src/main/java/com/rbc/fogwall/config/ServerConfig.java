@@ -70,6 +70,26 @@ public class ServerConfig {
     private int maxConcurrentRequests = 512;
 
     /**
+     * Jetty {@link org.eclipse.jetty.util.thread.QueuedThreadPool} sizing for the platform thread pool. With
+     * virtual-thread dispatch enabled (the default — see {@link #maxConcurrentRequests}) this pool runs only Jetty's
+     * acceptors and selectors, not blocking application work, so the defaults suit most deployments; these knobs exist
+     * for tuning a large or constrained instance. Defaults match {@code QueuedThreadPool}'s own (min 8, max 200,
+     * idle-timeout 60s).
+     */
+    private ThreadsConfig threads = new ThreadsConfig();
+
+    /** Platform thread-pool sizing ({@code server.threads.*}). */
+    @Data
+    public static class ThreadsConfig {
+        /** Minimum (core) platform threads kept alive. */
+        private int min = 8;
+        /** Maximum platform threads. */
+        private int max = 200;
+        /** Milliseconds an idle thread above {@link #min} is kept before being reaped. */
+        private int idleTimeoutMs = 60_000;
+    }
+
+    /**
      * Maximum size in bytes of a request body fogwall will accept, applied to both proxy modes. Pushes over the limit
      * are rejected with a git error before the body is read, so an over-size push costs no heap.
      *

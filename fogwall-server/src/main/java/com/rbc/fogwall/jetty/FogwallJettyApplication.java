@@ -2,6 +2,7 @@ package com.rbc.fogwall.jetty;
 
 import com.rbc.fogwall.config.FogwallConfigLoader;
 import com.rbc.fogwall.config.JettyConfigurationBuilder;
+import com.rbc.fogwall.config.ServerConfig;
 import com.rbc.fogwall.config.TlsConfig;
 import com.rbc.fogwall.jetty.reload.LiveConfigLoader;
 import com.rbc.fogwall.provider.FogwallProvider;
@@ -50,6 +51,7 @@ public class FogwallJettyApplication {
 
         var threadPool = new QueuedThreadPool();
         threadPool.setName("fogwall-server");
+        configureThreadPool(threadPool, configBuilder.getThreadsConfig());
 
         var server = new Server(threadPool);
         enableVirtualThreads(server, threadPool, "fogwall-server", configBuilder.getMaxConcurrentRequests());
@@ -142,6 +144,31 @@ public class FogwallJettyApplication {
         threadPool.setVirtualThreadsExecutor(virtualExecutor);
         server.addBean(virtualExecutor);
         log.info("Virtual-thread dispatch enabled (max {} concurrent requests)", maxConcurrentRequests);
+    }
+
+    /**
+     * Applies {@code server.threads.*} sizing to the platform {@link QueuedThreadPool}. Call before
+     * {@code server.start()}. With virtual-thread dispatch on (the default) this pool runs only acceptors/selectors;
+     * the knobs exist for tuning a large or constrained instance. Min and max are set in whichever order avoids a
+     * transient {@code min > max}, so both raising and lowering the pool from its defaults are valid; a genuinely
+     * inverted config (min > max) still fails loudly.
+     */
+    public static void configureThreadPool(QueuedThreadPool threadPool, ServerConfig.ThreadsConfig threads) {
+        int min = threads.getMin();
+        int max = threads.getMax();
+        if (min > max) {
+            throw new IllegalArgumentException(
+                    "server.threads.min (" + min + ") must not exceed server.threads.max (" + max + ")");
+        }
+        if (min <= threadPool.getMaxThreads()) {
+            threadPool.setMinThreads(min);
+            threadPool.setMaxThreads(max);
+        } else {
+            threadPool.setMaxThreads(max);
+            threadPool.setMinThreads(min);
+        }
+        threadPool.setIdleTimeout(threads.getIdleTimeoutMs());
+        log.info("Platform thread pool sized: min={} max={} idleTimeoutMs={}", min, max, threads.getIdleTimeoutMs());
     }
 
     public static ServerConnector buildHttpsConnector(Server server, TlsConfig tls) throws Exception {

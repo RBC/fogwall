@@ -153,6 +153,16 @@ server:
   # platform thread pool, capped by its own size).
   max-concurrent-requests: 512
 
+  # Jetty platform thread-pool sizing. With virtual-thread dispatch on (the default,
+  # above) this pool runs only Jetty's acceptors and selectors — not blocking
+  # application work — so the defaults suit most deployments; these knobs are for
+  # tuning a large or constrained instance. Defaults match Jetty's own QueuedThreadPool.
+  # A config with min > max is rejected at startup.
+  threads:
+    min: 8 # minimum (core) platform threads kept alive
+    max: 200 # maximum platform threads
+    idle-timeout-ms: 60000 # ms an idle thread above `min` is kept before being reaped
+
   # Largest request body fogwall will accept, in bytes. Applies to both proxy modes.
   # An over-size push is rejected with a git error before the body is read, so it
   # costs no memory. Set to 0 to disable the check — note that "unlimited" is still

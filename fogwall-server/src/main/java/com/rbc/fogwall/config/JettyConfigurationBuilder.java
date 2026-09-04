@@ -120,6 +120,11 @@ public class JettyConfigurationBuilder {
         return config.getServer().getMaxConcurrentRequests();
     }
 
+    /** Returns the platform thread-pool sizing ({@code server.threads.*}). */
+    public ServerConfig.ThreadsConfig getThreadsConfig() {
+        return config.getServer().getThreads();
+    }
+
     /** Returns the maximum accepted request body size in bytes (0 = no configured limit). */
     public long getMaxPushBytes() {
         return config.getServer().getMaxPushBytes();
