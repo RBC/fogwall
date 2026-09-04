@@ -47,7 +47,7 @@ public class ProxyPreReceiveHook implements FogwallHook {
             }
 
             try {
-                inspectCommits(rp, repo, cmd, logs);
+                inspectCommits(repo, cmd, logs);
             } catch (Exception e) {
                 log.error("Failed to inspect commits for {}", refName, e);
                 logs.add("ERROR inspecting " + refName + ": " + e.getMessage());
@@ -72,8 +72,7 @@ public class ProxyPreReceiveHook implements FogwallHook {
         return "ProxyPreReceiveHook";
     }
 
-    private void inspectCommits(ReceivePack rp, Repository repo, ReceiveCommand cmd, List<String> logs)
-            throws Exception {
+    private void inspectCommits(Repository repo, ReceiveCommand cmd, List<String> logs) throws Exception {
         String toCommit = cmd.getNewId().name();
         String refName = cmd.getRefName();
 

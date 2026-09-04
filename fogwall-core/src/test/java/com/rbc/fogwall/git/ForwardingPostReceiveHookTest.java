@@ -13,7 +13,6 @@ import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.PersonIdent;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
-import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.transport.ReceiveCommand;
 import org.eclipse.jgit.transport.ReceivePack;
 import org.junit.jupiter.api.BeforeEach;
@@ -66,7 +65,7 @@ class ForwardingPostReceiveHookTest {
         // leave result as NOT_ATTEMPTED (not OK) → accepted list is empty
 
         PushContext pushContext = new PushContext();
-        new ForwardingPostReceiveHook(null, null, pushContext).onPostReceive(rp, List.of(cmd));
+        new ForwardingPostReceiveHook(null, pushContext).onPostReceive(rp, List.of(cmd));
 
         assertFalse(pushContext.getSteps().isEmpty());
         assertEquals(StepStatus.PASS, pushContext.getSteps().get(0).getStatus());
@@ -83,7 +82,7 @@ class ForwardingPostReceiveHookTest {
         cmd.setResult(ReceiveCommand.Result.OK);
 
         PushContext pushContext = new PushContext();
-        new ForwardingPostReceiveHook(null, null, pushContext).onPostReceive(rp, List.of(cmd));
+        new ForwardingPostReceiveHook(null, pushContext).onPostReceive(rp, List.of(cmd));
 
         assertFalse(pushContext.getSteps().isEmpty());
         assertEquals(StepStatus.FAIL, pushContext.getSteps().get(0).getStatus());
@@ -102,15 +101,14 @@ class ForwardingPostReceiveHookTest {
         cmd.setResult(ReceiveCommand.Result.OK);
 
         PushContext pushContext = new PushContext();
-        new ForwardingPostReceiveHook(null, null, pushContext).onPostReceive(rp, List.of(cmd));
+        new ForwardingPostReceiveHook(null, pushContext).onPostReceive(rp, List.of(cmd));
 
         // Verify the step was recorded as PASS
         assertFalse(pushContext.getSteps().isEmpty());
         assertEquals(StepStatus.PASS, pushContext.getSteps().get(0).getStatus());
 
         // Verify the commit actually landed in the upstream bare repo
-        try (Repository upstream = Git.open(upstreamDir.toFile()).getRepository();
-                RevWalk rw = new RevWalk(upstream)) {
+        try (Repository upstream = Git.open(upstreamDir.toFile()).getRepository()) {
             ObjectId upstreamHead = upstream.resolve("refs/heads/main");
             assertNotNull(upstreamHead, "refs/heads/main should exist in upstream after forward");
             assertEquals(c1.getId(), upstreamHead);
@@ -119,7 +117,7 @@ class ForwardingPostReceiveHookTest {
 
     @Test
     void multipleRefs_allForwarded() throws Exception {
-        RevCommit c1 = createCommit("first");
+        createCommit("first");
         RevCommit c2 = createCommit("second on main");
 
         // Create a feature branch locally
@@ -141,7 +139,7 @@ class ForwardingPostReceiveHookTest {
         featureCmd.setResult(ReceiveCommand.Result.OK);
 
         PushContext pushContext = new PushContext();
-        new ForwardingPostReceiveHook(null, null, pushContext).onPostReceive(rp, List.of(mainCmd, featureCmd));
+        new ForwardingPostReceiveHook(null, pushContext).onPostReceive(rp, List.of(mainCmd, featureCmd));
 
         assertEquals(StepStatus.PASS, pushContext.getSteps().get(0).getStatus());
 

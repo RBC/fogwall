@@ -77,7 +77,7 @@ public class RepositoryUrlRuleHook implements FogwallHook {
                 log.debug("Push allowed by rule: {}", a.ruleId());
                 recordPass();
             }
-            case UrlRuleEvaluator.Result.NotAllowed n -> {
+            case UrlRuleEvaluator.Result.NotAllowed _ -> {
                 log.debug("Push blocked — no rule matched");
                 blockPush(
                         rp,

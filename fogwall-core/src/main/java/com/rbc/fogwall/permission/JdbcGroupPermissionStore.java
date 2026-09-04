@@ -148,7 +148,9 @@ public class JdbcGroupPermissionStore implements GroupPermissionStore {
 
     private static final RowMapper<PermissionGroup> GROUP_MAPPER = JdbcGroupPermissionStore::mapGroup;
 
-    private static PermissionGroup mapGroup(ResultSet rs, int i) throws SQLException {
+    // rowNum is unused but required to match the RowMapper functional interface signature.
+    @SuppressWarnings("PMD.UnusedFormalParameter")
+    private static PermissionGroup mapGroup(ResultSet rs, int rowNum) throws SQLException {
         return PermissionGroup.builder()
                 .id(rs.getString("id"))
                 .name(rs.getString("name"))
@@ -159,7 +161,9 @@ public class JdbcGroupPermissionStore implements GroupPermissionStore {
 
     private static final RowMapper<GroupPermissionRule> RULE_MAPPER = JdbcGroupPermissionStore::mapRule;
 
-    private static GroupPermissionRule mapRule(ResultSet rs, int i) throws SQLException {
+    // rowNum is unused but required to match the RowMapper functional interface signature.
+    @SuppressWarnings("PMD.UnusedFormalParameter")
+    private static GroupPermissionRule mapRule(ResultSet rs, int rowNum) throws SQLException {
         return GroupPermissionRule.builder()
                 .id(rs.getString("id"))
                 .groupId(rs.getString("group_id"))

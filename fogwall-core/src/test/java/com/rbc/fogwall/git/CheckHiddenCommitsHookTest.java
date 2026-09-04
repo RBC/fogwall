@@ -120,7 +120,7 @@ class CheckHiddenCommitsHookTest {
     @Test
     void lightweightTag_passes() throws Exception {
         // A lightweight tag points directly to a commit — no hidden-commit risk
-        RevCommit c1 = createCommit("init");
+        createCommit("init");
         RevCommit tagged = createCommit("tagged");
 
         ReceivePack rp = new ReceivePack(repo);
@@ -137,7 +137,7 @@ class CheckHiddenCommitsHookTest {
     @Test
     void annotatedTag_passes() throws Exception {
         // Annotated tags point to a tag object (not a commit); the hook must dereference it
-        RevCommit c1 = createCommit("init");
+        createCommit("init");
         RevCommit tagged = createCommit("tagged");
 
         // Create the annotated tag object in the repo

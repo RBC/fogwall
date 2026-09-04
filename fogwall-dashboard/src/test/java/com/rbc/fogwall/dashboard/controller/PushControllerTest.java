@@ -10,6 +10,7 @@ import static org.mockito.Mockito.*;
 import com.rbc.fogwall.config.FogwallConfig;
 import com.rbc.fogwall.config.ServerConfig;
 import com.rbc.fogwall.db.PushStore;
+import com.rbc.fogwall.db.model.Attestation;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
 import com.rbc.fogwall.db.model.PushSummary;
@@ -103,7 +104,7 @@ class PushControllerTest {
     class List_ {
         @Test
         void noFilters_delegatesToStore() {
-            when(pushStore.findSummaries(any())).thenReturn(java.util.List.of());
+            when(pushStore.findSummaries(any())).thenReturn(List.of());
             var result = controller.list(null, null, null, null, null, 50, 0, true);
             assertEquals(0, result.size());
             verify(pushStore).findSummaries(argThat(q -> q.getLimit() == 50 && q.getOffset() == 0));
@@ -119,7 +120,7 @@ class PushControllerTest {
 
         @Test
         void validStatus_passedToQuery() {
-            when(pushStore.findSummaries(any())).thenReturn(java.util.List.of());
+            when(pushStore.findSummaries(any())).thenReturn(List.of());
             controller.list("PENDING", null, null, null, null, 50, 0, true);
             verify(pushStore).findSummaries(argThat(q -> q.getStatus() == PushStatus.PENDING));
         }
@@ -437,7 +438,7 @@ class PushControllerTest {
 
             controller.approve("p1", approveBodyWithAdminOverride());
 
-            verify(pushStore).approve(eq("p1"), argThat(a -> a.isSelfApproval()));
+            verify(pushStore).approve(eq("p1"), argThat(Attestation::isSelfApproval));
         }
 
         @Test
@@ -447,7 +448,7 @@ class PushControllerTest {
 
             // Returns 403 — no interaction with pushStore at all
             controller.approve("p1", approveBody());
-            verify(pushStore, org.mockito.Mockito.never()).approve(any(), any());
+            verify(pushStore, never()).approve(any(), any());
         }
 
         @Test

@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset name="fogwall"
+         xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+
+    <description>
+        fogwall PMD rules (see issue #383). CI-enforced and required to merge — fails
+        ./gradlew build and .githooks/pre-commit on any violation (pmd.ignoreFailures = false in
+        build.gradle). Add/remove rules here as false positives or gaps turn up, and trial new
+        additions with a temporary ignoreFailures = true pass before committing to one; this file
+        is the single source of truth for every module. Complexity/design metrics
+        (CyclomaticComplexity, GodClass, etc.) live separately in metrics-ruleset.xml — report-only,
+        run by hand, not part of this file or CI.
+    </description>
+
+    <!-- Directly the smell called out in #112: "use of inline fully-qualified class names
+         instead of importing them at the top of each class". -->
+    <rule ref="category/java/codestyle.xml/UnnecessaryFullyQualifiedName"/>
+
+    <!-- #112: "not using method references in lambdas or function chains". -->
+    <rule ref="category/java/codestyle.xml/LambdaCanBeMethodReference"/>
+
+    <!-- #112: "remove unused constructors and method arguments" (parameter half; PMD has no rule
+         for a literally-unused constructor as opposed to unused params within one). -->
+    <rule ref="category/java/bestpractices.xml/UnusedFormalParameter"/>
+
+    <rule ref="category/java/bestpractices.xml/UnusedLocalVariable"/>
+    <rule ref="category/java/bestpractices.xml/UnusedPrivateField"/>
+    <rule ref="category/java/bestpractices.xml/UnusedPrivateMethod"/>
+    <rule ref="category/java/codestyle.xml/UnnecessaryImport"/>
+    <!-- allowCommentedBlocks: a catch with a comment explaining why it's empty is a deliberate,
+         documented no-op, not a silent swallow — the thing this rule exists to catch. -->
+    <rule ref="category/java/errorprone.xml/EmptyCatchBlock">
+        <properties>
+            <property name="allowCommentedBlocks" value="true"/>
+        </properties>
+    </rule>
+
+    <!-- Replaces the old EmptyIfStmt/EmptyWhileStmt/etc. rules, removed in PMD 7 and merged into
+         this one rule covering every empty control-statement body (if/while/try/switch/...). -->
+    <rule ref="category/java/codestyle.xml/EmptyControlStatement"/>
+
+    <!-- Correctness/footgun rules, not style opinions (Spotless already owns formatting).
+         CloseResource was trialed and dropped: 185 hits, nearly all false positives — it doesn't
+         understand JGit's caller-owned Repository/ReceivePack lifecycle or Spring's pooled JDBC
+         resources, and tuning it to would cost more than it's worth right now. -->
+    <rule ref="category/java/errorprone.xml/CompareObjectsWithEquals"/>
+    <rule ref="category/java/errorprone.xml/UseEqualsToCompareStrings"/>
+    <rule ref="category/java/errorprone.xml/EqualsNull"/>
+    <rule ref="category/java/errorprone.xml/OverrideBothEqualsAndHashcode"/>
+    <rule ref="category/java/errorprone.xml/BrokenNullCheck"/>
+    <rule ref="category/java/errorprone.xml/MisplacedNullCheck"/>
+
+    <!-- Common LLM-generated-code smells: stray debug printing instead of the SLF4J logger already
+         used throughout, and discarding an exception's cause chain when rethrowing (undermines the
+         audit trail — see CLAUDE.md's auditability principle). -->
+    <rule ref="category/java/bestpractices.xml/SystemPrintln"/>
+    <rule ref="category/java/bestpractices.xml/AvoidPrintStackTrace"/>
+    <rule ref="category/java/bestpractices.xml/PreserveStackTrace"/>
+
+    <rule ref="category/java/bestpractices.xml/UnusedAssignment"/>
+    <rule ref="category/java/bestpractices.xml/MethodReturnsInternalArray"/>
+    <rule ref="category/java/bestpractices.xml/ArrayIsStoredDirectly"/>
+    <rule ref="category/java/bestpractices.xml/UseCollectionIsEmpty"/>
+
+    <!-- UseTryWithResources was trialed and dropped: all 4 hits were a conditionally-acquired
+         resource (may be null) closed inside a finally block that also does unrelated,
+         non-resource cleanup — not expressible as try-with-resources without restructuring the
+         method's control flow. -->
+
+</ruleset>

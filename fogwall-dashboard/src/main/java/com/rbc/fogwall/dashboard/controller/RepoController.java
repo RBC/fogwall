@@ -136,15 +136,15 @@ public class RepoController {
 
         String decision =
                 switch (trail.result()) {
-                    case UrlRuleEvaluator.Result.Allowed a -> "ALLOW";
-                    case UrlRuleEvaluator.Result.Denied d -> "DENY";
-                    case UrlRuleEvaluator.Result.NotAllowed n -> "NOT_ALLOWED";
+                    case UrlRuleEvaluator.Result.Allowed _ -> "ALLOW";
+                    case UrlRuleEvaluator.Result.Denied _ -> "DENY";
+                    case UrlRuleEvaluator.Result.NotAllowed _ -> "NOT_ALLOWED";
                 };
         String matchedRuleId =
                 switch (trail.result()) {
                     case UrlRuleEvaluator.Result.Allowed a -> a.ruleId();
                     case UrlRuleEvaluator.Result.Denied d -> d.ruleId();
-                    case UrlRuleEvaluator.Result.NotAllowed n -> null;
+                    case UrlRuleEvaluator.Result.NotAllowed _ -> null;
                 };
 
         return ResponseEntity.ok(new RuleTestResponse(decision, matchedRuleId, steps));
@@ -155,7 +155,7 @@ public class RepoController {
      */
     private ResponseEntity<?> validateProviderId(String providerId) {
         Set<String> known = providerSource.getProviders().stream()
-                .map(p -> p.getProviderId())
+                .map(FogwallProvider::getProviderId)
                 .collect(Collectors.toSet());
         if (!known.contains(providerId)) {
             return ResponseEntity.badRequest()

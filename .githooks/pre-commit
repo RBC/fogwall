@@ -15,3 +15,10 @@ echo "[pre-commit] Running formatAll (spotless, prettier, eslint)..."
 ./gradlew formatAll --quiet --no-daemon
 git diff --name-only -- '*.java' fogwall-dashboard/frontend/src '*.md' | xargs -r git add
 echo "[pre-commit] formatAll: OK"
+
+# Blocking: config/pmd/ruleset.xml's findings have all been resolved (see #383), so this fails
+# the commit on any new violation. It does NOT run the report-only complexity/design metrics
+# survey (pmdMetricsAll) — that's a separate, manually-run task; see config/pmd/metrics-ruleset.xml.
+echo "[pre-commit] Running PMD static analysis..."
+./gradlew pmdAll --quiet --no-daemon
+echo "[pre-commit] PMD: OK"

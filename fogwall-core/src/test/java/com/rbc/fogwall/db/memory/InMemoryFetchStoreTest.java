@@ -115,6 +115,6 @@ class InMemoryFetchStoreTest {
 
     @Test
     void initialize_doesNotThrow() {
-        assertDoesNotThrow(() -> store.initialize());
+        assertDoesNotThrow(store::initialize);
     }
 }

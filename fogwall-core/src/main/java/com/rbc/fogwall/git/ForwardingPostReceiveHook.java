@@ -7,7 +7,6 @@ import static com.rbc.fogwall.git.GitClientUtils.sym;
 
 import com.rbc.fogwall.db.model.PushStep;
 import com.rbc.fogwall.db.model.StepStatus;
-import com.rbc.fogwall.provider.FogwallProvider;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -27,7 +26,6 @@ import org.eclipse.jgit.transport.*;
 @Slf4j
 public class ForwardingPostReceiveHook implements PostReceiveHook {
 
-    private final FogwallProvider provider;
     private final CredentialsProvider credentials;
     private final PushContext pushContext;
 
@@ -36,26 +34,20 @@ public class ForwardingPostReceiveHook implements PostReceiveHook {
 
     private final LocalRepositoryCache cache;
 
-    public ForwardingPostReceiveHook(
-            FogwallProvider provider, CredentialsProvider credentials, PushContext pushContext) {
-        this(provider, credentials, pushContext, 0, null);
+    public ForwardingPostReceiveHook(CredentialsProvider credentials, PushContext pushContext) {
+        this(credentials, pushContext, 0, null);
     }
 
     public ForwardingPostReceiveHook(
-            FogwallProvider provider,
-            CredentialsProvider credentials,
-            PushContext pushContext,
-            int connectTimeoutSeconds) {
-        this(provider, credentials, pushContext, connectTimeoutSeconds, null);
+            CredentialsProvider credentials, PushContext pushContext, int connectTimeoutSeconds) {
+        this(credentials, pushContext, connectTimeoutSeconds, null);
     }
 
     public ForwardingPostReceiveHook(
-            FogwallProvider provider,
             CredentialsProvider credentials,
             PushContext pushContext,
             int connectTimeoutSeconds,
             LocalRepositoryCache cache) {
-        this.provider = provider;
         this.credentials = credentials;
         this.pushContext = pushContext;
         this.connectTimeoutSeconds = connectTimeoutSeconds;
@@ -112,7 +104,7 @@ public class ForwardingPostReceiveHook implements PostReceiveHook {
 
         List<String> logs = new ArrayList<>();
         logs.add("Forwarding to " + upstreamUrl);
-        boolean forwardFailed = false;
+        boolean forwardFailed;
         String forwardError = null;
 
         try {

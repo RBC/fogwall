@@ -28,7 +28,7 @@ public class SslAwareHttpConnectionFactory implements HttpConnectionFactory {
     private final TrustManager[] trustManagers;
 
     public SslAwareHttpConnectionFactory(TrustManager[] trustManagers) {
-        this.trustManagers = trustManagers;
+        this.trustManagers = trustManagers.clone();
     }
 
     @Override

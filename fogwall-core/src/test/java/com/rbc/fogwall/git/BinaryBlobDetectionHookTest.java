@@ -186,7 +186,7 @@ class BinaryBlobDetectionHookTest {
     @Test
     void perCommitScan_multipleCleanCommits_passes() throws Exception {
         RevCommit base = commitText(".gitkeep", "");
-        RevCommit c1 = commitText("a.txt", "clean");
+        commitText("a.txt", "clean");
         RevCommit c2 = commitText("b.txt", "still clean");
 
         ValidationContext ctx = new ValidationContext();

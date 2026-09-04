@@ -9,20 +9,16 @@ import java.util.Map;
 import javax.sql.DataSource;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /** JDBC-backed {@link FetchStore}. Works with H2 and PostgreSQL. */
 public class JdbcFetchStore implements FetchStore {
 
     private final DataSource dataSource;
     private final NamedParameterJdbcTemplate jdbc;
-    private final TransactionTemplate tx;
 
     public JdbcFetchStore(DataSource dataSource) {
         this.dataSource = dataSource;
         this.jdbc = new NamedParameterJdbcTemplate(dataSource);
-        this.tx = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
     }
 
     @Override

@@ -2,6 +2,7 @@ package com.rbc.fogwall.service;
 
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.SshKeyFingerprintLookup;
+import com.rbc.fogwall.user.ScmIdentity;
 import com.rbc.fogwall.user.UserEntry;
 import java.time.Duration;
 import java.util.Map;
@@ -99,7 +100,7 @@ public class SshScmIdentityEnricher {
         String providerId = provider.getProviderId();
         return user.getScmIdentities().stream()
                 .filter(id -> providerId.equals(id.getProvider()))
-                .map(id -> id.getUsername())
+                .map(ScmIdentity::getUsername)
                 .filter(scmLogin ->
                         fingerprints(provider.getProviderId(), scmLogin, lookup).contains(connectingFingerprint))
                 .findFirst()

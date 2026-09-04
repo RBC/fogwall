@@ -60,6 +60,14 @@ jobs:
           path: "**/build/reports/jacoco/"
           retention-days: 14
 
+      - name: Publish PMD reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # ratchet:actions/upload-artifact@v7
+        with:
+          name: pmd-reports
+          path: "**/build/reports/pmd/"
+          retention-days: 14
+
   # Build the fogwall image once and hand it to every smoke-test matrix job as an
   # artifact, so the three DB variants reuse one image instead of each rebuilding it.
   # gha layer caching warms the build across runs too.

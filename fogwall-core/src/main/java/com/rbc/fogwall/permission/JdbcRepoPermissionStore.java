@@ -90,7 +90,9 @@ public class JdbcRepoPermissionStore implements PermissionStore<RepoPermission> 
 
     private static final RowMapper<RepoPermission> ROW_MAPPER = JdbcRepoPermissionStore::mapRow;
 
-    private static RepoPermission mapRow(ResultSet rs, int i) throws SQLException {
+    // rowNum is unused but required to match the RowMapper functional interface signature.
+    @SuppressWarnings("PMD.UnusedFormalParameter")
+    private static RepoPermission mapRow(ResultSet rs, int rowNum) throws SQLException {
         return RepoPermission.builder()
                 .id(rs.getString("id"))
                 .username(rs.getString("username"))

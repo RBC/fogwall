@@ -1,6 +1,5 @@
 package com.rbc.fogwall.permission;
 
-import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
 import java.nio.file.FileSystems;
 import java.nio.file.PathMatcher;
@@ -253,14 +252,14 @@ public class RepoPermissionService {
     }
 
     private boolean matchesPath(RepoPermission perm, String path) {
-        return matchesPattern(perm.getTarget(), perm.getValue(), perm.getMatchType(), path);
+        return matchesPattern(perm.getValue(), perm.getMatchType(), path);
     }
 
     private boolean matchesPathRule(GroupPermissionRule rule, String path) {
-        return matchesPattern(rule.getTarget(), rule.getValue(), rule.getMatchType(), path);
+        return matchesPattern(rule.getValue(), rule.getMatchType(), path);
     }
 
-    private boolean matchesPattern(MatchTarget target, String value, MatchType matchType, String path) {
+    private boolean matchesPattern(String value, MatchType matchType, String path) {
         return switch (matchType) {
             case LITERAL -> value.equals(path);
             case GLOB -> matchesGlob(value, path);

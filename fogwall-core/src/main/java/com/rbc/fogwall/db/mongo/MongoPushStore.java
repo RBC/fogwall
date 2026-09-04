@@ -137,7 +137,7 @@ public class MongoPushStore implements PushStore {
     @Override
     public void updateForwardStatus(String id, PushStatus status, String errorMessage) {
         PushStatus before = currentStatus(id);
-        Document set = new Document("status", status.name()).append("forwardedAt", new java.util.Date());
+        Document set = new Document("status", status.name()).append("forwardedAt", new Date());
         if (errorMessage != null) set.append("errorMessage", errorMessage);
         UpdateResult result = getCollection()
                 .updateOne(

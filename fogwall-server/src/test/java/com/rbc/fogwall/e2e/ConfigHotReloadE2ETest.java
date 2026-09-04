@@ -198,6 +198,10 @@ class ConfigHotReloadE2ETest {
      * Verifies that secret-scan can be enabled with an inline gitleaks config and that disabling it via reload allows
      * the same push through.
      */
+    // println is the established convention for e2e diagnostic breadcrumbs (see GitHelper) — no
+    // test logging config exists here, so a logger call would silently disappear instead of
+    // surfacing in the failure output.
+    @SuppressWarnings("PMD.SystemPrintln")
     @Test
     void secretScanningReload() throws Exception {
         GitHelper git = git();

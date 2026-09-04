@@ -23,6 +23,7 @@ plugins {
 ext {
     // Tooling
     palantirJavaFormatVersion = '2.91.0'
+    pmdVersion = '7.27.0'
 
     // JGit
     jgitVersion = '7.7.1.202607240634-r'
@@ -122,6 +123,21 @@ tasks.register('formatAll') {
             ':fogwall-dashboard:npmLint'
 }
 
+// Single entry point for the PMD static analysis check across every subproject, so
+// .githooks/pre-commit and CI need one Gradle invocation instead of enumerating modules.
+tasks.register('pmdAll') {
+    group = 'verification'
+    description = 'Runs PMD static analysis (pmdMain, pmdTest) across all subprojects.'
+    dependsOn subprojects.collectMany { [":${it.name}:pmdMain", ":${it.name}:pmdTest"] }
+}
+
+// Measures complexity across every subproject. Ad hoc only.
+tasks.register('pmdMetricsAll') {
+    group = 'verification'
+    description = 'Measures complexity/design metrics (pmdMetricsMain, pmdMetricsTest) across all subprojects. Ad hoc, not part of build/check.'
+    dependsOn subprojects.collectMany { [":${it.name}:pmdMetricsMain", ":${it.name}:pmdMetricsTest"] }
+}
+
 subprojects {
     apply plugin: 'com.diffplug.spotless'
     apply plugin: 'jacoco-report-aggregation'
@@ -164,6 +180,33 @@ subprojects {
     spotless {
         java {
             palantirJavaFormat("${palantirJavaFormatVersion}").formatJavadoc(true)
+        }
+    }
+
+    plugins.withId('java') {
+        apply plugin: 'pmd'
+
+        pmd {
+            toolVersion = pmdVersion
+            ruleSetFiles = rootProject.files('config/pmd/ruleset.xml')
+            ruleSets = []
+            // The starter set from #383 has been reviewed and every finding resolved — this now
+            // fails ./gradlew build (and so CI, and merging) and .githooks/pre-commit.
+            ignoreFailures = false
+        }
+
+        // Measures complexity (cyclomatic/cognitive/NPath, God Class). Ad hoc only — not part of
+        // check/build/pmdAll. Run with `./gradlew pmdMetricsAll` or `:module:pmdMetricsMain`.
+        sourceSets.each { ss ->
+            tasks.register("pmdMetrics${ss.name.capitalize()}", org.gradle.api.plugins.quality.Pmd) {
+                group = 'verification'
+                description = "Measures complexity/design metrics for the ${ss.name} source set. Ad hoc, not part of build/check."
+                ruleSetFiles = rootProject.files('config/pmd/metrics-ruleset.xml')
+                ruleSets = []
+                ignoreFailures = true
+                source = ss.allJava
+                classpath = ss.compileClasspath
+            }
         }
     }
 

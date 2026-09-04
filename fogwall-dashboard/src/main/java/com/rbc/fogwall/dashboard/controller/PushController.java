@@ -85,7 +85,8 @@ public class PushController {
             } catch (IllegalArgumentException e) {
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
-                        "Unknown status: " + status + ". Valid values: " + List.of(PushStatus.values()));
+                        "Unknown status: " + status + ". Valid values: " + List.of(PushStatus.values()),
+                        e);
             }
         }
         if (project != null && !project.isBlank()) query.project(project);
@@ -301,7 +302,7 @@ public class PushController {
                     if (identityError != null) return identityError;
 
                     // Validate required attestation questions are answered
-                    ResponseEntity<?> attestationError = checkAttestationAnswers(record, body.attestations());
+                    ResponseEntity<?> attestationError = checkAttestationAnswers(body.attestations());
                     if (attestationError != null) return attestationError;
 
                     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -325,7 +326,7 @@ public class PushController {
      *
      * @return a 400 response if a required question is missing, {@code null} if all required questions are answered
      */
-    private ResponseEntity<?> checkAttestationAnswers(PushRecord record, Map<String, String> answers) {
+    private ResponseEntity<?> checkAttestationAnswers(Map<String, String> answers) {
         List<AttestationQuestion> questions = configHolder.getAttestations();
         if (questions == null || questions.isEmpty()) return null;
 
