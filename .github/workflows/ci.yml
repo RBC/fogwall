@@ -200,6 +200,12 @@ jobs:
         run: npx playwright install --with-deps chromium
         working-directory: fogwall-dashboard/frontend
 
+      # Pre-build the app (compile all modules + frontend) so the Playwright webServer's
+      # `gradlew :fogwall-dashboard:run` finds everything up-to-date and only has to boot Spring,
+      # instead of cold-compiling inside the webServer timeout. See #550.
+      - name: Pre-build the dashboard app
+        run: ./gradlew :fogwall-dashboard:assemble
+
       - name: Run Playwright tests
         run: npm run test:e2e
         working-directory: fogwall-dashboard/frontend
