@@ -208,6 +208,39 @@ class ApprovalPreReceiveHookTest {
     }
 
     @Test
+    void selfApproved_noPermissionServiceWired_rejected() throws Exception {
+        // Fail closed: a self-approval whose entitlement cannot be verified (no RepoPermissionService in the
+        // wiring) must be rejected, not waved through.
+        String recordId = UUID.randomUUID().toString();
+        PushContext pushContext = new PushContext();
+        pushContext.setValidationRecordId(recordId);
+        Attestation att = Attestation.builder()
+                .pushId(recordId)
+                .type(Attestation.Type.APPROVAL)
+                .reviewerUsername("alice")
+                .build();
+        PushRecord record = PushRecord.builder()
+                .id(recordId)
+                .status(PushStatus.APPROVED)
+                .resolvedUser("alice")
+                .provider("github")
+                .url("/owner/repo")
+                .attestation(att)
+                .build();
+        when(pushStore.findById(recordId)).thenReturn(Optional.of(record));
+
+        RevCommit c1 = createCommit("init");
+        RevCommit c2 = createCommit("second");
+        ReceivePack rp = new ReceivePack(repo);
+        ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
+
+        new ApprovalPreReceiveHook(pushStore, approvalGateway, Duration.ofSeconds(5), null, null, pushContext)
+                .onPreReceive(rp, List.of(cmd));
+
+        assertEquals(ReceiveCommand.Result.REJECTED_OTHER_REASON, cmd.getResult());
+    }
+
+    @Test
     void selfApproved_alreadyApprovedAtHookStart_withPerm_passes() throws Exception {
         String recordId = UUID.randomUUID().toString();
         PushContext pushContext = new PushContext();

@@ -278,14 +278,80 @@ public class RepoPermissionService {
     }
 
     private boolean matchesRegex(String pattern, String value) {
+        if (pattern.length() > MAX_REGEX_PATTERN_LENGTH) {
+            log.warn(
+                    "Refusing permission regex over {} chars ({} chars) - treating as no match",
+                    MAX_REGEX_PATTERN_LENGTH,
+                    pattern.length());
+            return false;
+        }
         try {
             return patternCache
                     .computeIfAbsent(pattern, Pattern::compile)
-                    .matcher(value)
+                    .matcher(new DeadlineCharSequence(value, REGEX_MATCH_TIMEOUT_MS))
                     .matches();
         } catch (PatternSyntaxException e) {
             log.warn("Invalid regex pattern '{}': {}", pattern, e.getMessage());
             return false;
+        } catch (RegexTimeoutException e) {
+            log.error(
+                    "Permission regex '{}' exceeded {}ms matching '{}' (catastrophic backtracking?) - treating as no"
+                            + " match",
+                    pattern,
+                    REGEX_MATCH_TIMEOUT_MS,
+                    value);
+            return false;
+        }
+    }
+
+    /** Upper bound on a permission-rule regex; anything longer is refused rather than compiled. */
+    private static final int MAX_REGEX_PATTERN_LENGTH = 1000;
+
+    /** Wall-clock budget for one regex match. Repo slugs are short, so honest matches finish in microseconds. */
+    private static final long REGEX_MATCH_TIMEOUT_MS = 100;
+
+    /** Thrown by {@link DeadlineCharSequence} when a match runs past its deadline. */
+    private static final class RegexTimeoutException extends RuntimeException {}
+
+    /**
+     * A {@link CharSequence} that aborts any regex match running past a deadline. {@code java.util.regex} calls
+     * {@link #charAt} on every character access, including during backtracking, so a catastrophic-backtracking pattern
+     * hits the deadline instead of hanging the permission check (and with it the push path).
+     */
+    private static final class DeadlineCharSequence implements CharSequence {
+        private final CharSequence inner;
+        private final long deadlineNanos;
+
+        DeadlineCharSequence(CharSequence inner, long timeoutMs) {
+            this(inner, System.nanoTime() + timeoutMs * 1_000_000L, true);
+        }
+
+        private DeadlineCharSequence(CharSequence inner, long deadlineNanos, boolean ignored) {
+            this.inner = inner;
+            this.deadlineNanos = deadlineNanos;
+        }
+
+        @Override
+        public int length() {
+            return inner.length();
+        }
+
+        @Override
+        public char charAt(int index) {
+            if (System.nanoTime() > deadlineNanos) {
+                throw new RegexTimeoutException();
+            }
+            return inner.charAt(index);
+        }
+
+        @Override
+        public CharSequence subSequence(int start, int end) {
+            return new DeadlineCharSequence(inner.subSequence(start, end), deadlineNanos, true);
+        }
+
+        @Override
+        public String toString() {
+            return inner.toString();
         }
     }
 }

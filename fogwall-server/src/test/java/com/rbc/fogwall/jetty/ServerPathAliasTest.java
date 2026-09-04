@@ -1,13 +1,16 @@
 package com.rbc.fogwall.jetty;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 
+import com.rbc.fogwall.approval.ApprovalGateway;
 import com.rbc.fogwall.config.BinaryBlobConfig;
 import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.config.ContentPatternConfig;
 import com.rbc.fogwall.config.DiffScanConfig;
 import com.rbc.fogwall.config.ScmOAuthConfig;
 import com.rbc.fogwall.config.SecretScanConfig;
+import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.memory.InMemoryUrlRuleRegistry;
 import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.provider.FogwallProvider;
@@ -57,9 +60,9 @@ class ServerPathAliasTest {
                 BinaryBlobConfig::defaultConfig,
                 ScmOAuthConfig::defaultConfig,
                 ContentPatternConfig.defaultConfig(),
-                null, // pushStore — not touched at registration time
+                mock(PushStore.class), // the factory requires its control dependencies even at registration time
                 null, // serviceUrl
-                null, // approvalGateway
+                mock(ApprovalGateway.class),
                 null, // pushIdentityResolver
                 null, // repoPermissionService
                 10,
@@ -97,9 +100,9 @@ class ServerPathAliasTest {
                 BinaryBlobConfig::defaultConfig,
                 ScmOAuthConfig::defaultConfig,
                 ContentPatternConfig.defaultConfig(),
+                mock(PushStore.class),
                 null,
-                null,
-                null,
+                mock(ApprovalGateway.class),
                 null,
                 null,
                 10,

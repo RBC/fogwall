@@ -285,13 +285,21 @@ public class ApprovalPreReceiveHook implements PreReceiveHook {
      *     {@code SELF_CERTIFY} permission row exists.
      */
     private boolean verifySelfApprovalEntitled(PushRecord record) {
-        if (repoPermissionService == null) return true;
         Attestation att = record.getAttestation();
         if (att == null) return true;
         String pusher = record.getResolvedUser();
         String approver = att.getReviewerUsername();
         if (pusher == null || approver == null || !pusher.equals(approver)) return true;
         if (record.getProvider() == null || record.getUrl() == null) return true;
+        // Fail closed: this IS a self-approval, and without the permission service the entitlement
+        // cannot be verified. Allowing it here would silently waive the one check that separates
+        // self-certification from unreviewed pushing.
+        if (repoPermissionService == null) {
+            log.error(
+                    "Self-approval by {} rejected: no RepoPermissionService wired, entitlement cannot be verified",
+                    pusher);
+            return false;
+        }
         boolean entitled = repoPermissionService.isBypassReviewAllowed(pusher, record.getProvider(), record.getUrl());
         if (!entitled) {
             log.warn(
