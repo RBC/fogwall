@@ -5,10 +5,13 @@
          xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
 
     <description>
-        fogwall PMD rules. Starter set (see issue #383) — findings are being reviewed before this
-        can fail a build or block a commit (pmd.ignoreFailures = true in build.gradle). Add/remove
-        rules here as false positives or gaps turn up; this file is the single source of truth for
-        every module.
+        fogwall PMD rules (see issue #383). CI-enforced and required to merge — fails
+        ./gradlew build and .githooks/pre-commit on any violation (pmd.ignoreFailures = false in
+        build.gradle). Add/remove rules here as false positives or gaps turn up, and trial new
+        additions with a temporary ignoreFailures = true pass before committing to one; this file
+        is the single source of truth for every module. Complexity/design metrics
+        (CyclomaticComplexity, GodClass, etc.) live separately in metrics-ruleset.xml — report-only,
+        run by hand, not part of this file or CI.
     </description>
 
     <!-- Directly the smell called out in #112: "use of inline fully-qualified class names

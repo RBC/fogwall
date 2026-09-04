@@ -131,6 +131,13 @@ tasks.register('pmdAll') {
     dependsOn subprojects.collectMany { [":${it.name}:pmdMain", ":${it.name}:pmdTest"] }
 }
 
+// Measures complexity across every subproject. Ad hoc only.
+tasks.register('pmdMetricsAll') {
+    group = 'verification'
+    description = 'Measures complexity/design metrics (pmdMetricsMain, pmdMetricsTest) across all subprojects. Ad hoc, not part of build/check.'
+    dependsOn subprojects.collectMany { [":${it.name}:pmdMetricsMain", ":${it.name}:pmdMetricsTest"] }
+}
+
 subprojects {
     apply plugin: 'com.diffplug.spotless'
     apply plugin: 'jacoco-report-aggregation'
@@ -183,9 +190,23 @@ subprojects {
             toolVersion = pmdVersion
             ruleSetFiles = rootProject.files('config/pmd/ruleset.xml')
             ruleSets = []
-            // Findings are being reviewed and the ruleset tuned before this can fail a build or
-            // block a commit — see issue #383. Flip to false once the rule set has settled.
-            ignoreFailures = true
+            // The starter set from #383 has been reviewed and every finding resolved — this now
+            // fails ./gradlew build (and so CI, and merging) and .githooks/pre-commit.
+            ignoreFailures = false
+        }
+
+        // Measures complexity (cyclomatic/cognitive/NPath, God Class). Ad hoc only — not part of
+        // check/build/pmdAll. Run with `./gradlew pmdMetricsAll` or `:module:pmdMetricsMain`.
+        sourceSets.each { ss ->
+            tasks.register("pmdMetrics${ss.name.capitalize()}", org.gradle.api.plugins.quality.Pmd) {
+                group = 'verification'
+                description = "Measures complexity/design metrics for the ${ss.name} source set. Ad hoc, not part of build/check."
+                ruleSetFiles = rootProject.files('config/pmd/metrics-ruleset.xml')
+                ruleSets = []
+                ignoreFailures = true
+                source = ss.allJava
+                classpath = ss.compileClasspath
+            }
         }
     }
 
