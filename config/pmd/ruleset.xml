@@ -38,4 +38,32 @@
          this one rule covering every empty control-statement body (if/while/try/switch/...). -->
     <rule ref="category/java/codestyle.xml/EmptyControlStatement"/>
 
+    <!-- Correctness/footgun rules, not style opinions (Spotless already owns formatting).
+         CloseResource was trialed and dropped: 185 hits, nearly all false positives — it doesn't
+         understand JGit's caller-owned Repository/ReceivePack lifecycle or Spring's pooled JDBC
+         resources, and tuning it to would cost more than it's worth right now. -->
+    <rule ref="category/java/errorprone.xml/CompareObjectsWithEquals"/>
+    <rule ref="category/java/errorprone.xml/UseEqualsToCompareStrings"/>
+    <rule ref="category/java/errorprone.xml/EqualsNull"/>
+    <rule ref="category/java/errorprone.xml/OverrideBothEqualsAndHashcode"/>
+    <rule ref="category/java/errorprone.xml/BrokenNullCheck"/>
+    <rule ref="category/java/errorprone.xml/MisplacedNullCheck"/>
+
+    <!-- Common LLM-generated-code smells: stray debug printing instead of the SLF4J logger already
+         used throughout, and discarding an exception's cause chain when rethrowing (undermines the
+         audit trail — see CLAUDE.md's auditability principle). -->
+    <rule ref="category/java/bestpractices.xml/SystemPrintln"/>
+    <rule ref="category/java/bestpractices.xml/AvoidPrintStackTrace"/>
+    <rule ref="category/java/bestpractices.xml/PreserveStackTrace"/>
+
+    <rule ref="category/java/bestpractices.xml/UnusedAssignment"/>
+    <rule ref="category/java/bestpractices.xml/MethodReturnsInternalArray"/>
+    <rule ref="category/java/bestpractices.xml/ArrayIsStoredDirectly"/>
+    <rule ref="category/java/bestpractices.xml/UseCollectionIsEmpty"/>
+
+    <!-- UseTryWithResources was trialed and dropped: all 4 hits were a conditionally-acquired
+         resource (may be null) closed inside a finally block that also does unrelated,
+         non-resource cleanup — not expressible as try-with-resources without restructuring the
+         method's control flow. -->
+
 </ruleset>

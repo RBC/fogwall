@@ -424,7 +424,7 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
                 chainPreReceiveHooks(heartbeatInterval, validationContext, failFast, disconnectCallback, preHooks));
 
         // Post-receive: forward to upstream, then record final status
-        var forwardingHook = new ForwardingPostReceiveHook(provider, creds, pushContext, connectTimeoutSeconds, cache);
+        var forwardingHook = new ForwardingPostReceiveHook(creds, pushContext, connectTimeoutSeconds, cache);
         if (persistenceHook != null) {
             rp.setPostReceiveHook(chainPostReceiveHooks(forwardingHook, persistenceHook.postReceiveHook()));
         } else {

@@ -65,7 +65,7 @@ class ForwardingPostReceiveHookTest {
         // leave result as NOT_ATTEMPTED (not OK) → accepted list is empty
 
         PushContext pushContext = new PushContext();
-        new ForwardingPostReceiveHook(null, null, pushContext).onPostReceive(rp, List.of(cmd));
+        new ForwardingPostReceiveHook(null, pushContext).onPostReceive(rp, List.of(cmd));
 
         assertFalse(pushContext.getSteps().isEmpty());
         assertEquals(StepStatus.PASS, pushContext.getSteps().get(0).getStatus());
@@ -82,7 +82,7 @@ class ForwardingPostReceiveHookTest {
         cmd.setResult(ReceiveCommand.Result.OK);
 
         PushContext pushContext = new PushContext();
-        new ForwardingPostReceiveHook(null, null, pushContext).onPostReceive(rp, List.of(cmd));
+        new ForwardingPostReceiveHook(null, pushContext).onPostReceive(rp, List.of(cmd));
 
         assertFalse(pushContext.getSteps().isEmpty());
         assertEquals(StepStatus.FAIL, pushContext.getSteps().get(0).getStatus());
@@ -101,7 +101,7 @@ class ForwardingPostReceiveHookTest {
         cmd.setResult(ReceiveCommand.Result.OK);
 
         PushContext pushContext = new PushContext();
-        new ForwardingPostReceiveHook(null, null, pushContext).onPostReceive(rp, List.of(cmd));
+        new ForwardingPostReceiveHook(null, pushContext).onPostReceive(rp, List.of(cmd));
 
         // Verify the step was recorded as PASS
         assertFalse(pushContext.getSteps().isEmpty());
@@ -139,7 +139,7 @@ class ForwardingPostReceiveHookTest {
         featureCmd.setResult(ReceiveCommand.Result.OK);
 
         PushContext pushContext = new PushContext();
-        new ForwardingPostReceiveHook(null, null, pushContext).onPostReceive(rp, List.of(mainCmd, featureCmd));
+        new ForwardingPostReceiveHook(null, pushContext).onPostReceive(rp, List.of(mainCmd, featureCmd));
 
         assertEquals(StepStatus.PASS, pushContext.getSteps().get(0).getStatus());
 

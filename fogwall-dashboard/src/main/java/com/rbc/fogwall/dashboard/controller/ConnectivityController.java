@@ -134,7 +134,7 @@ public class ConnectivityController {
                     repoUri = new URI(
                             base.getScheme(), null, base.getHost(), base.getPort(), basePath + relative, null, null);
                 } catch (java.net.URISyntaxException e) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid repoPath: " + e.getMessage());
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid repoPath: " + e.getMessage(), e);
                 }
                 Map<String, Object> gitProbe = new LinkedHashMap<>();
                 gitProbe.put("uploadPack", probe(repoUri, "git-upload-pack", sslContext, steps));

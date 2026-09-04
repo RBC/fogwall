@@ -85,7 +85,8 @@ public class PushController {
             } catch (IllegalArgumentException e) {
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
-                        "Unknown status: " + status + ". Valid values: " + List.of(PushStatus.values()));
+                        "Unknown status: " + status + ". Valid values: " + List.of(PushStatus.values()),
+                        e);
             }
         }
         if (project != null && !project.isBlank()) query.project(project);

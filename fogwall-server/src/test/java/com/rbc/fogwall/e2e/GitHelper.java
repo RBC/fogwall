@@ -107,6 +107,9 @@ class GitHelper {
      *
      * @return {@code true} if the push exited 0, {@code false} otherwise.
      */
+    // println is this class's established convention for e2e diagnostic breadcrumbs — no test
+    // logging config exists here, so a logger call would silently disappear instead of surfacing.
+    @SuppressWarnings("PMD.SystemPrintln")
     boolean tryPush(Path repoDir) throws IOException, InterruptedException {
         String branch = currentBranch(repoDir);
         ProcessBuilder pb = buildGitCommand(repoDir, "push", "origin", branch);
@@ -177,6 +180,7 @@ class GitHelper {
      *
      * @return {@code true} if the push exited 0, {@code false} otherwise.
      */
+    @SuppressWarnings("PMD.SystemPrintln")
     boolean tryPushRef(Path repoDir, String ref) throws IOException, InterruptedException {
         ProcessBuilder pb = buildGitCommand(repoDir, "push", "origin", ref);
         pb.redirectErrorStream(true);
