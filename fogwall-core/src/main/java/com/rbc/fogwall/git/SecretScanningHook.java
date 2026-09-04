@@ -49,6 +49,11 @@ public class SecretScanningHook implements FogwallHook {
     @Override
     public void onPreReceive(ReceivePack rp, Collection<ReceiveCommand> commands) {
         Path repoDir = rp.getRepository().getDirectory().toPath();
+        // In server mode the push is received into a quarantine whose objects live outside the mirror's own object
+        // dir. gitleaks shells out to git against the mirror (repoDir), so without exposing the quarantine as an
+        // alternate the pushed commits are invisible and the scan silently passes. Null when no quarantine is active
+        // (objects already in the mirror), where repoDir alone resolves them.
+        Path scanObjectDir = pushContext.getScanObjectDirectory();
 
         List<Violation> allViolations = new ArrayList<>();
         boolean scannerUnavailable = false;
@@ -67,7 +72,8 @@ public class SecretScanningHook implements FogwallHook {
             String commitFrom =
                     hasNonZeroEffectiveBase ? effectiveFrom : cmd.getOldId().name();
 
-            Optional<List<GitleaksRunner.Finding>> result = runner.scanGit(repoDir, commitFrom, commitTo, config);
+            Optional<List<GitleaksRunner.Finding>> result =
+                    runner.scanGit(repoDir, scanObjectDir, commitFrom, commitTo, config);
 
             if (result.isEmpty()) {
                 scannerUnavailable = true;

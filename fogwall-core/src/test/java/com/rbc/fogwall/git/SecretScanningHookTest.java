@@ -44,7 +44,7 @@ class SecretScanningHookTest {
         validationContext = new ValidationContext();
         pushContext = new PushContext();
         config = SecretScanConfig.builder().build();
-        when(runner.scanGit(any(), any(), any(), any())).thenReturn(Optional.of(List.of()));
+        when(runner.scanGit(any(), any(), any(), any(), any())).thenReturn(Optional.of(List.of()));
     }
 
     private RevCommit createCommit(String msg) throws Exception {
@@ -73,7 +73,8 @@ class SecretScanningHookTest {
 
         hook().onPreReceive(rp, List.of(cmd));
 
-        verify(runner).scanGit(any(), eq(c1.getId().name()), eq(c2.getId().name()), any());
+        verify(runner)
+                .scanGit(any(), any(), eq(c1.getId().name()), eq(c2.getId().name()), any());
     }
 
     // ---- re-push with non-zero effectiveFromId: uses effectiveFrom, not cmd.getOldId() ----
@@ -92,8 +93,9 @@ class SecretScanningHookTest {
         hook().onPreReceive(rp, List.of(cmd));
 
         // Must scan from c1 (last forwarded) to c3 — covers c2 and c3, not just c3
-        verify(runner).scanGit(any(), eq(c1.getId().name()), eq(c3.getId().name()), any());
-        verify(runner, never()).scanGit(any(), eq(c2.getId().name()), any(), any());
+        verify(runner)
+                .scanGit(any(), any(), eq(c1.getId().name()), eq(c3.getId().name()), any());
+        verify(runner, never()).scanGit(any(), any(), eq(c2.getId().name()), any(), any());
     }
 
     // ---- re-push with zero effectiveFromId: falls back to cmd.getOldId() (zero case) ----
@@ -110,7 +112,8 @@ class SecretScanningHookTest {
         hook().onPreReceive(rp, List.of(cmd));
 
         // Falls back to cmd.getOldId() since zero effective base is not actionable
-        verify(runner).scanGit(any(), eq(c1.getId().name()), eq(c2.getId().name()), any());
+        verify(runner)
+                .scanGit(any(), any(), eq(c1.getId().name()), eq(c2.getId().name()), any());
     }
 
     // ---- findings → adds validation issue ----
@@ -124,7 +127,7 @@ class SecretScanningHookTest {
 
         GitleaksRunner.Finding finding = mock(GitleaksRunner.Finding.class);
         when(finding.toMessage()).thenReturn("SECRET: AWS key found in config.yml");
-        when(runner.scanGit(any(), any(), any(), any())).thenReturn(Optional.of(List.of(finding)));
+        when(runner.scanGit(any(), any(), any(), any(), any())).thenReturn(Optional.of(List.of(finding)));
 
         hook().onPreReceive(rp, List.of(cmd));
 
