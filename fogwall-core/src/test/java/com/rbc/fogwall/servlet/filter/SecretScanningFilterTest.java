@@ -120,7 +120,7 @@ class SecretScanningFilterTest {
     @Test
     void scannerUnavailable_failClosed() throws Exception {
         GitRequestDetails details = pushDetailsWithRepo();
-        when(runner.scanGit(any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(runner.scanGit(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
 
         filter.doHttpFilter(requestWith(details), mock(HttpServletResponse.class));
 
@@ -134,7 +134,7 @@ class SecretScanningFilterTest {
     @Test
     void noFindings_passes() throws Exception {
         GitRequestDetails details = pushDetailsWithRepo();
-        when(runner.scanGit(any(), any(), any(), any())).thenReturn(Optional.of(List.of()));
+        when(runner.scanGit(any(), any(), any(), any(), any())).thenReturn(Optional.of(List.of()));
 
         filter.doHttpFilter(requestWith(details), mock(HttpServletResponse.class));
 
@@ -146,7 +146,7 @@ class SecretScanningFilterTest {
         GitRequestDetails details = pushDetailsWithRepo();
         GitleaksRunner.Finding finding = mock(GitleaksRunner.Finding.class);
         when(finding.toMessage()).thenReturn("leaked-secret in config.yml:42");
-        when(runner.scanGit(any(), any(), any(), any())).thenReturn(Optional.of(List.of(finding)));
+        when(runner.scanGit(any(), any(), any(), any(), any())).thenReturn(Optional.of(List.of(finding)));
         HttpServletRequest req = requestWith(details);
 
         filter.doHttpFilter(req, mock(HttpServletResponse.class));

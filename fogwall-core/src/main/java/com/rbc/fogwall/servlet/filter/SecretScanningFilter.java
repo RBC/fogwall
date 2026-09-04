@@ -8,9 +8,11 @@ import com.rbc.fogwall.config.SecretScanConfig;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.GitleaksRunner;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.QuarantineObjectStore;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -96,8 +98,16 @@ public class SecretScanningFilter extends AbstractFogwallFilter {
             return;
         }
 
+        // gitleaks shells out to git against the mirror dir, but EnrichPushCommitsFilter unpacked the pushed objects
+        // into the quarantine's object dir — so expose it as a git alternate or the scan resolves nothing and silently
+        // passes. Null when no quarantine is active (objects were unpacked straight into the mirror).
+        Path scanObjectDir = request.getAttribute(QuarantineObjectStore.REQUEST_ATTRIBUTE)
+                        instanceof QuarantineObjectStore quarantine
+                ? quarantine.getObjectsDirectory()
+                : null;
+
         Optional<List<GitleaksRunner.Finding>> result =
-                runner.scanGit(repo.getDirectory().toPath(), commitFrom, commitTo, config);
+                runner.scanGit(repo.getDirectory().toPath(), scanObjectDir, commitFrom, commitTo, config);
 
         if (result.isEmpty()) {
             String msg = "Secret scanning failed — scanner error or unavailable. "

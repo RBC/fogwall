@@ -113,6 +113,18 @@ public final class QuarantineObjectStore implements Closeable {
     }
 
     /**
+     * The scratch object directory this push's objects are written into.
+     *
+     * <p>Exposed so a hook that shells out to an external {@code git} (the secret scanner runs {@code gitleaks git},
+     * which spawns {@code git log} in the mirror's directory) can pass this as a
+     * {@code GIT_ALTERNATE_OBJECT_DIRECTORIES} entry. Without it, that external git sees only the mirror's own object
+     * dir and cannot resolve the quarantined commits, so the scan finds nothing and silently reports a clean pass.
+     */
+    public Path getObjectsDirectory() {
+        return directory.resolve(Constants.OBJECTS);
+    }
+
+    /**
      * Promotes everything this push wrote into the mirror.
      *
      * <p>Only server mode needs this. There JGit applies the ref updates to the shared git directory once the

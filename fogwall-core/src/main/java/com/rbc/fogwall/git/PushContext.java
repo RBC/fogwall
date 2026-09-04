@@ -1,6 +1,7 @@
 package com.rbc.fogwall.git;
 
 import com.rbc.fogwall.db.model.PushStep;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -35,6 +36,13 @@ public class PushContext {
     // Where this push forwards to, resolved when the request opened its repository. Not read back off the mirror's
     // own config at forward time — that config is shared with every concurrent request using the same mirror.
     private String upstreamUrl;
+
+    // Object directory holding this push's not-yet-promoted objects (the server-mode quarantine store). Server-mode
+    // pushes are received into a quarantine whose objects live outside the mirror's own object dir, so an external
+    // git run against the mirror cannot resolve them; SecretScanningHook passes this to gitleaks as a git alternate
+    // (GIT_ALTERNATE_OBJECT_DIRECTORIES) so the scan can see the pushed commits. Null when no quarantine is active
+    // (objects were unpacked straight into the mirror), where the mirror's own object dir already holds them.
+    private Path scanObjectDirectory;
 
     /**
      * Transport context for this push — carries pre-authenticated identity (SSH) and upstream transport configuration.

@@ -310,6 +310,11 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
         pushContext.setRepoSlug(repoSlug);
         pushContext.setUpstreamUrl(upstreamUrl);
         pushContext.setTransport(transport);
+        // Expose the quarantine's object directory so SecretScanningHook can hand it to gitleaks as a git alternate;
+        // gitleaks shells out to git against the mirror and would otherwise never see the quarantined push objects.
+        if (quarantine != null) {
+            pushContext.setScanObjectDirectory(quarantine.getObjectsDirectory());
+        }
 
         // Persistence hook (records push to database). The store and gateway are constructor-required, so the
         // persistence and approval hooks are always in the chain — no wiring can assemble a push path without them.

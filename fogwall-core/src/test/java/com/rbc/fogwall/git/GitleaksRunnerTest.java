@@ -5,12 +5,19 @@ import static org.junit.jupiter.api.Assumptions.*;
 
 import com.rbc.fogwall.config.SecretScanConfig;
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.lib.CommitBuilder;
+import org.eclipse.jgit.lib.Constants;
+import org.eclipse.jgit.lib.FileMode;
+import org.eclipse.jgit.lib.ObjectId;
+import org.eclipse.jgit.lib.ObjectInserter;
 import org.eclipse.jgit.lib.PersonIdent;
+import org.eclipse.jgit.lib.TreeFormatter;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -143,6 +150,62 @@ class GitleaksRunnerTest {
 
         assertTrue(result.isPresent(), "Scanner must return a result");
         assertTrue(result.get().isEmpty(), "Clean commit must produce no findings");
+    }
+
+    @Test
+    void scanGit_quarantinedCommit_invisibleWithoutAlternate_visibleWithIt(@TempDir Path repoDir) throws Exception {
+        GitleaksRunner runner = runnerOrSkip();
+
+        // The "mirror": holds a base commit reachable from a ref, exactly like fogwall's local clone.
+        Git git = Git.init().setDirectory(repoDir.toFile()).call();
+        git.getRepository().getConfig().setBoolean("commit", null, "gpgsign", false);
+        git.getRepository().getConfig().save();
+
+        Files.writeString(repoDir.resolve("readme.txt"), "Hello world");
+        git.add().addFilepattern("readme.txt").call();
+        RevCommit base = git.commit()
+                .setAuthor(new PersonIdent("Test", "test@example.com"))
+                .setCommitter(new PersonIdent("Test", "test@example.com"))
+                .setMessage("initial commit")
+                .call();
+
+        // Simulate a server-mode push: the incoming commit's objects land in a quarantine object store that shares
+        // the mirror's git dir but writes objects to a separate directory — never into the mirror itself.
+        try (QuarantineObjectStore quarantine = QuarantineObjectStore.create(git.getRepository())) {
+            ObjectId badId;
+            try (ObjectInserter inserter = quarantine.getRepository().newObjectInserter()) {
+                ObjectId blob = inserter.insert(Constants.OBJ_BLOB, FAKE_PKCS8_KEY.getBytes(StandardCharsets.UTF_8));
+                TreeFormatter tree = new TreeFormatter();
+                tree.append("private.key", FileMode.REGULAR_FILE, blob);
+                ObjectId treeId = inserter.insert(tree);
+                CommitBuilder commit = new CommitBuilder();
+                commit.setTreeId(treeId);
+                commit.setParentId(base.getId());
+                PersonIdent who = new PersonIdent("Test", "test@example.com");
+                commit.setAuthor(who);
+                commit.setCommitter(who);
+                commit.setMessage("add private key");
+                badId = inserter.insert(commit);
+                inserter.flush();
+            }
+
+            // Without the quarantine exposed, the pushed tip is invisible to the child git gitleaks spawns. This is
+            // the regression: it must fail closed (empty result → hook blocks), not report a clean pass.
+            Optional<List<GitleaksRunner.Finding>> blind =
+                    runner.scanGit(repoDir, base.getId().name(), badId.name(), enabledConfig());
+            assertTrue(
+                    blind.isEmpty(),
+                    "A pushed commit the scan environment cannot resolve must fail closed, not report no findings");
+
+            // With the quarantine's object dir passed as a git alternate, gitleaks resolves and scans the commit.
+            Optional<List<GitleaksRunner.Finding>> scanned = runner.scanGit(
+                    repoDir, quarantine.getObjectsDirectory(), base.getId().name(), badId.name(), enabledConfig());
+            assertTrue(scanned.isPresent(), "Scanner must return a result once the quarantine is exposed");
+            assertFalse(scanned.get().isEmpty(), "gitleaks must detect the secret in the quarantined commit");
+            assertTrue(
+                    scanned.get().stream().anyMatch(f -> "private-key".equals(f.getRuleId())),
+                    "Finding must match the 'private-key' rule");
+        }
     }
 
     // ── scan() — --pipe diff mode ─────────────────────────────────────────────

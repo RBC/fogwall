@@ -180,10 +180,44 @@ public class GitleaksRunner {
      *     empty) list of findings
      */
     public Optional<List<Finding>> scanGit(Path repoDir, String commitFrom, String commitTo, SecretScanConfig config) {
+        return scanGit(repoDir, null, commitFrom, commitTo, config);
+    }
+
+    /**
+     * As {@link #scanGit(Path, String, String, SecretScanConfig)}, but also exposes {@code alternateObjectDir} to the
+     * {@code git} process gitleaks spawns via {@code GIT_ALTERNATE_OBJECT_DIRECTORIES}.
+     *
+     * <p>Server mode receives a push into a {@link QuarantineObjectStore}: the repository shares the mirror's git
+     * directory (so {@code repoDir} is the mirror and existing refs resolve) but the pushed objects land in a separate
+     * quarantine object directory. The in-process JGit hooks read those objects fine, but gitleaks shells out to
+     * {@code git}, which — running against the mirror — cannot see the quarantine and so scans nothing, silently
+     * reporting a clean pass. Passing the quarantine's object directory as an alternate makes the pushed commits
+     * resolvable to that external git exactly as intended. When {@code alternateObjectDir} is {@code null} (no
+     * quarantine; objects already in the mirror) this behaves identically to the four-argument overload.
+     *
+     * @param alternateObjectDir extra git object directory to expose to the scan, or {@code null} for none
+     */
+    public Optional<List<Finding>> scanGit(
+            Path repoDir, Path alternateObjectDir, String commitFrom, String commitTo, SecretScanConfig config) {
         Path binaryPath = resolveBinaryPath(config);
         if (binaryPath == null) {
             log.warn("gitleaks binary not available - secret scanning skipped (fail-open). "
                     + "Set commit.secretScanning.auto-install: true or provide scanner-path.");
+            return Optional.empty();
+        }
+
+        // Fail closed if the pushed tip is not resolvable in the environment the scan will actually use. This is the
+        // exact failure that made server-mode secret scanning a silent no-op once pushes were received into a
+        // quarantine object store: the pushed commits lived in the quarantine, invisible to the child git gitleaks
+        // spawns against the mirror, so git log found nothing, gitleaks exited 0, and the scan reported a clean pass.
+        // Verifying visibility up front turns any recurrence into a blocked push rather than a false all-clear.
+        if (!commitResolvable(repoDir, alternateObjectDir, commitTo, config)) {
+            log.error(
+                    "gitleaks git: pushed tip {} is not resolvable in {} (alternate objects: {}) - treating as a "
+                            + "scanner error so the push fails closed instead of passing unscanned",
+                    commitTo,
+                    repoDir,
+                    alternateObjectDir);
             return Optional.empty();
         }
 
@@ -204,6 +238,10 @@ public class GitleaksRunner {
             pb.redirectErrorStream(false);
             // Run inside the repo so gitleaks can traverse the git object graph
             pb.directory(repoDir.toFile());
+            // Expose the quarantine's objects to the git gitleaks spawns; inherited by that child process.
+            if (alternateObjectDir != null) {
+                pb.environment().put("GIT_ALTERNATE_OBJECT_DIRECTORIES", alternateObjectDir.toString());
+            }
             Process process = pb.start();
 
             // Gitleaks git writes findings to the JSON report file; drain output to avoid blocking
@@ -238,6 +276,41 @@ public class GitleaksRunner {
         } finally {
             deleteQuietly(reportFile);
             deleteQuietly(inlineConfigFile);
+        }
+    }
+
+    /**
+     * Confirms the pushed tip is resolvable in the exact directory and object environment the scan will use, by running
+     * {@code git cat-file -e <commitTo>} with the same {@code GIT_ALTERNATE_OBJECT_DIRECTORIES} that {@link #scanGit}
+     * sets. Returns {@code false} on a missing object, a git failure, or git being unavailable — each of which must
+     * block the push rather than let a scan that could see nothing report a clean pass.
+     *
+     * <p>{@code gitleaks git} already shells out to {@code git}, so requiring {@code git} on the path here adds no new
+     * dependency; if it were absent the scan itself would fail too.
+     */
+    private static boolean commitResolvable(
+            Path repoDir, Path alternateObjectDir, String commitTo, SecretScanConfig config) {
+        if (commitTo == null || commitTo.isBlank()) {
+            return false;
+        }
+        try {
+            ProcessBuilder pb = new ProcessBuilder("git", "cat-file", "-e", commitTo);
+            pb.directory(repoDir.toFile());
+            pb.redirectErrorStream(true);
+            if (alternateObjectDir != null) {
+                pb.environment().put("GIT_ALTERNATE_OBJECT_DIRECTORIES", alternateObjectDir.toString());
+            }
+            Process process = pb.start();
+            process.getInputStream().transferTo(OutputStream.nullOutputStream());
+            if (!process.waitFor(config.getTimeoutSeconds(), TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                log.warn("gitleaks git: object-visibility preflight for {} timed out - failing closed", commitTo);
+                return false;
+            }
+            return process.exitValue() == 0;
+        } catch (Exception e) {
+            log.warn("gitleaks git: could not verify {} is resolvable - failing closed: {}", commitTo, e.getMessage());
+            return false;
         }
     }
 
