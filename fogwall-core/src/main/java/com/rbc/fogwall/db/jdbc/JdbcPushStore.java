@@ -365,6 +365,7 @@ public class JdbcPushStore implements PushStore {
         List<MapSqlParameterSource> batchParams = new ArrayList<>(commits.size());
         for (PushCommit c : commits) {
             List<String> sobs = c.getSignedOffBy();
+            List<String> coauthors = c.getCoAuthoredBy();
             batchParams.add(new MapSqlParameterSource()
                     .addValue("pushId", pushId)
                     .addValue("sha", c.getSha())
@@ -376,13 +377,16 @@ public class JdbcPushStore implements PushStore {
                     .addValue("message", c.getMessage())
                     .addValue("commitDate", c.getCommitDate() != null ? Timestamp.from(c.getCommitDate()) : null)
                     .addValue("signature", c.getSignature())
-                    .addValue("signedOffBy", sobs != null && !sobs.isEmpty() ? String.join("\n", sobs) : null));
+                    .addValue("signedOffBy", sobs != null && !sobs.isEmpty() ? String.join("\n", sobs) : null)
+                    .addValue(
+                            "coAuthoredBy",
+                            coauthors != null && !coauthors.isEmpty() ? String.join("\n", coauthors) : null));
         }
         jdbc.batchUpdate("""
                 INSERT INTO push_commits (push_id, sha, parent_sha, author_name, author_email,
-                    committer_name, committer_email, message, commit_date, signature, signed_off_by)
+                    committer_name, committer_email, message, commit_date, signature, signed_off_by, co_authored_by)
                 VALUES (:pushId, :sha, :parentSha, :authorName, :authorEmail,
-                    :committerName, :committerEmail, :message, :commitDate, :signature, :signedOffBy)
+                    :committerName, :committerEmail, :message, :commitDate, :signature, :signedOffBy, :coAuthoredBy)
                 """, batchParams.toArray(MapSqlParameterSource[]::new));
     }
 

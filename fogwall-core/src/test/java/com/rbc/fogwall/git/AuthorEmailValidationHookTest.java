@@ -3,13 +3,13 @@ package com.rbc.fogwall.git;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.rbc.fogwall.config.CommitConfig;
+import com.rbc.fogwall.config.EmailRule;
 import com.rbc.fogwall.db.model.StepStatus;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
-import java.util.regex.Pattern;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.PersonIdent;
@@ -60,12 +60,11 @@ class AuthorEmailValidationHookTest {
         return CommitConfig.builder()
                 .committer(CommitConfig.CommitterConfig.builder()
                         .email(CommitConfig.EmailConfig.builder()
-                                .domain(CommitConfig.DomainConfig.builder()
-                                        .allow(Pattern.compile("example\\.com$"))
-                                        .build())
-                                .local(CommitConfig.LocalConfig.builder()
-                                        .block(Pattern.compile("^(noreply|bot)$"))
-                                        .build())
+                                .rules(List.of(
+                                        EmailRule.allow(
+                                                EmailRule.Field.DOMAIN, EmailRule.Match.REGEX, "example\\.com$"),
+                                        EmailRule.block(
+                                                EmailRule.Field.LOCAL, EmailRule.Match.REGEX, "^(noreply|bot)$")))
                                 .build())
                         .build())
                 .build();
@@ -157,10 +156,7 @@ class AuthorEmailValidationHookTest {
         hook.onPreReceive(rp, List.of(newBranchCommand(badCommit)));
 
         assertFalse(ctx.getIssues().isEmpty());
-        assertEquals(
-                "domain not allowed (badomain.io)",
-                ctx.getIssues().get(0).summary(),
-                "Invalid email must record FAIL step");
+        assertEquals("not in allowlist", ctx.getIssues().get(0).summary(), "Invalid email must record FAIL step");
     }
 
     @Test

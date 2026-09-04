@@ -9,7 +9,6 @@ import com.rbc.fogwall.git.Contributor;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 
@@ -36,7 +35,7 @@ public class AuthorEmailCheck implements CommitCheck {
         Set<String> committerEmails =
                 commits.stream().map(c -> c.getCommitter().getEmail()).collect(Collectors.toSet());
         for (String email : committerEmails) {
-            String reason = violationReason(email, config.getCommitter().getEmail());
+            String reason = config.getCommitter().getEmail().violationReason(email);
             if (reason != null) {
                 String detail = sym(CROSS_MARK) + "  committer email (" + email + "): " + reason + "\n"
                         + "  \u2192 The committer is you — the person who ran git commit or git rebase.\n"
@@ -48,7 +47,7 @@ public class AuthorEmailCheck implements CommitCheck {
         Set<String> authorEmails =
                 commits.stream().map(c -> c.getAuthor().getEmail()).collect(Collectors.toSet());
         for (String email : authorEmails) {
-            String reason = violationReason(email, config.getAuthor().getEmail());
+            String reason = config.getAuthor().getEmail().violationReason(email);
             if (reason != null) {
                 String detail = sym(CROSS_MARK) + "  author email (" + email + "): " + reason + "\n"
                         + "  \u2192 This commit was originally authored by someone outside the allowed domain.\n"
@@ -76,7 +75,7 @@ public class AuthorEmailCheck implements CommitCheck {
             return List.of();
         }
         String email = tagger.getEmail();
-        String reason = violationReason(email, config.getCommitter().getEmail());
+        String reason = config.getCommitter().getEmail().violationReason(email);
         if (reason == null) {
             return List.of();
         }
@@ -84,36 +83,5 @@ public class AuthorEmailCheck implements CommitCheck {
                 + "  → The tagger is you — the person who ran git tag -a (or -s).\n"
                 + "  → Fix: git config user.email \"you@corp.com\", then delete and re-create the tag.";
         return List.of(new Violation("tagger:" + email, reason, detail));
-    }
-
-    /** Returns the reason the email is rejected under the given email config, or {@code null} if it is allowed. */
-    private String violationReason(String email, CommitConfig.EmailConfig emailConfig) {
-        Pattern localBlock = emailConfig.getLocal().getBlock();
-        Pattern domainAllow = emailConfig.getDomain().getAllow();
-
-        if (localBlock == null && domainAllow == null) {
-            return null;
-        }
-
-        if (email == null || email.isEmpty()) {
-            return "empty email";
-        }
-
-        int atIndex = email.lastIndexOf('@');
-        if (atIndex < 0) {
-            return "missing @ in email";
-        }
-        String local = email.substring(0, atIndex);
-        String domain = email.substring(atIndex + 1);
-
-        if (localBlock != null && localBlock.matcher(local).find()) {
-            return "blocked local part (" + local + ")";
-        }
-
-        if (domainAllow != null && !domainAllow.matcher(domain).find()) {
-            return "domain not allowed (" + domain + ")";
-        }
-
-        return null;
     }
 }

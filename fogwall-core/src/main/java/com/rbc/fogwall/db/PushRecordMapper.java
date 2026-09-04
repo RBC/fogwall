@@ -115,6 +115,9 @@ public final class PushRecordMapper {
         if (commit.getSignedOffBy() != null && !commit.getSignedOffBy().isEmpty()) {
             builder.signedOffBy(new java.util.ArrayList<>(commit.getSignedOffBy()));
         }
+        if (commit.getCoAuthoredBy() != null && !commit.getCoAuthoredBy().isEmpty()) {
+            builder.coAuthoredBy(new java.util.ArrayList<>(commit.getCoAuthoredBy()));
+        }
 
         return builder.build();
     }

@@ -546,6 +546,77 @@ class JettyConfigurationBuilderTest {
         assertEquals("corp-gitea", providers.get(0).getName());
     }
 
+    // ---- buildCommitConfig: email policy rules + trailer policy (#146) ----
+
+    @Test
+    void buildCommitConfig_emailRules_compiledIntoEmailConfig() {
+        var config = new FogwallConfig();
+        var allow = new CommitSettings.RuleSettings();
+        allow.setAction("allow");
+        allow.setField("domain");
+        allow.setMatch("regex");
+        allow.setValue("corp\\.com$");
+        config.getCommit().getCommitter().getEmail().setRules(List.of(allow));
+
+        var commitConfig = new JettyConfigurationBuilder(config).buildCommitConfig();
+        var email = commitConfig.getCommitter().getEmail();
+        assertTrue(email.isConfigured());
+        assertNull(email.violationReason("dev@corp.com"));
+        assertNotNull(email.violationReason("dev@gmail.com"));
+    }
+
+    @Test
+    void buildCommitConfig_legacyDomainAllowAndLocalBlock_foldedIntoRules() {
+        var config = new FogwallConfig();
+        config.getCommit().getCommitter().getEmail().getDomain().setAllow("corp\\.com$");
+        config.getCommit().getCommitter().getEmail().getLocal().setBlock("^(noreply|bot)$");
+
+        var email = new JettyConfigurationBuilder(config)
+                .buildCommitConfig()
+                .getCommitter()
+                .getEmail();
+        assertNull(email.violationReason("dev@corp.com"), "allowed domain passes");
+        assertNotNull(email.violationReason("dev@gmail.com"), "disallowed domain blocked");
+        assertNotNull(email.violationReason("noreply@corp.com"), "blocked local part rejected even on allowed domain");
+    }
+
+    @Test
+    void buildCommitConfig_invalidRuleAction_throws() {
+        var config = new FogwallConfig();
+        var bad = new CommitSettings.RuleSettings();
+        bad.setAction("permit"); // not allow|block
+        bad.setField("domain");
+        bad.setValue("corp\\.com$");
+        config.getCommit().getAuthor().getEmail().setRules(List.of(bad));
+
+        var builder = new JettyConfigurationBuilder(config);
+        var ex = assertThrows(IllegalArgumentException.class, builder::buildCommitConfig);
+        assertTrue(ex.getMessage().contains("permit"));
+    }
+
+    @Test
+    void buildCommitConfig_trailerPolicy_bindsSignedOffByAndCoAuthoredBy() {
+        var config = new FogwallConfig();
+        config.getCommit().getTrailers().getSignedOffBy().setRequire(true);
+        config.getCommit().getTrailers().getSignedOffBy().setRequireAuthorMatch(true);
+        config.getCommit().getTrailers().getCoAuthoredBy().setPolicy("ban");
+
+        var trailers = new JettyConfigurationBuilder(config).buildCommitConfig().getTrailers();
+        assertTrue(trailers.getSignedOffBy().isRequire());
+        assertTrue(trailers.getSignedOffBy().isRequireAuthorMatch());
+        assertEquals(CommitConfig.CoAuthorPolicy.BAN, trailers.getCoAuthoredBy().getPolicy());
+        assertFalse(trailers.isEffectivelyOff());
+    }
+
+    @Test
+    void buildCommitConfig_trailerPolicy_defaultsOff() {
+        var trailers = new JettyConfigurationBuilder(new FogwallConfig())
+                .buildCommitConfig()
+                .getTrailers();
+        assertTrue(trailers.isEffectivelyOff());
+        assertEquals(CommitConfig.CoAuthorPolicy.OFF, trailers.getCoAuthoredBy().getPolicy());
+    }
+
     // ---- helpers ----
 
     private static PermissionConfig slugPerm(String username, String provider, String value) {

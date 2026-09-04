@@ -396,7 +396,8 @@ public class CommitInspectionService {
         String signature = (rawSig != null && rawSig.length > 0) ? new String(rawSig, StandardCharsets.US_ASCII) : null;
 
         String fullMessage = revCommit.getFullMessage();
-        List<String> signedOffBy = parseSignedOffBy(fullMessage);
+        List<String> signedOffBy = parseTrailer(fullMessage, "Signed-off-by:");
+        List<String> coAuthoredBy = parseTrailer(fullMessage, "Co-authored-by:");
 
         return Commit.builder()
                 .sha(revCommit.getName())
@@ -413,20 +414,25 @@ public class CommitInspectionService {
                 .date(committer.getWhenAsInstant())
                 .signature(signature)
                 .signedOffBy(signedOffBy)
+                .coAuthoredBy(coAuthoredBy)
                 .build();
     }
 
     /**
-     * Extract all {@code Signed-off-by:} trailers from a commit message. Returns them in order of appearance,
-     * preserving the full {@code Name <email>} value.
+     * Extract all trailers with the given key (e.g. {@code "Signed-off-by:"}, {@code "Co-authored-by:"}) from a commit
+     * message. Returns their values in order of appearance, preserving the full {@code Name <email>} value. The key
+     * match is case-insensitive, matching git's own trailer handling.
+     *
+     * @param key the trailer key including its trailing colon
      */
-    static List<String> parseSignedOffBy(String message) {
+    static List<String> parseTrailer(String message, String key) {
         if (message == null || message.isBlank()) return List.of();
         List<String> result = new ArrayList<>();
+        int keyLen = key.length();
         for (String line : message.lines().toList()) {
             String trimmed = line.trim();
-            if (trimmed.regionMatches(true, 0, "Signed-off-by:", 0, 14)) {
-                String value = trimmed.substring(14).trim();
+            if (trimmed.regionMatches(true, 0, key, 0, keyLen)) {
+                String value = trimmed.substring(keyLen).trim();
                 if (!value.isEmpty()) {
                     result.add(value);
                 }

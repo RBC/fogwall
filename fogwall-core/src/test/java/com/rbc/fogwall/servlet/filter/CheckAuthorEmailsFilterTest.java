@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.rbc.fogwall.config.CommitConfig;
+import com.rbc.fogwall.config.EmailRule;
 import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.git.Commit;
 import com.rbc.fogwall.git.Contributor;
@@ -21,7 +22,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
 class CheckAuthorEmailsFilterTest {
@@ -97,12 +97,15 @@ class CheckAuthorEmailsFilterTest {
         return CommitConfig.builder()
                 .committer(CommitConfig.CommitterConfig.builder()
                         .email(CommitConfig.EmailConfig.builder()
-                                .domain(CommitConfig.DomainConfig.builder()
-                                        .allow(Pattern.compile("(example\\.com|company\\.org)$"))
-                                        .build())
-                                .local(CommitConfig.LocalConfig.builder()
-                                        .block(Pattern.compile("^(noreply|no-reply|bot)$"))
-                                        .build())
+                                .rules(List.of(
+                                        EmailRule.allow(
+                                                EmailRule.Field.DOMAIN,
+                                                EmailRule.Match.REGEX,
+                                                "(example\\.com|company\\.org)$"),
+                                        EmailRule.block(
+                                                EmailRule.Field.LOCAL,
+                                                EmailRule.Match.REGEX,
+                                                "^(noreply|no-reply|bot)$")))
                                 .build())
                         .build())
                 .build();
@@ -218,10 +221,8 @@ class CheckAuthorEmailsFilterTest {
         CommitConfig config = CommitConfig.builder()
                 .committer(CommitConfig.CommitterConfig.builder()
                         .email(CommitConfig.EmailConfig.builder()
-                                .domain(CommitConfig.DomainConfig.builder()
-                                        .allow(Pattern.compile("github\\.com$"))
-                                        .build())
-                                .local(CommitConfig.LocalConfig.builder().build())
+                                .rules(List.of(EmailRule.allow(
+                                        EmailRule.Field.DOMAIN, EmailRule.Match.REGEX, "github\\.com$")))
                                 .build())
                         .build())
                 .build();

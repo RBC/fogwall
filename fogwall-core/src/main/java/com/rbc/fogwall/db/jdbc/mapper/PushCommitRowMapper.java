@@ -22,6 +22,10 @@ public final class PushCommitRowMapper implements RowMapper<PushCommit> {
         String sobRaw = rs.getString("signed_off_by");
         List<String> signedOffBy =
                 (sobRaw != null && !sobRaw.isBlank()) ? Arrays.asList(sobRaw.split("\n")) : new ArrayList<>();
+        String coauthorRaw = rs.getString("co_authored_by");
+        List<String> coAuthoredBy = (coauthorRaw != null && !coauthorRaw.isBlank())
+                ? Arrays.asList(coauthorRaw.split("\n"))
+                : new ArrayList<>();
         return PushCommit.builder()
                 .pushId(rs.getString("push_id"))
                 .sha(rs.getString("sha"))
@@ -34,6 +38,7 @@ public final class PushCommitRowMapper implements RowMapper<PushCommit> {
                 .commitDate(toInstant(rs.getTimestamp("commit_date")))
                 .signature(rs.getString("signature"))
                 .signedOffBy(signedOffBy)
+                .coAuthoredBy(coAuthoredBy)
                 .build();
     }
 

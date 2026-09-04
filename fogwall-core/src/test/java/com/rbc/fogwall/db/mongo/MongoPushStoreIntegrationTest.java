@@ -277,9 +277,11 @@ class MongoPushStoreIntegrationTest {
                 .authorEmail("dev@example.com")
                 .committerName("Dev")
                 .committerEmail("dev@example.com")
-                .message("feat: add thing\n\nSigned-off-by: Dev <dev@example.com>")
+                .message(
+                        "feat: add thing\n\nSigned-off-by: Dev <dev@example.com>\nCo-authored-by: Pair <pair@example.com>")
                 .commitDate(Instant.now())
                 .signedOffBy(List.of("Dev <dev@example.com>"))
+                .coAuthoredBy(List.of("Pair <pair@example.com>"))
                 .build()));
         store.save(r);
 
@@ -289,6 +291,7 @@ class MongoPushStoreIntegrationTest {
         assertEquals(id, c.getPushId());
         assertEquals("abc123", c.getSha());
         assertEquals(List.of("Dev <dev@example.com>"), c.getSignedOffBy());
+        assertEquals(List.of("Pair <pair@example.com>"), c.getCoAuthoredBy());
     }
 
     @Test

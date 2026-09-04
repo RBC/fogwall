@@ -362,6 +362,7 @@ public class JettyConfigurationBuilder {
                 .author(authorConfig)
                 .committer(committerConfig)
                 .message(messageConfig)
+                .trailers(buildTrailerPolicyConfig(cs.getTrailers()))
                 .build();
 
         log.info(
@@ -397,23 +398,53 @@ public class JettyConfigurationBuilder {
     }
 
     private CommitConfig.EmailConfig buildEmailConfig(CommitSettings.EmailSettings email) {
+        List<EmailRule> rules = new ArrayList<>();
+
+        // Current shape: explicit allow/block rules.
+        for (CommitSettings.RuleSettings r : email.getRules()) {
+            rules.add(new EmailRule(
+                    EmailRule.Action.fromString(r.getAction()),
+                    EmailRule.Field.fromString(r.getField()),
+                    EmailRule.Match.fromString(r.getMatch()),
+                    r.getValue()));
+        }
+
+        // Deprecated aliases: domain.allow / local.block, folded into equivalent regex rules (fogwall#146).
         String domainAllow = email.getDomain().getAllow();
-        CommitConfig.DomainConfig domainConfig = (domainAllow != null && !domainAllow.isBlank())
-                ? CommitConfig.DomainConfig.builder()
-                        .allow(Pattern.compile(domainAllow))
-                        .build()
-                : CommitConfig.DomainConfig.builder().build();
-
+        if (domainAllow != null && !domainAllow.isBlank()) {
+            warnDeprecatedEmailKey("domain.allow", "action: allow, field: domain, match: regex");
+            rules.add(EmailRule.allow(EmailRule.Field.DOMAIN, EmailRule.Match.REGEX, domainAllow));
+        }
         String localBlock = email.getLocal().getBlock();
-        CommitConfig.LocalConfig localConfig = (localBlock != null && !localBlock.isBlank())
-                ? CommitConfig.LocalConfig.builder()
-                        .block(Pattern.compile(localBlock))
-                        .build()
-                : CommitConfig.LocalConfig.builder().build();
+        if (localBlock != null && !localBlock.isBlank()) {
+            warnDeprecatedEmailKey("local.block", "action: block, field: local, match: regex");
+            rules.add(EmailRule.block(EmailRule.Field.LOCAL, EmailRule.Match.REGEX, localBlock));
+        }
 
-        return CommitConfig.EmailConfig.builder()
-                .domain(domainConfig)
-                .local(localConfig)
+        return CommitConfig.EmailConfig.builder().rules(rules).build();
+    }
+
+    private void warnDeprecatedEmailKey(String oldKey, String replacement) {
+        log.warn(
+                "Config key 'commit...email.{}' is deprecated — express it as a 'rules' entry instead "
+                        + "({}). The old key is still applied for now; migrate to the unified rules list "
+                        + "(see docs/CONFIGURATION.md#commit-email-policy).",
+                oldKey,
+                replacement);
+    }
+
+    private CommitConfig.TrailerPolicyConfig buildTrailerPolicyConfig(CommitSettings.TrailersSettings trailers) {
+        CommitSettings.SignedOffBySettings sob = trailers.getSignedOffBy();
+        CommitSettings.CoAuthoredBySettings cab = trailers.getCoAuthoredBy();
+        return CommitConfig.TrailerPolicyConfig.builder()
+                .signedOffBy(CommitConfig.SignedOffByConfig.builder()
+                        .require(sob.isRequire())
+                        .requireAuthorMatch(sob.isRequireAuthorMatch())
+                        .build())
+                .coAuthoredBy(CommitConfig.CoAuthoredByConfig.builder()
+                        .policy(CommitConfig.CoAuthorPolicy.fromString(cab.getPolicy()))
+                        .email(buildEmailConfig(cab.getEmail()))
+                        .build())
                 .build();
     }
 

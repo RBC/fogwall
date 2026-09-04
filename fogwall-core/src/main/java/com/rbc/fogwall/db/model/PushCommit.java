@@ -43,4 +43,8 @@ public class PushCommit {
     /** {@code Signed-off-by:} trailers extracted from the commit message, in order. */
     @Builder.Default
     private List<String> signedOffBy = new ArrayList<>();
+
+    /** {@code Co-authored-by:} trailers extracted from the commit message, in order. */
+    @Builder.Default
+    private List<String> coAuthoredBy = new ArrayList<>();
 }

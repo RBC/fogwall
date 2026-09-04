@@ -122,6 +122,16 @@ public class DatabaseMigrator {
                     "13",
                     "email sources (mysql/mariadb)",
                     "db/migration-mysql/V13__email_sources.sql",
+                    Vendor.MYSQL_ONLY),
+            new Migration(
+                    "14",
+                    "push commit co-authored-by trailers",
+                    "db/migration/V14__push_commit_co_authored_by.sql",
+                    Vendor.EXCEPT_MYSQL),
+            new Migration(
+                    "14",
+                    "push commit co-authored-by trailers (mysql/mariadb)",
+                    "db/migration-mysql/V14__push_commit_co_authored_by.sql",
                     Vendor.MYSQL_ONLY));
 
     // ---------------------------------------------------------------------------

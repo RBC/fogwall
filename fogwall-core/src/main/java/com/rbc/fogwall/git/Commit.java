@@ -21,4 +21,8 @@ public class Commit {
     /** Trailers matching {@code Signed-off-by: Name <email>}, in order of appearance. */
     @Builder.Default
     private List<String> signedOffBy = new ArrayList<>();
+
+    /** Trailers matching {@code Co-authored-by: Name <email>}, in order of appearance. */
+    @Builder.Default
+    private List<String> coAuthoredBy = new ArrayList<>();
 }

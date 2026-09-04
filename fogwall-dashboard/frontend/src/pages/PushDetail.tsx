@@ -35,6 +35,9 @@ const STEP_DISPLAY_NAMES: Record<string, string> = {
   checkCommitMessages: 'Commit messages',
   CommitMessage: 'Commit messages',
   CheckCommitMessagesFilter: 'Commit messages',
+  checkTrailers: 'Commit trailers',
+  TrailerPolicyValidationHook: 'Commit trailers',
+  CheckTrailersFilter: 'Commit trailers',
   CheckEmptyBranchHook: 'Empty branch',
   CheckEmptyBranchFilter: 'Empty branch',
   CheckHiddenCommitsHook: 'Hidden commits',
@@ -817,6 +820,19 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
                               className="ml-1 bg-green-50 text-green-700 border border-green-200 rounded px-1 dark:bg-green-900/20 dark:text-green-300 dark:border-green-700"
                             >
                               {sob}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {c.coAuthoredBy && c.coAuthoredBy.length > 0 && (
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          <span className="font-medium">Co-authored-by: </span>
+                          {c.coAuthoredBy.map((coauthor) => (
+                            <span
+                              key={coauthor}
+                              className="ml-1 bg-blue-50 text-blue-700 border border-blue-200 rounded px-1 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-700"
+                            >
+                              {coauthor}
                             </span>
                           ))}
                         </div>

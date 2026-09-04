@@ -16,44 +16,99 @@ class ConfigTest {
         assertNotNull(config);
         assertNotNull(config.getAuthor());
         assertNotNull(config.getAuthor().getEmail());
-        assertNotNull(config.getAuthor().getEmail().getDomain());
-        assertNotNull(config.getAuthor().getEmail().getLocal());
-        assertNull(config.getAuthor().getEmail().getDomain().getAllow());
-        assertNull(config.getAuthor().getEmail().getLocal().getBlock());
+        assertFalse(config.getAuthor().getEmail().isConfigured());
+        assertTrue(config.getAuthor().getEmail().getRules().isEmpty());
+        assertNull(config.getAuthor().getEmail().violationReason("anyone@anywhere.io"));
         assertNotNull(config.getMessage());
         assertNotNull(config.getMessage().getBlock());
         assertTrue(config.getMessage().getBlock().getLiterals().isEmpty());
         assertTrue(config.getMessage().getBlock().getPatterns().isEmpty());
+        assertTrue(config.getTrailers().isEffectivelyOff());
     }
 
     @Test
-    void commitConfig_builder_setsEmailDomainAllow() {
-        Pattern domainPattern = Pattern.compile("example\\.com$");
-        CommitConfig config = CommitConfig.builder()
-                .author(CommitConfig.AuthorConfig.builder()
-                        .email(CommitConfig.EmailConfig.builder()
-                                .domain(CommitConfig.DomainConfig.builder()
-                                        .allow(domainPattern)
-                                        .build())
-                                .build())
-                        .build())
+    void emailConfig_domainAllowRule_gatesByDomain() {
+        CommitConfig.EmailConfig email = CommitConfig.EmailConfig.builder()
+                .rules(List.of(EmailRule.allow(EmailRule.Field.DOMAIN, EmailRule.Match.REGEX, "example\\.com$")))
                 .build();
-        assertSame(domainPattern, config.getAuthor().getEmail().getDomain().getAllow());
+        assertNull(email.violationReason("dev@example.com"));
+        assertNotNull(email.violationReason("dev@gmail.com"));
     }
 
     @Test
-    void commitConfig_builder_setsEmailLocalBlock() {
-        Pattern blockPattern = Pattern.compile("^noreply$");
-        CommitConfig config = CommitConfig.builder()
-                .author(CommitConfig.AuthorConfig.builder()
-                        .email(CommitConfig.EmailConfig.builder()
-                                .local(CommitConfig.LocalConfig.builder()
-                                        .block(blockPattern)
-                                        .build())
-                                .build())
-                        .build())
+    void emailConfig_localBlockRule_blocksLocalPart() {
+        CommitConfig.EmailConfig email = CommitConfig.EmailConfig.builder()
+                .rules(List.of(EmailRule.block(EmailRule.Field.LOCAL, EmailRule.Match.REGEX, "^noreply$")))
                 .build();
-        assertSame(blockPattern, config.getAuthor().getEmail().getLocal().getBlock());
+        assertNotNull(email.violationReason("noreply@example.com"));
+        assertNull(email.violationReason("dev@example.com"));
+    }
+
+    @Test
+    void emailConfig_addressLiteralAllow_permitsExactAddressOnly() {
+        CommitConfig.EmailConfig email = CommitConfig.EmailConfig.builder()
+                .rules(List.of(
+                        EmailRule.allow(EmailRule.Field.DOMAIN, EmailRule.Match.REGEX, "company\\.com$"),
+                        EmailRule.allow(EmailRule.Field.ADDRESS, EmailRule.Match.LITERAL, "noreply@anthropic.com")))
+                .build();
+        assertNull(email.violationReason("dev@company.com"));
+        assertNull(email.violationReason("noreply@anthropic.com"));
+        assertNotNull(email.violationReason("someone@anthropic.com"));
+    }
+
+    @Test
+    void emailConfig_blockWinsOverAllowOnSameEmail() {
+        CommitConfig.EmailConfig email = CommitConfig.EmailConfig.builder()
+                .rules(List.of(
+                        EmailRule.allow(EmailRule.Field.DOMAIN, EmailRule.Match.REGEX, "corp\\.com$"),
+                        EmailRule.block(EmailRule.Field.LOCAL, EmailRule.Match.REGEX, "^svc-")))
+                .build();
+        assertNotNull(email.violationReason("svc-ci@corp.com"), "block wins even when the allow rule also matches");
+        assertNull(email.violationReason("dev@corp.com"));
+    }
+
+    @Test
+    void emailConfig_emptyAndMalformedEmails() {
+        CommitConfig.EmailConfig email = CommitConfig.EmailConfig.builder()
+                .rules(List.of(EmailRule.allow(EmailRule.Field.DOMAIN, EmailRule.Match.REGEX, "corp\\.com$")))
+                .build();
+        assertEquals("empty email", email.violationReason(""));
+        assertEquals("empty email", email.violationReason(null));
+        assertEquals("missing @ in email", email.violationReason("notanemail"));
+    }
+
+    @Test
+    void emailConfig_notConfigured_permitsEverything() {
+        CommitConfig.EmailConfig email = CommitConfig.EmailConfig.builder().build();
+        assertFalse(email.isConfigured());
+        assertNull(email.violationReason("anyone@anywhere.io"));
+        assertNull(email.violationReason(""));
+    }
+
+    @Test
+    void coAuthorPolicy_fromString_parsesAllAndDefaults() {
+        assertEquals(CommitConfig.CoAuthorPolicy.BAN, CommitConfig.CoAuthorPolicy.fromString("ban"));
+        assertEquals(CommitConfig.CoAuthorPolicy.ALLOWLIST, CommitConfig.CoAuthorPolicy.fromString("ALLOWLIST"));
+        assertEquals(CommitConfig.CoAuthorPolicy.REQUIRE, CommitConfig.CoAuthorPolicy.fromString("require"));
+        assertEquals(CommitConfig.CoAuthorPolicy.OFF, CommitConfig.CoAuthorPolicy.fromString("off"));
+        assertEquals(CommitConfig.CoAuthorPolicy.OFF, CommitConfig.CoAuthorPolicy.fromString(null));
+        assertEquals(CommitConfig.CoAuthorPolicy.OFF, CommitConfig.CoAuthorPolicy.fromString("nonsense"));
+    }
+
+    @Test
+    void trailerPolicy_isEffectivelyOff_reflectsBothControls() {
+        assertTrue(CommitConfig.TrailerPolicyConfig.builder().build().isEffectivelyOff());
+        assertFalse(CommitConfig.TrailerPolicyConfig.builder()
+                .signedOffBy(
+                        CommitConfig.SignedOffByConfig.builder().require(true).build())
+                .build()
+                .isEffectivelyOff());
+        assertFalse(CommitConfig.TrailerPolicyConfig.builder()
+                .coAuthoredBy(CommitConfig.CoAuthoredByConfig.builder()
+                        .policy(CommitConfig.CoAuthorPolicy.REQUIRE)
+                        .build())
+                .build()
+                .isEffectivelyOff());
     }
 
     @Test
