@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.rbc.fogwall.config.CommitConfig;
+import com.rbc.fogwall.config.EmailRule;
 import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.git.Commit;
 import com.rbc.fogwall.git.Contributor;
@@ -102,12 +103,15 @@ class FilterChainIntegrationTest {
         return CommitConfig.builder()
                 .committer(CommitConfig.CommitterConfig.builder()
                         .email(CommitConfig.EmailConfig.builder()
-                                .domain(CommitConfig.DomainConfig.builder()
-                                        .allow(Pattern.compile("(example\\.com|company\\.org)$"))
-                                        .build())
-                                .local(CommitConfig.LocalConfig.builder()
-                                        .block(Pattern.compile("^(noreply|no-reply|bot)$"))
-                                        .build())
+                                .rules(List.of(
+                                        EmailRule.allow(
+                                                EmailRule.Field.DOMAIN,
+                                                EmailRule.Match.REGEX,
+                                                "(example\\.com|company\\.org)$"),
+                                        EmailRule.block(
+                                                EmailRule.Field.LOCAL,
+                                                EmailRule.Match.REGEX,
+                                                "^(noreply|no-reply|bot)$")))
                                 .build())
                         .build())
                 .message(CommitConfig.MessageConfig.builder()

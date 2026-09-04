@@ -7,6 +7,7 @@ import com.rbc.fogwall.config.BinaryBlobConfig;
 import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.config.ContentPatternConfig;
 import com.rbc.fogwall.config.DiffScanConfig;
+import com.rbc.fogwall.config.EmailRule;
 import com.rbc.fogwall.config.GpgConfig;
 import com.rbc.fogwall.config.SecretScanConfig;
 import com.rbc.fogwall.db.PushStore;
@@ -345,13 +346,15 @@ class JettyProxyFixture implements AutoCloseable {
         return CommitConfig.builder()
                 .author(CommitConfig.AuthorConfig.builder()
                         .email(CommitConfig.EmailConfig.builder()
-                                .domain(CommitConfig.DomainConfig.builder()
-                                        .allow(Pattern.compile(
-                                                "(proton\\.me|gmail\\.com|outlook\\.com|yahoo\\.com|example\\.com)$"))
-                                        .build())
-                                .local(CommitConfig.LocalConfig.builder()
-                                        .block(Pattern.compile("^(noreply|no-reply|bot|nobody)$"))
-                                        .build())
+                                .rules(List.of(
+                                        EmailRule.allow(
+                                                EmailRule.Field.DOMAIN,
+                                                EmailRule.Match.REGEX,
+                                                "(proton\\.me|gmail\\.com|outlook\\.com|yahoo\\.com|example\\.com)$"),
+                                        EmailRule.block(
+                                                EmailRule.Field.LOCAL,
+                                                EmailRule.Match.REGEX,
+                                                "^(noreply|no-reply|bot|nobody)$")))
                                 .build())
                         .build())
                 .message(CommitConfig.MessageConfig.builder()

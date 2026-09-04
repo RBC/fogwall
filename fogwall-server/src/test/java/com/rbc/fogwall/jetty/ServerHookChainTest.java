@@ -3,6 +3,7 @@ package com.rbc.fogwall.jetty;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.rbc.fogwall.config.CommitConfig;
+import com.rbc.fogwall.config.EmailRule;
 import com.rbc.fogwall.git.AuthorEmailValidationHook;
 import com.rbc.fogwall.git.CommitMessageValidationHook;
 import com.rbc.fogwall.git.PushContext;
@@ -13,7 +14,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
-import java.util.regex.Pattern;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.PersonIdent;
@@ -68,12 +68,13 @@ class ServerHookChainTest {
         return CommitConfig.builder()
                 .author(CommitConfig.AuthorConfig.builder()
                         .email(CommitConfig.EmailConfig.builder()
-                                .domain(CommitConfig.DomainConfig.builder()
-                                        .allow(Pattern.compile("example\\.com$"))
-                                        .build())
-                                .local(CommitConfig.LocalConfig.builder()
-                                        .block(Pattern.compile("^(noreply|bot|nobody)$"))
-                                        .build())
+                                .rules(List.of(
+                                        EmailRule.allow(
+                                                EmailRule.Field.DOMAIN, EmailRule.Match.REGEX, "example\\.com$"),
+                                        EmailRule.block(
+                                                EmailRule.Field.LOCAL,
+                                                EmailRule.Match.REGEX,
+                                                "^(noreply|bot|nobody)$")))
                                 .build())
                         .build())
                 .message(CommitConfig.MessageConfig.builder()

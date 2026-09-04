@@ -298,6 +298,7 @@ class JdbcPushStoreIntegrationTest {
                 .committerEmail("alice@example.com")
                 .message("feat: add thing")
                 .signedOffBy(List.of("Alice <alice@example.com>", "Bob <bob@example.com>"))
+                .coAuthoredBy(List.of("Carol <carol@example.com>"))
                 .build();
         r.setCommits(List.of(commit));
         store.save(r);
@@ -312,6 +313,7 @@ class JdbcPushStoreIntegrationTest {
         assertEquals("alice@example.com", loadedCommit.getAuthorEmail());
         assertEquals("feat: add thing", loadedCommit.getMessage());
         assertEquals(List.of("Alice <alice@example.com>", "Bob <bob@example.com>"), loadedCommit.getSignedOffBy());
+        assertEquals(List.of("Carol <carol@example.com>"), loadedCommit.getCoAuthoredBy());
     }
 
     // ---- find with search ----

@@ -168,4 +168,32 @@ class CommitInspectionServiceTest {
     void getAnnotatedTagMessage_nullId_returnsEmpty() throws Exception {
         assertTrue(CommitInspectionService.getAnnotatedTagMessage(repo, null).isEmpty());
     }
+
+    // --- trailer parsing (#146) ---
+
+    @Test
+    void parseTrailer_extractsSignedOffByAndCoAuthoredBy_inOrder_caseInsensitive() {
+        String message = """
+                Add a feature
+
+                Body text mentioning signed-off-by inline should be ignored unless it starts the line.
+
+                Signed-off-by: Dev One <dev1@corp.com>
+                co-authored-by: Pair Two <pair2@corp.com>
+                Co-Authored-By: Bot <noreply@anthropic.com>
+                """;
+
+        assertEquals(
+                List.of("Dev One <dev1@corp.com>"), CommitInspectionService.parseTrailer(message, "Signed-off-by:"));
+        assertEquals(
+                List.of("Pair Two <pair2@corp.com>", "Bot <noreply@anthropic.com>"),
+                CommitInspectionService.parseTrailer(message, "Co-authored-by:"));
+    }
+
+    @Test
+    void parseTrailer_noMatches_returnsEmpty() {
+        assertTrue(CommitInspectionService.parseTrailer("just a subject", "Co-authored-by:")
+                .isEmpty());
+        assertTrue(CommitInspectionService.parseTrailer(null, "Signed-off-by:").isEmpty());
+    }
 }

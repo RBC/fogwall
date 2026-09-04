@@ -20,6 +20,7 @@ export interface Commit {
   committerName?: string
   committerEmail?: string
   signedOffBy?: string[]
+  coAuthoredBy?: string[]
 }
 
 export interface AttestationLink {

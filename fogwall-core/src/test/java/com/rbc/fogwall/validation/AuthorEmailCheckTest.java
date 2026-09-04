@@ -3,10 +3,10 @@ package com.rbc.fogwall.validation;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.rbc.fogwall.config.CommitConfig;
+import com.rbc.fogwall.config.EmailRule;
 import com.rbc.fogwall.git.Commit;
 import com.rbc.fogwall.git.Contributor;
 import java.util.List;
-import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -15,14 +15,22 @@ class AuthorEmailCheckTest {
 
     // --- config helpers ---
 
+    private static CommitConfig.EmailConfig domainAllow(String pattern) {
+        return CommitConfig.EmailConfig.builder()
+                .rules(List.of(EmailRule.allow(EmailRule.Field.DOMAIN, EmailRule.Match.REGEX, pattern)))
+                .build();
+    }
+
+    private static CommitConfig.EmailConfig localBlock(String pattern) {
+        return CommitConfig.EmailConfig.builder()
+                .rules(List.of(EmailRule.block(EmailRule.Field.LOCAL, EmailRule.Match.REGEX, pattern)))
+                .build();
+    }
+
     private static CommitConfig committerDomainAllow(String pattern) {
         return CommitConfig.builder()
                 .committer(CommitConfig.CommitterConfig.builder()
-                        .email(CommitConfig.EmailConfig.builder()
-                                .domain(CommitConfig.DomainConfig.builder()
-                                        .allow(Pattern.compile(pattern))
-                                        .build())
-                                .build())
+                        .email(domainAllow(pattern))
                         .build())
                 .build();
     }
@@ -30,11 +38,7 @@ class AuthorEmailCheckTest {
     private static CommitConfig committerLocalBlock(String pattern) {
         return CommitConfig.builder()
                 .committer(CommitConfig.CommitterConfig.builder()
-                        .email(CommitConfig.EmailConfig.builder()
-                                .local(CommitConfig.LocalConfig.builder()
-                                        .block(Pattern.compile(pattern))
-                                        .build())
-                                .build())
+                        .email(localBlock(pattern))
                         .build())
                 .build();
     }
@@ -42,25 +46,18 @@ class AuthorEmailCheckTest {
     private static CommitConfig authorDomainAllow(String pattern) {
         return CommitConfig.builder()
                 .author(CommitConfig.AuthorConfig.builder()
-                        .email(CommitConfig.EmailConfig.builder()
-                                .domain(CommitConfig.DomainConfig.builder()
-                                        .allow(Pattern.compile(pattern))
-                                        .build())
-                                .build())
+                        .email(domainAllow(pattern))
                         .build())
                 .build();
     }
 
     private static CommitConfig bothDomainAllow(String pattern) {
-        CommitConfig.EmailConfig emailConfig = CommitConfig.EmailConfig.builder()
-                .domain(CommitConfig.DomainConfig.builder()
-                        .allow(Pattern.compile(pattern))
-                        .build())
-                .build();
         return CommitConfig.builder()
-                .author(CommitConfig.AuthorConfig.builder().email(emailConfig).build())
+                .author(CommitConfig.AuthorConfig.builder()
+                        .email(domainAllow(pattern))
+                        .build())
                 .committer(CommitConfig.CommitterConfig.builder()
-                        .email(emailConfig)
+                        .email(domainAllow(pattern))
                         .build())
                 .build();
     }

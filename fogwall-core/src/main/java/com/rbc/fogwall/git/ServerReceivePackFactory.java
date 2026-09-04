@@ -328,6 +328,7 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
         //   CheckEmptyBranchHook            (210) - reject if no commits introduced (short-circuit)
         //   CheckHiddenCommitsHook          (220) - reject if pack contains commits outside push range
         //   AuthorEmailValidationHook       (250) - validates emails
+        //   TrailerPolicyValidationHook     (255) - DCO Signed-off-by / Co-authored-by policy
         //   CommitMessageValidationHook     (260) - validates messages
         //   ContentPatternCommitMessageHook (265) - WARN-only PII/identifier scan of commit messages
         //   ProxyPreReceiveHook             (270) - commit inspection
@@ -375,6 +376,7 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
                 new CheckEmptyBranchHook(pushContext),
                 new CheckHiddenCommitsHook(pushContext),
                 new AuthorEmailValidationHook(commitConfig, validationContext, pushContext),
+                new TrailerPolicyValidationHook(commitConfig, validationContext, pushContext),
                 new CommitMessageValidationHook(commitConfig, validationContext, pushContext),
                 new ContentPatternCommitMessageHook(contentPatternConfig, pushContext),
                 new ProxyPreReceiveHook(pushContext),

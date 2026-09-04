@@ -326,7 +326,8 @@ public class MongoPushStore implements PushStore {
                 .append("committerEmail", c.getCommitterEmail())
                 .append("message", c.getMessage())
                 .append("signature", c.getSignature())
-                .append("signedOffBy", c.getSignedOffBy() != null ? c.getSignedOffBy() : List.of());
+                .append("signedOffBy", c.getSignedOffBy() != null ? c.getSignedOffBy() : List.of())
+                .append("coAuthoredBy", c.getCoAuthoredBy() != null ? c.getCoAuthoredBy() : List.of());
         if (c.getCommitDate() != null) {
             doc.append("commitDate", Date.from(c.getCommitDate()));
         }
@@ -344,7 +345,8 @@ public class MongoPushStore implements PushStore {
                 .committerEmail(doc.getString("committerEmail"))
                 .message(doc.getString("message"))
                 .signature(doc.getString("signature"))
-                .signedOffBy(doc.getList("signedOffBy", String.class, new ArrayList<>()));
+                .signedOffBy(doc.getList("signedOffBy", String.class, new ArrayList<>()))
+                .coAuthoredBy(doc.getList("coAuthoredBy", String.class, new ArrayList<>()));
         Date commitDate = doc.getDate("commitDate");
         if (commitDate != null) {
             builder.commitDate(commitDate.toInstant());

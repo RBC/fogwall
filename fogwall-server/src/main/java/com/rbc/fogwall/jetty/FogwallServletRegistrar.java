@@ -376,6 +376,7 @@ public final class FogwallServletRegistrar {
         filters.add(new CheckEmptyBranchFilter());
         filters.add(new CheckHiddenCommitsFilter());
         filters.add(new CheckAuthorEmailsFilter(commitConfigSupplier));
+        filters.add(new CheckTrailersFilter(commitConfigSupplier));
         filters.add(new CheckCommitMessagesFilter(commitConfigSupplier));
         filters.add(new ContentPatternMessageFilter(contentPatternConfig));
         filters.add(new BinaryBlobFilter(binaryBlobConfigSupplier));

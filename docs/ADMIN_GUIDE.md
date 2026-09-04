@@ -34,8 +34,9 @@ Think of them as a firewall rule list.
 **User permissions** are per-user grants scoped to a provider and path. They determine whether a particular
 authenticated user is permitted to push to (or review) a particular repository.
 
-**Commit validation** runs against the push content: author email domains, commit messages, diff scanning, secret
-scanning. These apply to everyone regardless of permissions.
+**Commit validation** runs against the push content: author/committer email policy, commit messages, commit-trailer
+policy (DCO `Signed-off-by`, `Co-authored-by`), diff scanning, secret scanning. These apply to everyone regardless of
+permissions.
 
 ---
 
