@@ -37,11 +37,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hc.client5.http.fluent.Form;
 import org.apache.hc.client5.http.fluent.Request;
 import org.apache.hc.core5.http.ContentType;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -80,24 +80,21 @@ import tools.jackson.databind.json.JsonMapper;
 @Slf4j
 @RestController
 @RequestMapping("/api/scm-oauth")
+@RequiredArgsConstructor
 public class ScmOAuthLinkController {
 
     private static final Set<String> SUPPORTED_PROVIDER_TYPES = Set.of("github", "gitlab", "forgejo");
 
-    @Autowired
-    private ReadOnlyUserStore userStore;
+    private final ReadOnlyUserStore userStore;
 
-    @Autowired
-    private FogwallConfig fogwallConfig;
+    private final FogwallConfig fogwallConfig;
 
-    @Autowired
-    private ProviderRegistry providerRegistry;
+    private final ProviderRegistry providerRegistry;
 
-    @Autowired
-    private TokenCipherProvider tokenCipherProvider;
+    private final TokenCipherProvider tokenCipherProvider;
 
-    @Autowired(required = false)
-    private ScmOAuthTokenStore scmOAuthTokenStore;
+    /** JDBC deployments only — empty on Mongo backends, where OAuth linking degrades to 501 (see linkStart). */
+    private final Optional<ScmOAuthTokenStore> scmOAuthTokenStore;
 
     @Operation(operationId = "linkScmOAuth", summary = "Start the OAuth flow to link the current user's SCM account")
     @GetMapping("/{providerId}/link")
@@ -204,14 +201,16 @@ public class ScmOAuthLinkController {
             // permission/group paths already use.
             mutable.upsertUser(currentUser);
 
-            if (scmOAuthTokenStore != null) {
-                scmOAuthTokenStore.save(
-                        currentUser,
-                        providerId,
-                        encryptedAccessToken,
-                        encryptedRefreshToken,
-                        tokenResponse.scope(),
-                        expiresAt);
+            if (scmOAuthTokenStore.isPresent()) {
+                scmOAuthTokenStore
+                        .get()
+                        .save(
+                                currentUser,
+                                providerId,
+                                encryptedAccessToken,
+                                encryptedRefreshToken,
+                                tokenResponse.scope(),
+                                expiresAt);
             }
             mutable.upsertVerifiedScmIdentity(currentUser, providerId, scmUsername);
             lockProviderVerifiedEmails(
@@ -254,9 +253,7 @@ public class ScmOAuthLinkController {
         mutable.removeVerifiedScmIdentity(currentUser, providerId);
         mutable.removeSshKeysByAuthSource(currentUser, providerId);
         mutable.removeEmailsByAuthSource(currentUser, providerId);
-        if (scmOAuthTokenStore != null) {
-            scmOAuthTokenStore.remove(currentUser, providerId);
-        }
+        scmOAuthTokenStore.ifPresent(store -> store.remove(currentUser, providerId));
         log.info(
                 "Unlinked SCM OAuth identity for user '{}' / provider '{}' (ssh keys and provider-verified emails"
                         + " removed)",
@@ -271,12 +268,12 @@ public class ScmOAuthLinkController {
      * trusting/using this token regardless of whether the provider itself acknowledges the revocation.
      */
     private void revokeUpstreamToken(String providerId, String username) {
-        if (scmOAuthTokenStore == null) return;
+        if (scmOAuthTokenStore.isEmpty()) return;
         Optional<FogwallProvider> provider = providerRegistry.getProvider(providerId);
         OAuthProviderSettings settings = oauthSettingsFor(providerId);
         if (provider.isEmpty() || settings == null || settings.getClientId().isBlank()) return;
         try {
-            Optional<byte[]> encrypted = scmOAuthTokenStore.findAccessToken(username, providerId);
+            Optional<byte[]> encrypted = scmOAuthTokenStore.get().findAccessToken(username, providerId);
             if (encrypted.isEmpty()) return;
             var cipher = tokenCipherProvider.cipher();
             if (cipher.isEmpty()) {
@@ -350,7 +347,7 @@ public class ScmOAuthLinkController {
                     "SCM OAuth linking is not configured (server.service-url is unset) — contact an administrator.");
             return null;
         }
-        if (scmOAuthTokenStore == null) {
+        if (scmOAuthTokenStore.isEmpty()) {
             // JDBC-only for now (see FogwallDashboardApplication's conditional bean registration) — Mongo
             // deployments get no ScmOAuthTokenStore bean. Degrade, don't fail Spring context startup over it.
             response.sendError(

@@ -18,7 +18,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.Map;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -41,6 +41,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Profile", description = "Self-service profile management for the authenticated user")
 @RestController
 @RequestMapping("/api/me")
+@RequiredArgsConstructor
 public class ProfileController {
 
     private static final ResponseEntity<Map<String, String>> NOT_MUTABLE = ResponseEntity.status(
@@ -58,14 +59,11 @@ public class ProfileController {
                     "This deployment requires an OAuth-verified SCM identity — manually entering one is disabled."
                             + " Use \"Link via OAuth\" instead."));
 
-    @Autowired
-    private ReadOnlyUserStore userStore;
+    private final ReadOnlyUserStore userStore;
 
-    @Autowired
-    private RepoPermissionService permissionService;
+    private final RepoPermissionService permissionService;
 
-    @Autowired
-    private ConfigHolder configHolder;
+    private final ConfigHolder configHolder;
 
     // ---- email claims ----
 

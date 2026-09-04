@@ -5,7 +5,7 @@ import com.rbc.fogwall.jetty.reload.LiveConfigLoader.Section;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.Map;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -35,10 +35,10 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Admin", description = "Administrative operations — requires ROLE_ADMIN")
 @RestController
 @RequestMapping("/api/config")
+@RequiredArgsConstructor
 public class ConfigReloadController {
 
-    @Autowired
-    private LiveConfigLoader liveConfigLoader;
+    private final LiveConfigLoader liveConfigLoader;
 
     @Operation(
             operationId = "reloadConfig",

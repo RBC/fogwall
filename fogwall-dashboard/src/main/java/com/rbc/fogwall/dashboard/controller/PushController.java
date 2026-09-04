@@ -15,11 +15,10 @@ import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.ProviderRegistry;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.annotation.Resource;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -30,22 +29,18 @@ import org.springframework.web.server.ResponseStatusException;
 @Tag(name = "Push", description = "Push records and the approval workflow")
 @RestController
 @RequestMapping("/api/push")
+@RequiredArgsConstructor
 public class PushController {
 
-    @Autowired
-    private PushStore pushStore;
+    private final PushStore pushStore;
 
-    @Autowired(required = false)
-    private RepoPermissionService repoPermissionService;
+    private final RepoPermissionService repoPermissionService;
 
-    @Autowired
-    private FogwallConfig fogwallConfig;
+    private final FogwallConfig fogwallConfig;
 
-    @Autowired
-    private ConfigHolder configHolder;
+    private final ConfigHolder configHolder;
 
-    @Resource(name = "providers")
-    private ProviderRegistry providerRegistry;
+    private final ProviderRegistry providerRegistry;
 
     /** Returns the authenticated username, falling back to {@code body.reviewerUsername}, then {@code "system"}. */
     private static String resolveReviewer(Map<String, String> body) {
@@ -238,8 +233,7 @@ public class PushController {
         if (reviewer == null || pusher == null || !pusher.equals(reviewer)) return false;
         boolean hasRole = auth.getAuthorities().stream().anyMatch(a -> "ROLE_SELF_CERTIFY".equals(a.getAuthority()));
         if (!hasRole) return false;
-        return repoPermissionService != null
-                && record.getProvider() != null
+        return record.getProvider() != null
                 && record.getUrl() != null
                 && repoPermissionService.isBypassReviewAllowed(reviewer, record.getProvider(), record.getUrl());
     }
@@ -439,8 +433,7 @@ public class PushController {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                         .body(Map.of("error", "Self-approval is not permitted: SELF_CERTIFY role not granted"));
             }
-            boolean hasSelfCertifyPerm = repoPermissionService != null
-                    && record.getProvider() != null
+            boolean hasSelfCertifyPerm = record.getProvider() != null
                     && record.getUrl() != null
                     && repoPermissionService.isBypassReviewAllowed(reviewer, record.getProvider(), record.getUrl());
             if (hasSelfCertifyPerm) {
@@ -455,7 +448,7 @@ public class PushController {
         // Default (false) allows any authenticated user to review any push they did not push themselves.
         boolean requirePerm =
                 fogwallConfig.getServer() != null && fogwallConfig.getServer().isRequireReviewPermission();
-        if (requirePerm && repoPermissionService != null && record.getProvider() != null && record.getUrl() != null) {
+        if (requirePerm && record.getProvider() != null && record.getUrl() != null) {
             if (reviewer != null
                     && !repoPermissionService.isAllowedToReview(reviewer, record.getProvider(), record.getUrl())) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)

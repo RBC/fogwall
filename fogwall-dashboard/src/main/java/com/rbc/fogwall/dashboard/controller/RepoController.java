@@ -12,7 +12,6 @@ import com.rbc.fogwall.provider.ProviderRegistry;
 import com.rbc.fogwall.servlet.filter.UrlRuleEvaluator;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -20,8 +19,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -32,19 +31,16 @@ import org.springframework.web.bind.annotation.*;
 @Slf4j
 @RestController
 @RequestMapping("/api/repos")
+@RequiredArgsConstructor
 public class RepoController {
 
-    @Autowired
-    private UrlRuleRegistry urlRuleRegistry;
+    private final UrlRuleRegistry urlRuleRegistry;
 
-    @Autowired
-    private FetchStore fetchStore;
+    private final FetchStore fetchStore;
 
-    @Autowired
-    private PushStore pushStore;
+    private final PushStore pushStore;
 
-    @Resource(name = "providers")
-    private ProviderRegistry providerSource;
+    private final ProviderRegistry providerSource;
 
     @Operation(operationId = "listRules", summary = "List access control rules")
     @GetMapping("/rules")

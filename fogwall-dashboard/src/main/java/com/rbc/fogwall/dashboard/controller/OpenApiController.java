@@ -34,8 +34,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -65,13 +65,13 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
 @Slf4j
 @RestController
 @RequestMapping("/api")
+@RequiredArgsConstructor
 public class OpenApiController {
 
     /** Controllers whose endpoints should not appear in the public spec. */
     private static final Set<String> EXCLUDED = Set.of("OpenApiController", "SpaController");
 
-    @Autowired
-    private RequestMappingHandlerMapping handlerMapping;
+    private final RequestMappingHandlerMapping handlerMapping;
 
     private String specYaml;
     private String specJson;
