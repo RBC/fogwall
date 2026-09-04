@@ -145,6 +145,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth.requestMatchers(
                                 "/api",
                                 "/api/runtime-config",
+                                "/api/setup",
                                 "/api/health",
                                 "/api/openapi.yaml",
                                 "/api/openapi.json",

@@ -47,6 +47,13 @@ identity is registered.
 
 ## Setting up your remote
 
+> **Fastest path — the in-app setup page.** Your fogwall deployment serves a **Setup** page in the dashboard (the help /
+> quick-start icon in the top bar, reachable without logging in) that generates copy-pasteable git config for _this_
+> deployment, with the real hostnames already filled in. By default it reroutes only your **pushes** to fogwall (via
+> git's `pushInsteadOf`) and leaves your clones and fetches going straight to the upstream — so read-only access is
+> unaffected and you don't need it at all if you only clone or fetch. It offers both a one-paste global form and an
+> explicit per-repository form. The manual per-remote steps below are the same thing done by hand.
+
 The proxy URL is structured as:
 
 ```text
@@ -104,7 +111,12 @@ using your own token.
 
 <!-- prettier-ignore-start -->
 > [!TIP]
-> Most credential helpers (macOS Keychain, Windows Credential Manager, `git-credential-store`) pin credentials to a hostname. Since the proxy hostname differs from the upstream SCM, your helper won't automatically supply the right token — it will look for a stored credential for `fogwall.corp.example.com`, not `github.com`. Either store a separate credential entry for the proxy hostname, or embed the token in the remote URL as shown above. For local development environments that are frequently recreated, embedding the token in the URL is simpler than managing keychain entries.
+> Most credential helpers (macOS Keychain, Windows Credential Manager, `git-credential-store`) pin credentials to a hostname. git authenticates to the proxy host, not the upstream — so **if you have previously authenticated directly to the upstream (e.g. `github.com`), that credential won't be reused for the proxy**; git looks for one stored under `fogwall.corp.example.com` instead. Either let git prompt on the first push and your helper store it under the proxy host, store a separate entry for the proxy host yourself, or embed the token in the remote URL as shown above. For local development environments that are frequently recreated, embedding the token in the URL is simpler than managing keychain entries.
+<!-- prettier-ignore-end -->
+
+<!-- prettier-ignore-start -->
+> [!TIP]
+> **Pushing to more than one provider through the same proxy?** The proxy serves every provider under one hostname, differing only by URL path (`/server/github.com/…` vs `/server/codeberg.org/…`), but credential helpers key on hostname alone — so one stored credential would be reused for all of them. Run `git config --global credential.https://fogwall.corp.example.com.useHttpPath true` to key credentials on the full URL (host + path) instead, so each provider gets its own entry.
 <!-- prettier-ignore-end -->
 
 <!-- prettier-ignore-start -->
