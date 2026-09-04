@@ -9,7 +9,15 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.PersonIdent;
@@ -469,5 +477,54 @@ class LocalRepositoryCacheTest {
         cache.refreshNow(remoteUrl, null, null, "alice:token");
         assertEquals(3, reachableCommitCount(mirror), "refreshNow must unshallow a shallow-since mirror to full");
         mirror.close();
+    }
+
+    /**
+     * Many threads racing on the very first access to the same repository must not each launch their own clone into the
+     * shared mirror directory — that interleaves two {@code git clone} operations writing the same path and fails. The
+     * per-cache-key clone lock serializes the first clone: the winner clones, every loser double-checks the cache and
+     * is handed the same mirror. All callers must succeed and see one shared directory, and only one mirror must exist
+     * on disk.
+     */
+    @Test
+    void concurrentFirstClone_sameRepo_dedupesToOneMirror() throws Exception {
+        LocalRepositoryCache cache = new LocalRepositoryCache(cacheTempDir, 0, false);
+
+        int threads = 8;
+        var barrier = new CyclicBarrier(threads); // release all threads into getOrClone at once
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        try {
+            List<Callable<String>> tasks = new ArrayList<>();
+            for (int i = 0; i < threads; i++) {
+                tasks.add(() -> {
+                    barrier.await(10, TimeUnit.SECONDS);
+                    Repository repo = cache.getOrClone(remoteUrl);
+                    try {
+                        return repo.getDirectory().getCanonicalPath();
+                    } finally {
+                        repo.close();
+                    }
+                });
+            }
+
+            List<Future<String>> results = pool.invokeAll(tasks, 30, TimeUnit.SECONDS);
+            String firstDir = null;
+            for (Future<String> result : results) {
+                String dir = result.get(); // rethrows any clone failure from the worker
+                assertNotNull(dir);
+                if (firstDir == null) {
+                    firstDir = dir;
+                } else {
+                    assertEquals(firstDir, dir, "Every racing caller must receive the same shared mirror directory");
+                }
+            }
+
+            try (var stream = Files.list(cacheTempDir)) {
+                long mirrorDirs = stream.filter(Files::isDirectory).count();
+                assertEquals(1, mirrorDirs, "Exactly one mirror must be cloned despite the concurrent first access");
+            }
+        } finally {
+            pool.shutdownNow();
+        }
     }
 }
