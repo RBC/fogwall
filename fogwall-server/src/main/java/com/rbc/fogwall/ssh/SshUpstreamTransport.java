@@ -25,7 +25,6 @@ import org.eclipse.jgit.transport.sshd.ServerKeyDatabase;
 import org.eclipse.jgit.transport.sshd.SshdSessionFactory;
 import org.eclipse.jgit.transport.sshd.agent.Connector;
 import org.eclipse.jgit.transport.sshd.agent.ConnectorFactory;
-import org.eclipse.jgit.transport.sshd.agent.ConnectorFactory.ConnectorDescriptor;
 
 /**
  * Builds a JGit {@link TransportConfigCallback} that routes outbound SSH transport (to the upstream SCM) through a

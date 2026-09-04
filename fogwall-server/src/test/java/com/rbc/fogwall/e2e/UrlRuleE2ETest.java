@@ -57,7 +57,7 @@ class UrlRuleE2ETest {
         gitea.createRepo("otherorg", "allowed-repo");
         gitea.createRepo("otherorg", "other-secret");
 
-        proxy = new JettyProxyFixture(gitea.getBaseUri(), buildRules(gitea.getBaseUri()));
+        proxy = new JettyProxyFixture(gitea.getBaseUri(), buildRules());
         tempDir = Files.createTempDirectory("fogwall-urlrule-e2e-");
     }
 
@@ -94,17 +94,6 @@ class UrlRuleE2ETest {
         return cloneCommitPush(pushUrl(org, repo), suffix, message);
     }
 
-    /** Clone → commit → push, returning the full result (exit code + output). */
-    private GitHelper.PushResult proxyPushWithResult(String suffix, String org, String repo, String message)
-            throws Exception {
-        return cloneCommitPushWithResult(proxyUrl(org, repo), suffix, message);
-    }
-
-    private GitHelper.PushResult sfPushWithResult(String suffix, String org, String repo, String message)
-            throws Exception {
-        return cloneCommitPushWithResult(pushUrl(org, repo), suffix, message);
-    }
-
     private boolean cloneCommitPush(String url, String suffix, String message) throws Exception {
         GitHelper git = new GitHelper(tempDir);
         Path repoDir = git.clone(url, suffix);
@@ -112,15 +101,6 @@ class UrlRuleE2ETest {
         git.writeAndStage(repoDir, "file.txt", message + " - " + Instant.now());
         git.commit(repoDir, message);
         return git.tryPush(repoDir);
-    }
-
-    private GitHelper.PushResult cloneCommitPushWithResult(String url, String suffix, String message) throws Exception {
-        GitHelper git = new GitHelper(tempDir);
-        Path repoDir = git.clone(url, suffix);
-        git.setAuthor(repoDir, GiteaContainer.VALID_AUTHOR_NAME, GiteaContainer.VALID_AUTHOR_EMAIL);
-        git.writeAndStage(repoDir, "file.txt", message + " - " + Instant.now());
-        git.commit(repoDir, message);
-        return git.pushWithResult(repoDir);
     }
 
     /**
@@ -315,7 +295,7 @@ class UrlRuleE2ETest {
      *   <li>ALLOW order=111: owner {@code otherorg} — BOTH
      * </ol>
      */
-    private static List<AccessRule> buildRules(java.net.URI giteaUri) {
+    private static List<AccessRule> buildRules() {
         return List.of(
                 AccessRule.builder()
                         .ruleOrder(100)

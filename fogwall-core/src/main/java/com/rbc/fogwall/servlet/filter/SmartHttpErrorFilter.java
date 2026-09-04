@@ -60,24 +60,24 @@ public class SmartHttpErrorFilter implements Filter {
         @Override
         public void setStatus(int sc) {
             // Don't intercept 401 - auth challenges must reach the client so it sends credentials
-            super.setStatus(sc >= 400 && sc != HttpServletResponse.SC_UNAUTHORIZED ? HttpServletResponse.SC_OK : sc);
+            super.setStatus(sc >= 400 && sc != SC_UNAUTHORIZED ? SC_OK : sc);
         }
 
         @Override
         public void sendError(int sc, String msg) throws IOException {
-            if (sc == HttpServletResponse.SC_UNAUTHORIZED) {
+            if (sc == SC_UNAUTHORIZED) {
                 super.sendError(sc, msg);
             } else {
-                super.setStatus(HttpServletResponse.SC_OK);
+                super.setStatus(SC_OK);
             }
         }
 
         @Override
         public void sendError(int sc) throws IOException {
-            if (sc == HttpServletResponse.SC_UNAUTHORIZED) {
+            if (sc == SC_UNAUTHORIZED) {
                 super.sendError(sc);
             } else {
-                super.setStatus(HttpServletResponse.SC_OK);
+                super.setStatus(SC_OK);
             }
         }
     }

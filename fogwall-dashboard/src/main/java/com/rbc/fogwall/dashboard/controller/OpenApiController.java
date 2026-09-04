@@ -135,7 +135,7 @@ public class OpenApiController {
         for (var entry : byPath.entrySet()) {
             PathItem pathItem = new PathItem();
             for (var mapping : entry.getValue()) {
-                Operation op = buildOperation(mapping.getValue(), mapping.getKey(), componentSchemas);
+                Operation op = buildOperation(mapping.getValue(), componentSchemas);
                 for (RequestMethod method : effectiveMethods(mapping.getKey())) {
                     assignOperation(pathItem, method, op);
                 }
@@ -165,8 +165,7 @@ public class OpenApiController {
         return methods.isEmpty() ? Set.of(RequestMethod.GET) : methods;
     }
 
-    private Operation buildOperation(
-            HandlerMethod handler, RequestMappingInfo info, Map<String, Schema> componentSchemas) {
+    private Operation buildOperation(HandlerMethod handler, Map<String, Schema> componentSchemas) {
         Operation op = new Operation();
 
         // Prefer @Operation annotation for operationId, summary, and description; fall back to method name.

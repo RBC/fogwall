@@ -167,7 +167,7 @@ public class FogwallJettyApplication {
         String pidFilePath = System.getProperty("fogwall.pidfile");
         if (pidFilePath == null) return;
         try {
-            var pidFile = java.nio.file.Path.of(pidFilePath);
+            var pidFile = Path.of(pidFilePath);
             java.nio.file.Files.createDirectories(pidFile.getParent());
             java.nio.file.Files.writeString(
                     pidFile, String.valueOf(ProcessHandle.current().pid()));

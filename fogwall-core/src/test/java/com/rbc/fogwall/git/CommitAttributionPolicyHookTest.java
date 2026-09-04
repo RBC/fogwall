@@ -252,7 +252,7 @@ class CommitAttributionPolicyHookTest {
 
         // createCommit sets author=committer; we need a commit where committer=alice but author=external.
         // Use the lower-level JGit API to set them independently.
-        File f = new File(tempDir.toFile(), java.util.UUID.randomUUID() + ".txt");
+        File f = new File(tempDir.toFile(), UUID.randomUUID() + ".txt");
         writeString(f.toPath(), "content");
         git.add().addFilepattern(".").call();
         RevCommit base = git.commit()
@@ -287,7 +287,7 @@ class CommitAttributionPolicyHookTest {
         when(resolver.resolve(any(FogwallProvider.class), eq("alice-git"), isNull()))
                 .thenReturn(Optional.of(alice()));
 
-        File f = new File(tempDir.toFile(), java.util.UUID.randomUUID() + ".txt");
+        File f = new File(tempDir.toFile(), UUID.randomUUID() + ".txt");
         writeString(f.toPath(), "content");
         git.add().addFilepattern(".").call();
         RevCommit base = git.commit()

@@ -244,7 +244,7 @@ class MongoPushStoreIntegrationTest {
 
     @Test
     void initialize_calledTwice_doesNotThrow() {
-        assertDoesNotThrow(() -> store.initialize());
+        assertDoesNotThrow(store::initialize);
     }
 
     @Test

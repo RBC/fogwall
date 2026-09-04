@@ -619,7 +619,7 @@ class EnrichPushCommitsFilterTest {
     void pushedObjectsAreGoneFromTheMirrorOnceTheRequestEnds() throws Exception {
         Path srcDir = Files.createDirectories(quarantineSourceDir.resolve("src"));
         Git sourceGit = Git.init().setDirectory(srcDir.toFile()).call();
-        Files.writeString(srcDir.resolve("secret.txt"), "leaked credential\n");
+        writeString(srcDir.resolve("secret.txt"), "leaked credential\n");
         sourceGit.add().addFilepattern("secret.txt").call();
         var revCommit = sourceGit
                 .commit()

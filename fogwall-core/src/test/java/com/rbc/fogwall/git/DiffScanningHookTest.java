@@ -131,7 +131,7 @@ class DiffScanningHookTest {
     @Test
     void perCommitScan_multipleCleanCommits_passes() throws Exception {
         RevCommit c1 = commit("a.txt", "clean");
-        RevCommit c2 = commit("b.txt", "still clean");
+        commit("b.txt", "still clean");
         RevCommit c3 = commit("c.txt", "also clean");
 
         ValidationContext ctx = new ValidationContext();

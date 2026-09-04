@@ -24,11 +24,9 @@ public class MongoFetchStore implements FetchStore {
     private static final Logger log = LoggerFactory.getLogger(MongoFetchStore.class);
     private static final String COLLECTION_NAME = "fetch_records";
 
-    private final MongoClient mongoClient;
     private final MongoDatabase database;
 
     public MongoFetchStore(MongoClient mongoClient, String databaseName) {
-        this.mongoClient = mongoClient;
         this.database = mongoClient.getDatabase(databaseName);
     }
 

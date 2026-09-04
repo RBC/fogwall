@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hc.client5.http.fluent.Request;
+import org.apache.hc.core5.http.HttpResponse;
 import org.apache.hc.core5.http.HttpStatus;
 import org.apache.hc.core5.util.Timeout;
 
@@ -83,7 +84,7 @@ public class UpstreamAuthProbe {
                     .connectTimeout(PROBE_TIMEOUT)
                     .responseTimeout(PROBE_TIMEOUT)
                     .execute(FogwallHttpExecutor.instance())
-                    .handleResponse(response -> response.getCode());
+                    .handleResponse(HttpResponse::getCode);
 
             if (status == HttpStatus.SC_OK) {
                 log.debug("Upstream {} serves anonymous reads; not challenging", upstreamRepoUrl);

@@ -2,9 +2,9 @@ package com.rbc.fogwall.git;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.PushStoreFactory;
+import com.rbc.fogwall.db.model.PushCommit;
 import com.rbc.fogwall.db.model.PushQuery;
 import com.rbc.fogwall.db.model.PushStatus;
 import com.rbc.fogwall.db.model.PushStep;
@@ -16,7 +16,6 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import java.util.regex.Pattern;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.PersonIdent;
@@ -343,22 +342,8 @@ class PushStorePersistenceHookTest {
         var commits = pushStore.findById(pushId).orElseThrow().getCommits();
         // Should include both c2 and c3 (range from commitId to c3), not just c3
         assertTrue(commits.size() >= 2, "enriched PENDING record must include commits from effectiveFrom..c3");
-        var shas = commits.stream().map(pc -> pc.getSha()).toList();
+        var shas = commits.stream().map(PushCommit::getSha).toList();
         assertTrue(shas.contains(c3.getId().name()), "c3 must be in enriched commit list");
         assertTrue(shas.contains(c2.getId().name()), "c2 must be in enriched commit list (was cached, not forwarded)");
-    }
-
-    // ---- email validation config ----
-
-    private CommitConfig blockNoreplyConfig() {
-        return CommitConfig.builder()
-                .author(CommitConfig.AuthorConfig.builder()
-                        .email(CommitConfig.EmailConfig.builder()
-                                .local(CommitConfig.LocalConfig.builder()
-                                        .block(Pattern.compile("^(noreply|no-reply|bot)$"))
-                                        .build())
-                                .build())
-                        .build())
-                .build();
     }
 }

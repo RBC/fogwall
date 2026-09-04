@@ -176,8 +176,6 @@ public class SshGitReceiveCommand implements Command {
                 exitCode = 128;
                 return;
             }
-            String owner = route.owner();
-            String repo = route.repo();
             String upstreamUrl = route.upstreamUrl();
             String repoSlug = route.repoSlug();
 

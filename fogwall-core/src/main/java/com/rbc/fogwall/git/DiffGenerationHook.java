@@ -68,18 +68,17 @@ public class DiffGenerationHook implements FogwallHook {
             boolean isNewBranch = ObjectId.zeroId().equals(cmd.getOldId()) && effectiveFrom == null;
 
             // 1. Push diff: what changed in this push
-            generatePushDiff(rp, repo, refName, commitFrom, commitTo, isNewBranch);
+            generatePushDiff(repo, refName, commitFrom, commitTo);
 
             // 2. Default branch diff: total diff relative to the default branch
             //    Only useful when pushing to a non-default branch
             if (!isNewBranch) {
-                generateDefaultBranchDiff(rp, repo, refName, commitTo);
+                generateDefaultBranchDiff(repo, refName, commitTo);
             }
         }
     }
 
-    private void generatePushDiff(
-            ReceivePack rp, Repository repo, String refName, String commitFrom, String commitTo, boolean isNewBranch) {
+    private void generatePushDiff(Repository repo, String refName, String commitFrom, String commitTo) {
         try {
             String diff = CommitInspectionService.getFormattedDiff(repo, commitFrom, commitTo);
             int lines = diff.isEmpty() ? 0 : (int) diff.lines().count();
@@ -117,7 +116,7 @@ public class DiffGenerationHook implements FogwallHook {
      * Generate a diff of the pushed commit(s) relative to the repository's default branch. This helps reviewers see the
      * full scope of changes even when the push is part of a larger feature branch.
      */
-    private void generateDefaultBranchDiff(ReceivePack rp, Repository repo, String pushRef, String commitTo) {
+    private void generateDefaultBranchDiff(Repository repo, String pushRef, String commitTo) {
         try {
             String defaultBranch = resolveDefaultBranch(repo);
             if (defaultBranch == null) {
@@ -137,7 +136,6 @@ public class DiffGenerationHook implements FogwallHook {
             }
 
             String defaultBranchTip = defaultRef.getObjectId().name();
-            String shortBranch = shortenRef(defaultBranch);
 
             String diff = CommitInspectionService.getFormattedDiff(repo, defaultBranchTip, commitTo);
             int lines = diff.isEmpty() ? 0 : (int) diff.lines().count();
@@ -186,9 +184,5 @@ public class DiffGenerationHook implements FogwallHook {
         }
 
         return null;
-    }
-
-    private static String shortenRef(String ref) {
-        return ref.startsWith("refs/heads/") ? ref.substring("refs/heads/".length()) : ref;
     }
 }

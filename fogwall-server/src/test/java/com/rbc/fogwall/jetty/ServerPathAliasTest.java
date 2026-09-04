@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.eclipse.jetty.ee11.servlet.ServletContextHandler;
+import org.eclipse.jetty.ee11.servlet.ServletHolder;
 import org.eclipse.jetty.ee11.servlet.ServletMapping;
 import org.junit.jupiter.api.Test;
 
@@ -111,7 +112,7 @@ class ServerPathAliasTest {
                 null);
 
         List<String> gitHolderNames = Arrays.stream(context.getServletHandler().getServlets())
-                .map(h -> h.getName())
+                .map(ServletHolder::getName)
                 .filter(n -> n.startsWith("git-"))
                 .sorted()
                 .collect(Collectors.toList());

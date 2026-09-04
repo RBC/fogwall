@@ -5,6 +5,7 @@ import com.rbc.fogwall.db.model.PushQuery;
 import com.rbc.fogwall.user.EmailConflictException;
 import com.rbc.fogwall.user.LockedByConfigException;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
+import com.rbc.fogwall.user.ScmIdentity;
 import com.rbc.fogwall.user.ScmIdentityConflictException;
 import com.rbc.fogwall.user.UserEntry;
 import com.rbc.fogwall.user.UserStore;
@@ -233,7 +234,7 @@ public class UserController {
     private UserSummary toSummary(UserEntry u, Map<String, Long> pushCounts) {
         String primaryEmail = u.getEmails().isEmpty() ? null : u.getEmails().get(0);
         List<String> scmProviders = u.getScmIdentities().stream()
-                .map(id -> id.getProvider())
+                .map(ScmIdentity::getProvider)
                 .filter(p -> !"proxy".equals(p))
                 .distinct()
                 .toList();

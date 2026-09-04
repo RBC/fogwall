@@ -282,7 +282,7 @@ class PermissionControllerTest {
 
     @Test
     void listGroups_returnsMemberships() {
-        GroupPermissionStore groupStore = org.mockito.Mockito.mock(GroupPermissionStore.class);
+        GroupPermissionStore groupStore = mock(GroupPermissionStore.class);
         PermissionGroup g = PermissionGroup.builder()
                 .name("devs")
                 .source(PermissionGroup.Source.DB)

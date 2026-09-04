@@ -130,7 +130,7 @@ class LdapAuthE2ETest {
                 .POST(HttpRequest.BodyPublishers.ofString(formBody, StandardCharsets.UTF_8))
                 .build();
 
-        var resp = freshClient.send(req, HttpResponse.BodyHandlers.ofString());
+        freshClient.send(req, HttpResponse.BodyHandlers.ofString());
 
         // Spring Security redirects to /login?error on failure; after following redirects the page
         // should not have authenticated successfully. We check the /api/me endpoint still returns 401.

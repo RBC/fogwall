@@ -115,7 +115,7 @@ public class CheckUserPushPermissionHook implements FogwallHook {
         // SSH transport: user resolved by public-key auth — skip token-based identity resolution.
         var preAuthenticated = pushContext.getTransport().preAuthenticatedUser();
         if (preAuthenticated.isPresent()) {
-            checkRepoPermission(preAuthenticated.get(), repoSlug, commands);
+            checkRepoPermission(preAuthenticated.get(), repoSlug);
             return;
         }
 
@@ -159,10 +159,10 @@ public class CheckUserPushPermissionHook implements FogwallHook {
             return;
         }
 
-        checkRepoPermission(resolved.get(), repoSlug, commands);
+        checkRepoPermission(resolved.get(), repoSlug);
     }
 
-    private void checkRepoPermission(UserEntry user, String repoSlug, Collection<ReceiveCommand> commands) {
+    private void checkRepoPermission(UserEntry user, String repoSlug) {
         String providerId = provider != null ? provider.getProviderId() : null;
 
         if (providerId == null

@@ -13,7 +13,6 @@ import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.PersonIdent;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
-import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.transport.ReceiveCommand;
 import org.eclipse.jgit.transport.ReceivePack;
 import org.junit.jupiter.api.BeforeEach;
@@ -109,8 +108,7 @@ class ForwardingPostReceiveHookTest {
         assertEquals(StepStatus.PASS, pushContext.getSteps().get(0).getStatus());
 
         // Verify the commit actually landed in the upstream bare repo
-        try (Repository upstream = Git.open(upstreamDir.toFile()).getRepository();
-                RevWalk rw = new RevWalk(upstream)) {
+        try (Repository upstream = Git.open(upstreamDir.toFile()).getRepository()) {
             ObjectId upstreamHead = upstream.resolve("refs/heads/main");
             assertNotNull(upstreamHead, "refs/heads/main should exist in upstream after forward");
             assertEquals(c1.getId(), upstreamHead);
@@ -119,7 +117,7 @@ class ForwardingPostReceiveHookTest {
 
     @Test
     void multipleRefs_allForwarded() throws Exception {
-        RevCommit c1 = createCommit("first");
+        createCommit("first");
         RevCommit c2 = createCommit("second on main");
 
         // Create a feature branch locally

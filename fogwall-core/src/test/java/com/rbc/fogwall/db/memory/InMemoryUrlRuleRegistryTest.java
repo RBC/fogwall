@@ -82,7 +82,7 @@ class InMemoryUrlRuleRegistryTest {
 
     @Test
     void initialize_doesNotThrow() {
-        assertDoesNotThrow(() -> registry.initialize());
+        assertDoesNotThrow(registry::initialize);
     }
 
     @Test

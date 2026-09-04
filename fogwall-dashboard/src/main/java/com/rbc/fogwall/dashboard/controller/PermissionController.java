@@ -3,6 +3,7 @@ package com.rbc.fogwall.dashboard.controller;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
 import com.rbc.fogwall.permission.GroupPermissionStore;
+import com.rbc.fogwall.permission.PermissionGroup;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
@@ -183,11 +184,11 @@ public class PermissionController {
                         String groupName = permissionService
                                 .getGroupStore()
                                 .findGroupById(groupId)
-                                .map(gr -> gr.getName())
+                                .map(PermissionGroup::getName)
                                 .orElse(groupId);
                         yield new PermissionTestResponse(true, "GROUP", g.rule().getId(), groupName);
                     }
-                    case RepoPermissionService.GrantResult.NotGranted n ->
+                    case RepoPermissionService.GrantResult.NotGranted _ ->
                         new PermissionTestResponse(false, "NONE", null, null);
                 };
         return ResponseEntity.ok(response);

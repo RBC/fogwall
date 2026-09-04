@@ -107,7 +107,7 @@ public class UrlRuleAggregateFilter extends ProviderAwareFogwallFilter<FogwallPr
                 log.debug("Allowed by rule: {}", a.ruleId());
                 if (operation == HttpOperation.FETCH && fetchStore != null) recordFetch(request, true);
             }
-            case UrlRuleEvaluator.Result.NotAllowed n -> {
+            case UrlRuleEvaluator.Result.NotAllowed _ -> {
                 log.debug("Blocked — no rule matched");
                 if (operation == HttpOperation.FETCH && fetchStore != null) recordFetch(request, false);
                 sendNotAllowed(request, response, operation);
@@ -116,7 +116,7 @@ public class UrlRuleAggregateFilter extends ProviderAwareFogwallFilter<FogwallPr
     }
 
     private void sendNotAllowed(HttpServletRequest request, HttpServletResponse response, HttpOperation operation)
-            throws java.io.IOException {
+            throws IOException {
         String action = operation == HttpOperation.PUSH ? "Push" : "Fetch";
         String title = sym(NO_ENTRY) + "  " + action + " Blocked - Repository Not Allowed";
         String verb = operation == HttpOperation.PUSH ? "Pushes to" : "Fetches from";
@@ -161,7 +161,7 @@ public class UrlRuleAggregateFilter extends ProviderAwareFogwallFilter<FogwallPr
                         provider.getBlockedInfoRefsStatus(),
                         "Repository access denied: this repository has been explicitly blocked by an administrator.");
             }
-            case UrlRuleEvaluator.Result.NotAllowed n -> {
+            case UrlRuleEvaluator.Result.NotAllowed _ -> {
                 log.debug("Blocking /info/refs — no rule matched");
                 if (effectiveOp == HttpOperation.FETCH && fetchStore != null) recordFetch(request, false);
                 setResult(request, GitRequestDetails.GitResult.REJECTED, "Repository not in allow rules");
@@ -170,7 +170,7 @@ public class UrlRuleAggregateFilter extends ProviderAwareFogwallFilter<FogwallPr
                         "Repository access denied: this repository is not in the allow list."
                                 + " Contact an administrator to add it.");
             }
-            case UrlRuleEvaluator.Result.Allowed a -> {
+            case UrlRuleEvaluator.Result.Allowed _ -> {
                 /* pass through — request is permitted */
             }
         }

@@ -366,7 +366,7 @@ public class CompositeUserStore implements UserStore {
         configUser.ifPresent(u -> result.addAll(u.getSshKeys()));
 
         // Supplemental DB keys (skip any whose fingerprint overlaps with config)
-        java.util.Set<String> configFingerprints = configUser
+        Set<String> configFingerprints = configUser
                 .map(u ->
                         u.getSshKeys().stream().map(SshKeyEntry::getFingerprint).collect(Collectors.toSet()))
                 .orElse(Set.of());
