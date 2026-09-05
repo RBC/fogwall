@@ -1303,6 +1303,114 @@ every linked user simply needs to re-link (push authorization is never affected)
 
 ---
 
+## Proposals
+
+_Available since v1.4.0, opt-in per provider._
+
+Extends fogwall past `git push` into the rest of the contribution lifecycle — proxying the `gh` CLI's issue/PR
+create-edit-comment-review traffic through the same identity resolution, permission engine, and audit trail as the
+git-push path. See [CONFIGURATION.md — SCM API proxy](CONFIGURATION.md#proposals) for the full config reference and
+[docs/internals/SCM_API_PROXY.md](internals/SCM_API_PROXY.md) for the design rationale; this section covers what an
+operator needs to understand before turning it on.
+
+### Token model and the egress assumption
+
+Developers bring their own personal access token. fogwall forwards it upstream unchanged after inspecting the request,
+and never mints or supplies a credential for this path.
+
+[SCM OAuth](#scm-oauth-account-linking) is a separate mechanism, for fogwall-managed operations — today the
+account-linking UI, later potentially fogwall acting on a user's behalf. It does not provide a token for a CLI.
+
+Enforcement is **content interception**, not the credential. So what you get here depends on something fogwall does not
+provide: **direct access to the SCM API has to be blocked elsewhere**, or a developer can bypass the proxy with the same
+token. fogwall governs the sanctioned API host and inspects what goes through it; organization-wide egress control is
+better served by traditional web proxies and network security appliances.
+
+The git-push path already works this way — a developer with a valid PAT can `git push` straight to github.com if nothing
+stops them.
+
+### Enabling it
+
+Two switches, both off by default (CLAUDE.md's "opt-in, no baseline cost for non-users" principle):
+
+```yaml
+proposals:
+  allow:
+    - provider: github
+      operation: BOTH
+
+providers:
+  github:
+    proposals:
+      enabled: true
+      port: 9443 # required — see "Each provider needs its own port" below
+```
+
+**Each enabled provider needs its own port.** The SCM API proxy does not share the main git-proxy port, and does not sit
+under a URL path: the dialect is mounted at the root of a dedicated listener (`/api/graphql` for GitHub, `/api/v4/*` for
+GitLab, `/api/v1/*` for Gitea/Forgejo). That is forced by the clients — `gh` and `fj` address the API from the host root
+and silently discard any path prefix — and a single shared listener would collide between two instances of the same
+platform, since every GitLab claims `/api/v4`. fogwall refuses to start if a provider has `proposals.enabled: true` with
+no port, rather than opening a listener no CLI could reach. Developers are then given a host and port; see
+[docs/USER_GUIDE.md](USER_GUIDE.md#submitting-prsmrs-through-fogwall).
+
+Optionally add `require-known-cli: true` to refuse callers whose `User-Agent` isn't one of the four recognised SCM CLIs
+(browsers, bare `curl`, unrecognised automation). Treat it as hardening, **not** a control: `User-Agent` is chosen by
+the caller, so it can only deny requests that would otherwise be allowed — it never grants anything, and a forged header
+leaves you exactly where you'd be with the setting off. The raw header is recorded on every audit record regardless,
+which is how you spot a CLI upgrade changing its wire format.
+
+### TLS on the proposals listeners
+
+**Every one of these ports has to be reachable over HTTPS.** `gh`, `glab`, `tea` and `fj` all address a custom host over
+HTTPS and give you no way to ask for plain HTTP, so a plaintext listener is unreachable by the tools it exists to serve.
+TLS must terminate somewhere in front of it — you have two shapes:
+
+- **Terminate at the edge.** An ingress, route, or load balancer per provider port, with fogwall's listeners left on
+  plain HTTP behind it. This is the usual Kubernetes/OpenShift shape: one Service exposing the proposals ports, one
+  Ingress per provider, each with its own hostname and certificate.
+- **Terminate at fogwall.** Configure [`server.tls`](CONFIGURATION.md#tls) and every proposals listener inherits it
+  automatically — same certificate, its own port. There is no per-provider TLS block to configure: the certificate is
+  issued per hostname and these listeners differ only by port. If you give each provider its own hostname _and_
+  terminate at fogwall, the certificate's SANs must cover all of them.
+
+fogwall can't tell whether something upstream is terminating TLS for it, so it doesn't guess: with `server.tls` unset it
+logs a warning at startup naming each plaintext listener. That warning is expected and harmless in the edge-termination
+shape. Treat a CLI reporting a connection or handshake error against a proposals port as this, until ruled out.
+
+If you terminate at fogwall with a certificate from an internal CA, the CLIs are Go binaries and will need that CA in
+their trust store (or `SSL_CERT_FILE` pointing at it) — worth saying in whatever you hand developers.
+
+The `proposals.allow`/`deny` block is a **separate, fail-closed gate** from the per-provider `enabled` flag — enabling
+the provider starts its SCM API listener, but every request is still denied until a matching allow rule exists. This
+mirrors the rest of fogwall's rule/permission surfaces (URL rules, repo permissions): no matching row means deny, not
+"open by default."
+
+Per-repo authorization for mutations goes through the ordinary `permissions:` mechanism — grant a user `PROPOSE` on the
+repos they should be able to file issues/PRs against (see
+[CONFIGURATION.md — Permissions](CONFIGURATION.md#permissions)). This is deliberately independent of `PUSH`/`REVIEW`: a
+user can have API-mutation access without push access, or vice versa.
+
+### Why reads and mutations are gated differently
+
+Mutations get real per-repo enforcement, checked against that user's `PROPOSE` grants — how the target repo is
+determined differs by dialect: GitHub's GraphQL mutation carries only an opaque node ID, resolved to `owner/repo` via a
+cache (TTL is itself a security parameter — see CONFIGURATION.md); GitLab's REST calls carry `owner/repo` directly in
+the URL, so no resolution step is needed. Reads (`gh issue list`, `glab mr list`, etc.) are **not** individually
+resolved or permission-checked in either dialect; they're gated only by the coarser `proposals.allow`/`deny` block
+above, at provider granularity. This is a deliberate cost tradeoff (see docs/internals/SCM_API_PROXY.md's "cost at high
+volume" section): resolving and permission-checking every read would undercut the point of keeping read traffic cheap.
+Per-repo read gating is tracked as follow-up scope (related: #478), not currently implemented.
+
+### Audit trail
+
+Every proxied **mutation** (never a read) produces one audit record — who, the resolved repo, the operation performed,
+and the allow/deny outcome — following the same auditability bar as the push path. These are viewable in the dashboard
+under **SCM API** (a plain list, no approval workflow — these are already-decided audit records), or queryable directly
+from the `scm_api_action_records` table/collection.
+
+---
+
 ## Common operational problems
 
 ### Push is rejected with "repository not permitted"

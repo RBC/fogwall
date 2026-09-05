@@ -32,6 +32,7 @@ import org.eclipse.jetty.ee11.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee11.servlet.ServletHolder;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.server.handler.ContextHandlerCollection;
 import org.eclipse.jetty.util.component.LifeCycle;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.springframework.security.web.context.AbstractSecurityWebApplicationInitializer;
@@ -138,7 +139,13 @@ public class FogwallDashboardApplication {
                 jdbcDataSource,
                 mongoFactory);
 
-        server.setHandler(new BlockingContentHandler(context));
+        // SCM API dialects live on their own listeners, not under the dashboard's "/" context — see
+        // FogwallServletRegistrar.registerScmApiListeners for why a shared path prefix can't work.
+        var contexts = new ContextHandlerCollection();
+        contexts.addHandler(context);
+        FogwallServletRegistrar.registerScmApiListeners(server, contexts, ctx, configBuilder, providers);
+
+        server.setHandler(new BlockingContentHandler(contexts));
         server.start();
 
         log.info("JGit Proxy with Dashboard started on port {}", connector.getPort());
@@ -171,6 +178,7 @@ public class FogwallDashboardApplication {
             bf.registerSingleton("liveConfigLoader", liveConfigLoader);
             bf.registerSingleton("repoRegistry", urlRuleRegistry);
             bf.registerSingleton("fetchStore", ctx.fetchStore());
+            bf.registerSingleton("scmApiActionStore", ctx.scmApiActionStore());
             // #340: expose both local-mirror caches so AdminCacheController can inspect/invalidate them. Both are
             // always constructed by JettyConfigurationBuilder (server-mode and transparent-proxy mirrors).
             bf.registerSingleton("serverCache", ctx.serverCache());

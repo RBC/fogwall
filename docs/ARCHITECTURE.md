@@ -85,6 +85,82 @@ each hook completes.
 Both modes share the same validation logic and push store. Both are always active for every configured provider — there
 is currently no per-provider toggle to disable one mode.
 
+### Proposals (a dedicated listener per provider)
+
+_Available since v1.4.0, opt-in per provider — see [docs/internals/SCM_API_PROXY.md](internals/SCM_API_PROXY.md)._
+
+A third HTTP surface, opt-in per provider (`providers.<name>.proposals.enabled`), for SCM CLI tools rather than git
+itself — proxying `gh`'s issue/PR, `glab`'s issue/MR, and `tea`/`fj`'s issue/PR create-edit-comment-review traffic
+instead of a git push. Unlike the two modes above, it does not touch a local repository clone; it inspects and relays a
+small request/response pair.
+
+Unlike server mode and the transparent proxy, which share the main port under path prefixes, **each enabled provider
+gets its own listener** (`providers.<name>.proposals.port`) with its dialect mounted at that listener's root —
+`/api/graphql`, `/api/v4/*`, `/api/v1/*`. This is forced by the clients: `gh` and `fj` address the API from the host
+root and discard any path prefix, and a single shared root listener would collide between two instances of the same
+platform. `registerScmApiListeners` binds each context to its connector using Jetty's `"@connectorName"` virtual-host
+form, and relaxes URI compliance on those connectors alone so GitLab's `owner%2Frepo` segment isn't rejected as an
+ambiguous path separator.
+
+The three platforms use genuinely different wire formats, so each gets its own filter chain rather than one shared
+pipeline forced to fit all — the chains are plain `jakarta.servlet.Filter`s (not `FogwallFilter`s — the git-specific
+`GitRequestDetails`/`PushStep` request model doesn't apply here), registered by `FogwallServletRegistrar`:
+
+```
+GitHub (GraphQL), via registerScmApiProxy:
+ScmApiAuditFilter (outermost, try/finally — writes one audit record per mutation, mirrors PushStoreAuditFilter)
+  └─ ScmApiAuthenticateFilter (token → fogwall identity, via the same PushIdentityResolver git push uses)
+       └─ ScmApiGitHubGateFilter (parse → allowlist/resolve/authorize a mutation, or provider-level-gate a read)
+            └─ ScmApiGraphQlForwardServlet (relays to the provider's GraphQL endpoint with the caller's own token)
+
+GitLab (REST), via registerScmApiProxyGitLab:
+ScmApiAuditFilter (same as above)
+  └─ ScmApiAuthenticateFilter (same as above)
+       └─ ScmApiGitLabGateFilter (allowlist method+path → authorize using owner/repo straight from the URL)
+            └─ ScmApiRestForwardServlet (relays the same sub-path/query/body to the provider's REST API base URL)
+
+Gitea/Forgejo (REST), via registerScmApiProxyGitea:
+ScmApiAuditFilter (same as above)
+  └─ ScmApiAuthenticateFilter (same as above)
+       └─ ScmApiUserAgentFilter (classify + audit the client; optionally refuse non-CLI callers)
+            └─ ScmApiGiteaGateFilter (same shape as GitLab's, different allowlist table)
+                 └─ ScmApiRestForwardServlet (shared with the GitLab dialect)
+```
+
+(`ScmApiUserAgentFilter` sits in all three chains; it is shown once, above, to keep the other two readable.)
+
+Mechanics that carry the actual security decisions:
+
+- **AST-based mutation allowlisting (GitHub).** The GraphQL request body is parsed (`graphql-java`) into a real AST; the
+  allowlist matches on the parsed mutation's schema field name, never a substring of the raw query text — a client alias
+  or a string literal containing a mutation name can't spoof the check.
+- **Opaque node-ID resolution (GitHub only).** A GraphQL mutation references its target only by an opaque node ID, never
+  `owner/repo` — `NodeIdResolver` resolves it (cached, with a TTL that is a security parameter, not just a perf knob: a
+  node ID can outlive a repo rename/transfer) before `RepoPermissionService.isAllowedToPropose` can run. GitLab has no
+  equivalent step: its REST calls carry `owner/repo` directly in the URL (verified from live `glab` captures — see
+  docs/internals/SCM_API_PROXY.md), so `ScmApiGitLabGateFilter` reads the authorization target straight off the matched
+  path via `GitLabRestAllowlist`.
+- **One dialect for `tea` and `fj`.** The two Gitea/Forgejo CLIs speak the same server API and differ only in which
+  subset they use, so `GiteaRestAllowlist` is the union of both. The union is load-bearing: `tea pr close` sends
+  `PATCH /pulls/{n}` while `fj pr close` sends `PATCH /issues/{n}`, so allowlisting one form silently breaks the other
+  CLI. They are deliberately **not** told apart by `User-Agent` — that header is caller-controlled, so branching
+  authorization on it would let a caller select the looser rule set.
+- **`User-Agent` is evidence, never an input to a decision.** `ScmApiUserAgentFilter` records the raw header (each CLI
+  advertises its version, the anchor for spotting a wire-format change after an upgrade) and can optionally refuse
+  unrecognised client types. It is strictly subtractive: enabling it only ever denies more, so a forged header buys
+  nothing beyond the baseline the allowlist and permission engine already enforce.
+- **Allowlists match the raw, undecoded URI.** `getPathInfo()` is decoded by the container, which would split GitLab's
+  `acme%2Fwidgets` into two segments — turning every `glab` mutation into a fail-closed denial, and in principle letting
+  an encoded slash shift which repository is authorized. `ScmApiRestPath` reads `getRequestURI()` instead.
+- **Reads stay cheap in all dialects.** Neither dialect resolves or permission-checks reads individually — they're gated
+  only by the coarser `ScmApiAccessRule` provider-level check, keeping the default read cost near pass-through.
+- **A rule system that isn't `UrlRuleRegistry`, shared by both dialects.** `ScmApiAccessRule`/`ScmApiAccessEvaluator`
+  are a deliberately separate, provider-level-only rule mechanism — `UrlRuleRegistry` matches on the repository path in
+  the request URL, which GitHub's GraphQL traffic doesn't have (the target lives in the request body's `variables`, not
+  the URL). GitLab's REST traffic _does_ have a path-addressable target, but reuses this same coarse mechanism rather
+  than `UrlRuleRegistry`, since the per-repo enforcement for GitLab's mutations happens in
+  `ScmApiGitLabGateFilter`/`RepoPermissionService` directly, not through a path-rule lookup.
+
 ---
 
 ## Request flow

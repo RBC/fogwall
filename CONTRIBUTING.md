@@ -8,6 +8,13 @@ The easiest way to get the right toolchain versions is [mise](https://mise.jdx.d
 mise install   # installs Java 25 (Temurin) and Node 26 as defined in mise.toml
 ```
 
+Optional CLI tools (e.g. `glab`, for testing the GitLab SCM API proxy dialect) live in `mise.cli.toml` rather than
+`mise.toml`, since they're not needed by every contributor. Install them with:
+
+```shell
+MISE_ENVIRONMENT=cli mise install
+```
+
 If you prefer to manage tools yourself, you need:
 
 - Java 25+
@@ -102,6 +109,51 @@ permissions:
 ```
 
 See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the full reference.
+
+### Testing the proposals listeners locally (TLS)
+
+The proposals listeners (`gh`, `glab`, `tea`, `fj`) can't be exercised over plain HTTP: every one of those CLIs
+addresses a custom host over HTTPS with no way to ask otherwise. So fogwall has to terminate TLS, which locally means a
+self-signed certificate the CLIs will trust.
+
+Generate one — `-nodes` already emits a PKCS8 key, so no conversion step:
+
+```shell
+openssl req -x509 -newkey rsa:2048 -nodes -days 30 \
+  -keyout /tmp/fogwall-key.pem -out /tmp/fogwall-cert.pem \
+  -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+```
+
+The SAN matters — Go rejects a certificate carrying only a CN. Run with `server.tls` pointed at it; every enabled
+proposals listener inherits it and logs `(https, inherited from server.tls)`:
+
+```shell
+FOGWALL_SERVER_TLS_CERTIFICATE=/tmp/fogwall-cert.pem \
+FOGWALL_SERVER_TLS_KEY=/tmp/fogwall-key.pem \
+  ./gradlew :fogwall-dashboard:run
+```
+
+Then point a CLI at it, trusting the certificate per-invocation with `SSL_CERT_FILE` (both CLIs are Go, which reads it
+for the file portion of the trust store while still loading the system CA directory — so public hosts keep working):
+
+```shell
+export SSL_CERT_FILE=/tmp/fogwall-cert.pem
+
+# gh — GH_ENTERPRISE_TOKEN, not GH_TOKEN, which gh only applies to github.com.
+# `gh auth login` can't be used here: it validates against the REST API, which fogwall doesn't proxy.
+GH_HOST=localhost:9443 GH_ENTERPRISE_TOKEN="$(gh auth token)" \
+  gh pr create -R localhost:9443/<owner>/<repo> --base main --head <branch> --title t --body b
+
+# glab — authenticate against the fogwall host in a throwaway config dir so your real one is untouched
+export GLAB_CONFIG_DIR=/tmp/fogwall-glab
+glab auth login --hostname localhost:9444 --api-protocol https --insecure-storage --stdin < /path/to/pat
+GITLAB_HOST=localhost:9444 glab mr create -R <owner>/<repo> \
+  --source-branch <branch> --target-branch main --title t --description b --no-editor --yes
+```
+
+Two client quirks that cost time if you don't know them: `glab mr create` refuses to run unless one of the repo's git
+remotes points at `GITLAB_HOST` (add a dummy `fogwall` remote — it is never used for git), and `glab` sends a PAT in
+`PRIVATE-TOKEN` but an OAuth token in `Authorization: Bearer`, so the two token types are not interchangeable.
 
 ## Tests
 
