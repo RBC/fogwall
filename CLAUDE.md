@@ -62,10 +62,6 @@ isn't actually providing security.
 - **fogwall is not in the encryption/KMS business.** Credential-at-rest features use stdlib primitives correctly
   (AES-GCM, IV/AAD handling, hard delete) behind a thin key-custody SPI. KMS integration and node-root threat models are
   platform concerns.
-- **Docker is the primary distribution.** The Dockerfile is fully self-contained (no host tooling assumed) and image
-  references always carry the `docker.io/` registry prefix.
-- **Vendored data (pattern bundles etc.) is imported, not fetched.** A one-time import script pinned to a commit SHA,
-  plus the upstream LICENSE verbatim routed through `generateThirdPartyNotices`. No submodules, no build-time fetches.
 
 ## Repository layout
 
@@ -122,47 +118,36 @@ source of truth for exact commands, since it's written for human contributors an
 - `./gradlew spotlessApply && ./gradlew build` — format then compile + unit test
 - `./gradlew e2eTest` — e2e tests (requires Docker/Podman)
 - `bash compose.sh -- up -d` — local stack (fogwall + Gitea); see CONTRIBUTING.md for auth/db overlay flags
-- Gradle caches test results — pass `--rerun` when adding or changing tests, e.g.
-  `./gradlew :fogwall-core:test --rerun`. Locally, run targeted unit tests plus a compile; leave coverage gates and e2e
-  to CI — it is the arbiter and runs without cache.
+- Locally, run targeted unit tests plus a compile; leave coverage gates and e2e to CI — it is the arbiter and runs
+  without cache.
+- When a build or test fails or hangs, run it unfiltered into a file and grep the file. Never pipe through `grep FAILED`
+  / `tail` — a hung test never writes `build/test-results`, so the console stream is the only record.
+- A feature isn't done until it has been pushed or fetched through the running proxy end to end. Unit tests plus a clean
+  compile have hidden unwired filter chains before.
 
 ## Git workflow
 
-Branches and commits:
+Mechanical rules (`git add -A`, `--no-verify`, `[ci skip]`, `Claude-Session:` trailers, `git merge main`,
+`git rebase -i`, squash/rebase merges, label creation, external-repo issues, generated-with footers) are enforced by
+`.claude/hooks/guard-bash.sh`. When it blocks a command, do what the message says; never work around it.
 
 - Always start a new feature branch from an up-to-date `origin/main` — `git fetch origin main` first, branch from
   `origin/main`, not a possibly-stale local `main`.
-- Always squash related commits into one before pushing — use `git reset --soft`, not `git rebase -i` (requires TTY).
-  Compute the squash base against a freshly fetched `origin/main`, never the local `main` ref — it goes stale in
-  multi-worktree setups and silently pulls already-merged commits back into the squash. Exception: never squash across
-  commits that differ by author or model trailer; that multi-commit structure is the provenance record.
-- When a PR branch falls behind, rebase onto `origin/main` and force-push. Never `git merge origin/main` into the branch
-  — the repo only allows merge-commit merges, so an in-branch merge commit produces two merge commits on the final
-  merge.
-- Rebase and squash locally, never through the GitHub UI ("Update branch", web rebase, web edits). Commits must carry
-  the developer's signature, not GitHub's key.
-- Never use `git add -A` — the working tree may hold sensitive or scratch files that don't belong in version control.
-  Stage paths explicitly.
-- Never disable commit signing or hooks (`--no-verify`) unless explicitly asked. The pre-commit hook runs formatting,
-  linting, and PMD; it catches many code smells and is the signal that the harness is going off the rails.
-- Never add `[ci skip]` to commits unless explicitly asked.
-
-Commit messages:
-
-- Plain language: lead with what a developer saw go wrong, then the cause, then the fix. Dense graph shorthand is not
-  documentation. The same applies to PR bodies.
+- Always squash related commits into one before pushing, with `git reset --soft` against a freshly fetched `origin/main`
+  — never the local `main` ref, which goes stale in multi-worktree setups. Exception: never squash across commits that
+  differ by author or model trailer; that multi-commit structure is the provenance record.
+- A branch that falls behind is rebased, locally, and force-pushed; the `sync-pr-branch` skill has the full sequence
+  including re-arming auto-merge. Nothing goes through the GitHub UI's "Update branch" or web editor — commits must
+  carry the developer's signature, not GitHub's key.
+- Stage paths explicitly. The working tree may hold sensitive or scratch files.
+- Commit messages and PR bodies in plain language: lead with what a developer saw go wrong, then the cause, then the
+  fix. Dense graph shorthand is not documentation.
 - Always include a `Co-Authored-By` trailer crediting the Claude model that did the work (e.g.
   `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>` — use the current model's name, not this example, if it
-  differs). This is a project transparency requirement. Never append a `Claude-Session:` trailer — session URLs are
-  garbage-collected within weeks.
+  differs). This is a project transparency requirement. No other Claude trailers.
 - Always include `closes #N` / `resolves #N` when addressing a GitHub issue — but grep for the actual implementation
   first. A docs-only PR once closed #83 and an unrelated commit closed #107.
-
-Merging:
-
-- `gh pr merge` is always `--merge`; squash and rebase merges are disabled on the repo.
-- After a force-push, check `autoMergeRequest` and re-arm with `gh pr merge N --merge --auto` if it dropped. A PR
-  sitting at `mergeStateStatus: UNKNOWN` with green checks is stalled behind main, not merged — rebase it.
+- `gh pr merge` is always `--merge`.
 
 ## Issue and PR hygiene
 
@@ -170,25 +155,10 @@ This is a public repository.
 
 - Update an issue or PR body when state changes; don't litter threads with progress comments. Only the latest state
   matters, and edit history is there if anyone ever needs it.
-- No "Generated with Claude Code" footers on issues or PRs.
 - Only use labels that already exist; never create new ones. Don't prefix an issue title with a word that is already
   applied as a label.
 - Say "point N", not "#N", for numbered sub-items inside an issue — GitHub linkifies `#N`.
-- Never open issues on external repos on the maintainer's behalf; note the upstream tracker for manual follow-up.
-
-## Code conventions
-
-- **Comments describe the code, not its history.** No issue references in comments or javadoc for fogwall's own features
-  or bugs (`/** MyCoolFeature (#123) … */`), and no version numbers ("deferred to 1.x"). Both go stale the moment a
-  follow-up lands; that context belongs in release notes and issues. The one exception is a workaround for an external
-  project, e.g. `// workaround for https://github.com/foo/bar/issues/123`.
-- **YAML config is user-facing.** Its audience is admins, operators, policy authors, and developers (including plugin
-  and extension authors). Tuning knobs for JGit, Jetty, and other internals that only matter in specific deployment
-  scenarios do not go through the YAML/Gestalt loader; expose them as documented environment variables an operator
-  _could_ set but isn't expected to know about (precedent: the server-tuned JGit pack-window cache).
-- **`*Settings` POJOs default fully inert** — `enabled = false`, empty lists, no limits. Real defaults live only in the
-  shipped YAML files (`SecretScanSettings` is the precedent).
-- **One global config key before per-provider or per-entity variants**, until someone actually asks for the granularity.
+- Anything that belongs upstream (finos/git-proxy, JGit, Jetty…) is noted for the maintainer to file by hand.
 
 ## Backwards compatibility
 
@@ -204,47 +174,6 @@ Past the 1.0.0 line (current version well past it — see `build.gradle`) — re
 
 Before renaming a config key, table, column, or collection: pause and ask — the answer is almost always "ship a
 migration instead."
-
-## Dependency injection conventions
-
-- **Constructor injection only, everywhere** — `private final` fields via Lombok `@RequiredArgsConstructor`, or an
-  explicit constructor when a param needs `@Qualifier` or `Optional<T>`. Field `@Autowired` and `@Resource` are banned;
-  `@Autowired(required = false)` especially so.
-- **A genuinely optional collaborator is an explicit `Optional<T>` constructor param** (deployment-conditional beans
-  like the storage-backend split) **or a no-op implementation** — never a nullable field with use-site `!= null` guards.
-  A required control dependency is `Objects.requireNonNull`'d with a message naming the consequence.
-- **Conditionality lives in the composition roots only** — `JettyConfigurationBuilder` (server) and
-  `FogwallDashboardApplication`'s `registerSingleton` block (dashboard). Everything they hand out is non-null; anything
-  conditional gets resolved inside them. No `BeanFactoryPostProcessor`, no conditional bean registration for beans that
-  always exist.
-
-## Testing conventions
-
-- Always use JUnit assertions (`org.junit.jupiter.api.Assertions.*`) — not manual `if`/`throw` checks.
-- E2e tests use Testcontainers (Gitea) + `JettyProxyFixture`. Credentials in the clone URL are forwarded to upstream
-  Gitea, so they must be valid Gitea credentials. Use `GiteaContainer.ADMIN_USER`/`ADMIN_PASSWORD` or create test users
-  via `createTestUser()` / `addTestUserAsCollaborator()` — never invent fake usernames that won't authenticate upstream.
-- When a build or test fails or hangs, run it unfiltered into a file and grep the file. Never pipe through `grep FAILED`
-  / `tail` — a hung test never writes `build/test-results`, so the console stream is the only record.
-- A feature isn't done until it has been pushed or fetched through the running proxy end to end. Unit tests plus a clean
-  compile have hidden unwired filter chains before.
-- The HTTP Basic username is meaningless for identity — the token drives resolution (only Bitbucket differs). Test
-  scripts use `me`; never switch it to a real handle or document it as an identity input.
-
-## Build and CI
-
-- Transitive CVE pins go in the root `build.gradle` subprojects `eachDependency` table with `because 'CVE fix: GHSA-…'`.
-  Never declare the vulnerable artifact as a dependency, not even as a platform/BOM. The `buildscript` force block
-  covers only the plugin classpath: it can't fix an image-scan finding, and it is the only thing that clears
-  plugin-classpath Dependabot alerts.
-- CI binaries (grype, cosign…) are installed by downloading the release tarball plus `checksums.txt` and verifying with
-  `sha256sum -c`. Never `curl | sh`, never the tool's own install script, never a hardcoded hash.
-- Add workflow steps to the existing job that already did the prerequisite work; don't create new jobs. Scope
-  `secrets.*` to the step's `env:`, not the job's.
-- Dockerfile digest pins must be multi-arch _index_ digests, verified with `skopeo inspect --raw … | sha256sum`. PR CI
-  builds amd64 only; arm64 breakage only surfaces post-merge.
-- `compose.sh` is for the main stack only. The perf harness uses bare `docker compose -f perf/docker-compose.yml` per
-  `perf/README.md`.
 
 ## Configuration
 
@@ -263,6 +192,17 @@ PR — don't let doc drift accumulate to be reconciled later in a big batch:
   explaining for contributors
 
 Not every change needs all four — use judgment — but check rather than skip the check.
+
+## Where the rest lives
+
+This file is loaded into every session, so it holds only what every session needs. Narrower guidance is loaded on
+demand:
+
+- `.claude/rules/` — path-scoped conventions that load when matching files are touched: `java.md` (DI, comments),
+  `config.md` (YAML and `*Settings` rules), `testing.md`, `build-ci.md` (dependency pins, workflows, Docker).
+- `.claude/skills/` and `.claude/commands/` — multi-step procedures (`sync-pr-branch`, `pin-transitive-cve`,
+  `refresh-pattern-bundles`, releases, action pins). Prefer invoking one over reconstructing the steps.
+- `.claude/hooks/guard-bash.sh` — the enforced prohibitions listed under Git workflow.
 
 ## Roadmap & architecture
 
