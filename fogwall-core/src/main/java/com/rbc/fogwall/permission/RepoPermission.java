@@ -57,7 +57,26 @@ public class RepoPermission implements FogwallPermission {
          * still runs; the automated attestation is recorded in the audit log. Does not imply {@link #PUSH} or
          * {@link #REVIEW} — those must be granted separately if also needed.
          */
-        SELF_CERTIFY
+        SELF_CERTIFY,
+        /**
+         * Can propose a change against matching repos — open a pull/merge request and iterate on it (create, edit
+         * title/body, comment) through the SCM API proxy, along with the issue operations that accompany it.
+         *
+         * <p>Named for what it permits rather than what it achieves: whether a proposal becomes a contribution is the
+         * upstream maintainer's call, outside fogwall. Kept distinct from {@link #PUSH} so an operator can permission
+         * git-push and change proposals independently — pushing to a fork proposes nothing — and does not imply
+         * {@link #PUSH} or {@link #REVIEW}. Reads are not gated by this grant at all; they go through the existing
+         * URL-rule mechanism, the same as git fetches.
+         *
+         * <p>Issue create/edit/comment are deliberately included: filing an issue that a pull request then closes is
+         * part of one contribution, and comments cannot be split by subject anyway — GitHub's {@code addComment} takes
+         * an "Issue or PR" id, and Gitea posts pull-request comments to its issue endpoint. A narrower participation
+         * grant, for people who file issues but propose no code, would be a subset of this one.
+         *
+         * <p>Merging is <b>not</b> included — that is a maintainer operation with its own design questions. Neither is
+         * review, which stays with the SCM's own UI.
+         */
+        PROPOSE
     }
 
     public enum Source {

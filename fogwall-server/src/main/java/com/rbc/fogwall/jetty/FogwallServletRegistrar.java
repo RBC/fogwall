@@ -11,6 +11,7 @@ import com.rbc.fogwall.config.GpgConfig;
 import com.rbc.fogwall.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.config.ScmOAuthConfig;
 import com.rbc.fogwall.config.SecretScanConfig;
+import com.rbc.fogwall.config.TlsConfig;
 import com.rbc.fogwall.db.FetchStore;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.UrlRuleRegistry;
@@ -25,12 +26,22 @@ import com.rbc.fogwall.net.ResolvedOutboundProxy;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.BitbucketProvider;
 import com.rbc.fogwall.provider.FogwallProvider;
+import com.rbc.fogwall.provider.ForgejoProvider;
+import com.rbc.fogwall.provider.GitHubProvider;
+import com.rbc.fogwall.provider.GitLabProvider;
+import com.rbc.fogwall.scmapi.GitLabProjectIdResolver;
+import com.rbc.fogwall.scmapi.NodeIdResolver;
+import com.rbc.fogwall.scmapi.ScmApiAccessEvaluator;
 import com.rbc.fogwall.service.PushIdentityResolver;
 import com.rbc.fogwall.servlet.FogwallServlet;
+import com.rbc.fogwall.servlet.ScmApiGraphQlForwardServlet;
+import com.rbc.fogwall.servlet.ScmApiRestForwardServlet;
+import com.rbc.fogwall.servlet.ScmApiRestPathPolicy;
 import com.rbc.fogwall.servlet.filter.*;
 import com.rbc.fogwall.tls.SslAwareHttpConnectionFactory;
 import com.rbc.fogwall.tls.SslUtil;
 import jakarta.servlet.DispatcherType;
+import jakarta.servlet.Filter;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -41,6 +52,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jetty.ee11.servlet.FilterHolder;
 import org.eclipse.jetty.ee11.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee11.servlet.ServletHolder;
+import org.eclipse.jetty.http.UriCompliance;
+import org.eclipse.jetty.server.HttpConfiguration;
+import org.eclipse.jetty.server.HttpConnectionFactory;
+import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.server.SslConnectionFactory;
+import org.eclipse.jetty.server.handler.ContextHandlerCollection;
 import org.eclipse.jgit.http.server.GitServlet;
 
 /**
@@ -60,6 +78,33 @@ public final class FogwallServletRegistrar {
     public static final String PUSH_PATH_PREFIX = "/push";
 
     public static final String PROXY_PATH_PREFIX = "/proxy";
+
+    /**
+     * Mount point for GitHub's GraphQL dialect. {@code gh} posts every issue/PR mutation to this one path.
+     *
+     * @see #registerScmApiListeners for why these are absolute paths rather than a shared prefix
+     */
+    public static final String GITHUB_GRAPHQL_MOUNT = "/api/graphql";
+
+    /** Mount point for GitLab's REST v4 dialect — everything {@code glab} sends lives below it. */
+    public static final String GITLAB_REST_MOUNT = "/api/v4/*";
+
+    /** Mount point for the Gitea/Forgejo REST v1 dialect, shared by {@code tea} and {@code fj}. */
+    public static final String GITEA_REST_MOUNT = "/api/v1/*";
+
+    /**
+     * URI compliance for SCM API listeners only: Jetty's default rejects an encoded {@code %2F} in the path as an
+     * ambiguous path separator, which would fail every {@code glab} request with a 400 before any fogwall code ran —
+     * GitLab addresses a project as a single {@code owner%2Frepo} segment, so the encoded slash is load-bearing, not an
+     * evasion attempt.
+     *
+     * <p>Exactly one violation is allowed, rather than reaching for {@code LEGACY} or {@code UNSAFE}, and only on these
+     * connectors — the git server and transparent-proxy ports keep Jetty's default. The allowlists match the raw,
+     * still-encoded URI ({@code ScmApiRestPath}), so a {@code %2F} stays inside one segment where it belongs instead of
+     * being decoded into an extra path element that could shift which repository is authorized.
+     */
+    public static final UriCompliance SCM_API_URI_COMPLIANCE =
+            UriCompliance.from(EnumSet.of(UriCompliance.Violation.AMBIGUOUS_PATH_SEPARATOR));
 
     /**
      * Server-mode path prefixes to register each git servlet under: the canonical {@code /server} and legacy
@@ -104,6 +149,7 @@ public final class FogwallServletRegistrar {
 
         // Seed config rules once — registry is the single source of truth for all rule evaluation
         fogwallContext.urlRuleRegistry().seedFromConfig(configBuilder.buildConfigRules());
+        fogwallContext.scmApiAccessRuleStore().seedFromConfig(configBuilder.buildProposalsAccessRules());
 
         for (FogwallProvider provider : providers) {
             log.info("Registering provider: {}", provider.getName());
@@ -322,6 +368,234 @@ public final class FogwallServletRegistrar {
         context.addServlet(proxyHolder, proxyMapping);
 
         log.info("Registered proxy servlet for {} at {}", provider.getName(), proxyMapping);
+    }
+
+    /**
+     * Registers the SCM API proxy pipeline for one GitHub provider instance: audit filter (outermost) → authenticate →
+     * gate (parse/allowlist/resolve/authorize) → forwarding servlet. Registration order is execution order — these are
+     * plain {@link jakarta.servlet.Filter}s, not {@link FogwallFilter}s, since the git-specific request/step model
+     * ({@code GitRequestDetails}, {@code PushStep}) doesn't apply to GraphQL traffic.
+     */
+    public static void registerScmApiProxy(
+            ServletContextHandler context,
+            GitHubProvider provider,
+            FogwallContext fogwallContext,
+            boolean requireKnownCli) {
+        String mapping = GITHUB_GRAPHQL_MOUNT;
+
+        var nodeIdResolver = new NodeIdResolver(fogwallContext.nodeIdCache());
+        var accessEvaluator = new ScmApiAccessEvaluator(fogwallContext.scmApiAccessRuleStore());
+
+        addFilter(context, mapping, new ScmApiAuditFilter(fogwallContext.scmApiActionStore()));
+        addFilter(context, mapping, new ScmApiAuthenticateFilter(provider, fogwallContext.pushIdentityResolver()));
+        addFilter(context, mapping, new ScmApiUserAgentFilter(requireKnownCli));
+        addFilter(
+                context,
+                mapping,
+                new ScmApiGitHubGateFilter(
+                        provider, accessEvaluator, nodeIdResolver, fogwallContext.repoPermissionService()));
+
+        var forwardHolder = new ServletHolder(new ScmApiGraphQlForwardServlet(provider.getGraphqlUrl()));
+        forwardHolder.setName("scm-api-" + provider.getName());
+        context.addServlet(forwardHolder, mapping);
+
+        log.info("Registered SCM API proxy for {} at {}", provider.getName(), mapping);
+    }
+
+    /**
+     * Registers the SCM API proxy pipeline for one GitLab provider instance: audit filter (outermost) → authenticate →
+     * gate (REST allowlist, path-based authorization — no node-ID resolution, GitLab addresses its target directly in
+     * the URL) → REST forwarding servlet. See {@link ScmApiGitLabGateFilter}'s javadoc for how this differs from
+     * GitHub's GraphQL pipeline.
+     */
+    public static void registerScmApiProxyGitLab(
+            ServletContextHandler context,
+            GitLabProvider provider,
+            FogwallContext fogwallContext,
+            boolean requireKnownCli) {
+        String mapping = GITLAB_REST_MOUNT;
+
+        var accessEvaluator = new ScmApiAccessEvaluator(fogwallContext.scmApiAccessRuleStore());
+
+        addFilter(context, mapping, new ScmApiAuditFilter(fogwallContext.scmApiActionStore()));
+        addFilter(context, mapping, new ScmApiAuthenticateFilter(provider, fogwallContext.pushIdentityResolver()));
+        addFilter(context, mapping, new ScmApiUserAgentFilter(requireKnownCli));
+        addFilter(
+                context,
+                mapping,
+                new ScmApiGitLabGateFilter(
+                        provider,
+                        accessEvaluator,
+                        new GitLabProjectIdResolver(fogwallContext.gitLabProjectIdCache()),
+                        fogwallContext.repoPermissionService()));
+
+        var forwardHolder = new ServletHolder(new ScmApiRestForwardServlet(
+                provider.getApiUrl(), ScmApiRestPathPolicy.EncodedSeparators.GITLAB_PROJECT_SEGMENT));
+        forwardHolder.setName("scm-api-" + provider.getName());
+        context.addServlet(forwardHolder, mapping);
+
+        log.info("Registered SCM API proxy for {} at {}", provider.getName(), mapping);
+    }
+
+    /**
+     * Registers the SCM API proxy pipeline for one Gitea/Forgejo provider instance. Same shape as
+     * {@link #registerScmApiProxyGitLab} — path-addressed REST, no node-ID resolution — differing only in the allowlist
+     * table. One registration serves both {@code tea} and {@code fj}: they speak the same server API, so
+     * {@link ScmApiGiteaGateFilter} covers the union of the endpoints each CLI uses.
+     */
+    public static void registerScmApiProxyGitea(
+            ServletContextHandler context,
+            ForgejoProvider provider,
+            FogwallContext fogwallContext,
+            boolean requireKnownCli) {
+        String mapping = GITEA_REST_MOUNT;
+
+        var accessEvaluator = new ScmApiAccessEvaluator(fogwallContext.scmApiAccessRuleStore());
+
+        addFilter(context, mapping, new ScmApiAuditFilter(fogwallContext.scmApiActionStore()));
+        addFilter(context, mapping, new ScmApiAuthenticateFilter(provider, fogwallContext.pushIdentityResolver()));
+        addFilter(context, mapping, new ScmApiUserAgentFilter(requireKnownCli));
+        addFilter(
+                context,
+                mapping,
+                new ScmApiGiteaGateFilter(provider, accessEvaluator, fogwallContext.repoPermissionService()));
+
+        var forwardHolder = new ServletHolder(
+                new ScmApiRestForwardServlet(provider.getApiUrl(), ScmApiRestPathPolicy.EncodedSeparators.REJECTED));
+        forwardHolder.setName("scm-api-" + provider.getName());
+        context.addServlet(forwardHolder, mapping);
+
+        log.info("Registered SCM API proxy for {} at {}", provider.getName(), mapping);
+    }
+
+    /**
+     * Gives every SCM-API-enabled provider its own listener, with its dialect mounted at the root of a context bound to
+     * that listener via Jetty's {@code "@connectorName"} virtual-host form.
+     *
+     * <p>A port per provider is not a stylistic choice — it is the only shape the CLIs can be pointed at. {@code gh}
+     * and {@code fj} address the API from the host root and discard any path prefix (verified against both binaries;
+     * {@code fj} resolves {@code base.join("/api/v1/...")}, which RFC 3986 makes replace the whole base path), so a
+     * shared {@code /scm-api/<provider>} prefix is unreachable for them. Nor can the dialects simply share one root
+     * listener: two GitLab instances would both claim {@code /api/v4}, and two Gitea/Forgejo instances {@code /api/v1}.
+     *
+     * <p>Clients are then configured with nothing but a host and port — {@code GH_HOST}, {@code GITLAB_HOST},
+     * {@code tea login add --url}, {@code fj -H} — which is the one form all four accept.
+     */
+    public static void registerScmApiListeners(
+            Server server,
+            ContextHandlerCollection contexts,
+            FogwallContext fogwallContext,
+            JettyConfigurationBuilder configBuilder,
+            List<FogwallProvider> providers)
+            throws Exception {
+        TlsConfig tls = configBuilder.getTlsConfig();
+        boolean serveTls = tls.isServerTlsConfigured();
+        var plaintextListeners = new ArrayList<String>();
+
+        for (FogwallProvider provider : providers) {
+            if (!isHttpProvider(provider) || !configBuilder.isProposalsEnabled(provider)) continue;
+            if (!(provider instanceof GitHubProvider
+                    || provider instanceof GitLabProvider
+                    || provider instanceof ForgejoProvider)) {
+                log.warn(
+                        "SCM API proxy enabled for {} but no dialect is implemented for provider type {} — skipping",
+                        provider.getName(),
+                        provider.getType());
+                continue;
+            }
+
+            int port = configBuilder.getProposalsPort(provider);
+            boolean requireKnownCli = configBuilder.isProposalsRequireKnownCli(provider);
+            String connectorName = "scm-api-" + provider.getName();
+            // GitLab alone addresses its target as an encoded owner%2Frepo segment, so it is the only listener that
+            // relaxes Jetty's URI compliance. GitHub and Gitea/Forgejo keep the strict default and reject an encoded
+            // separator at the parser; ScmApiRestPathPolicy then confines GitLab's to the project segment itself.
+            boolean allowEncodedSeparator = provider instanceof GitLabProvider;
+
+            // Inherited from server.tls, not configured per provider: the certificate is per-hostname and these
+            // listeners differ only by port, so one set of material covers them all.
+            var http = new HttpConnectionFactory(scmApiHttpConfiguration(allowEncodedSeparator));
+            var connector = serveTls
+                    ? new ServerConnector(
+                            server,
+                            new SslConnectionFactory(JettyTls.serverSslContextFactory(tls), http.getProtocol()),
+                            http)
+                    : new ServerConnector(server, http);
+            connector.setPort(port);
+            connector.setName(connectorName);
+            server.addConnector(connector);
+            if (!serveTls) {
+                plaintextListeners.add(provider.getName() + ":" + port);
+            }
+
+            var context = scmApiContext(connectorName, allowEncodedSeparator);
+
+            if (provider instanceof GitHubProvider githubProvider) {
+                registerScmApiProxy(context, githubProvider, fogwallContext, requireKnownCli);
+            } else if (provider instanceof GitLabProvider gitlabProvider) {
+                registerScmApiProxyGitLab(context, gitlabProvider, fogwallContext, requireKnownCli);
+            } else {
+                registerScmApiProxyGitea(context, (ForgejoProvider) provider, fogwallContext, requireKnownCli);
+            }
+
+            contexts.addHandler(context);
+            log.info(
+                    "SCM API listener for {} on port {} ({})",
+                    provider.getName(),
+                    port,
+                    serveTls ? "https, inherited from server.tls" : "http");
+        }
+
+        // The CLIs address a custom host over HTTPS and offer no way to ask for http, so a plaintext listener is
+        // reachable only through something that terminates TLS in front of it. fogwall cannot see whether an ingress
+        // or load balancer is doing that, so it says what it knows rather than assuming either way.
+        if (!plaintextListeners.isEmpty()) {
+            log.warn(
+                    "Proposals listeners are serving plain HTTP ({}) because server.tls is not configured. gh, glab,"
+                            + " tea and fj all address a custom host over HTTPS, so TLS must terminate somewhere in"
+                            + " front of these ports — an ingress, route, or load balancer. Configure server.tls to"
+                            + " have fogwall terminate it instead.",
+                    String.join(", ", plaintextListeners));
+        }
+    }
+
+    /**
+     * {@link HttpConfiguration} for one SCM API listener. {@link #SCM_API_URI_COMPLIANCE} is applied only when
+     * {@code allowEncodedSeparator} is set — that is, only on a GitLab listener, the sole dialect that addresses its
+     * target as an encoded {@code owner%2Frepo} segment. Every other listener keeps Jetty's strict default and refuses
+     * an encoded separator at the parser, before any fogwall code runs.
+     */
+    public static HttpConfiguration scmApiHttpConfiguration(boolean allowEncodedSeparator) {
+        var httpConfig = new HttpConfiguration();
+        if (allowEncodedSeparator) {
+            httpConfig.setUriCompliance(SCM_API_URI_COMPLIANCE);
+        }
+        return httpConfig;
+    }
+
+    /**
+     * The root context for one SCM API listener, bound to {@code connectorName} so the dialect owns that port and only
+     * that port.
+     *
+     * <p>Encoded path separators have to be permitted <b>twice</b>. {@link #SCM_API_URI_COMPLIANCE} gets GitLab's
+     * {@code /projects/owner%2Frepo} past the HTTP parser; the servlet layer then rejects it again, handing the request
+     * an {@code AmbiguousURI} wrapper whose {@code getServletPath()} and {@code getPathInfo()} throw 400 — which
+     * {@code ScmApiRestPath} calls, so every {@code glab} request fails before a filter sees it. Relaxing it here is
+     * safe precisely because the allowlists and the forwarder read the raw URI and never the decoded path this permits.
+     */
+    public static ServletContextHandler scmApiContext(String connectorName, boolean allowEncodedSeparator) {
+        var context = new ServletContextHandler("/", false, false);
+        context.setVirtualHosts(List.of("@" + connectorName));
+        if (allowEncodedSeparator) {
+            context.getServletHandler().setDecodeAmbiguousURIs(true);
+        }
+        return context;
+    }
+
+    private static void addFilter(ServletContextHandler context, String mapping, Filter filter) {
+        var holder = new FilterHolder(filter);
+        holder.setAsyncSupported(true);
+        context.addFilter(holder, mapping, EnumSet.of(DispatcherType.REQUEST));
     }
 
     /**

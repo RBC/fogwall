@@ -132,6 +132,12 @@ public class DatabaseMigrator {
                     "14",
                     "push commit co-authored-by trailers (mysql/mariadb)",
                     "db/migration-mysql/V14__push_commit_co_authored_by.sql",
+                    Vendor.MYSQL_ONLY),
+            new Migration("15", "scm api proxy", "db/migration/V15__scm_api_proxy.sql", Vendor.EXCEPT_MYSQL),
+            new Migration(
+                    "15",
+                    "scm api proxy (mysql/mariadb)",
+                    "db/migration-mysql/V15__scm_api_proxy.sql",
                     Vendor.MYSQL_ONLY));
 
     // ---------------------------------------------------------------------------
