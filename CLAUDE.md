@@ -128,7 +128,7 @@ source of truth for exact commands, since it's written for human contributors an
 ## Git workflow
 
 Mechanical rules (`git add -A`, `--no-verify`, `[ci skip]`, `Claude-Session:` trailers, `git merge main`,
-`git rebase -i`, squash/rebase merges, label creation, external-repo issues, generated-with footers) are enforced by
+`git rebase -i`, squash/rebase merges, label creation, external-repo issues) are enforced by
 `.claude/hooks/guard-bash.sh`. When it blocks a command, do what the message says; never work around it.
 
 - Always start a new feature branch from an up-to-date `origin/main` — `git fetch origin main` first, branch from
