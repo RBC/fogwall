@@ -19,6 +19,18 @@ unreliable. Server mode keeps the client connection open for the full validation
 connection means starting over. Transparent proxy completes each HTTP request atomically, so a network hiccup during
 approval does not lose the push record.
 
+### If you don't re-push after a `/proxy/` push is queued for review
+
+A queued (`PENDING`) transparent-proxy push has no held connection to time out on its own, so two things can cancel it
+automatically instead:
+
+- If you push a different commit to the same branch, the earlier queued push is canceled — you've moved on, so it's no
+  longer waiting to be reviewed.
+- If nothing happens to it at all, it's canceled after an administrator-configured age (30 days by default) as timed
+  out.
+
+Either way this is a state change, not a deletion — the original record and its history remain visible in the dashboard.
+
 ## Disk usage in server mode
 
 In server mode, the proxy maintains local mirrors of each upstream repository on ephemeral pod storage (`emptyDir` in

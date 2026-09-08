@@ -1,5 +1,6 @@
 package com.rbc.fogwall.db.model;
 
+import java.time.Instant;
 import lombok.Builder;
 import lombok.Data;
 
@@ -15,6 +16,9 @@ public class PushQuery {
     private String user;
     private String authorEmail;
     private String commitTo;
+
+    /** Matches records with a timestamp strictly before this instant. */
+    private Instant olderThan;
 
     /** Free-text search: matches records where project OR repo_name contains this value (case-insensitive LIKE). */
     private String search;

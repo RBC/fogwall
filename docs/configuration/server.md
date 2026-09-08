@@ -17,6 +17,16 @@ server:
   # live-session bound, not a durable queue; hold it short. Default 1800 (30 minutes).
   approval-timeout-seconds: 1800
 
+  # How long, in days, an unreviewed PENDING push in transparent proxy mode may sit
+  # before it's automatically canceled as timed out. Unrelated to approval-timeout-seconds
+  # above: that bounds a server mode connection held open synchronously during the wait,
+  # while a proxy mode PENDING record has no held connection and would otherwise sit
+  # forever until a human acts on it or a new push to the same branch supersedes it.
+  # Canceling is a state change, not a deletion — the record and its history stay visible
+  # to reviewers. Default 30 days, long enough that a review still genuinely in progress
+  # is never swept.
+  pending-push-expiry-days: 30
+
   # Sideband keepalive interval in seconds for server mode operations.
   # Sends periodic progress packets to prevent idle-timeout disconnects during
   # long steps (secret scanning, approval polling). Set to 0 to disable.

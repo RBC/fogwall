@@ -8,6 +8,7 @@ import com.rbc.fogwall.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.config.ScmOAuthConfig;
 import com.rbc.fogwall.crypto.TokenCipherProvider;
 import com.rbc.fogwall.db.MongoStoreFactory;
+import com.rbc.fogwall.db.PendingPushExpiryTask;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.jetty.BlockingContentHandler;
 import com.rbc.fogwall.jetty.FogwallContext;
@@ -26,6 +27,7 @@ import jakarta.servlet.DispatcherType;
 import jakarta.servlet.ServletContextEvent;
 import jakarta.servlet.ServletContextListener;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
@@ -122,10 +124,16 @@ public class FogwallDashboardApplication {
                 ctx.urlRuleRegistry(),
                 ctx.repoPermissionService());
         liveConfigLoader.start();
+
+        var pendingPushExpiryTask =
+                new PendingPushExpiryTask(ctx.pushStore(), Duration.ofDays(configBuilder.getPendingPushExpiryDays()));
+        pendingPushExpiryTask.start();
+
         server.addEventListener(new LifeCycle.Listener() {
             @Override
             public void lifeCycleStopping(LifeCycle event) {
                 liveConfigLoader.stop();
+                pendingPushExpiryTask.stop();
                 if (sshGitServer != null) sshGitServer.stop();
             }
         });

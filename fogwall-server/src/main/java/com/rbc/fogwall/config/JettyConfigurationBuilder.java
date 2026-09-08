@@ -148,6 +148,11 @@ public class JettyConfigurationBuilder {
         return config.getServer().getMaxObjectSizeBytes();
     }
 
+    /** Returns the age in days after which an unreviewed transparent-proxy PENDING record is canceled. */
+    public int getPendingPushExpiryDays() {
+        return config.getServer().getPendingPushExpiryDays();
+    }
+
     /** Returns the server mode upstream connect timeout in seconds (0 = no timeout). */
     public int getUpstreamConnectTimeoutSeconds() {
         return config.getServer().getUpstreamConnectTimeoutSeconds();
