@@ -1145,6 +1145,16 @@ public class JettyConfigurationBuilder {
         return providerConfig != null && providerConfig.getProposals().isRequireKnownCli();
     }
 
+    /**
+     * Whether this provider refuses a proposal whose head commit has no push record —
+     * {@code providers.<name>.proposals.require-validated-head}, default {@code false}. See
+     * {@link ProposalsProviderSettings#isRequireValidatedHead()}.
+     */
+    public boolean isProposalsRequireValidatedHead(FogwallProvider provider) {
+        ProviderConfig providerConfig = config.getProviders().get(provider.getName());
+        return providerConfig != null && providerConfig.getProposals().isRequireValidatedHead();
+    }
+
     private MongoStoreFactory requireMongoStoreFactory() {
         if (cachedMongoStoreFactory == null) {
             DatabaseConfig db = config.getDatabase();

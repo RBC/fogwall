@@ -50,6 +50,9 @@ public class MongoPushStore implements PushStore {
         collection.createIndex(Indexes.ascending("repoName"));
         collection.createIndex(Indexes.ascending("user"));
         collection.createIndex(Indexes.descending("timestamp"));
+        // Repo-agnostic on purpose: a fork proposal's head commit was pushed to the fork, not the upstream this
+        // record's repoName/project name, so require-validated-head's lookup is keyed on the SHA alone.
+        collection.createIndex(Indexes.ascending("commitTo"));
         log.info("MongoDB push store initialized");
     }
 

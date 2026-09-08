@@ -29,12 +29,19 @@ import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.ForgejoProvider;
 import com.rbc.fogwall.provider.GitHubProvider;
 import com.rbc.fogwall.provider.GitLabProvider;
+import com.rbc.fogwall.scmapi.ForgejoHeadShaResolver;
 import com.rbc.fogwall.scmapi.ForgejoProposalResponseReader;
+import com.rbc.fogwall.scmapi.GitHubHeadShaResolver;
 import com.rbc.fogwall.scmapi.GitHubNodeIdResolver;
 import com.rbc.fogwall.scmapi.GitHubProposalResponseReader;
+import com.rbc.fogwall.scmapi.GitLabHeadShaResolver;
 import com.rbc.fogwall.scmapi.GitLabProjectIdResolver;
 import com.rbc.fogwall.scmapi.GitLabProposalResponseReader;
+import com.rbc.fogwall.scmapi.GitLabRestAllowlist;
 import com.rbc.fogwall.scmapi.GraphQlLiterals;
+import com.rbc.fogwall.scmapi.HeadCommitValidator;
+import com.rbc.fogwall.scmapi.JsonBodyField;
+import com.rbc.fogwall.scmapi.OwnerRepo;
 import com.rbc.fogwall.scmapi.ProposalContent;
 import com.rbc.fogwall.scmapi.ProposalContentInspector;
 import com.rbc.fogwall.scmapi.ProposalRegistrar;
@@ -42,7 +49,9 @@ import com.rbc.fogwall.service.PushIdentityResolver;
 import com.rbc.fogwall.servlet.FogwallServlet;
 import com.rbc.fogwall.servlet.ScmApiGraphQlForwardServlet;
 import com.rbc.fogwall.servlet.ScmApiRestForwardServlet;
+import com.rbc.fogwall.servlet.ScmApiRestPath;
 import com.rbc.fogwall.servlet.ScmApiRestPathPolicy;
+import com.rbc.fogwall.servlet.ScmApiTokenExtractor;
 import com.rbc.fogwall.servlet.filter.*;
 import com.rbc.fogwall.tls.SslAwareHttpConnectionFactory;
 import com.rbc.fogwall.tls.SslUtil;
@@ -54,6 +63,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jetty.ee11.servlet.FilterHolder;
@@ -414,10 +424,12 @@ public final class FogwallServletRegistrar {
             GitHubProvider provider,
             FogwallContext fogwallContext,
             ProposalContentInspector contentInspector,
-            boolean requireKnownCli) {
+            boolean requireKnownCli,
+            boolean requireValidatedHead) {
         String mapping = GITHUB_GRAPHQL_MOUNT;
 
         var nodeIdResolver = new GitHubNodeIdResolver(fogwallContext.gitHubNodeIdCache());
+        var headShaResolver = new GitHubHeadShaResolver();
 
         addFilter(context, mapping, new ScmApiAuditFilter(fogwallContext.scmApiActionStore()));
         addFilter(context, mapping, new ScmApiAuthenticateFilter(provider, fogwallContext.pushIdentityResolver()));
@@ -426,6 +438,21 @@ public final class FogwallServletRegistrar {
                 context,
                 mapping,
                 new ScmApiGitHubGateFilter(provider, nodeIdResolver, fogwallContext.repoPermissionService()));
+        addFilter(
+                context,
+                mapping,
+                new ScmApiHeadValidationFilter(
+                        "createPullRequest",
+                        body -> JsonBodyField.stringField(body.path("variables").path("input"), "headRefName"),
+                        (req, ctx, headRef) -> {
+                            String callerToken = ScmApiTokenExtractor.extractToken(req);
+                            var baseRepo = new OwnerRepo(ctx.getRepoOwner(), ctx.getRepoName());
+                            return callerToken == null
+                                    ? Optional.empty()
+                                    : headShaResolver.resolveHeadSha(provider, baseRepo, headRef, callerToken);
+                        },
+                        new HeadCommitValidator(fogwallContext.pushStore()),
+                        requireValidatedHead));
         addFilter(
                 context,
                 mapping,
@@ -452,8 +479,11 @@ public final class FogwallServletRegistrar {
             GitLabProvider provider,
             FogwallContext fogwallContext,
             ProposalContentInspector contentInspector,
-            boolean requireKnownCli) {
+            boolean requireKnownCli,
+            boolean requireValidatedHead) {
         String mapping = GITLAB_REST_MOUNT;
+
+        var headShaResolver = new GitLabHeadShaResolver();
 
         addFilter(context, mapping, new ScmApiAuditFilter(fogwallContext.scmApiActionStore()));
         addFilter(context, mapping, new ScmApiAuthenticateFilter(provider, fogwallContext.pushIdentityResolver()));
@@ -465,6 +495,25 @@ public final class FogwallServletRegistrar {
                         provider,
                         new GitLabProjectIdResolver(fogwallContext.gitLabProjectIdCache()),
                         fogwallContext.repoPermissionService()));
+        addFilter(
+                context,
+                mapping,
+                new ScmApiHeadValidationFilter(
+                        "merge_requests.create",
+                        body -> JsonBodyField.stringField(body, "source_branch"),
+                        (req, ctx, sourceBranch) -> {
+                            String urlPath = ScmApiRestPath.rawSubPath(req);
+                            var match = GitLabRestAllowlist.match(req.getMethod(), urlPath);
+                            String authHeaderName = ScmApiTokenExtractor.authHeaderName(req);
+                            if (match.isEmpty() || authHeaderName == null) {
+                                return Optional.<String>empty();
+                            }
+                            OwnerRepo sourceRepo = match.get().ownerRepo();
+                            return headShaResolver.resolveHeadSha(
+                                    provider, sourceRepo, sourceBranch, authHeaderName, req.getHeader(authHeaderName));
+                        },
+                        new HeadCommitValidator(fogwallContext.pushStore()),
+                        requireValidatedHead));
         addFilter(
                 context,
                 mapping,
@@ -492,13 +541,31 @@ public final class FogwallServletRegistrar {
             ForgejoProvider provider,
             FogwallContext fogwallContext,
             ProposalContentInspector contentInspector,
-            boolean requireKnownCli) {
+            boolean requireKnownCli,
+            boolean requireValidatedHead) {
         String mapping = FORGEJO_REST_MOUNT;
+
+        var headShaResolver = new ForgejoHeadShaResolver();
 
         addFilter(context, mapping, new ScmApiAuditFilter(fogwallContext.scmApiActionStore()));
         addFilter(context, mapping, new ScmApiAuthenticateFilter(provider, fogwallContext.pushIdentityResolver()));
         addFilter(context, mapping, new ScmApiUserAgentFilter(requireKnownCli));
         addFilter(context, mapping, new ScmApiForgejoGateFilter(provider, fogwallContext.repoPermissionService()));
+        addFilter(
+                context,
+                mapping,
+                new ScmApiHeadValidationFilter(
+                        "pulls.create",
+                        body -> JsonBodyField.stringField(body, "head"),
+                        (req, ctx, head) -> {
+                            String callerToken = ScmApiTokenExtractor.extractToken(req);
+                            var baseRepo = new OwnerRepo(ctx.getRepoOwner(), ctx.getRepoName());
+                            return callerToken == null
+                                    ? Optional.empty()
+                                    : headShaResolver.resolveHeadSha(provider, baseRepo, head, callerToken);
+                        },
+                        new HeadCommitValidator(fogwallContext.pushStore()),
+                        requireValidatedHead));
         addFilter(
                 context,
                 mapping,
@@ -562,6 +629,7 @@ public final class FogwallServletRegistrar {
 
             int port = configBuilder.getProposalsPort(provider);
             boolean requireKnownCli = configBuilder.isProposalsRequireKnownCli(provider);
+            boolean requireValidatedHead = configBuilder.isProposalsRequireValidatedHead(provider);
             String connectorName = SCM_API_CONNECTOR_PREFIX + provider.getName();
             // GitLab and Gitea/Forgejo both address something through an encoded separator, so both relax Jetty's
             // URI compliance; GitHub keeps the strict default and rejects one at the parser. The relaxation is only
@@ -588,12 +656,29 @@ public final class FogwallServletRegistrar {
             var context = scmApiContext(connectorName, allowEncodedSeparator);
 
             if (provider instanceof GitHubProvider githubProvider) {
-                registerScmApiProxy(context, githubProvider, fogwallContext, contentInspector, requireKnownCli);
+                registerScmApiProxy(
+                        context,
+                        githubProvider,
+                        fogwallContext,
+                        contentInspector,
+                        requireKnownCli,
+                        requireValidatedHead);
             } else if (provider instanceof GitLabProvider gitlabProvider) {
-                registerScmApiProxyGitLab(context, gitlabProvider, fogwallContext, contentInspector, requireKnownCli);
+                registerScmApiProxyGitLab(
+                        context,
+                        gitlabProvider,
+                        fogwallContext,
+                        contentInspector,
+                        requireKnownCli,
+                        requireValidatedHead);
             } else {
                 registerScmApiProxyForgejo(
-                        context, (ForgejoProvider) provider, fogwallContext, contentInspector, requireKnownCli);
+                        context,
+                        (ForgejoProvider) provider,
+                        fogwallContext,
+                        contentInspector,
+                        requireKnownCli,
+                        requireValidatedHead);
             }
 
             contexts.addHandler(context);

@@ -39,6 +39,7 @@ providers:
       enabled: true
       port: 9445
       require-known-cli: true # optional hardening; default false
+      require-validated-head: true # optional provenance check; default false
 ```
 
 **Each enabled provider needs its own `port`**, and fogwall fails to start if one is enabled without it. The dialect is
@@ -62,6 +63,16 @@ would refuse. It defaults off because a CLI release that changes its `User-Agent
 for reasons unrelated to policy. The raw header is recorded on every audit record either way, since each CLI advertises
 its version there.
 
+`require-validated-head` refuses a proposal-create request whose head commit fogwall has no push record for — closing
+the gap where a contributor pushes straight to their fork, never touching fogwall, then opens the pull request through
+it. The lookup is keyed on the commit SHA alone, not the repository, since a fork push and the upstream proposal are two
+different repositories.
+
+It defaults off because it breaks legitimately in a few common workflows: a rebase, amend, or force-push after pushing
+through fogwall changes the SHA a validated push recorded, and a commit authored in the SCM's own web UI never went
+through fogwall at all. A denial names the remedy — push the branch through fogwall, then reopen — rather than just
+refusing.
+
 Per-repo authorization for **mutations** (issue/PR create, edit, comment, review) goes through the existing
 `RepoPermission` grants — see [Permissions](permissions.md) below — with a dedicated `PROPOSE` grant kept independent
 from `PUSH`/`REVIEW`, so an operator can permission git-push and SCM API mutations separately:
@@ -81,12 +92,13 @@ resolution, no extra round-trip.
 
 ## Proposal properties
 
-| Property                                       | Type    | Default | Description                                                                               |
-| ---------------------------------------------- | ------- | ------- | ----------------------------------------------------------------------------------------- |
-| `proposals.node-id-cache-ttl`                  | string  | `PT5M`  | ISO-8601 duration. See the security note above.                                           |
-| `providers.<name>.proposals.enabled`           | boolean | `false` | Whether the SCM API proxy is mounted for this provider.                                   |
-| `providers.<name>.proposals.port`              | int     | —       | Dedicated listener port. **Required** when `enabled`; startup fails without it.           |
-| `providers.<name>.proposals.require-known-cli` | boolean | `false` | Refuse callers whose `User-Agent` isn't a recognised SCM CLI. Subtractive hardening only. |
+| Property                                            | Type    | Default | Description                                                                                                       |
+| --------------------------------------------------- | ------- | ------- | ----------------------------------------------------------------------------------------------------------------- |
+| `proposals.node-id-cache-ttl`                       | string  | `PT5M`  | ISO-8601 duration. See the security note above.                                                                   |
+| `providers.<name>.proposals.enabled`                | boolean | `false` | Whether the SCM API proxy is mounted for this provider.                                                           |
+| `providers.<name>.proposals.port`                   | int     | —       | Dedicated listener port. **Required** when `enabled`; startup fails without it.                                   |
+| `providers.<name>.proposals.require-known-cli`      | boolean | `false` | Refuse callers whose `User-Agent` isn't a recognised SCM CLI. Subtractive hardening only.                         |
+| `providers.<name>.proposals.require-validated-head` | boolean | `false` | Refuse a proposal whose head commit has no fogwall push record. Breaks on rebase/amend/force-push/web-UI commits. |
 
 ## Token model
 
