@@ -13,8 +13,8 @@ public class ProposalsSettings {
 
     /**
      * TTL for the node-ID → owner/repo resolution cache, an ISO-8601 duration (e.g. {@code PT5M}). This is a security
-     * parameter, not just a perf knob — see docs/internals/SCM_API_PROXY.md: a node ID can outlive a repo
-     * rename/transfer while the owner/repo it resolves to changes underneath it. Kept conservative by default.
+     * parameter, not just a perf knob — see the SCM API proxy notes: a node ID can outlive a repo rename/transfer while
+     * the owner/repo it resolves to changes underneath it. Kept conservative by default.
      */
     private String nodeIdCacheTtl = "PT5M";
 

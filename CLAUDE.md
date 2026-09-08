@@ -187,19 +187,19 @@ migration instead."
 
 ## Configuration
 
-Refer to [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for detailed docs on YAML config structure, environment variable
-overrides, and provider-specific settings.
+Refer to [docs/configuration/index.md](docs/configuration/index.md) for detailed docs on YAML config structure,
+environment variable overrides, and provider-specific settings.
 
 ## Documentation upkeep
 
 When a PR introduces or materially changes a user-facing feature, check whether it needs a docs update as part of that
 PR — don't let doc drift accumulate to be reconciled later in a big batch:
 
-- [docs/USER_GUIDE.md](docs/USER_GUIDE.md) — anything a developer pushing through the proxy would need to know
-- [docs/ADMIN_GUIDE.md](docs/ADMIN_GUIDE.md) — anything an operator configuring/running fogwall would need to know
-- [docs/CONFIGURATION.md](docs/CONFIGURATION.md) — any new or changed config key
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — any new abstraction, pipeline step, or design rationale worth
-  explaining for contributors
+- [docs/user/index.md](docs/user/index.md) — anything a developer pushing through the proxy would need to know
+- [docs/admin/index.md](docs/admin/index.md) — anything an operator configuring/running fogwall would need to know
+- [docs/configuration/index.md](docs/configuration/index.md) — any new or changed config key
+- [docs/architecture/index.md](docs/architecture/index.md) — any new abstraction, pipeline step, or design rationale
+  worth explaining for contributors
 
 Not every change needs all four — use judgment — but check rather than skip the check.
 

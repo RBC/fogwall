@@ -33,7 +33,7 @@ Multi-module Gradle project; dependencies flow upward (`core` → `server` → `
 | `fogwall-server`    | Standalone proxy-only server — no dashboard, no Spring                                     |
 | `fogwall-dashboard` | Dashboard + REST API — Spring MVC, approval UI, depends on `fogwall-server`                |
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the modules fit together at runtime.
+See [docs/architecture/index.md](docs/architecture/index.md) for how the modules fit together at runtime.
 
 ## Build
 
@@ -108,7 +108,7 @@ permissions:
     operations: PUSH
 ```
 
-See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the full reference.
+See [docs/configuration/index.md](docs/configuration/index.md) for the full reference.
 
 ### Testing the proposals listeners locally (TLS)
 
@@ -320,8 +320,8 @@ The scripts default to repos owned by the project maintainer. To run them agains
    ```
 
 3. **Allow rules and permissions** in `fogwall-local.yml` — add your repo slug to the `rules.allow` slugs list and add
-   `PUSH`/`REVIEW` permission entries for your proxy user. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the
-   full reference.
+   `PUSH`/`REVIEW` permission entries for your proxy user. See
+   [docs/configuration/index.md](docs/configuration/index.md) for the full reference.
 
 4. **Run with your repo** — single scripts accept an inline override; orchestrators need an export:
 
@@ -581,6 +581,6 @@ merged.
 ### Documenting new config surface
 
 When a PR introduces a new config section (not just a key on an existing one) in
-[docs/CONFIGURATION.md](docs/CONFIGURATION.md), tag it with the release it's shipping in, e.g.
+[docs/configuration/index.md](docs/configuration/index.md), tag it with the release it's shipping in, e.g.
 `_Available since v1.3.0._`, right under the heading. This isn't backfilled onto existing sections — only applied going
 forward from a section's introduction.

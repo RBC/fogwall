@@ -15,9 +15,9 @@ import tools.jackson.databind.json.JsonMapper;
  * targets.
  *
  * <p>{@code glab mr create} puts the <b>source</b> project in the URL and carries the upstream only as a numeric
- * {@code target_project_id} in the request body (verified against a real fork MR — see
- * docs/internals/SCM_API_PROXY.md). Authorizing on the URL alone would therefore check the fork, which the contributor
- * owns and can always push to, rather than the upstream the merge request is actually opened on.
+ * {@code target_project_id} in the request body (verified against a real fork MR — see the SCM API proxy notes).
+ * Authorizing on the URL alone would therefore check the fork, which the contributor owns and can always push to,
+ * rather than the upstream the merge request is actually opened on.
  *
  * <p>Backed by {@link GitLabProjectIdCache}, whose TTL is a security parameter: an ID outlives a rename or transfer
  * while what it resolves to changes underneath it.

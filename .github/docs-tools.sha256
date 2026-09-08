@@ -1,0 +1,7 @@
+# Checksums for the docs toolchain downloaded by .github/workflows/docs.yml.
+#
+# rust-lang/mdBook publishes no checksums file with its releases, so this hash is
+# recorded here on first use and reviewed like any other pinned dependency — bump it
+# in the same commit as MDBOOK_VERSION. lychee publishes a .sha256 per asset, so that
+# one is verified against upstream at download time and is not listed here.
+5222beabd3e37dc5be0d18ff99b79058469354db5c220153a1b92db5ba12be89  mdbook-v0.5.4-x86_64-unknown-linux-musl.tar.gz

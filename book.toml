@@ -1,0 +1,32 @@
+# Docs site for https://rbc.github.io/fogwall/ — see .github/workflows/docs.yml.
+#
+# The sources stay plain CommonMark and live in docs/, so every page still reads on
+# GitHub: each section is a directory whose README.md is both the directory landing
+# page GitHub shows and the section's index chapter here.
+[book]
+title = "fogwall"
+description = "Git push proxy — validation, approval and audit in front of your SCM"
+authors = ["The fogwall authors"]
+language = "en"
+src = "docs"
+
+[build]
+build-dir = "book"
+create-missing = false
+
+[output.html]
+site-url = "/fogwall/"
+git-repository-url = "https://github.com/RBC/fogwall"
+edit-url-template = "https://github.com/RBC/fogwall/edit/main/{path}"
+default-theme = "light"
+preferred-dark-theme = "navy"
+hash-files = true
+
+[output.html.fold]
+enable = true
+level = 1
+
+[output.html.search]
+enable = true
+limit-results = 20
+use-boolean-and = true

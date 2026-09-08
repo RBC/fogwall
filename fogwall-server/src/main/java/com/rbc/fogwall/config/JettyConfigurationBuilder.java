@@ -363,9 +363,8 @@ public class JettyConfigurationBuilder {
                 .build();
 
         if (cs.getIdentityVerification() != null) {
-            log.warn(
-                    "Config key 'commit.identity-verification' is deprecated and IGNORED — its values have no effect. "
-                            + "Rename it to 'commit.attribution-policy' (see docs/CONFIGURATION.md#commit-attribution-policy).");
+            log.warn("Config key 'commit.identity-verification' is deprecated and IGNORED — its values have no effect. "
+                    + "Rename it to 'commit.attribution-policy' (see the configuration reference).");
         }
         CommitSettings.CommitAttributionPolicySettings ivs = cs.getAttributionPolicy();
         CommitConfig.CommitAttributionPolicyConfig attributionPolicyConfig =
@@ -445,7 +444,7 @@ public class JettyConfigurationBuilder {
         log.warn(
                 "Config key 'commit...email.{}' is deprecated — express it as a 'rules' entry instead "
                         + "({}). The old key is still applied for now; migrate to the unified rules list "
-                        + "(see docs/CONFIGURATION.md#commit-email-policy).",
+                        + "(see the configuration reference).",
                 oldKey,
                 replacement);
     }

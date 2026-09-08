@@ -34,7 +34,7 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * The SCM API proxy decision pipeline for GitLab's REST dialect; see {@link ScmApiGitHubGateFilter} for GraphQL. GitLab
  * addresses its target directly in the URL as a URL-encoded {@code owner/repo} path segment (verified from live
- * {@code glab} captures — see docs/internals/SCM_API_PROXY.md's GitLab section), so the matched path segment is the
+ * {@code glab} captures — see the GitLab section of the SCM API proxy notes), so the matched path segment is the
  * authorization target, with no opaque-ID resolution step.
  *
  * <p>Reads (any {@code GET}) are gated by authentication alone — no allowlist, no permission check. Any non-GET request

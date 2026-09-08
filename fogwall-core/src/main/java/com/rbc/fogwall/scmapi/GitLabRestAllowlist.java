@@ -8,10 +8,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Fail-closed allowlist of {@code glab}'s mutating REST v4 calls, verified from live traffic — see
- * docs/internals/SCM_API_PROXY.md's GitLab section. Unlike GitHub's GraphQL dialect, GitLab addresses its target
- * directly in the URL as a URL-encoded {@code owner/repo} path segment, so there is no opaque-ID resolution step: the
- * authorization target is read straight off the matched path.
+ * Fail-closed allowlist of {@code glab}'s mutating REST v4 calls, verified from live traffic — see the GitLab section
+ * of the SCM API proxy notes. Unlike GitHub's GraphQL dialect, GitLab addresses its target directly in the URL as a
+ * URL-encoded {@code owner/repo} path segment, so there is no opaque-ID resolution step: the authorization target is
+ * read straight off the matched path.
  *
  * <p>Hardcoded rather than config-driven: this is the security boundary.
  */

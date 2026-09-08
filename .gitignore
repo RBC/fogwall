@@ -91,3 +91,6 @@ fogwall-dashboard/.ssh/
 test/capture/mapping.env
 test/capture/secrets.env
 __pycache__/
+
+# mdbook build output
+book/

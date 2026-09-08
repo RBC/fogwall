@@ -4,7 +4,7 @@ Notes on git/JGit behaviour that inform how filters and hooks are written. Add a
 edge case so the next person doesn't have to rediscover it.
 
 For an overview of how fogwall uses JGit's server-side APIs (ReceivePackFactory, hook chain, forwarding, credential
-flow), see [JGIT_INFRASTRUCTURE.md](JGIT_INFRASTRUCTURE.md).
+flow), see [JGit infrastructure](jgit-infrastructure.md).
 
 ---
 

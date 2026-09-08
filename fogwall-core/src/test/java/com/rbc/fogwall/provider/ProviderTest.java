@@ -63,7 +63,7 @@ class ProviderTest {
     @Test
     void gitHub_selfHostedSshUri_withNonStandardPort_dropsSshPortRatherThanGuessing() {
         // The SSH port has no fixed relationship to the HTTPS port, so it must not be carried over — api-uri is
-        // required when HTTPS isn't on the standard port (documented in ADMIN_GUIDE.md for the same reason).
+        // required when HTTPS isn't on the standard port (documented in the administrator guide for the same reason).
         var p = GitHubProvider.builder()
                 .uri(URI.create("ssh://git@ghes.corp.example.com:2222"))
                 .build();

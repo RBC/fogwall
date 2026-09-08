@@ -4,7 +4,7 @@ paths:
   - "**/src/main/resources/**/*.yml"
   - "**/src/main/resources/**/*.yaml"
   - "docker/**"
-  - "docs/CONFIGURATION.md"
+  - "docs/configuration/**"
 ---
 
 # Configuration conventions
@@ -18,4 +18,5 @@ paths:
 - **One global config key before per-provider or per-entity variants**, until someone actually asks for the granularity.
 - **Renaming or removing a key needs a deprecation path** — accept old and new for at least one minor release. See
   "Backwards compatibility" in CLAUDE.md.
-- Every new or changed key gets documented in [docs/CONFIGURATION.md](../../docs/CONFIGURATION.md) in the same PR.
+- Every new or changed key gets documented in [docs/configuration/index.md](../../docs/configuration/index.md) in the
+  same PR.

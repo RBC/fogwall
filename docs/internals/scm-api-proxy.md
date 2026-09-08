@@ -5,7 +5,7 @@ reverse-engineering record: request shapes, endpoint maps, where each dialect hi
 per-CLI quirks that constrain the implementation.
 
 For how the proxy is built — listeners, filter chains, where each decision is made — see
-[ARCHITECTURE.md](../ARCHITECTURE.md#proposals-a-dedicated-listener-per-provider).
+[Architecture](../architecture/proxy-modes.md#proposals-a-dedicated-listener-per-provider).
 
 Everything below is from live traffic unless marked otherwise. Versions captured: `gh` 2.98.0 (`GH_DEBUG=api`), `glab`
 v1.116.0 (`GLAB_DEBUG_HTTP=true`), `tea` 0.15.1 (`tea --debug`, `gitea.dev/sdk` v1.2.0). `fj` v0.6.0 emits no HTTP debug

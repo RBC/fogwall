@@ -30,7 +30,7 @@ import org.eclipse.jetty.util.Callback;
  * issued while the client is still uploading is not reliably delivered at all. Bounding the allocation needs the body
  * streamed rather than buffered.
  *
- * @see <a href="docs/internals/GIT_INTERNALS.md">GIT_INTERNALS.md — "Large pushes and chunked transfer encoding"</a>
+ * <p>The git internals notes cover this under "Large pushes and chunked transfer encoding".
  */
 @Slf4j
 public class BlockingContentHandler extends Handler.Wrapper {

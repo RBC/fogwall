@@ -1,3 +1,7 @@
 [tools]
 java = "temurin-25"
 node = "26"
+# docs site — CI installs these from upstream release tarballs, these are for local
+# `mdbook serve` / link checking; see book.toml and .github/workflows/docs.yml
+mdbook = "0.5.4"
+lychee = "0.24.2"

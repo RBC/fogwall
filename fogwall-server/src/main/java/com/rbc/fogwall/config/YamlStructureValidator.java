@@ -57,7 +57,7 @@ final class YamlStructureValidator {
                             + " (path: "
                             + e.getPathReference()
                             + "). Check for a typo or misplaced key."
-                            + " See docs/CONFIGURATION.md for valid keys.",
+                            + " See the configuration reference for valid keys.",
                     e);
         }
     }

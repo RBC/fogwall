@@ -5,7 +5,7 @@ package com.rbc.fogwall.scmapi;
  * {@code query} field is not syntactically valid GraphQL.
  *
  * <p>Callers must treat this as a deny, not a pass-through: a document fogwall cannot parse must not reach upstream
- * unchecked (fail-closed, per docs/internals/SCM_API_PROXY.md).
+ * unchecked (fail-closed, per the SCM API proxy notes).
  */
 public class GraphQlParseException extends RuntimeException {
 

@@ -4,7 +4,7 @@ import java.util.Set;
 
 /**
  * Fixed, hardcoded allowlist of GitHub GraphQL mutation fields the SCM API proxy forwards. Anything not in this set is
- * denied — see docs/internals/SCM_API_PROXY.md's "GitHub allowlist" section for the source list and rationale.
+ * denied — see the "GitHub allowlist" section of the SCM API proxy notes for the source list and rationale.
  *
  * <p>Deliberately not config-driven: this list <em>is</em> the security boundary, not an operator knob to tune.
  */

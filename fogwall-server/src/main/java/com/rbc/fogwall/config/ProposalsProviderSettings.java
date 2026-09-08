@@ -3,8 +3,8 @@ package com.rbc.fogwall.config;
 import lombok.Data;
 
 /**
- * Proposal settings for a single provider instance, nested under {@code providers.<name>.proposals}. See
- * docs/CONFIGURATION.md#proposals and docs/internals/SCM_API_PROXY.md.
+ * Proposal settings for a single provider instance, nested under {@code providers.<name>.proposals}. See the
+ * configuration reference and the SCM API proxy notes.
  *
  * <p>Opt-in per provider, default {@code false}: a deployment that doesn't proxy pull requests pays zero
  * registration/runtime cost for it, per CLAUDE.md's "don't raise baseline complexity for non-users" principle.
@@ -19,10 +19,10 @@ public class ProposalsProviderSettings {
      * Dedicated listener port for this provider. Required when {@link #enabled} is set.
      *
      * <p>Each provider gets its own port because the CLIs cannot be redirected any other way: {@code gh} and {@code fj}
-     * address the API from the host root and silently discard any path prefix (verified — see
-     * docs/internals/SCM_API_PROXY.md's "Client redirection" section), so the dialect must be mounted at {@code /} on a
-     * listener of its own. A port per provider also keeps two instances of the same platform from colliding, since
-     * every GitLab speaks {@code /api/v4} and every Gitea/Forgejo speaks {@code /api/v1}.
+     * address the API from the host root and silently discard any path prefix (verified — see the "Client redirection"
+     * section of the SCM API proxy notes), so the dialect must be mounted at {@code /} on a listener of its own. A port
+     * per provider also keeps two instances of the same platform from colliding, since every GitLab speaks
+     * {@code /api/v4} and every Gitea/Forgejo speaks {@code /api/v1}.
      */
     private int port = 0;
 
