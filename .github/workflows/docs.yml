@@ -1,0 +1,93 @@
+name: Docs
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "docs/**"
+      - "book.toml"
+      - ".github/docs-tools.sha256"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "docs/**"
+      - "book.toml"
+      - ".github/docs-tools.sha256"
+      - ".github/workflows/docs.yml"
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  MDBOOK_VERSION: "0.5.4"
+  LYCHEE_VERSION: "0.24.2"
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v7.0.1
+
+      # mdBook ships no checksums file, so the hash lives in .github/docs-tools.sha256
+      # and is bumped alongside MDBOOK_VERSION.
+      - name: Install mdBook
+        run: |
+          cd /tmp
+          ASSET="mdbook-v${MDBOOK_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+          curl -sSfL -o "${ASSET}" \
+            "https://github.com/rust-lang/mdBook/releases/download/v${MDBOOK_VERSION}/${ASSET}"
+          grep -F "${ASSET}" "${GITHUB_WORKSPACE}/.github/docs-tools.sha256" | sha256sum --check
+          tar -xzf "${ASSET}" mdbook
+          sudo mv mdbook /usr/local/bin/mdbook
+
+      - name: Install lychee
+        run: |
+          cd /tmp
+          ASSET="lychee-x86_64-unknown-linux-musl.tar.gz"
+          BASE="https://github.com/lycheeverse/lychee/releases/download/lychee-v${LYCHEE_VERSION}"
+          curl -sSfL -o "${ASSET}" "${BASE}/${ASSET}"
+          curl -sSfL -o "${ASSET}.sha256" "${BASE}/${ASSET}.sha256"
+          sha256sum --check "${ASSET}.sha256"
+          tar -xzf "${ASSET}" --strip-components=1 "${ASSET%.tar.gz}/lychee"
+          sudo mv lychee /usr/local/bin/lychee
+
+      # mdBook does not validate links, so lychee checks them separately — including
+      # #fragments, which is what catches a heading renamed out from under a link.
+      - name: Check links and anchors
+        run: lychee --offline --include-fragments --no-progress 'docs/**/*.md' 'docs/*.md'
+
+      - name: Build book
+        run: mdbook build
+
+      - name: Configure Pages
+        if: github.ref == 'refs/heads/main'
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # ratchet:actions/configure-pages@v6.0.0
+
+      - name: Upload artifact
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # ratchet:actions/upload-pages-artifact@v5.0.0
+        with:
+          path: book
+
+  publish:
+    name: Publish to GitHub Pages
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # ratchet:actions/deploy-pages@v5.0.1

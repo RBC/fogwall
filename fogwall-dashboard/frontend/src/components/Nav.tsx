@@ -205,7 +205,7 @@ export function Nav({ currentUser, dark, toggleDark }: NavProps) {
           )}
         </button>
         <a
-          href="https://github.com/RBC/fogwall/blob/main/docs/CONFIGURATION.md"
+          href="https://rbc.github.io/fogwall/"
           target="_blank"
           rel="noopener noreferrer"
           className="text-slate-400 hover:text-white transition-colors"

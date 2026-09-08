@@ -8,10 +8,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Fail-closed allowlist of the mutating REST v1 calls made by {@code fj} and {@code tea} — see
- * docs/internals/SCM_API_PROXY.md's Forgejo section. The repository is addressed directly in the URL as two plain
- * segments ({@code /repos/{owner}/{repo}/...}), so the authorization target is read off the matched path with no
- * opaque-ID resolution step.
+ * Fail-closed allowlist of the mutating REST v1 calls made by {@code fj} and {@code tea} — see the Forgejo section of
+ * the SCM API proxy notes. The repository is addressed directly in the URL as two plain segments
+ * ({@code /repos/{owner}/{repo}/...}), so the authorization target is read off the matched path with no opaque-ID
+ * resolution step.
  *
  * <p>One table serves both CLIs, as the union of the endpoints each uses. They reach the same operation by different
  * ones — {@code tea pr close} sends {@code PATCH /pulls/{n}}, {@code fj pr close} sends {@code PATCH /issues/{n}} — so

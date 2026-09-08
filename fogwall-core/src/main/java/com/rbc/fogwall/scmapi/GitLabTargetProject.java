@@ -8,7 +8,7 @@ import tools.jackson.databind.json.JsonMapper;
  *
  * <p>GitLab is the one dialect where the URL does not name the repository being written to. {@code mr create} posts to
  * the <b>source</b> project and names the upstream only here, as a numeric ID (verified against a real fork MR — see
- * docs/internals/SCM_API_PROXY.md). Authorizing on the URL alone therefore checks the fork, which the contributor owns
+ * the SCM API proxy notes). Authorizing on the URL alone therefore checks the fork, which the contributor owns
  * outright, instead of the upstream the merge request is opened on.
  *
  * <p>Absent is a normal case, not an error: a same-project merge request has no separate target, and the URL is then

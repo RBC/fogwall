@@ -195,7 +195,7 @@ commit:
   #            Should not gate push access in most workflows. Default: off.
   #
   # NOTE: 'warn' is not a security control — pushes succeed regardless of outcome.
-  # See docs/CONFIGURATION.md#commit-attribution-policy for token scope requirements and rollout guidance.
+  # See the configuration reference for token scope requirements and rollout guidance.
   # attribution-policy:
   #   committer: warn
   #   author: off
@@ -237,9 +237,9 @@ secret-scan:
 # Binary blob detection — flags added/modified blobs that exceed a size threshold or match a denied MIME type.
 # Runs once per push against the aggregate diff, same scope as diff-scan above. ENFORCE-only: a match always
 # blocks the push. MIME type is content-sniffed from magic bytes, not guessed from the file extension — see
-# docs/CONFIGURATION.md#binary-blob-detection for the full signature table and why extensions aren't used.
+# the configuration reference for the full signature table and why extensions aren't used.
 # Enabled by default with a 50MiB size ceiling and PDF/ZIP-family denied — a reasonable safety net out of the
-# box. Further content types are a policy choice; see docs/CONFIGURATION.md#binary-blob-detection for the full
+# box. Further content types are a policy choice; see the configuration reference for the full
 # list of detectable MIME types and uncomment/add your own below.
 binary-blob:
   enabled: true
@@ -255,7 +255,7 @@ binary-blob:
 # PROVENANCE.md alongside the bundle resources). WARN-only: a match is recorded as a WARN step for the reviewer
 # to see, it never blocks the push — these patterns have a real false-positive rate and there's no override path
 # for a wrongly-blocked push yet. Enabled by default with every jurisdiction fogwall currently ships a bundle
-# for — remove entries below to scope this down. See docs/CONFIGURATION.md#content-pattern-scanning for what
+# for — remove entries below to scope this down. See the configuration reference for what
 # each bundle detects.
 # generic-* bundles are grouped by checksum strength rather than all-or-nothing:
 #   - generic-iban (mod-97) and generic-crypto-wallet (SHA-256d/BCH/Keccak-256 checksums, all far stronger than a

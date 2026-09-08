@@ -6,8 +6,8 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 /**
- * Cases derived from the {@code tea} 0.15.1 and {@code fj} v0.6.0 endpoint tables in docs/internals/SCM_API_PROXY.md —
- * one per row, plus the fail-closed rejections.
+ * Cases derived from the {@code tea} 0.15.1 and {@code fj} v0.6.0 endpoint tables in the SCM API proxy notes — one per
+ * row, plus the fail-closed rejections.
  */
 class ForgejoRestAllowlistTest {
 

@@ -18,7 +18,7 @@ spec:
         # otherwise trigger a restart of already-running pods.
         checksum/config: {{ .Values.config | sha256sum }}
     spec:
-      # fogwall reads every FOGWALL_* env var as a config override (see docs/CONFIGURATION.md).
+      # fogwall reads every FOGWALL_* env var as a config override (see docs/configuration/index.md).
       # Kubernetes auto-injects <SERVICE_NAME>_SERVICE_PORT-style env vars for every Service in
       # the namespace — since a release/service named "fogwall*" is the common case, those
       # auto-injected vars collide with fogwall's own env prefix and break config loading.

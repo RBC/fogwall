@@ -23,7 +23,7 @@ service:
   port: 80
   targetPort: 8080
 
-# SSH transport (see docs/CONFIGURATION.md#ssh-transport). Off by default, matching fogwall's own
+# SSH transport (see docs/configuration/ssh-transport.md). Off by default, matching fogwall's own
 # server.ssh.enabled default. Setting sshService.enabled here only exposes the port — you still
 # need server.ssh.enabled: true (and at least one provider configured for SSH) in `config` below.
 sshService:
@@ -44,7 +44,7 @@ configProfileName: custom
 # passwords, OIDC client secret, API key) out of this value — use extraEnvFrom to pull them from
 # an existing Secret instead.
 config: |
-  # See docs/CONFIGURATION.md for the full reference.
+  # See docs/configuration/index.md for the full reference.
   providers:
     github:
       type: github

@@ -113,7 +113,7 @@ public class ProfileController {
      * this is disabled server-side (not just hidden in the dashboard) to avoid the confusing dead state of an identity
      * that appears added but can never gate a push. This is deliberately narrower than blocking email claims too:
      * strict identity mode governs which SCM login a push is attributed to, not commit-author-email verification
-     * ({@code commit.attribution-policy}), an independent control — see docs/CONFIGURATION.md#scm-oauth.
+     * ({@code commit.attribution-policy}), an independent control — see the configuration reference.
      */
     @Operation(operationId = "addScmIdentity", summary = "Add an SCM identity to the current user's profile")
     @PostMapping("/identities")

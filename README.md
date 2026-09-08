@@ -4,6 +4,7 @@
 [![Container: ghcr.io](https://img.shields.io/badge/container-ghcr.io-blue?logo=docker&logoColor=white)](https://github.com/RBC/fogwall/pkgs/container/fogwall)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/RBC/fogwall/badge)](https://scorecard.dev/viewer/?uri=github.com/RBC/fogwall)
 [![License](https://img.shields.io/github/license/RBC/fogwall)](https://github.com/RBC/fogwall/blob/main/LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-rbc.github.io%2Ffogwall-1f6feb)](https://rbc.github.io/fogwall/)
 
 A git-aware gateway that sits between developers and the upstream host (GitHub, GitLab, Bitbucket, Forgejo). Every push
 — any branch, any tag — is policy-checked, content-scanned, identity-verified, and gated behind review before it reaches
@@ -15,6 +16,8 @@ Built on [JGit](https://github.com/eclipse-jgit/jgit) for native git protocol ha
 ([Web](https://docs.spring.io/spring-framework/reference/web/webmvc.html),
 [Security](https://spring.io/projects/spring-security)) with [React](https://react.dev/) &
 [Tailwind](https://tailwindcss.com/) for the dashboard.
+
+**📚 Documentation — <https://rbc.github.io/fogwall/>**
 
 ![fogwall demo](demos/demo-push-fail-then-fix.gif)
 
@@ -36,113 +39,63 @@ Spring) — swap the image name to use it instead.
 | `:vX.Y.Z` | A specific pinned release.                                                            |
 | `:edge`   | Built from `main` on every merge — newer, less battle-tested. Not for production use. |
 
-See the [Configuration Reference](docs/CONFIGURATION.md) for YAML config, environment variable overrides, and provider
-settings. If you'd rather build and run from source (or need the Docker Compose dev environment, test scripts, or to
-contribute), see [CONTRIBUTING.md](CONTRIBUTING.md).
+For Kubernetes, there is a [Helm chart](charts/fogwall/README.md). If you'd rather build and run from source (or need
+the Docker Compose dev environment, test scripts, or to contribute), see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Validation Features
+## Features
 
-Both proxy modes enforce the same set of configurable validation rules:
+### Policy
 
-- 🪪 Identity linkage — internal corporate identity bound to upstream SCM identity, verified on every push (token over
-  HTTPS, SSH key fingerprint over SSH)
-- 🛡️ Governance per persona — per-repo push permissions (RBAC), self-certify for trusted maintainers, peer review by
-  default, or unattended auto-approve on the standalone server
-- 🔒 Repository URL allow/deny rules (literal, glob, and regex)
-- 🕵️ Git history integrity (prevent hidden commits and empty branch pushes)
-- ✍️ GPG commit signature verification
-- 🔑 Secret scanning ([gitleaks](https://github.com/gitleaks/gitleaks)); findings redacted at rest
-- 🔍 Diff content scanning — custom patterns plus built-in PII bundles (national ID patterns are warning-only)
-- 🧊 Binary blob detection by magic-byte signature, with MIME-type allow/deny
-- ✉️ Author email domain allow/block list
-- 📝 Commit message validation (literal + regex)
-- 📊 Fetch auditing
+Both proxy modes enforce the same rules:
 
-## Dashboard
+- 🔀 **Proxy push and fetch over HTTPS and SSH** — branches and tags alike, as a transparent proxy or as a
+  receive-validate-forward server
+- 🪪 **Link public SCM accounts** (GitHub, GitLab, …) **to internal corporate identities**, checked on every push
+- 🛡️ **One permission model across every upstream**, whoever hosts the repo
+- 🔍 **Diff and commit message scanning** — custom patterns plus built-in PII bundles
+- 🔑 **Secret scanning** ([gitleaks](https://github.com/gitleaks/gitleaks)); findings redacted at rest
+- 💬 **Proxy the SCM CLIs** (`gh`, `glab`, `tea`, `fj`) — outbound PR/MR and comment content, inspected the same way
+- 🧊 **Binary blob detection** by magic-byte signature, with MIME-type allow/deny
+- ✍️ **GPG commit signature verification**
+- 📝 **Commit attribution policy** — author, committer, `Co-authored-by` and DCO trailers, against allowed email domains
+- 🔒 **Proxy-wide URL allow/deny rules**
+- 🕵️ **Git-level guards** — rejects hidden commits, empty branch pushes, Git LFS and push options
+- 📊 **Audit trail** — every push state transition and every fetch recorded, in both modes
+
+### Dashboard
 
 ![Push detail — timeline, diff, and attestation](demos/demo-ui-stack.png)
 
-The web dashboard provides push management, approval workflows, and operational tooling:
-
-- 🔒 Allow/deny URL rules (literal, glob, regex) scoped by provider and operation
-- 👤 Per-user and per-group push permissions with the same target/match model as URL rules
-- 🛡️ Admin override with explicit opt-in and separate audit logging
-- 🧪 Dry-run test endpoints for rules and permissions before rollout
-- 📜 Push lifecycle timeline (received → validated → approved → forwarded)
-- ✅ Attestation questionnaire (with linkable policy references) and approve/reject/cancel audit trail
-- 📄 Inline diff viewer with side-by-side toggle; large diffs (>1000 lines) on a dedicated page
-- 📦 Repository discovery with push/fetch traffic counts and one-click clone URL
-- 🔌 Provider connectivity diagnostics (TCP, TLS, HTTP, git-specific probe)
-- 🔄 Live config reload without server restart
+Push management and approval, URL rules and per-user permissions, a lifecycle timeline with an inline diff viewer,
+provider connectivity diagnostics, and live config reload.
 
 ## Supported Providers
 
-| Provider        | Identity resolution | Notes                                         |
-| --------------- | ------------------- | --------------------------------------------- |
-| GitHub          | Token → user        | github.com and GitHub Enterprise (custom URI) |
-| GitLab          | Token → user        | gitlab.com and self-hosted instances          |
-| Bitbucket       | Token → user        | bitbucket.org and Bitbucket Data Center       |
-| Forgejo / Gitea | Token → user        | Any Forgejo or Gitea instance                 |
+Three public hosts are enabled out of the box; Gitea and Bitbucket ship configured but switched off. Pinned SSH host
+keys are included for every built-in host either way.
 
-Each provider can be pointed at a self-hosted instance via the `uri` config property. Multiple instances of the same
-provider type are supported. Pushes over both HTTPS and SSH (opt-in) are supported — see the
-[User Guide](docs/USER_GUIDE.md) for choosing a proxy mode and setting up a remote, and the
-[Administrator Guide](docs/ADMIN_GUIDE.md#ssh-transport) for SSH setup.
+| Provider      | Default upstream            | Out of the box         | Transports | Also works with                 |
+| ------------- | --------------------------- | ---------------------- | ---------- | ------------------------------- |
+| GitHub        | `github.com`                | Enabled                | HTTPS, SSH | GitHub Enterprise               |
+| GitLab        | `gitlab.com`                | Enabled                | HTTPS, SSH | Self-hosted instances           |
+| Forgejo       | `codeberg.org`, `gitea.com` | Codeberg on, Gitea off | HTTPS, SSH | Any Forgejo or Gitea instance   |
+| Bitbucket     | `bitbucket.org`             | Built in, off          | HTTPS      | Bitbucket Data Center           |
+| Anything else | —                           | `type: generic`        | HTTPS      | Anything speaking git over HTTP |
 
-## Authentication
-
-The dashboard supports multiple authentication backends:
-
-| Provider         | Description                                                       |
-| ---------------- | ----------------------------------------------------------------- |
-| Static (default) | Usernames and password hashes defined in YAML config              |
-| LDAP             | Standard LDAP bind + optional group search                        |
-| Active Directory | UPN bind via Spring's `ActiveDirectoryLdapAuthenticationProvider` |
-| OIDC             | OpenID Connect authorization code flow                            |
-
-LDAP, Active Directory, and OIDC backends can optionally run in open-access mode — any authenticated user gets default
-role access when no group/role mapping is configured, rather than being locked out. See the
-[Configuration Reference](docs/CONFIGURATION.md#authentication) for setup details. Docker Compose overlays are provided
-for [LDAP](docker/docker-compose.ldap.yml) and [OIDC](docker/docker-compose.oidc.yml).
-
-## Deployment
-
-- [Outbound corporate proxy](docs/CONFIGURATION.md#outbound-proxy) support (Basic and Kerberos auth)
-- [Custom upstream CA trust](docs/CONFIGURATION.md#custom-upstream-ca-trust); optional
-  [HTTPS listener](docs/CONFIGURATION.md#server-https-listener)
-- [Helm chart](charts/fogwall/README.md), including L4 passthrough for the SSH listener
-- [Redis-backed sessions](docs/CONFIGURATION.md#session-persistence-for-multi-instance-deployments) for multi-replica
-  dashboards
-
-See the full [Configuration Reference](docs/CONFIGURATION.md) and [Administrator Guide](docs/ADMIN_GUIDE.md).
-
-## Push Audit Database
-
-All pushes through the server mode path are recorded as an event log. Each state transition (RECEIVED → APPROVED →
-FORWARDED, or BLOCKED/ERROR) is written as a separate row, enabling full push history and audit reporting.
-
-| Type         | Config value | Notes                                      |
-| ------------ | ------------ | ------------------------------------------ |
-| H2 in-memory | `h2-mem`     | SQL schema, data lost on restart. Default. |
-| H2 file      | `h2-file`    | Persistent, zero external dependencies     |
-| PostgreSQL   | `postgres`   | Production-grade                           |
-| MySQL        | `mysql`      | MySQL 8.0+                                 |
-| MariaDB      | `mariadb`    | MariaDB 10.5+                              |
-| MongoDB      | `mongo`      | —                                          |
-
-See the [Configuration Reference](docs/CONFIGURATION.md#database) for connection settings and Docker Compose profiles.
+Generic git servers do not support every feature — see
+[Providers](https://rbc.github.io/fogwall/configuration/providers.html) for details.
 
 ## Documentation
 
-| Document                                                     | Description                                                                                                     |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| [User Guide](docs/USER_GUIDE.md)                             | For developers pushing code through the proxy: remote setup, push modes, blocked pushes, approval workflow      |
-| [Administrator Guide](docs/ADMIN_GUIDE.md)                   | For operators: RBAC vs permissions, approval modes, logging, JGit filesystem requirements, production checklist |
-| [Configuration Reference](docs/CONFIGURATION.md)             | YAML config structure, environment variable overrides, provider settings, validation rules                      |
-| [Architecture](docs/ARCHITECTURE.md)                         | How the proxy works: two proxy modes, validation pipeline, core abstractions, advanced use cases                |
-| [JGit Infrastructure](docs/internals/JGIT_INFRASTRUCTURE.md) | Server mode internals: ReceivePackFactory, hook chain, forwarding, credential flow (contributor reference)      |
-| [Git Internals](docs/internals/GIT_INTERNALS.md)             | Wire-protocol edge cases: tags, new branches, force pushes, pack parsing (contributor reference)                |
-| [SCM API Proxy](docs/internals/SCM_API_PROXY.md)             | Design note (#264): SCM API proxy — pipeline, GraphQL/REST dialects, node-ID resolution + allowlist             |
+Everything lives at **<https://rbc.github.io/fogwall/>**.
+
+| Section                                                                 | For                                                                 |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| [User Guide](https://rbc.github.io/fogwall/user/)                       | Developers pushing through the proxy                                |
+| [Administrator Guide](https://rbc.github.io/fogwall/admin/)             | Operators deploying, configuring and running it                     |
+| [Configuration Reference](https://rbc.github.io/fogwall/configuration/) | Every YAML key, what it does, what it defaults to                   |
+| [Architecture](https://rbc.github.io/fogwall/architecture/)             | Contributors: modules, proxy modes, request flow, core abstractions |
+| [Internals](https://rbc.github.io/fogwall/internals/)                   | Contributor notes on git, JGit and SCM API behaviour                |
 
 ## Roadmap
 

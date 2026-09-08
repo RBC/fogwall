@@ -10,8 +10,8 @@ import java.util.Locale;
  * refuse client types it never intends to serve — and to record the CLI version in the audit trail. A forged header
  * buys an attacker nothing beyond what the allowlist and permission engine already enforce.
  *
- * <p>The version each CLI advertises is the anchor for detecting a wire-format break after an upgrade (see
- * docs/internals/SCM_API_PROXY.md), so the raw header is audited alongside the classification.
+ * <p>The version each CLI advertises is the anchor for detecting a wire-format break after an upgrade (see the SCM API
+ * proxy notes), so the raw header is audited alongside the classification.
  */
 public enum ScmApiClientType {
 

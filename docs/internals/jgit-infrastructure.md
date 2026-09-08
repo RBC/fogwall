@@ -4,7 +4,7 @@ How fogwall uses [Eclipse JGit](https://github.com/eclipse-jgit/jgit) to impleme
 support commit inspection in the transparent proxy mode.
 
 For low-level details on git wire-protocol behaviour and how individual hooks/filters handle edge cases (tags, new
-branches, force pushes, deletions, etc.), see [GIT_INTERNALS.md](GIT_INTERNALS.md).
+branches, force pushes, deletions, etc.), see [Git internals](git-internals.md).
 
 ---
 
@@ -275,8 +275,8 @@ Cache characteristics:
 - Stored in temp directory, cleaned up on JVM shutdown
 - Thread-safe with synchronized cloning
 
-See [GIT_INTERNALS.md — Shallow clone implications](GIT_INTERNALS.md#shallow-clone-implications) for how the depth limit
-affects commit walks and diffs.
+See [Shallow clone implications](git-internals.md#shallow-clone-implications) for how the depth limit affects commit
+walks and diffs.
 
 ---
 
@@ -293,7 +293,7 @@ Utility class used by both modes for extracting commit data via JGit:
 | `findNewBranchBase(repo, to)`      | Oldest new commit's parent tree (for diffing new branches)    | `RevWalk` excluding existing refs                                                |
 
 All methods use `^{commit}` peeling to handle annotated tags transparently. See
-[GIT_INTERNALS.md — Tag objects](GIT_INTERNALS.md#tag-objects) for details.
+[Tag objects](git-internals.md#tag-objects) for details.
 
 ---
 

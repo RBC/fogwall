@@ -27,7 +27,7 @@ helm install fogwall charts/fogwall \
 
 Where `my-values.yaml` sets at minimum the `config` value — the contents of the operator-supplied
 `fogwall-<configProfileName>.yml` profile (providers, rules, permissions; see
-[docs/CONFIGURATION.md](../../docs/CONFIGURATION.md)):
+[docs/configuration/index.md](../../docs/configuration/index.md)):
 
 ```yaml
 config: |
@@ -58,8 +58,7 @@ extraEnvFrom:
 
 The default config (`h2-file`) only works for a single replica — it's a local file database. For `replicaCount > 1`,
 override `config` to point at PostgreSQL or MongoDB, and set `server.session-store` to `jdbc`, `mongo`, or `redis` so
-sessions are shared across pods. See
-[docs/ADMIN_GUIDE.md — Production checklist](../../docs/ADMIN_GUIDE.md#production-checklist).
+sessions are shared across pods. See [Production checklist](../../docs/admin/production-checklist.md).
 
 ## Standalone server image
 
@@ -71,7 +70,7 @@ variant: server # proxy + validation pipeline only, no dashboard/REST API
 
 This switches the default image to `ghcr.io/rbc/fogwall-server` and the liveness/readiness probes to a plain `tcpSocket`
 check — the server image has no `/api/health` endpoint (see
-[docs/ADMIN_GUIDE.md — Standalone server image](../../docs/ADMIN_GUIDE.md#standalone-server-image-no-dashboard)). Set
+[Standalone server image](../../docs/admin/production-checklist.md#standalone-server-image-no-dashboard)). Set
 `image.repository`/`image.tag` or `livenessProbe`/`readinessProbe` explicitly to override either independently of
 `variant` (e.g. to point at a private mirror of either image).
 

@@ -14,7 +14,7 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Resolves an opaque GitHub GraphQL node ID to the {@code owner/repo} it belongs to, so the SCM API proxy's
  * authorization step has a concrete permission-check target — mutations reference their subject only by node ID, never
- * by owner/repo (docs/internals/SCM_API_PROXY.md).
+ * by owner/repo (see the SCM API proxy notes).
  *
  * <p>GitHub-specific: the {@code node(id:)} query below is GitHub's own schema shape. GitLab's counterpart is
  * {@link GitLabProjectIdResolver}.

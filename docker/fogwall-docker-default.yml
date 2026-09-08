@@ -162,12 +162,12 @@ diff-scan:
     patterns:
       - '(?i)https?://[a-z0-9.-]*\.corp\.example\.com\b'
 
-# Enables Gitleaks secret scanning. Full configuration reference: docs/CONFIGURATION.md#secret-scanning
+# Enables Gitleaks secret scanning. Full configuration reference: docs/configuration/secret-scanning.md
 secret-scan:
   enabled: true
 
 # Flags added/modified blobs that exceed a size threshold or match a denied MIME type (content-sniffed from magic
-# bytes, not the file extension). ENFORCE-only. Full reference: docs/CONFIGURATION.md#binary-blob-detection
+# bytes, not the file extension). ENFORCE-only. Full reference: docs/configuration/binary-blob-detection.md
 binary-blob:
   enabled: true
   max-size-bytes: 104857600 # 100MiB

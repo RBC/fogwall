@@ -19,8 +19,8 @@ import tools.jackson.databind.JsonNode;
  * <p>The {@code input} argument has to be a variable reference, which is what {@code gh} sends; an inline object is
  * refused.
  *
- * <p>The argument holding the ID differs per mutation field — see docs/internals/SCM_API_PROXY.md's "Mutation → node-ID
- * map" table, verified against live {@code gh} traffic.
+ * <p>The argument holding the ID differs per mutation field — see the "Mutation → node-ID map" table in the SCM API
+ * proxy notes, verified against live {@code gh} traffic.
  */
 public final class MutationNodeIdExtractor {
 
