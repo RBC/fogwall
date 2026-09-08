@@ -12,6 +12,7 @@ import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.service.PushIdentityResolver;
+import com.rbc.fogwall.service.ResolvedScmIdentity;
 import com.rbc.fogwall.user.ScmIdentity;
 import com.rbc.fogwall.user.UserEntry;
 import jakarta.servlet.http.HttpServletRequest;
@@ -87,7 +88,8 @@ public class CheckUserPushPermissionFilter extends AbstractFogwallFilter {
         String pushUsername = userPass != null ? userPass[0] : null;
         String pushToken = userPass != null ? userPass[1] : null;
 
-        Optional<UserEntry> resolved = identityResolver.resolve(requestDetails.getProvider(), pushUsername, pushToken);
+        Optional<ResolvedScmIdentity> resolved =
+                identityResolver.resolveIdentity(requestDetails.getProvider(), pushUsername, pushToken);
 
         if (resolved.isEmpty()) {
             String identity = pushUsername != null ? pushUsername : "(unknown)";
@@ -108,7 +110,8 @@ public class CheckUserPushPermissionFilter extends AbstractFogwallFilter {
             return;
         }
 
-        UserEntry user = resolved.get();
+        UserEntry user = resolved.get().user();
+        String tokenScmLogin = resolved.get().scmLogin();
         String providerId = requestDetails.getProvider() != null
                 ? requestDetails.getProvider().getProviderId()
                 : null;
@@ -147,15 +150,22 @@ public class CheckUserPushPermissionFilter extends AbstractFogwallFilter {
             var identities = user.getScmIdentities().stream()
                     .filter(id -> requestDetails.getProvider().getProviderId().equalsIgnoreCase(id.getProvider()));
             if (identityMode == ScmOAuthConfig.IdentityMode.STRICT) {
+                // Strict mode admits the account the token belongs to only if OAuth linking proved that account. A
+                // verified sibling identity, or a user matched by email, does not vouch for it.
                 identities = identities.filter(ScmIdentity::isVerified);
+                if (tokenScmLogin != null) {
+                    identities = identities.filter(id -> tokenScmLogin.equalsIgnoreCase(id.getUsername()));
+                }
             }
-            Optional<String> scmUsername =
+            Optional<String> identityOnFile =
                     identities.map(ScmIdentity::getUsername).findFirst();
-            if (scmUsername.isEmpty() && identityMode == ScmOAuthConfig.IdentityMode.STRICT) {
-                blockUnverifiedIdentity(request, response, user);
+            if (identityOnFile.isEmpty() && identityMode == ScmOAuthConfig.IdentityMode.STRICT) {
+                blockUnverifiedIdentity(request, response, user, tokenScmLogin);
                 return;
             }
-            scmUsername.ifPresent(requestDetails::setScmUsername);
+            // The record names the account the token belongs to. Identities on file only say which accounts the user
+            // has linked, and a user may hold several on one provider.
+            Optional.ofNullable(tokenScmLogin).or(() -> identityOnFile).ifPresent(requestDetails::setScmUsername);
         }
     }
 
@@ -165,11 +175,14 @@ public class CheckUserPushPermissionFilter extends AbstractFogwallFilter {
      * <p>Mirrors the server-mode hook. Without this the setting applied to one proxy mode only, and a user could skip
      * it by pushing to {@code /proxy/…} instead of {@code /server/…} for the same provider.
      */
-    private void blockUnverifiedIdentity(HttpServletRequest request, HttpServletResponse response, UserEntry user)
+    private void blockUnverifiedIdentity(
+            HttpServletRequest request, HttpServletResponse response, UserEntry user, String tokenScmLogin)
             throws IOException {
         log.warn(
-                "User '{}' has no OAuth-verified SCM identity — push denied (strict identity mode)",
-                user.getUsername());
+                "User '{}' has no OAuth-verified SCM identity for token account '{}' — push denied (strict identity"
+                        + " mode)",
+                user.getUsername(),
+                tokenScmLogin);
         String serviceUrl = (String) request.getAttribute(SERVICE_URL_ATTR);
         String profileHint = serviceUrl != null
                 ? "Link your account via OAuth at:\n  " + sym(LINK) + "  " + serviceUrl + "/dashboard/profile"

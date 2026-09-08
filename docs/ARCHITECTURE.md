@@ -452,6 +452,9 @@ When a developer pushes with `Authorization: Basic <token>`, the proxy:
 1. Calls the provider API with the token to get the developer's SCM username.
 2. Looks up a proxy user whose `scmIdentities` has a matching `(provider, scmUsername)` entry.
 3. Uses the resolved `UserEntry` for permission checks and author attribution.
+4. Records that SCM login on the push record, so the audit trail names the account the token belongs to. A user may hold
+   several identities on one provider, and the match may have been made on email, in which case no identity on file
+   carries the login at all.
 
 Resolution results are cached in the database (7-day TTL by default).
 

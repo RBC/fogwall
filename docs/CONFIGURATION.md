@@ -900,9 +900,11 @@ re-enter data the provider already has confirmed.
 scm-oauth:
   # permissive (default): any linked SCM identity is usable for push authorization, verified or not — today's
   # behaviour, unchanged.
-  # strict: only OAuth-verified identities count, on both HTTP and SSH push paths. On SSH this also means the
-  # connecting key must be one OAuth linking imported — a key added by hand on the profile page no longer resolves
-  # an SCM identity, even if the provider would confirm it is registered there.
+  # strict: only OAuth-verified identities count, on both HTTP and SSH push paths. On HTTP the account the token
+  # belongs to must itself be one OAuth verified — a verified identity on the same provider does not vouch for a
+  # hand-typed sibling, or for a user matched by email. On SSH the connecting key must be one OAuth linking
+  # imported — a key added by hand on the profile page no longer resolves an SCM identity, even if the provider
+  # would confirm it is registered there.
   identity-mode: permissive
 
   # Path to a file holding a base64-encoded 32-byte AES-256-GCM key, used to encrypt linked OAuth tokens at rest.

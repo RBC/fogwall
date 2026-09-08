@@ -11,6 +11,7 @@ import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.GitHubProvider;
 import com.rbc.fogwall.service.PushIdentityResolver;
+import com.rbc.fogwall.service.ResolvedScmIdentity;
 import com.rbc.fogwall.user.ScmIdentity;
 import com.rbc.fogwall.user.UserEntry;
 import jakarta.servlet.ReadListener;
@@ -132,6 +133,18 @@ class CheckUserPushPermissionFilterTest {
                 .build();
     }
 
+    private static Optional<ResolvedScmIdentity> resolvedAs(UserEntry user, String scmLogin) {
+        return Optional.of(new ResolvedScmIdentity(user, scmLogin));
+    }
+
+    private static ScmIdentity identity(String provider, String scmUsername, boolean verified) {
+        return ScmIdentity.builder()
+                .provider(provider)
+                .username(scmUsername)
+                .verified(verified)
+                .build();
+    }
+
     // ---- null requestDetails → no-op ----
 
     @Test
@@ -170,7 +183,7 @@ class CheckUserPushPermissionFilterTest {
     @Test
     void resolverReturnsEmpty_blocks() throws Exception {
         GitRequestDetails details = pushDetails();
-        when(resolver.resolve(any(FogwallProvider.class), eq("ghost"), eq("tok")))
+        when(resolver.resolveIdentity(any(FogwallProvider.class), eq("ghost"), eq("tok")))
                 .thenReturn(Optional.empty());
         FakeResponse resp = new FakeResponse();
 
@@ -187,8 +200,8 @@ class CheckUserPushPermissionFilterTest {
     @Test
     void resolvedButNotAuthorized_blocks() throws Exception {
         GitRequestDetails details = pushDetails();
-        when(resolver.resolve(any(FogwallProvider.class), eq("corp"), eq("tok")))
-                .thenReturn(Optional.of(userEntry("alice")));
+        when(resolver.resolveIdentity(any(FogwallProvider.class), eq("corp"), eq("tok")))
+                .thenReturn(resolvedAs(userEntry("alice"), "alice-gh"));
         when(permService.isAllowedToPush(eq("alice"), anyString(), anyString())).thenReturn(false);
         FakeResponse resp = new FakeResponse();
 
@@ -204,8 +217,8 @@ class CheckUserPushPermissionFilterTest {
     @Test
     void resolvedAndAuthorized_passes() throws Exception {
         GitRequestDetails details = pushDetails();
-        when(resolver.resolve(any(FogwallProvider.class), eq("corp"), eq("tok")))
-                .thenReturn(Optional.of(userEntry("alice")));
+        when(resolver.resolveIdentity(any(FogwallProvider.class), eq("corp"), eq("tok")))
+                .thenReturn(resolvedAs(userEntry("alice"), "alice-gh"));
         when(permService.isAllowedToPush(eq("alice"), anyString(), anyString())).thenReturn(true);
         FakeResponse resp = new FakeResponse();
 
@@ -221,12 +234,13 @@ class CheckUserPushPermissionFilterTest {
     @Test
     void noAuthHeader_resolverCalledWithNullUsername() throws Exception {
         GitRequestDetails details = pushDetails();
-        when(resolver.resolve(any(FogwallProvider.class), isNull(), isNull())).thenReturn(Optional.empty());
+        when(resolver.resolveIdentity(any(FogwallProvider.class), isNull(), isNull()))
+                .thenReturn(Optional.empty());
         FakeResponse resp = new FakeResponse();
 
         new CheckUserPushPermissionFilter(resolver, permService).doHttpFilter(mockRequest(details, null), resp.mock);
 
-        verify(resolver).resolve(any(FogwallProvider.class), isNull(), isNull());
+        verify(resolver).resolveIdentity(any(FogwallProvider.class), isNull(), isNull());
         assertTrue(resp.committed.get());
     }
 
@@ -237,14 +251,15 @@ class CheckUserPushPermissionFilterTest {
         GitRequestDetails details = pushDetails();
         FogwallProvider github = new GitHubProvider("/proxy");
         details.setProvider(github);
-        when(resolver.resolve(eq(github), eq("corp"), eq("tok"))).thenReturn(Optional.of(userEntry("alice")));
+        when(resolver.resolveIdentity(eq(github), eq("corp"), eq("tok")))
+                .thenReturn(resolvedAs(userEntry("alice"), "alice-gh"));
         when(permService.isAllowedToPush(eq("alice"), anyString(), anyString())).thenReturn(true);
         FakeResponse resp = new FakeResponse();
 
         new CheckUserPushPermissionFilter(resolver, permService)
                 .doHttpFilter(mockRequest(details, basicAuth("corp", "tok")), resp.mock);
 
-        verify(resolver).resolve(eq(github), eq("corp"), eq("tok"));
+        verify(resolver).resolveIdentity(eq(github), eq("corp"), eq("tok"));
         assertFalse(resp.committed.get());
     }
 
@@ -255,15 +270,15 @@ class CheckUserPushPermissionFilterTest {
         // GitHub PATs can contain colons; only the first colon is the user:pass separator
         String tokenWithColon = "ghp_abc:xyz";
         GitRequestDetails details = pushDetails();
-        when(resolver.resolve(any(FogwallProvider.class), eq("user"), eq(tokenWithColon)))
-                .thenReturn(Optional.of(userEntry("user")));
+        when(resolver.resolveIdentity(any(FogwallProvider.class), eq("user"), eq(tokenWithColon)))
+                .thenReturn(resolvedAs(userEntry("user"), "user-gh"));
         when(permService.isAllowedToPush(anyString(), anyString(), anyString())).thenReturn(true);
         FakeResponse resp = new FakeResponse();
 
         new CheckUserPushPermissionFilter(resolver, permService)
                 .doHttpFilter(mockRequest(details, basicAuth("user", tokenWithColon)), resp.mock);
 
-        verify(resolver).resolve(any(FogwallProvider.class), eq("user"), eq(tokenWithColon));
+        verify(resolver).resolveIdentity(any(FogwallProvider.class), eq("user"), eq(tokenWithColon));
         assertFalse(resp.committed.get());
     }
 
@@ -273,11 +288,7 @@ class CheckUserPushPermissionFilterTest {
         return UserEntry.builder()
                 .username(username)
                 .emails(List.of())
-                .scmIdentities(List.of(ScmIdentity.builder()
-                        .provider(provider)
-                        .username(scmUsername)
-                        .verified(verified)
-                        .build()))
+                .scmIdentities(List.of(identity(provider, scmUsername, verified)))
                 .build();
     }
 
@@ -290,8 +301,8 @@ class CheckUserPushPermissionFilterTest {
         // Without this the setting applied to server mode only, and pushing to /proxy/… skipped it entirely.
         GitRequestDetails details = pushDetails();
         UserEntry alice = userWithIdentity("alice", "github", "alice-gh", false);
-        when(resolver.resolve(any(FogwallProvider.class), eq("alice"), eq("token")))
-                .thenReturn(Optional.of(alice));
+        when(resolver.resolveIdentity(any(FogwallProvider.class), eq("alice"), eq("token")))
+                .thenReturn(resolvedAs(alice, "alice-gh"));
         when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(true);
         var resp = new FakeResponse();
 
@@ -305,8 +316,8 @@ class CheckUserPushPermissionFilterTest {
     void strictMode_verifiedIdentity_allows() throws Exception {
         GitRequestDetails details = pushDetails();
         UserEntry alice = userWithIdentity("alice", "github", "alice-gh", true);
-        when(resolver.resolve(any(FogwallProvider.class), eq("alice"), eq("token")))
-                .thenReturn(Optional.of(alice));
+        when(resolver.resolveIdentity(any(FogwallProvider.class), eq("alice"), eq("token")))
+                .thenReturn(resolvedAs(alice, "alice-gh"));
         when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(true);
         var resp = new FakeResponse();
 
@@ -321,8 +332,8 @@ class CheckUserPushPermissionFilterTest {
     void permissiveMode_unverifiedIdentity_stillAllows() throws Exception {
         GitRequestDetails details = pushDetails();
         UserEntry alice = userWithIdentity("alice", "github", "alice-gh", false);
-        when(resolver.resolve(any(FogwallProvider.class), eq("alice"), eq("token")))
-                .thenReturn(Optional.of(alice));
+        when(resolver.resolveIdentity(any(FogwallProvider.class), eq("alice"), eq("token")))
+                .thenReturn(resolvedAs(alice, "alice-gh"));
         when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(true);
         var resp = new FakeResponse();
 
@@ -330,6 +341,96 @@ class CheckUserPushPermissionFilterTest {
                 .doHttpFilter(mockRequest(details, basicAuth("alice", "token")), resp.mock);
 
         assertNotEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+        assertEquals("alice-gh", details.getScmUsername());
+    }
+
+    // ---- push record names the account the token belongs to ----
+
+    @Test
+    void recordsTokenLogin_notTheFirstIdentityOnFile() throws Exception {
+        GitRequestDetails details = pushDetails();
+        UserEntry alice = UserEntry.builder()
+                .username("alice")
+                .emails(List.of())
+                .scmIdentities(
+                        List.of(identity("github", "alice-personal", true), identity("github", "alice-gh", true)))
+                .build();
+        when(resolver.resolveIdentity(any(FogwallProvider.class), eq("alice"), eq("token")))
+                .thenReturn(resolvedAs(alice, "alice-gh"));
+        when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(true);
+        var resp = new FakeResponse();
+
+        new CheckUserPushPermissionFilter(resolver, permService)
+                .doHttpFilter(mockRequest(details, basicAuth("alice", "token")), resp.mock);
+
+        assertEquals("alice-gh", details.getScmUsername());
+    }
+
+    @Test
+    void recordsTokenLogin_whenNoIdentityOnFileCarriesIt() throws Exception {
+        // The email fallback resolves a user whose identities say nothing about the account the token belongs to.
+        GitRequestDetails details = pushDetails();
+        when(resolver.resolveIdentity(any(FogwallProvider.class), eq("alice"), eq("token")))
+                .thenReturn(resolvedAs(userEntry("alice"), "alice-gh"));
+        when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(true);
+        var resp = new FakeResponse();
+
+        new CheckUserPushPermissionFilter(resolver, permService)
+                .doHttpFilter(mockRequest(details, basicAuth("alice", "token")), resp.mock);
+
+        assertEquals("alice-gh", details.getScmUsername());
+    }
+
+    @Test
+    void strictMode_tokenForUnverifiedSibling_blocks() throws Exception {
+        // A verified identity on the same provider does not vouch for a hand-typed one the token actually belongs to.
+        GitRequestDetails details = pushDetails();
+        UserEntry alice = UserEntry.builder()
+                .username("alice")
+                .emails(List.of())
+                .scmIdentities(
+                        List.of(identity("github", "alice-personal", true), identity("github", "alice-gh", false)))
+                .build();
+        when(resolver.resolveIdentity(any(FogwallProvider.class), eq("alice"), eq("token")))
+                .thenReturn(resolvedAs(alice, "alice-gh"));
+        when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(true);
+        var resp = new FakeResponse();
+
+        new CheckUserPushPermissionFilter(resolver, permService, strict())
+                .doHttpFilter(mockRequest(details, basicAuth("alice", "token")), resp.mock);
+
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+        assertNull(details.getScmUsername());
+    }
+
+    @Test
+    void strictMode_tokenForAccountNotOnFile_blocks() throws Exception {
+        // The email fallback found the user, but nothing OAuth wrote names the account the token belongs to.
+        GitRequestDetails details = pushDetails();
+        UserEntry alice = userWithIdentity("alice", "github", "alice-personal", true);
+        when(resolver.resolveIdentity(any(FogwallProvider.class), eq("alice"), eq("token")))
+                .thenReturn(resolvedAs(alice, "alice-gh"));
+        when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(true);
+        var resp = new FakeResponse();
+
+        new CheckUserPushPermissionFilter(resolver, permService, strict())
+                .doHttpFilter(mockRequest(details, basicAuth("alice", "token")), resp.mock);
+
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+    }
+
+    @Test
+    void resolverWithoutLogin_recordsIdentityOnFile() throws Exception {
+        GitRequestDetails details = pushDetails();
+        UserEntry alice = userWithIdentity("alice", "github", "alice-gh", true);
+        when(resolver.resolveIdentity(any(FogwallProvider.class), eq("alice"), eq("token")))
+                .thenReturn(resolvedAs(alice, null));
+        when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(true);
+        var resp = new FakeResponse();
+
+        new CheckUserPushPermissionFilter(resolver, permService)
+                .doHttpFilter(mockRequest(details, basicAuth("alice", "token")), resp.mock);
+
         assertEquals("alice-gh", details.getScmUsername());
     }
 }
