@@ -36,4 +36,12 @@ public class ProposalsProviderSettings {
      * start failing for reasons unrelated to policy.
      */
     private boolean requireKnownCli = false;
+
+    /**
+     * Refuse a proposal whose head commit fogwall has no push record for. Default {@code false}.
+     *
+     * <p>Breaks legitimately on a rebase, amend, force-push, or a commit authored in the SCM's own web UI — none of
+     * those change the code, only the SHA that identifies it, so this is opt-in rather than a default posture.
+     */
+    private boolean requireValidatedHead = false;
 }
