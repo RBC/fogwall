@@ -71,6 +71,13 @@ test.describe('per-user permissions', () => {
         grant: 'SELF_CERTIFY',
         badge: /self.?certify/i,
       },
+      {
+        provider: 'github',
+        path: `/pw-${stamp}/propose`,
+        matchType: 'LITERAL',
+        grant: 'PROPOSE',
+        badge: /propose/i,
+      },
     ]
     for (const c of cases) {
       await addPermission(page, c)

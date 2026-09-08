@@ -5,6 +5,7 @@ import {
   createGroup,
   deleteGroup,
   deleteGroupPermission,
+  fetchConfig,
   fetchGroup,
   fetchGroups,
   fetchProviders,
@@ -48,6 +49,7 @@ export function Groups() {
   const [ruleValue, setRuleValue] = useState('')
   const [ruleMatchType, setRuleMatchType] = useState('GLOB')
   const [ruleGrant, setRuleGrant] = useState('PUSH')
+  const [proposalsEnabled, setProposalsEnabled] = useState(false)
   const [ruleError, setRuleError] = useState<string | null>(null)
 
   const refreshGroups = () =>
@@ -76,6 +78,9 @@ export function Groups() {
         setProviders(data)
         if (data.length > 0) setRuleProvider(data[0].id)
       })
+      .catch(() => {})
+    fetchConfig()
+      .then((c) => setProposalsEnabled(c.proposalsEnabled))
       .catch(() => {})
     fetchUsers()
       .then((data: UserSummary[]) => setUsers(data))
@@ -461,6 +466,7 @@ export function Groups() {
                       <option value="REVIEW">Review</option>
                       <option value="PUSH_AND_REVIEW">Push and review</option>
                       <option value="SELF_CERTIFY">Self-certify</option>
+                      {proposalsEnabled && <option value="PROPOSE">Propose</option>}
                     </select>
                     <button
                       onClick={handleAddRule}
