@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
 import com.rbc.fogwall.scmapi.HeadCommitValidator;
+import com.rbc.fogwall.scmapi.JsonBodyField;
 import com.rbc.fogwall.servlet.ScmApiRequestContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ReadListener;
@@ -29,7 +30,7 @@ class ScmApiHeadValidationFilterTest {
     private ScmApiHeadValidationFilter filter(boolean requireValidatedHead, Optional<String> resolvedSha) {
         return new ScmApiHeadValidationFilter(
                 CREATE_OP,
-                body -> com.rbc.fogwall.scmapi.JsonBodyField.stringField(body, "head"),
+                body -> JsonBodyField.stringField(body, "head"),
                 (req, ctx, headRef) -> resolvedSha,
                 headCommitValidator,
                 requireValidatedHead);
