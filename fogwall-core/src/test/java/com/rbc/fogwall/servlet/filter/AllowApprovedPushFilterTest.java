@@ -3,12 +3,16 @@ package com.rbc.fogwall.servlet.filter;
 import static com.rbc.fogwall.servlet.FogwallServlet.GIT_REQUEST_ATTR;
 import static com.rbc.fogwall.servlet.FogwallServlet.PRE_APPROVED_ATTR;
 import static com.rbc.fogwall.servlet.FogwallServlet.SERVICE_URL_ATTR;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
 
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.PushStoreFactory;
 import com.rbc.fogwall.db.model.Attestation;
+import com.rbc.fogwall.db.model.PushQuery;
 import com.rbc.fogwall.db.model.PushRecord;
+import com.rbc.fogwall.db.model.PushStatus;
 import com.rbc.fogwall.git.Commit;
 import com.rbc.fogwall.git.Contributor;
 import com.rbc.fogwall.git.GitRequestDetails;
@@ -273,5 +277,100 @@ class AllowApprovedPushFilterTest {
         filter.doHttpFilter(req, resp);
 
         verify(store, never()).find(any());
+    }
+
+    // ── Supersede ──────────────────────────────────────────────────────────────
+
+    @Test
+    void newPushToSameBranch_cancelsOlderPendingRecord() throws Exception {
+        PushStore store = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
+        PushRecord pending = PushRecord.builder()
+                .commitTo("oldsha")
+                .branch("refs/heads/main")
+                .provider("github")
+                .project("owner")
+                .repoName("my-repo")
+                .status(PushStatus.PENDING)
+                .build();
+        store.save(pending);
+
+        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080");
+        GitRequestDetails details = pushDetailsFor("newsha", "refs/heads/main", "my-repo");
+        HttpServletRequest req = mockPushRequest(details);
+
+        filter.doHttpFilter(req, mock(HttpServletResponse.class));
+
+        PushRecord reloaded = store.findById(pending.getId()).orElseThrow();
+        assertEquals(PushStatus.CANCELED, reloaded.getStatus());
+        assertTrue(
+                reloaded.getAttestation().getReason().contains(details.getId().toString()));
+    }
+
+    @Test
+    void newPushToDifferentBranch_doesNotCancelPendingRecord() throws Exception {
+        PushStore store = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
+        PushRecord pending = PushRecord.builder()
+                .commitTo("oldsha")
+                .branch("refs/heads/other")
+                .provider("github")
+                .project("owner")
+                .repoName("my-repo")
+                .status(PushStatus.PENDING)
+                .build();
+        store.save(pending);
+
+        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080");
+        GitRequestDetails details = pushDetailsFor("newsha", "refs/heads/main", "my-repo");
+        HttpServletRequest req = mockPushRequest(details);
+
+        filter.doHttpFilter(req, mock(HttpServletResponse.class));
+
+        PushRecord reloaded = store.findById(pending.getId()).orElseThrow();
+        assertEquals(PushStatus.PENDING, reloaded.getStatus());
+    }
+
+    @Test
+    void newPushToSameBranch_doesNotCancelApprovedRecord() throws Exception {
+        PushStore store = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
+        PushRecord approved = PushRecord.builder()
+                .commitTo("oldsha")
+                .branch("refs/heads/main")
+                .provider("github")
+                .project("owner")
+                .repoName("my-repo")
+                .build();
+        store.save(approved);
+        store.approve(
+                approved.getId(),
+                Attestation.builder()
+                        .pushId(approved.getId())
+                        .type(Attestation.Type.APPROVAL)
+                        .reviewerUsername("admin")
+                        .build());
+
+        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080");
+        GitRequestDetails details = pushDetailsFor("newsha", "refs/heads/main", "my-repo");
+        HttpServletRequest req = mockPushRequest(details);
+
+        filter.doHttpFilter(req, mock(HttpServletResponse.class));
+
+        PushRecord reloaded = store.findById(approved.getId()).orElseThrow();
+        assertEquals(PushStatus.APPROVED, reloaded.getStatus());
+    }
+
+    @Test
+    void noPendingRecordForBranch_findIsStillScoped() throws Exception {
+        PushStore store = mock(PushStore.class);
+        when(store.find(any())).thenReturn(java.util.List.of());
+        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080");
+        GitRequestDetails details = pushDetailsFor("newsha", "refs/heads/main", "my-repo");
+        HttpServletRequest req = mockPushRequest(details);
+
+        filter.doHttpFilter(req, mock(HttpServletResponse.class));
+
+        verify(store)
+                .find(argThat((PushQuery q) ->
+                        q.getStatus() == PushStatus.PENDING && "refs/heads/main".equals(q.getBranch())));
+        verify(store, never()).cancel(any(), any());
     }
 }

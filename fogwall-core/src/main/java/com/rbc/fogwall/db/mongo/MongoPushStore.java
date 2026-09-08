@@ -93,6 +93,9 @@ public class MongoPushStore implements PushStore {
         if (query.getCommitTo() != null) {
             filters.add(Filters.eq("commitTo", query.getCommitTo()));
         }
+        if (query.getOlderThan() != null) {
+            filters.add(Filters.lt("timestamp", Date.from(query.getOlderThan())));
+        }
         if (query.getSearch() != null && !query.getSearch().isBlank()) {
             String pattern = "(?i).*" + Pattern.quote(query.getSearch()) + ".*";
             filters.add(Filters.or(

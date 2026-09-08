@@ -6,6 +6,8 @@ import static com.rbc.fogwall.servlet.FogwallServlet.PRE_APPROVED_ATTR;
 import static com.rbc.fogwall.servlet.FogwallServlet.SERVICE_URL_ATTR;
 
 import com.rbc.fogwall.db.PushStore;
+import com.rbc.fogwall.db.model.Attestation;
+import com.rbc.fogwall.db.model.Attestation.Type;
 import com.rbc.fogwall.db.model.PushQuery;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
@@ -26,6 +28,8 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>For PUSH operations, checks whether a prior approved record exists for the same {@code commitTo} + branch +
  *       repo (transparent-proxy re-push flow). If found, sets the {@code fogwall.preApproved} attribute to
  *       short-circuit remaining validation filters.
+ *   <li>For PUSH operations, cancels any other still-PENDING record for the same branch + repo: the developer has moved
+ *       on to a new push, so the earlier one queued for review is moot.
  * </ol>
  *
  * <p>Runs at order 50 (authorization range) - after {@code ParseGitRequestFilter} (which populates
@@ -100,6 +104,37 @@ public class AllowApprovedPushFilter extends AbstractFogwallFilter {
             // Store the original push ID so fogwallServlet can update its status to FORWARDED/ERROR
             // via the async response callbacks after the upstream responds.
             request.setAttribute(APPROVED_PUSH_ID_ATTR, approvedId);
+        }
+
+        supersedeStalePendingPushes(details, branch, provider, owner, repoName);
+    }
+
+    /**
+     * Cancels any other PENDING record for this branch: this push means the developer has moved past whatever earlier
+     * commit was queued for review on it. Not scoped to {@code commitTo} — the point is to catch a <em>different</em>,
+     * older commit on the same branch, not a re-push of the same one.
+     */
+    private void supersedeStalePendingPushes(
+            GitRequestDetails details, String branch, String provider, String owner, String repoName) {
+        List<PushRecord> stalePending = pushStore.find(PushQuery.builder()
+                .branch(branch)
+                .provider(provider)
+                .project(owner)
+                .repoName(repoName)
+                .status(PushStatus.PENDING)
+                .build());
+
+        String newPushId = details.getId().toString();
+        for (PushRecord stale : stalePending) {
+            log.info("Push {} superseded by new push {} to the same branch", stale.getId(), newPushId);
+            pushStore.cancel(
+                    stale.getId(),
+                    Attestation.builder()
+                            .pushId(stale.getId())
+                            .type(Type.CANCELLATION)
+                            .automated(true)
+                            .reason("Superseded by push " + newPushId)
+                            .build());
         }
     }
 }

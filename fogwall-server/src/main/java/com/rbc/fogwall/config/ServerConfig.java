@@ -42,6 +42,16 @@ public class ServerConfig {
     private int approvalTimeoutSeconds = 1800;
 
     /**
+     * Age in days after which an unreviewed PENDING record in transparent proxy mode is canceled as timed out.
+     * Unrelated to {@link #approvalTimeoutSeconds}: that bounds a server-mode connection held open synchronously during
+     * the wait, while a proxy-mode PENDING record has no held connection and would otherwise sit forever until a human
+     * acts on it or a new push to the same branch supersedes it. Canceling is a state change, not a deletion — the
+     * record and its history stay visible to reviewers. Defaults to 30 days, long enough that a review still genuinely
+     * in progress is never swept.
+     */
+    private int pendingPushExpiryDays = 30;
+
+    /**
      * When {@code true}, the validation pipeline stops after the first failed check rather than collecting all issues.
      * The developer sees only the first problem per push. Defaults to {@code false} (collect all issues).
      */
