@@ -68,7 +68,8 @@ jobs:
         with:
           distribution: temurin
           java-version: 25
-          cache: gradle
+
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # ratchet:gradle/actions/setup-gradle@v6
 
       - name: Generate SBOM
         run: ./gradlew cyclonedxBom -PskipFrontend
