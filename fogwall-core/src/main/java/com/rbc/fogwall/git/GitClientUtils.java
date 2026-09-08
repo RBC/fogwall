@@ -238,7 +238,9 @@ public class GitClientUtils {
         // Pure data / infrastructure steps that don't represent a user-visible check
         Set<String> skipSteps = Set.of("diff", "diff:default-branch", "forward", "inspection", "commitEnrichment");
 
-        // Human-readable label for each step name (header line)
+        // Human-readable label for each step name (header line). Every step's internal stepName (used for
+        // ordering/lookup/tests) needs an entry here and in passResults below — a step missing from both silently
+        // falls back to printing its raw internal name to the git client instead of failing the build.
         Map<String, String> labels = new HashMap<>(Map.ofEntries(
                 Map.entry("checkUrlRules", "Checking URL allow rules"),
                 Map.entry("checkUserPermission", "Checking user permission"),
@@ -246,6 +248,7 @@ public class GitClientUtils {
                 Map.entry("checkEmptyBranch", "Checking branch"),
                 Map.entry("checkHiddenCommits", "Checking for hidden commits"),
                 Map.entry("checkAuthorEmails", "Checking author emails"),
+                Map.entry("checkTrailers", "Checking Co-Authored-By/Signed-off-by trailers"),
                 Map.entry("checkCommitMessages", "Checking commit messages"),
                 Map.entry("scanContentPatternsMessages", "Scanning commit messages for PII/identifiers"),
                 Map.entry("scanDiff", "Scanning diff content"),
@@ -262,6 +265,7 @@ public class GitClientUtils {
                 Map.entry("checkEmptyBranch", "branch OK"),
                 Map.entry("checkHiddenCommits", "no hidden commits"),
                 Map.entry("checkAuthorEmails", "emails OK"),
+                Map.entry("checkTrailers", "trailers OK"),
                 Map.entry("checkCommitMessages", "messages OK"),
                 Map.entry("scanContentPatternsMessages", "no PII/identifiers detected"),
                 Map.entry("scanDiff", "clean"),
