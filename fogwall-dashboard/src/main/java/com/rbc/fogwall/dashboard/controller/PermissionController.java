@@ -1,5 +1,6 @@
 package com.rbc.fogwall.dashboard.controller;
 
+import com.rbc.fogwall.dashboard.audit.AdminAuditLog;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
 import com.rbc.fogwall.permission.GroupPermissionStore;
@@ -25,6 +26,8 @@ public class PermissionController {
     private final RepoPermissionService permissionService;
 
     private final ReadOnlyUserStore userStore;
+
+    private final AdminAuditLog auditLog;
 
     @Operation(operationId = "listUserPermissions", summary = "List permissions for a user")
     @GetMapping
@@ -88,14 +91,14 @@ public class PermissionController {
         var conflict = permissionService.findConflict(permission);
         if (conflict.isPresent()) {
             var c = conflict.get();
-            return ResponseEntity.badRequest()
-                    .body(Map.of(
-                            "error",
-                            String.format(
-                                    "Conflicts with existing permission: value '%s' (%s/%s)",
-                                    c.getValue(), c.getTarget(), c.getMatchType())));
+            String reason = String.format(
+                    "Conflicts with existing permission: value '%s' (%s/%s)",
+                    c.getValue(), c.getTarget(), c.getMatchType());
+            auditLog.denied("permission.grant", "user:" + username, reason);
+            return ResponseEntity.badRequest().body(Map.of("error", reason));
         }
         permissionService.save(permission);
+        auditLog.success("permission.grant", "user:" + username, "value=" + permission.getValue() + " grant=" + grant);
         return ResponseEntity.status(HttpStatus.CREATED).body(permission);
     }
 
@@ -110,14 +113,17 @@ public class PermissionController {
             return ResponseEntity.notFound().build();
         }
         if (!username.equals(existing.get().getUsername())) {
+            auditLog.denied("permission.revoke", "user:" + username, "permission does not belong to this user");
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("error", "Permission does not belong to this user"));
         }
         if (existing.get().getSource() == RepoPermission.Source.CONFIG) {
+            auditLog.denied("permission.revoke", "user:" + username, "config-defined permission");
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("error", "Cannot delete config-defined permissions"));
         }
         permissionService.delete(id);
+        auditLog.success("permission.revoke", "user:" + username, "permissionId=" + id);
         return ResponseEntity.noContent().build();
     }
 

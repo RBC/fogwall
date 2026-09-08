@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+import com.rbc.fogwall.dashboard.audit.AdminAuditLog;
 import com.rbc.fogwall.db.model.MatchType;
 import com.rbc.fogwall.permission.GroupPermissionRule;
 import com.rbc.fogwall.permission.GroupPermissionStore;
@@ -36,6 +37,9 @@ class GroupControllerTest {
 
     @Mock
     GroupPermissionStore groupStore;
+
+    @Mock
+    AdminAuditLog auditLog;
 
     private static final PermissionGroup DB_GROUP = PermissionGroup.builder()
             .name("devs")

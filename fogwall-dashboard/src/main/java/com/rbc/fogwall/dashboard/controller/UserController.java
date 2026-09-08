@@ -1,5 +1,6 @@
 package com.rbc.fogwall.dashboard.controller;
 
+import com.rbc.fogwall.dashboard.audit.AdminAuditLog;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.model.PushQuery;
 import com.rbc.fogwall.user.EmailConflictException;
@@ -30,6 +31,8 @@ public class UserController {
     private final PushStore pushStore;
 
     private final PasswordEncoder passwordEncoder;
+
+    private final AdminAuditLog auditLog;
 
     @Operation(
             operationId = "listUsers",
@@ -72,8 +75,10 @@ public class UserController {
             if (req.email() != null && !req.email().isBlank()) {
                 jdbc.addEmail(req.username(), req.email());
             }
+            auditLog.success("user.create", "user:" + req.username());
             return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("username", req.username()));
         } catch (IllegalArgumentException e) {
+            auditLog.denied("user.create", "user:" + req.username(), e.getMessage());
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
         }
     }
@@ -95,6 +100,7 @@ public class UserController {
             return ResponseEntity.badRequest().body(Map.of("error", "username is required"));
         }
         jdbc.upsertUser(req.username());
+        auditLog.success("user.provision", "user:" + req.username());
         return ResponseEntity.ok(Map.of("username", req.username()));
     }
 
@@ -114,11 +120,13 @@ public class UserController {
                     .filter(u -> u.getRoles().contains("ADMIN"))
                     .count();
             if (adminCount <= 1) {
+                auditLog.denied("user.delete", "user:" + username, "last admin user");
                 return ResponseEntity.status(HttpStatus.CONFLICT)
                         .body(Map.of("error", "Cannot delete the last admin user"));
             }
         }
         jdbc.deleteUser(username);
+        auditLog.success("user.delete", "user:" + username);
         return ResponseEntity.noContent().build();
     }
 
@@ -134,6 +142,7 @@ public class UserController {
         }
         try {
             jdbc.setPassword(username, passwordEncoder.encode(req.password()));
+            auditLog.success("user.password_reset", "user:" + username);
             return ResponseEntity.ok(Map.of("username", username));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();
@@ -156,10 +165,13 @@ public class UserController {
         try {
             mutable.addEmail(username, req.email());
         } catch (LockedByConfigException e) {
+            auditLog.denied("user.email.add", "user:" + username, e.getMessage());
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
         } catch (EmailConflictException e) {
+            auditLog.denied("user.email.add", "user:" + username, e.getMessage());
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
         }
+        auditLog.success("user.email.add", "user:" + username, "email=" + req.email());
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("email", req.email()));
     }
 
@@ -176,10 +188,12 @@ public class UserController {
         try {
             mutable.removeEmail(username, email);
         } catch (LockedByConfigException e) {
+            auditLog.denied("user.email.remove", "user:" + username, e.getMessage());
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
+        auditLog.success("user.email.remove", "user:" + username, "email=" + email);
         return ResponseEntity.noContent().build();
     }
 
@@ -202,10 +216,16 @@ public class UserController {
         try {
             mutable.addScmIdentity(username, req.provider(), req.scmUsername());
         } catch (LockedByConfigException e) {
+            auditLog.denied("user.identity.add", "user:" + username, e.getMessage());
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
         } catch (ScmIdentityConflictException e) {
+            auditLog.denied("user.identity.add", "user:" + username, e.getMessage());
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
         }
+        auditLog.success(
+                "user.identity.add",
+                "user:" + username,
+                "provider=" + req.provider() + " scmUsername=" + req.scmUsername());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(Map.of("provider", req.provider(), "scmUsername", req.scmUsername()));
     }
@@ -224,8 +244,11 @@ public class UserController {
         try {
             mutable.removeScmIdentity(username, provider, scmUsername);
         } catch (LockedByConfigException e) {
+            auditLog.denied("user.identity.remove", "user:" + username, e.getMessage());
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
         }
+        auditLog.success(
+                "user.identity.remove", "user:" + username, "provider=" + provider + " scmUsername=" + scmUsername);
         return ResponseEntity.noContent().build();
     }
 

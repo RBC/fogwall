@@ -1,5 +1,6 @@
 package com.rbc.fogwall.dashboard.controller;
 
+import com.rbc.fogwall.dashboard.audit.AdminAuditLog;
 import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.git.LocalRepositoryCache.CacheEntrySummary;
 import com.rbc.fogwall.git.LocalRepositoryCache.RefInfo;
@@ -8,11 +9,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -36,19 +34,21 @@ import org.springframework.web.bind.annotation.RestController;
  * mutating call is logged with the acting admin's login for auditability.
  */
 @Tag(name = "Admin", description = "Administrative operations — requires ROLE_ADMIN")
-@Slf4j
 @RestController
 @RequestMapping("/api/admin/cache")
 public class AdminCacheController {
 
     private final LocalRepositoryCache serverCache;
     private final LocalRepositoryCache proxyCache;
+    private final AdminAuditLog auditLog;
 
     public AdminCacheController(
             @Qualifier("serverCache") LocalRepositoryCache serverCache,
-            @Qualifier("proxyCache") LocalRepositoryCache proxyCache) {
+            @Qualifier("proxyCache") LocalRepositoryCache proxyCache,
+            AdminAuditLog auditLog) {
         this.serverCache = serverCache;
         this.proxyCache = proxyCache;
+        this.auditLog = auditLog;
     }
 
     @Operation(
@@ -87,12 +87,7 @@ public class AdminCacheController {
             return ResponseEntity.badRequest().build();
         }
         boolean removed = cache.removeByKey(key);
-        log.info(
-                "Local mirror cache entry invalidated by login={}: mode={} key={} removed={}",
-                login(),
-                mode,
-                key,
-                removed);
+        auditLog.success("cache.invalidate", "cache:" + mode + ":" + key, "removed=" + removed);
         return ResponseEntity.ok(Map.of("removed", removed));
     }
 
@@ -107,7 +102,7 @@ public class AdminCacheController {
             return ResponseEntity.badRequest().build();
         }
         int count = cache.invalidateAll();
-        log.info("Local mirror cache fully invalidated by login={}: mode={} count={}", login(), mode, count);
+        auditLog.success("cache.invalidate_all", "cache:" + mode, "count=" + count);
         return ResponseEntity.ok(Map.of("invalidated", count));
     }
 
@@ -118,11 +113,5 @@ public class AdminCacheController {
             case "proxy" -> proxyCache;
             default -> null;
         };
-    }
-
-    /** The acting admin's login for audit logging, or {@code "unknown"} when unauthenticated. */
-    private static String login() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        return auth != null ? auth.getName() : "unknown";
     }
 }

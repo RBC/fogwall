@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.rbc.fogwall.dashboard.audit.AdminAuditLog;
 import com.rbc.fogwall.db.FetchStore;
 import com.rbc.fogwall.db.FetchStore.RepoFetchSummary;
 import com.rbc.fogwall.db.PushStore;
@@ -42,6 +43,9 @@ class RepoControllerTest {
 
     @Mock
     ProviderRegistry providerSource;
+
+    @Mock
+    AdminAuditLog auditLog;
 
     // ── GET /api/repos/rules ──────────────────────────────────────────────────────
 

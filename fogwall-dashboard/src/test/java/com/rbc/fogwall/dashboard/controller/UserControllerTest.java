@@ -7,6 +7,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.rbc.fogwall.dashboard.audit.AdminAuditLog;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.user.LockedByConfigException;
 import com.rbc.fogwall.user.ScmIdentityConflictException;
@@ -36,6 +37,9 @@ class UserControllerTest {
 
     @Mock
     PasswordEncoder passwordEncoder;
+
+    @Mock
+    AdminAuditLog auditLog;
 
     private static final UserEntry ALICE = UserEntry.builder()
             .username("alice")
