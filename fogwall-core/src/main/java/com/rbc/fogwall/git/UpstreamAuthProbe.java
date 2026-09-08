@@ -68,6 +68,7 @@ public class UpstreamAuthProbe {
             return cached.requiresAuth();
         }
         boolean requiresAuth = probe(upstreamRepoUrl);
+        cache.entrySet().removeIf(e -> isExpired(e.getValue()));
         cache.put(upstreamRepoUrl, new Verdict(requiresAuth, System.currentTimeMillis()));
         return requiresAuth;
     }

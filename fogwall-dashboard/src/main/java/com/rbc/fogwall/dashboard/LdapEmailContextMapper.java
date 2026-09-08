@@ -8,7 +8,7 @@ import org.springframework.security.ldap.userdetails.LdapUserDetailsMapper;
 
 /**
  * Extends the default LDAP user-details mapper to capture the {@code mail} attribute from the directory entry. When
- * present, wraps the result in {@link LdapUserDetailsWithEmail} so that {@link IdpLoginListener} can lock that email
+ * present, wraps the result in {@link LdapUserDetailsWithEmail} so that {@link SecurityConfig} can lock that email
  * address to the user's profile on login.
  *
  * <p>Requires the {@link org.springframework.security.ldap.authentication.BindAuthenticator} to be configured with

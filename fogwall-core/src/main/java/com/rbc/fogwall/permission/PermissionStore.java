@@ -3,7 +3,7 @@ package com.rbc.fogwall.permission;
 import java.util.List;
 import java.util.Optional;
 
-public interface PermissionStore<T extends FogwallPermission> {
+public interface PermissionStore<T> {
     /** Called once at startup; implementations may use this to create schema or seed data. */
     default void initialize() {}
 
