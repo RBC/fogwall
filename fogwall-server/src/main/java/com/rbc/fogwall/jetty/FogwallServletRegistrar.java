@@ -707,6 +707,55 @@ public final class FogwallServletRegistrar {
 
         // Build the orderable filter list. Sorted by getOrder() before registration so the Jetty chain
         // execution order matches the documented order ranges in fogwallFilter.
+        List<FogwallFilter> filters = buildCoreFilters(
+                provider,
+                repositoryCache,
+                configBuilder,
+                commitConfigSupplier,
+                diffScanConfigSupplier,
+                secretScanConfigSupplier,
+                binaryBlobConfigSupplier,
+                contentPatternConfig,
+                pushStore,
+                serviceUrl,
+                approvalGateway,
+                pushIdentityResolver,
+                repoPermissionService,
+                fetchStore,
+                urlRuleRegistry,
+                scmOAuthConfig);
+
+        for (FogwallFilter filter : filters) {
+            var holder = new FilterHolder(filter);
+            holder.setAsyncSupported(true);
+            context.addFilter(holder, urlPattern, EnumSet.of(DispatcherType.REQUEST));
+        }
+
+        log.info("Registered {} proxy filters for provider {}", filters.size(), provider.getName());
+    }
+
+    /**
+     * Builds and orders the core proxy validation filter roster, before any Jetty registration. Public so a test can
+     * compare this roster against the server-mode hook roster without reflecting into the registered
+     * {@link ServletContextHandler}.
+     */
+    public static List<FogwallFilter> buildCoreFilters(
+            FogwallProvider provider,
+            LocalRepositoryCache repositoryCache,
+            JettyConfigurationBuilder configBuilder,
+            Supplier<CommitConfig> commitConfigSupplier,
+            Supplier<DiffScanConfig> diffScanConfigSupplier,
+            Supplier<SecretScanConfig> secretScanConfigSupplier,
+            Supplier<BinaryBlobConfig> binaryBlobConfigSupplier,
+            ContentPatternConfig contentPatternConfig,
+            PushStore pushStore,
+            String serviceUrl,
+            ApprovalGateway approvalGateway,
+            PushIdentityResolver pushIdentityResolver,
+            RepoPermissionService repoPermissionService,
+            FetchStore fetchStore,
+            UrlRuleRegistry urlRuleRegistry,
+            ScmOAuthConfig scmOAuthConfig) {
         List<FogwallFilter> filters = new ArrayList<>();
         filters.add(new ParseGitRequestFilter(provider, configBuilder.getMaxPushBytes()));
         filters.add(new EnrichPushCommitsFilter(provider, repositoryCache, configBuilder.getMaxObjectSizeBytes()));
@@ -744,13 +793,6 @@ public final class FogwallServletRegistrar {
         }
 
         filters.sort(Comparator.comparingInt(FogwallFilter::getOrder));
-
-        for (FogwallFilter filter : filters) {
-            var holder = new FilterHolder(filter);
-            holder.setAsyncSupported(true);
-            context.addFilter(holder, urlPattern, EnumSet.of(DispatcherType.REQUEST));
-        }
-
-        log.info("Registered {} proxy filters for provider {}", filters.size(), provider.getName());
+        return filters;
     }
 }
