@@ -357,45 +357,8 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
         SecretScanConfig secretScanConfig = secretScanConfigSupplier.get();
         BinaryBlobConfig binaryBlobConfig = binaryBlobConfigSupplier.get();
 
-        SshScmLoginResolver sshLoginResolver = scmOAuthConfig.getIdentityMode() == ScmOAuthConfig.IdentityMode.STRICT
-                ? new ImportedKeyIdentityResolver()
-                : SshScmLoginResolver.firstOf(sshScmIdentityEnricher, new ImportedKeyIdentityResolver());
-        var permissionHook = new CheckUserPushPermissionHook(
-                pushIdentityResolver,
-                repoPermissionService,
-                validationContext,
-                pushContext,
-                provider,
-                serviceUrl,
-                sshLoginResolver,
-                scmOAuthConfig.getIdentityMode());
-
-        var attributionPolicyHook = new CommitAttributionPolicyHook(
-                pushIdentityResolver, commitConfig.getAttributionPolicy(), validationContext, pushContext, provider);
-
-        // Build and sort the orderable validation hook list
-        List<FogwallHook> validationHooks = new ArrayList<>(List.of(
-                new RepositoryUrlRuleHook(urlRuleRegistry, provider, validationContext, pushContext),
-                permissionHook,
-                attributionPolicyHook,
-                new CheckEmptyBranchHook(pushContext),
-                new CheckHiddenCommitsHook(pushContext),
-                new AuthorEmailValidationHook(commitConfig, validationContext, pushContext),
-                new TrailerPolicyValidationHook(commitConfig, validationContext, pushContext),
-                new CommitMessageValidationHook(commitConfig, validationContext, pushContext),
-                new ContentPatternCommitMessageHook(contentPatternConfig, pushContext),
-                new ProxyPreReceiveHook(pushContext),
-                new DiffGenerationHook(validationContext, pushContext),
-                new BinaryBlobDetectionHook(binaryBlobConfig, validationContext, pushContext),
-                new DiffScanningHook(diffScanConfig, validationContext, pushContext),
-                new GpgSignatureHook(gpgConfig, validationContext, pushContext),
-                new SecretScanningHook(secretScanConfig, validationContext, pushContext),
-                new ContentPatternDiffHook(contentPatternConfig, pushContext)));
-        if (provider instanceof BitbucketProvider bitbucketProvider) {
-            validationHooks.add(new BitbucketCredentialRewriteHook(bitbucketProvider, pushContext));
-        }
-        validationHooks.add(new PriorPushEnrichmentHook(pushStore, pushContext));
-        validationHooks.sort(Comparator.comparingInt(FogwallHook::getOrder));
+        List<FogwallHook> validationHooks = buildValidationHooks(
+                commitConfig, diffScanConfig, secretScanConfig, binaryBlobConfig, validationContext, pushContext);
 
         List<PreReceiveHook> hooks = new ArrayList<>(validationHooks);
         hooks.add(persistenceHook.validationResultHook(validationContext));
@@ -430,6 +393,58 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
         log.debug("Created ReceivePack for {} with {} auth", provider.getName(), creds != null ? "credentials" : "no");
 
         return rp;
+    }
+
+    /**
+     * Builds and orders the roster of validation hooks for one push. Public so a test can compare this roster against
+     * the transparent-proxy filter roster without reflecting into the assembled {@link ReceivePack}.
+     */
+    public List<FogwallHook> buildValidationHooks(
+            CommitConfig commitConfig,
+            DiffScanConfig diffScanConfig,
+            SecretScanConfig secretScanConfig,
+            BinaryBlobConfig binaryBlobConfig,
+            ValidationContext validationContext,
+            PushContext pushContext) {
+        SshScmLoginResolver sshLoginResolver = scmOAuthConfig.getIdentityMode() == ScmOAuthConfig.IdentityMode.STRICT
+                ? new ImportedKeyIdentityResolver()
+                : SshScmLoginResolver.firstOf(sshScmIdentityEnricher, new ImportedKeyIdentityResolver());
+        var permissionHook = new CheckUserPushPermissionHook(
+                pushIdentityResolver,
+                repoPermissionService,
+                validationContext,
+                pushContext,
+                provider,
+                serviceUrl,
+                sshLoginResolver,
+                scmOAuthConfig.getIdentityMode());
+
+        var attributionPolicyHook = new CommitAttributionPolicyHook(
+                pushIdentityResolver, commitConfig.getAttributionPolicy(), validationContext, pushContext, provider);
+
+        List<FogwallHook> validationHooks = new ArrayList<>(List.of(
+                new RepositoryUrlRuleHook(urlRuleRegistry, provider, validationContext, pushContext),
+                permissionHook,
+                attributionPolicyHook,
+                new CheckEmptyBranchHook(pushContext),
+                new CheckHiddenCommitsHook(pushContext),
+                new AuthorEmailValidationHook(commitConfig, validationContext, pushContext),
+                new TrailerPolicyValidationHook(commitConfig, validationContext, pushContext),
+                new CommitMessageValidationHook(commitConfig, validationContext, pushContext),
+                new ContentPatternCommitMessageHook(contentPatternConfig, pushContext),
+                new ProxyPreReceiveHook(pushContext),
+                new DiffGenerationHook(validationContext, pushContext),
+                new BinaryBlobDetectionHook(binaryBlobConfig, validationContext, pushContext),
+                new DiffScanningHook(diffScanConfig, validationContext, pushContext),
+                new GpgSignatureHook(gpgConfig, validationContext, pushContext),
+                new SecretScanningHook(secretScanConfig, validationContext, pushContext),
+                new ContentPatternDiffHook(contentPatternConfig, pushContext)));
+        if (provider instanceof BitbucketProvider bitbucketProvider) {
+            validationHooks.add(new BitbucketCredentialRewriteHook(bitbucketProvider, pushContext));
+        }
+        validationHooks.add(new PriorPushEnrichmentHook(pushStore, pushContext));
+        validationHooks.sort(Comparator.comparingInt(FogwallHook::getOrder));
+        return validationHooks;
     }
 
     private static PreReceiveHook chainPreReceiveHooks(
