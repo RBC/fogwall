@@ -129,6 +129,8 @@ export async function fetchConfig(): Promise<{
   scmOAuthProviders: ScmOAuthProviderInfo[]
   scmOAuthLinkAvailable: boolean
   scmIdentityMode: string
+  /** Whether any provider has proposals enabled; the PROPOSE grant is offered only when one does. */
+  proposalsEnabled: boolean
 }> {
   const res = await fetch('/api/runtime-config')
   if (!res.ok) throw new Error('Failed to fetch config')

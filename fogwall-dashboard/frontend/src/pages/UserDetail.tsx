@@ -6,6 +6,7 @@ import {
   addUserPermission,
   deleteUser,
   deleteUserPermission,
+  fetchConfig,
   fetchProviders,
   fetchPushes,
   fetchUser,
@@ -595,7 +596,15 @@ function AddPermissionModal({
   const [error, setError] = useState<string | null>(null)
   const [regexError, setRegexError] = useState<string | null>(null)
 
+  const [proposalsEnabled, setProposalsEnabled] = useState(false)
+
   const requireReviewPermission = providers.length > 0 && providers[0].requireReviewPermission
+
+  useEffect(() => {
+    fetchConfig()
+      .then((c) => setProposalsEnabled(c.proposalsEnabled))
+      .catch(console.error)
+  }, [])
 
   function handlePathChange(value: string) {
     setPath(value)
@@ -716,6 +725,7 @@ function AddPermissionModal({
               <option value="PUSH">Push only</option>
               {requireReviewPermission && <option value="REVIEW">Review only</option>}
               <option value="SELF_CERTIFY">Self-certify</option>
+              {proposalsEnabled && <option value="PROPOSE">Propose</option>}
             </select>
           </div>
           {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
@@ -741,6 +751,7 @@ function TestPermissionModal({ username, onClose }: { username: string; onClose:
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<PermissionTestResponse | null>(null)
+  const [proposalsEnabled, setProposalsEnabled] = useState(false)
 
   useEffect(() => {
     fetchProviders()
@@ -748,6 +759,9 @@ function TestPermissionModal({ username, onClose }: { username: string; onClose:
         setProviders(list)
         if (list.length > 0) setProvider(list[0].id)
       })
+      .catch(console.error)
+    fetchConfig()
+      .then((c) => setProposalsEnabled(c.proposalsEnabled))
       .catch(console.error)
   }, [])
 
@@ -819,6 +833,7 @@ function TestPermissionModal({ username, onClose }: { username: string; onClose:
             >
               <option value="PUSH">Push</option>
               <option value="REVIEW">Review</option>
+              {proposalsEnabled && <option value="PROPOSE">Propose</option>}
             </select>
           </div>
         </div>

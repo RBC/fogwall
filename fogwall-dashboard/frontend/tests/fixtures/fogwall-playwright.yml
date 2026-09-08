@@ -36,6 +36,10 @@ providers:
     enabled: true
     ssh:
       enabled: true
+    # Makes the PROPOSE grant selectable in the permission forms; nothing in the suite talks to the listener.
+    proposals:
+      enabled: true
+      port: 8481
     oauth:
       enabled: true
       client-id: playwright-placeholder-client-id # replaced by env override during capture; never used on replay

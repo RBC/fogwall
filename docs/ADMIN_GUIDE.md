@@ -227,6 +227,7 @@ permissions:
 | `REVIEW`          | User can approve or reject pushes to this repo submitted by others                                                                                                                                                                                          |
 | `PUSH_AND_REVIEW` | Shorthand for both PUSH and REVIEW                                                                                                                                                                                                                          |
 | `SELF_CERTIFY`    | Per-repo entitlement: this user may self-approve pushes to this repo. Requires `ROLE_SELF_CERTIFY` (the capability role) to also be present — see [Dashboard roles](#dashboard-roles). Does **not** imply PUSH or REVIEW; grant those separately if needed. |
+| `PROPOSE`         | User can open and edit pull/merge requests and issues on this repo through the [SCM API proxy](#proposals). Independent of PUSH and REVIEW; implies neither.                                                                                                |
 
 ### SELF_CERTIFY — for solo contributors
 
