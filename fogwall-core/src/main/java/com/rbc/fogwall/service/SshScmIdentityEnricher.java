@@ -150,6 +150,7 @@ public class SshScmIdentityEnricher implements SshScmLoginResolver {
         if (!result.isEmpty()) {
             // Normalise to a sorted set so storage order from the SCM API doesn't affect equality
             Set<String> normalised = Set.copyOf(new TreeSet<>(result));
+            memCache.entrySet().removeIf(e -> e.getValue().isExpired(ttlMs));
             memCache.put(key, new CacheEntry(normalised, System.currentTimeMillis()));
             if (persistentCache != null) {
                 persistentCache.store(providerId, login, normalised);

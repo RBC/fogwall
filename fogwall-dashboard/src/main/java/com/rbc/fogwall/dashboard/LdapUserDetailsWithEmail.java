@@ -5,7 +5,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 
 /**
  * Thin {@link UserDetails} wrapper that carries the LDAP {@code mail} attribute alongside the standard Spring Security
- * fields. Produced by {@link LdapEmailContextMapper} and consumed by {@link IdpLoginListener} to discover the email to
+ * fields. Produced by {@link LdapEmailContextMapper} and consumed by {@link SecurityConfig} to discover the email to
  * lock against the user record.
  */
 class LdapUserDetailsWithEmail extends User {

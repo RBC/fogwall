@@ -20,7 +20,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-public class RepoPermission implements FogwallPermission {
+public class RepoPermission {
 
     @Builder.Default
     private String id = UUID.randomUUID().toString();
