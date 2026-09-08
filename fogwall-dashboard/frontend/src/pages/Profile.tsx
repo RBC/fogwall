@@ -269,7 +269,11 @@ export function Profile() {
         (p) =>
           p && { ...p, scmIdentities: p.scmIdentities.filter((id) => id.provider !== provider) },
       )
-      setSshKeys((prev) => prev.filter((k) => k.source !== provider))
+      // Refetch rather than filter: a key several providers vouch for survives one unlink, and the label
+      // ("github, gitlab") does not equal the provider being removed. The server decides what is left.
+      await fetchMySshKeys()
+        .then((keys: SshKeyEntry[]) => setSshKeys(keys))
+        .catch(() => {})
     } catch (err: unknown) {
       setIdentityError(err instanceof Error ? err.message : 'Failed to unlink OAuth account')
     }
@@ -501,6 +505,14 @@ export function Profile() {
             with <code className="text-xs bg-gray-100 dark:bg-slate-700 px-1 rounded">ssh -A</code>.
             Your key fingerprint is looked up on push to identify you.
           </p>
+
+          {profile?.strictIdentityMode && (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
+              This deployment identifies a push only by keys imported when you link an account. A
+              key you add here can fetch, but pushing with it will be refused &mdash; link the
+              account on the Identities tab to push.
+            </p>
+          )}
 
           {sshKeys.length === 0 ? (
             <p className="text-sm text-gray-400 italic dark:text-gray-500">

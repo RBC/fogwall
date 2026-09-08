@@ -191,8 +191,7 @@ public class JettyConfigurationBuilder {
                     buildDiffScanConfig(),
                     buildSecretScanConfig(),
                     buildBinaryBlobConfig(),
-                    buildAttestations(config),
-                    buildScmOAuthConfig());
+                    buildAttestations(config));
         }
         return cachedConfigHolder;
     }
@@ -715,6 +714,11 @@ public class JettyConfigurationBuilder {
      *   <li>{@code servicenow} — delegates to a ServiceNow approval workflow
      * </ul>
      */
+    /** The configured {@code server.approval-mode}, so a distribution can refuse a mode it cannot serve. */
+    public String getServerApprovalMode() {
+        return config.getServer().getApprovalMode();
+    }
+
     public ApprovalGateway buildApprovalGateway(PushStore pushStore) {
         String mode = config.getServer().getApprovalMode();
         return switch (mode) {

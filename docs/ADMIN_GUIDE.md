@@ -957,6 +957,17 @@ This runs `FogwallJettyApplication` — the git validation and forwarding pipeli
 Spring, no React/Node build step, no REST API. It uses the same config override mechanism as the dashboard image (mount
 a `fogwall-{profile}.yml` at `/app/conf/`, set `FOGWALL_CONFIG_PROFILES`) and exposes the same port 8080.
 
+A push's lifecycle here is automated checks and nothing else: decisions are recorded to the database, but there is no
+review step, because there is nothing to review with. Two settings therefore **fail startup** on this image rather than
+being accepted and then never satisfied:
+
+| Setting                           | Why it cannot work here                                                              |
+| --------------------------------- | ------------------------------------------------------------------------------------ |
+| `server.approval-mode: ui`        | A held push waits for a decision over the REST API, which this image does not serve. |
+| `scm-oauth.identity-mode: strict` | Only OAuth-verified identities count, and account linking is a dashboard flow.       |
+
+Pick the dashboard image if you want either. The two are alternatives, not halves of one deployment.
+
 ```bash
 docker run -e FOGWALL_CONFIG_PROFILES=docker-default \
   -v ./docker/fogwall-docker-default.yml:/app/conf/fogwall-docker-default.yml:ro \
@@ -973,6 +984,16 @@ GET /api/health   → 200 OK with status payload when the server is up
 
 The standalone server module (`fogwall-server`) does not expose a health endpoint — use a TCP check against the proxy
 port instead.
+
+### Imported SSH keys and revocation
+
+Linking an account imports the SSH keys registered on it, marked as coming from that provider. In
+`scm-oauth.identity-mode: strict` those imported keys are the only ones that resolve an SCM identity for an SSH push.
+
+fogwall does not poll providers to notice a key removed upstream, and does not need to: a push is forwarded with the
+client's own SSH agent, so a key revoked on the SCM fails there whatever fogwall still holds. Fetches re-sync from
+upstream with that same agent, and fogwall grants no fetch permission of its own. A user who wants their imported keys
+re-read unlinks and re-links the account, which imports them again.
 
 ### Identifying which build is running
 
@@ -1596,10 +1617,25 @@ identity. Possible causes:
 
 ### SSH push rejected: SSH identity verification not supported by provider
 
-The provider used for this push does not implement SSH fingerprint lookup (e.g. `type: generic`). The SSH path is
-fail-closed — pushes are blocked unless the provider can verify the connecting key against the SCM user's registered
-keys. Switch to a supported provider type (`forgejo`, `gitlab`, or `github`). Opt-in fail-open behaviour for unsupported
-providers is planned as a follow-up feature.
+The provider used for this push does not implement SSH fingerprint lookup (e.g. `type: generic`), **and** the connecting
+key is not one that OAuth linking imported. The SSH path is fail-closed — pushes are blocked unless the connecting key
+can be tied to an SCM account one way or the other. Either switch to a supported provider type (`forgejo`, `gitlab`, or
+`github`), or have the user link their account so their keys are imported with it. Opt-in fail-open behaviour for
+unsupported providers is planned as a follow-up feature.
+
+### SSH push rejected in strict mode for a key the user has linked
+
+A public SSH key can only be registered to one fogwall user. If someone else's account already holds the fingerprint —
+anyone can paste any public key into their own profile — the import at link time skips that key and logs:
+
+```
+Skipping SSH key from '<provider>' for user '<user>': fingerprint already registered to a different proxy user ('<owner>')
+```
+
+The link itself succeeds, so nothing tells the user their key was left out. In `scm-oauth.identity-mode: strict` the
+result is a refused SSH push for the key's actual owner, since only imported keys resolve an identity there. Remove the
+key from the account holding it — Users → the other account → SSH Keys — and have the owner unlink and link again to
+re-import.
 
 ### Push blocked or warned: commit email mismatch
 

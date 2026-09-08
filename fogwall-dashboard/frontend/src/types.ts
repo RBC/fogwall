@@ -212,6 +212,8 @@ export interface CurrentUser {
   emails: EmailEntry[]
   scmIdentities: ScmIdentity[]
   authorities: string[]
+  /** When true, only SSH keys imported by OAuth linking can identify a push. */
+  strictIdentityMode?: boolean
 }
 
 export interface UserSummary {

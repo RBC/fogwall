@@ -1,5 +1,6 @@
 package com.rbc.fogwall.dashboard.controller;
 
+import com.rbc.fogwall.config.ScmOAuthConfig;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
 import com.rbc.fogwall.user.UserEntry;
@@ -26,6 +27,8 @@ public class AuthController {
     private final ReadOnlyUserStore userStore;
 
     private final RepoPermissionService repoPermissionService;
+
+    private final ScmOAuthConfig scmOAuthConfig;
 
     /**
      * Returns the currently authenticated user's full profile: username, emails (with verified flag), SCM identities,
@@ -74,6 +77,8 @@ public class AuthController {
                 "emails", emails,
                 "scmIdentities", scmIdentities,
                 "authorities", authorities,
-                "permissions", permissions);
+                "permissions", permissions,
+                // Lets the profile page say what a hand-added SSH key can and cannot do here.
+                "strictIdentityMode", scmOAuthConfig.getIdentityMode() == ScmOAuthConfig.IdentityMode.STRICT);
     }
 }
