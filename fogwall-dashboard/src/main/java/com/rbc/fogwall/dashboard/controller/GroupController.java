@@ -1,5 +1,6 @@
 package com.rbc.fogwall.dashboard.controller;
 
+import com.rbc.fogwall.dashboard.audit.AdminAuditLog;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
 import com.rbc.fogwall.permission.GroupPermissionRule;
@@ -26,6 +27,8 @@ public class GroupController {
     private final RepoPermissionService permissionService;
 
     private final ReadOnlyUserStore userStore;
+
+    private final AdminAuditLog auditLog;
 
     private GroupPermissionStore groupStore() {
         return permissionService.getGroupStore();
@@ -64,6 +67,7 @@ public class GroupController {
                 .source(PermissionGroup.Source.DB)
                 .build();
         groupStore().saveGroup(group);
+        auditLog.success("group.create", "group:" + group.getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(group);
     }
 
@@ -88,6 +92,7 @@ public class GroupController {
         var existing = groupStore().findGroupById(id);
         if (existing.isEmpty()) return ResponseEntity.notFound().build();
         if (existing.get().getSource() == PermissionGroup.Source.CONFIG) {
+            auditLog.denied("group.update", "group:" + id, "config-defined group");
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("error", "Cannot modify config-defined groups"));
         }
@@ -103,6 +108,7 @@ public class GroupController {
                         id,
                         req.name().trim(),
                         req.description() != null ? req.description().trim() : null);
+        auditLog.success("group.update", "group:" + id);
         return groupStore()
                 .findGroupById(id)
                 .map(g -> ResponseEntity.ok(new GroupDetail(
@@ -121,10 +127,12 @@ public class GroupController {
         var existing = groupStore().findGroupById(id);
         if (existing.isEmpty()) return ResponseEntity.notFound().build();
         if (existing.get().getSource() == PermissionGroup.Source.CONFIG) {
+            auditLog.denied("group.delete", "group:" + id, "config-defined group");
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("error", "Cannot delete config-defined groups"));
         }
         groupStore().deleteGroup(id);
+        auditLog.success("group.delete", "group:" + id);
         return ResponseEntity.noContent().build();
     }
 
@@ -136,6 +144,7 @@ public class GroupController {
         var group = groupStore().findGroupById(id);
         if (group.isEmpty()) return ResponseEntity.notFound().build();
         if (group.get().getSource() == PermissionGroup.Source.CONFIG) {
+            auditLog.denied("group.member.add", "group:" + id, "config-defined group");
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("error", "Cannot modify members of config-defined groups"));
         }
@@ -150,6 +159,7 @@ public class GroupController {
             return ResponseEntity.badRequest().body(Map.of("error", "user already a member of this group"));
         }
         groupStore().addMember(id, req.username());
+        auditLog.success("group.member.add", "group:" + id, "user=" + req.username());
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("username", req.username()));
     }
 
@@ -159,10 +169,12 @@ public class GroupController {
         var group = groupStore().findGroupById(id);
         if (group.isEmpty()) return ResponseEntity.notFound().build();
         if (group.get().getSource() == PermissionGroup.Source.CONFIG) {
+            auditLog.denied("group.member.remove", "group:" + id, "config-defined group");
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("error", "Cannot modify members of config-defined groups"));
         }
         groupStore().removeMember(id, username);
+        auditLog.success("group.member.remove", "group:" + id, "user=" + username);
         return ResponseEntity.noContent().build();
     }
 
@@ -182,6 +194,7 @@ public class GroupController {
         var group = groupStore().findGroupById(id);
         if (group.isEmpty()) return ResponseEntity.notFound().build();
         if (group.get().getSource() == PermissionGroup.Source.CONFIG) {
+            auditLog.denied("group.rule.add", "group:" + id, "config-defined group");
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("error", "Cannot modify rules of config-defined groups"));
         }
@@ -225,6 +238,7 @@ public class GroupController {
                 .grant(grant)
                 .build();
         groupStore().saveRule(rule);
+        auditLog.success("group.rule.add", "group:" + id, "value=" + rule.getValue() + " grant=" + grant);
         return ResponseEntity.status(HttpStatus.CREATED).body(rule);
     }
 
@@ -234,6 +248,7 @@ public class GroupController {
         var group = groupStore().findGroupById(id);
         if (group.isEmpty()) return ResponseEntity.notFound().build();
         if (group.get().getSource() == PermissionGroup.Source.CONFIG) {
+            auditLog.denied("group.rule.delete", "group:" + id, "config-defined group");
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("error", "Cannot modify rules of config-defined groups"));
         }
@@ -244,6 +259,7 @@ public class GroupController {
                     .body(Map.of("error", "Rule does not belong to this group"));
         }
         groupStore().deleteRule(ruleId);
+        auditLog.success("group.rule.delete", "group:" + id, "ruleId=" + ruleId);
         return ResponseEntity.noContent().build();
     }
 

@@ -514,6 +514,22 @@ the proxy but fails forwarding to upstream.
 Logs each HTTP request and response made by Jetty's `ProxyServlet` to the upstream. Useful when the transparent proxy
 path (`/proxy/`) fails to reach the upstream.
 
+### Administrative action logging
+
+Every mutating dashboard REST endpoint — user create/delete/password reset/email and SCM identity changes, group
+create/delete/membership/rule changes, permission grants and revocations, access rule changes, cache invalidation —
+emits one `INFO`-level line to the application log:
+
+```
+admin_action actor=<login> action=<user.create|group.delete|permission.grant|...> target=<resource> outcome=<SUCCESS|DENIED> [detail=<...>]
+```
+
+`outcome=DENIED` covers refusals such as an admin trying to delete the last remaining admin account or modify a
+config-defined group. Password resets log that a reset happened, never the new value. Read endpoints are not logged.
+This is the operational history of who changed what through the dashboard; push and SCM API proposal records remain
+separately in the database as evidence about proxy traffic. Grep the application log for `admin_action` to filter this
+stream from everything else.
+
 ### Reading logs for a failed push
 
 Each push gets a `requestId` in the MDC (visible in the `[%X{requestId}]` field in the log pattern). To follow a single

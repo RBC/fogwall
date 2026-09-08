@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.rbc.fogwall.dashboard.audit.AdminAuditLog;
 import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.git.LocalRepositoryCache.CacheEntrySummary;
 import com.rbc.fogwall.git.LocalRepositoryCache.RefInfo;
@@ -27,11 +28,14 @@ class AdminCacheControllerTest {
     @Mock
     LocalRepositoryCache proxyCache;
 
+    @Mock
+    AdminAuditLog auditLog;
+
     AdminCacheController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new AdminCacheController(serverCache, proxyCache);
+        controller = new AdminCacheController(serverCache, proxyCache, auditLog);
     }
 
     private static CacheEntrySummary entry(String key, String url) {

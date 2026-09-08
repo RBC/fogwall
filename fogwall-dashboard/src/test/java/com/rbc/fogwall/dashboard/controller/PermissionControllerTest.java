@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.rbc.fogwall.dashboard.audit.AdminAuditLog;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
 import com.rbc.fogwall.permission.GroupPermissionRule;
@@ -37,6 +38,9 @@ class PermissionControllerTest {
 
     @Mock
     ReadOnlyUserStore userStore;
+
+    @Mock
+    AdminAuditLog auditLog;
 
     private static final UserEntry ALICE = UserEntry.builder()
             .username("alice")

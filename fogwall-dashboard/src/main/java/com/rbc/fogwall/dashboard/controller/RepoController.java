@@ -1,5 +1,6 @@
 package com.rbc.fogwall.dashboard.controller;
 
+import com.rbc.fogwall.dashboard.audit.AdminAuditLog;
 import com.rbc.fogwall.db.FetchStore;
 import com.rbc.fogwall.db.FetchStore.RepoFetchSummary;
 import com.rbc.fogwall.db.PushStore;
@@ -22,15 +23,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Repos", description = "Access control rules and repository traffic")
-@Slf4j
 @RestController
 @RequestMapping("/api/repos")
 @RequiredArgsConstructor
@@ -43,6 +40,8 @@ public class RepoController {
     private final PushStore pushStore;
 
     private final ProviderRegistry providerSource;
+
+    private final AdminAuditLog auditLog;
 
     @Operation(operationId = "listRules", summary = "List access control rules")
     @GetMapping("/rules")
@@ -68,9 +67,7 @@ public class RepoController {
         }
         rule.setSource(AccessRule.Source.DB);
         urlRuleRegistry.save(rule);
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        String login = auth != null ? auth.getName() : "unknown";
-        log.info("Access rule created by login={}: id={}", login, rule.getId());
+        auditLog.success("rule.create", "rule:" + rule.getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(rule);
     }
 
@@ -86,6 +83,7 @@ public class RepoController {
         }
         rule.setId(id);
         urlRuleRegistry.update(rule);
+        auditLog.success("rule.update", "rule:" + id);
         return ResponseEntity.ok(rule);
     }
 
@@ -178,9 +176,7 @@ public class RepoController {
             return ResponseEntity.notFound().build();
         }
         urlRuleRegistry.delete(id);
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        String login = auth != null ? auth.getName() : "unknown";
-        log.info("Access rule deleted by login={}: id={}", login, id);
+        auditLog.success("rule.delete", "rule:" + id);
         return ResponseEntity.noContent().build();
     }
 
