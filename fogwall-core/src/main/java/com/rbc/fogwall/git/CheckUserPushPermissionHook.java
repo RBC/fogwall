@@ -261,12 +261,18 @@ public class CheckUserPushPermissionHook implements FogwallHook {
             var httpScmIdentities = user.getScmIdentities().stream()
                     .filter(id -> provider.getProviderId().equalsIgnoreCase(id.getProvider()));
             if (identityMode == ScmOAuthConfig.IdentityMode.STRICT) {
+                // Strict mode admits the account the token belongs to only if OAuth linking proved that account. A
+                // verified sibling identity, or a user matched by email, does not vouch for it.
                 httpScmIdentities = httpScmIdentities.filter(ScmIdentity::isVerified);
+                if (tokenScmLogin != null) {
+                    httpScmIdentities =
+                            httpScmIdentities.filter(id -> tokenScmLogin.equalsIgnoreCase(id.getUsername()));
+                }
             }
             Optional<String> identityOnFile =
                     httpScmIdentities.map(ScmIdentity::getUsername).findFirst();
             if (identityOnFile.isEmpty() && identityMode == ScmOAuthConfig.IdentityMode.STRICT) {
-                blockUnverifiedIdentity(user);
+                blockUnverifiedIdentity(user, tokenScmLogin);
                 return;
             }
             // The record names the account the token belongs to. Identities on file only say which accounts the user
@@ -281,10 +287,12 @@ public class CheckUserPushPermissionHook implements FogwallHook {
     }
 
     /** Blocks the push in {@code scm-oauth.identity-mode: strict} when no OAuth-verified SCM identity is usable. */
-    private void blockUnverifiedIdentity(UserEntry user) {
+    private void blockUnverifiedIdentity(UserEntry user, String tokenScmLogin) {
         log.warn(
-                "User '{}' has no OAuth-verified SCM identity — push denied (strict identity mode)",
-                user.getUsername());
+                "User '{}' has no OAuth-verified SCM identity for token account '{}' — push denied (strict identity"
+                        + " mode)",
+                user.getUsername(),
+                tokenScmLogin);
         String profileHint = serviceUrl != null
                 ? "Link your account via OAuth at:\n  " + sym(LINK) + "  " + serviceUrl + "/dashboard/profile"
                 : "Ask an administrator to link your SCM account via OAuth.";

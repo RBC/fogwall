@@ -365,28 +365,31 @@ class CheckUserPushPermissionHookTest {
 
     // ---- push record names the account the token belongs to ----
 
+    private static UserEntry userEntryWithScmIdentities(String username, ScmIdentity... identities) {
+        return UserEntry.builder()
+                .username(username)
+                .emails(List.of())
+                .scmIdentities(List.of(identities))
+                .build();
+    }
+
+    private static ScmIdentity identity(String provider, String scmUsername, boolean verified) {
+        return ScmIdentity.builder()
+                .provider(provider)
+                .username(scmUsername)
+                .verified(verified)
+                .build();
+    }
+
     @Test
     void recordsTokenLogin_notTheFirstIdentityOnFile() throws Exception {
         FogwallProvider github = new GitHubProvider("/push");
-        UserEntry alice = UserEntry.builder()
-                .username("alice")
-                .emails(List.of())
-                .scmIdentities(List.of(
-                        ScmIdentity.builder()
-                                .provider("github")
-                                .username("alice-personal")
-                                .verified(true)
-                                .build(),
-                        ScmIdentity.builder()
-                                .provider("github")
-                                .username("alice-gh")
-                                .verified(true)
-                                .build()))
-                .build();
+        UserEntry alice = userEntryWithScmIdentities(
+                "alice", identity("github", "alice-personal", true), identity("github", "alice-gh", true));
         when(resolver.resolveIdentity(eq(github), eq("corp-user"), any())).thenReturn(resolvedAs(alice, "alice-gh"));
         when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(true);
 
-        PushContext pushContext = httpRun(github, ScmOAuthConfig.IdentityMode.PERMISSIVE);
+        PushContext pushContext = httpRun(github, ScmOAuthConfig.IdentityMode.PERMISSIVE, new ValidationContext());
 
         assertEquals("alice-gh", pushContext.getScmUsername());
     }
@@ -399,7 +402,7 @@ class CheckUserPushPermissionHookTest {
                 .thenReturn(resolvedAs(userEntry("alice"), "alice-gh"));
         when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(true);
 
-        PushContext pushContext = httpRun(github, ScmOAuthConfig.IdentityMode.PERMISSIVE);
+        PushContext pushContext = httpRun(github, ScmOAuthConfig.IdentityMode.PERMISSIVE, new ValidationContext());
 
         assertEquals("alice-gh", pushContext.getScmUsername());
     }
@@ -411,13 +414,63 @@ class CheckUserPushPermissionHookTest {
                 .thenReturn(resolvedAs(userEntryWithScmIdentity("alice", "github", "alice-gh", true), null));
         when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(true);
 
-        PushContext pushContext = httpRun(github, ScmOAuthConfig.IdentityMode.STRICT);
+        PushContext pushContext = httpRun(github, ScmOAuthConfig.IdentityMode.STRICT, new ValidationContext());
 
         assertEquals("alice-gh", pushContext.getScmUsername());
     }
 
+    // ---- strict identity mode — the token's account must itself be the verified one ----
+
+    @Test
+    void strictMode_tokenForUnverifiedSibling_blocksPush() throws Exception {
+        // A verified identity on the same provider does not vouch for a hand-typed one the token actually belongs to.
+        FogwallProvider github = new GitHubProvider("/push");
+        UserEntry alice = userEntryWithScmIdentities(
+                "alice", identity("github", "alice-personal", true), identity("github", "alice-gh", false));
+        when(resolver.resolveIdentity(eq(github), eq("corp-user"), any())).thenReturn(resolvedAs(alice, "alice-gh"));
+        when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(true);
+        ValidationContext validationContext = new ValidationContext();
+
+        PushContext pushContext = httpRun(github, ScmOAuthConfig.IdentityMode.STRICT, validationContext);
+
+        assertTrue(validationContext.hasIssues());
+        assertTrue(validationContext.getIssues().get(0).summary().contains("No OAuth-verified SCM identity"));
+        assertNull(pushContext.getScmUsername());
+    }
+
+    @Test
+    void strictMode_tokenForAccountNotOnFile_blocksPush() throws Exception {
+        // The email fallback found the user, but nothing OAuth wrote names the account the token belongs to.
+        FogwallProvider github = new GitHubProvider("/push");
+        UserEntry alice = userEntryWithScmIdentity("alice", "github", "alice-personal", true);
+        when(resolver.resolveIdentity(eq(github), eq("corp-user"), any())).thenReturn(resolvedAs(alice, "alice-gh"));
+        when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(true);
+        ValidationContext validationContext = new ValidationContext();
+
+        httpRun(github, ScmOAuthConfig.IdentityMode.STRICT, validationContext);
+
+        assertTrue(validationContext.hasIssues());
+        assertTrue(validationContext.getIssues().get(0).summary().contains("No OAuth-verified SCM identity"));
+    }
+
+    @Test
+    void strictMode_tokenLoginMatchesVerifiedIdentityCaseInsensitively_allowsPush() throws Exception {
+        FogwallProvider github = new GitHubProvider("/push");
+        UserEntry alice = userEntryWithScmIdentity("alice", "github", "Alice-GH", true);
+        when(resolver.resolveIdentity(eq(github), eq("corp-user"), any())).thenReturn(resolvedAs(alice, "alice-gh"));
+        when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(true);
+        ValidationContext validationContext = new ValidationContext();
+
+        PushContext pushContext = httpRun(github, ScmOAuthConfig.IdentityMode.STRICT, validationContext);
+
+        assertFalse(validationContext.hasIssues());
+        assertEquals("alice-gh", pushContext.getScmUsername());
+    }
+
     /** Runs one HTTP push through the hook as {@code corp-user} and returns the context it wrote to. */
-    private PushContext httpRun(FogwallProvider provider, ScmOAuthConfig.IdentityMode identityMode) throws Exception {
+    private PushContext httpRun(
+            FogwallProvider provider, ScmOAuthConfig.IdentityMode identityMode, ValidationContext validationContext)
+            throws Exception {
         RevCommit c1 = createCommit("init");
         RevCommit c2 = createCommit("second");
         ReceivePack rp = new ReceivePack(repo);
@@ -426,7 +479,7 @@ class CheckUserPushPermissionHookTest {
         pushContext.setPushUser("corp-user");
         pushContext.setRepoSlug("/owner/repo");
         new CheckUserPushPermissionHook(
-                        resolver, permService, new ValidationContext(), pushContext, provider, null, null, identityMode)
+                        resolver, permService, validationContext, pushContext, provider, null, null, identityMode)
                 .onPreReceive(rp, List.of(cmd));
         return pushContext;
     }

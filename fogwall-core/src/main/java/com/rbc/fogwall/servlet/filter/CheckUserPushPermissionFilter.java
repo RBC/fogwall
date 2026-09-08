@@ -150,12 +150,17 @@ public class CheckUserPushPermissionFilter extends AbstractFogwallFilter {
             var identities = user.getScmIdentities().stream()
                     .filter(id -> requestDetails.getProvider().getProviderId().equalsIgnoreCase(id.getProvider()));
             if (identityMode == ScmOAuthConfig.IdentityMode.STRICT) {
+                // Strict mode admits the account the token belongs to only if OAuth linking proved that account. A
+                // verified sibling identity, or a user matched by email, does not vouch for it.
                 identities = identities.filter(ScmIdentity::isVerified);
+                if (tokenScmLogin != null) {
+                    identities = identities.filter(id -> tokenScmLogin.equalsIgnoreCase(id.getUsername()));
+                }
             }
             Optional<String> identityOnFile =
                     identities.map(ScmIdentity::getUsername).findFirst();
             if (identityOnFile.isEmpty() && identityMode == ScmOAuthConfig.IdentityMode.STRICT) {
-                blockUnverifiedIdentity(request, response, user);
+                blockUnverifiedIdentity(request, response, user, tokenScmLogin);
                 return;
             }
             // The record names the account the token belongs to. Identities on file only say which accounts the user
@@ -170,11 +175,14 @@ public class CheckUserPushPermissionFilter extends AbstractFogwallFilter {
      * <p>Mirrors the server-mode hook. Without this the setting applied to one proxy mode only, and a user could skip
      * it by pushing to {@code /proxy/…} instead of {@code /server/…} for the same provider.
      */
-    private void blockUnverifiedIdentity(HttpServletRequest request, HttpServletResponse response, UserEntry user)
+    private void blockUnverifiedIdentity(
+            HttpServletRequest request, HttpServletResponse response, UserEntry user, String tokenScmLogin)
             throws IOException {
         log.warn(
-                "User '{}' has no OAuth-verified SCM identity — push denied (strict identity mode)",
-                user.getUsername());
+                "User '{}' has no OAuth-verified SCM identity for token account '{}' — push denied (strict identity"
+                        + " mode)",
+                user.getUsername(),
+                tokenScmLogin);
         String serviceUrl = (String) request.getAttribute(SERVICE_URL_ATTR);
         String profileHint = serviceUrl != null
                 ? "Link your account via OAuth at:\n  " + sym(LINK) + "  " + serviceUrl + "/dashboard/profile"

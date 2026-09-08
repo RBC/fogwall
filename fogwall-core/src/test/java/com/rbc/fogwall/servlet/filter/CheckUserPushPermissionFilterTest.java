@@ -382,6 +382,44 @@ class CheckUserPushPermissionFilterTest {
     }
 
     @Test
+    void strictMode_tokenForUnverifiedSibling_blocks() throws Exception {
+        // A verified identity on the same provider does not vouch for a hand-typed one the token actually belongs to.
+        GitRequestDetails details = pushDetails();
+        UserEntry alice = UserEntry.builder()
+                .username("alice")
+                .emails(List.of())
+                .scmIdentities(
+                        List.of(identity("github", "alice-personal", true), identity("github", "alice-gh", false)))
+                .build();
+        when(resolver.resolveIdentity(any(FogwallProvider.class), eq("alice"), eq("token")))
+                .thenReturn(resolvedAs(alice, "alice-gh"));
+        when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(true);
+        var resp = new FakeResponse();
+
+        new CheckUserPushPermissionFilter(resolver, permService, strict())
+                .doHttpFilter(mockRequest(details, basicAuth("alice", "token")), resp.mock);
+
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+        assertNull(details.getScmUsername());
+    }
+
+    @Test
+    void strictMode_tokenForAccountNotOnFile_blocks() throws Exception {
+        // The email fallback found the user, but nothing OAuth wrote names the account the token belongs to.
+        GitRequestDetails details = pushDetails();
+        UserEntry alice = userWithIdentity("alice", "github", "alice-personal", true);
+        when(resolver.resolveIdentity(any(FogwallProvider.class), eq("alice"), eq("token")))
+                .thenReturn(resolvedAs(alice, "alice-gh"));
+        when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(true);
+        var resp = new FakeResponse();
+
+        new CheckUserPushPermissionFilter(resolver, permService, strict())
+                .doHttpFilter(mockRequest(details, basicAuth("alice", "token")), resp.mock);
+
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+    }
+
+    @Test
     void resolverWithoutLogin_recordsIdentityOnFile() throws Exception {
         GitRequestDetails details = pushDetails();
         UserEntry alice = userWithIdentity("alice", "github", "alice-gh", true);
