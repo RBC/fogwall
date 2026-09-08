@@ -73,4 +73,10 @@ public class ScmApiActionRecord {
      * trail exists to catch are version-specific: "which releases" is a question for a column, not a text scan.
      */
     private String clientVersion;
+
+    /** The upstream's HTTP status for a forwarded mutation; null when nothing was forwarded. */
+    private Integer upstreamStatus;
+
+    /** {@link ScmApiProposalRecord} the mutation created or touched, when the upstream response named one. */
+    private String proposalId;
 }

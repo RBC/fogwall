@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchScmApiActions } from '../api'
 import { StatusBadge } from '../components/StatusBadge'
-import type { ScmApiActionRecord, ScmApiActionStatus, CurrentUser } from '../types'
+import type { ScmApiActionRecord, ScmApiActionStatus, ScmApiProposal, CurrentUser } from '../types'
 
 const PAGE_SIZE = 25
 const STATUSES: ScmApiActionStatus[] = ['FORWARDED', 'DENIED', 'REJECTED', 'ERROR']
@@ -13,6 +13,32 @@ function formatTime(ts: string | number | undefined) {
   } catch {
     return String(ts)
   }
+}
+
+const PROPOSAL_KIND: Record<ScmApiProposal['kind'], string> = {
+  PULL_REQUEST: 'PR',
+  ISSUE: 'Issue',
+}
+
+/**
+ * What the mutation created or touched: kind, number and link. Only the identity — a record describes one past event,
+ * and the proposal's current state and title belong to the registry, not to every row that ever touched it.
+ */
+function ProposalRef({ proposal }: { proposal: ScmApiProposal }) {
+  const label = `${PROPOSAL_KIND[proposal.kind]} #${proposal.number}`
+  return proposal.url ? (
+    <a
+      href={proposal.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+    >
+      {label}
+    </a>
+  ) : (
+    <span className="text-xs text-gray-700 dark:text-gray-300">{label}</span>
+  )
 }
 
 interface ScmApiActionListProps {
@@ -180,6 +206,11 @@ export function ScmApiActionList({ currentUser }: ScmApiActionListProps) {
                     ? `${action.repoOwner}/${action.repoName}`
                     : '—'}
                 </div>
+                {action.proposal && (
+                  <div className="truncate">
+                    <ProposalRef proposal={action.proposal} />
+                  </div>
+                )}
                 {action.reason && (
                   <div className="text-xs text-gray-400 truncate dark:text-gray-500">
                     {action.reason}
@@ -191,17 +222,37 @@ export function ScmApiActionList({ currentUser }: ScmApiActionListProps) {
                 <div className="text-xs text-gray-400 mt-0.5 dark:text-gray-500">
                   {formatTime(action.timestamp)}
                 </div>
+                {action.upstreamStatus !== undefined && action.upstreamStatus !== null && (
+                  <div className="text-xs text-gray-400 mt-0.5 dark:text-gray-500">
+                    upstream {action.upstreamStatus}
+                  </div>
+                )}
               </div>
             </div>
             {expandedId === action.id && (
               <div className="px-5 pb-4 space-y-1 text-xs text-gray-500 border-t border-gray-100 pt-3 dark:border-slate-700 dark:text-gray-400">
                 <div>id: {action.id}</div>
-                <div>nodeId: {action.nodeId ?? '—'}</div>
-                <div>nodeType: {action.nodeType ?? '—'}</div>
+                {/* GitHub addresses a mutation's target by GraphQL node ID; the REST dialects have none. */}
+                {action.nodeId && <div>nodeId: {action.nodeId}</div>}
+                {action.nodeType && <div>nodeType: {action.nodeType}</div>}
+                {action.proposal && (
+                  <div>
+                    proposal: {action.proposal.id}
+                    {action.proposal.nodeId && ` · node ${action.proposal.nodeId}`}
+                  </div>
+                )}
+                {action.reason && (
+                  <div className="mt-2 whitespace-pre-wrap break-words text-gray-600 dark:text-gray-300">
+                    {action.reason}
+                  </div>
+                )}
                 {action.variablesJson && (
-                  <pre className="mt-2 bg-gray-50 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all dark:bg-slate-900">
-                    {action.variablesJson}
-                  </pre>
+                  <div className="mt-2">
+                    <div className="mb-1">payload</div>
+                    <pre className="bg-gray-50 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all dark:bg-slate-900">
+                      {action.variablesJson}
+                    </pre>
+                  </div>
                 )}
               </div>
             )}

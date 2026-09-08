@@ -43,6 +43,26 @@ class ScmApiAuditFilterTest {
         assertEquals("github", captor.getValue().getProvider());
         assertEquals("createIssue", captor.getValue().getMutationField());
         assertEquals(ScmApiActionStatus.FORWARDED, captor.getValue().getStatus());
+        assertEquals(context.getActionId(), captor.getValue().getId(), "the id the registry was told to point at");
+    }
+
+    @Test
+    void forwardedMutation_carriesTheUpstreamStatusAndProposalLink() throws Exception {
+        ScmApiActionStore store = mock(ScmApiActionStore.class);
+        ScmApiRequestContext context = new ScmApiRequestContext();
+        context.setProvider("gitea");
+        context.setResolvedUser("alice");
+        context.setMutationField("pulls.create");
+        context.setStatus(ScmApiActionStatus.FORWARDED);
+        context.setUpstreamStatus(201);
+        context.setProposalId("p-7");
+        HttpServletRequest req = mock(HttpServletRequest.class);
+        when(req.getAttribute(SCM_API_REQUEST_ATTR)).thenReturn(context);
+        new ScmApiAuditFilter(store).doFilter(req, mock(HttpServletResponse.class), mock(FilterChain.class));
+        ArgumentCaptor<ScmApiActionRecord> captor = ArgumentCaptor.forClass(ScmApiActionRecord.class);
+        verify(store).save(captor.capture());
+        assertEquals(201, captor.getValue().getUpstreamStatus());
+        assertEquals("p-7", captor.getValue().getProposalId());
     }
 
     @Test

@@ -64,6 +64,7 @@ public class ScmApiAuditFilter implements Filter {
             if (context != null && shouldRecord(context)) {
                 try {
                     scmApiActionStore.save(ScmApiActionRecord.builder()
+                            .id(context.getActionId())
                             .status(statusOf(context))
                             .provider(context.getProvider())
                             .scmUsername(context.getScmLogin())
@@ -81,6 +82,8 @@ public class ScmApiAuditFilter implements Filter {
                                             ? null
                                             : context.getClientType().name())
                             .clientVersion(abbreviate(context.getClientVersion(), MAX_CLIENT_VERSION))
+                            .upstreamStatus(context.getUpstreamStatus())
+                            .proposalId(context.getProposalId())
                             .build());
                 } catch (RuntimeException e) {
                     log.error("Failed to write SCM API action audit record", e);

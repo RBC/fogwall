@@ -2,6 +2,7 @@ package com.rbc.fogwall.servlet;
 
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
 import com.rbc.fogwall.net.FogwallHttpExecutor;
+import com.rbc.fogwall.scmapi.ProposalRegistrar;
 import com.rbc.fogwall.scmapi.ScmApiUserAgent;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
@@ -23,8 +24,11 @@ public class ScmApiGraphQlForwardServlet extends HttpServlet {
 
     private final String upstreamGraphqlUrl;
 
-    public ScmApiGraphQlForwardServlet(String upstreamGraphqlUrl) {
+    private final ProposalRegistrar proposalRegistrar;
+
+    public ScmApiGraphQlForwardServlet(String upstreamGraphqlUrl, ProposalRegistrar proposalRegistrar) {
         this.upstreamGraphqlUrl = upstreamGraphqlUrl;
+        this.proposalRegistrar = proposalRegistrar;
     }
 
     @Override
@@ -46,9 +50,13 @@ public class ScmApiGraphQlForwardServlet extends HttpServlet {
         }
         ScmApiUserAgent.relay(upstreamRequest, ScmApiUserAgent.of(request));
 
+        boolean mutation = context != null && context.getMutationField() != null;
         try {
-            // Streamed, with the upstream's content type relayed: nothing here assumes the response is JSON.
-            upstreamRequest
+            // A read is streamed, with the upstream's content type relayed: nothing here assumes it is JSON. A
+            // mutation's response is also kept (bounded) — it is the upstream's own statement of what it created,
+            // and the proposal registry reads it once the client has it.
+            var captured = new byte[1][];
+            int upstreamStatus = upstreamRequest
                     .bodyByteArray(body, ContentType.APPLICATION_JSON)
                     .execute(FogwallHttpExecutor.instance())
                     .handleResponse(upstream -> {
@@ -62,14 +70,19 @@ public class ScmApiGraphQlForwardServlet extends HttpServlet {
                         }
                         if (entity != null) {
                             try (var in = entity.getContent()) {
-                                in.transferTo(response.getOutputStream());
+                                if (mutation) {
+                                    captured[0] = UpstreamResponseRelay.relayAndCapture(in, response.getOutputStream());
+                                } else {
+                                    in.transferTo(response.getOutputStream());
+                                }
                             }
                         }
-                        return null;
+                        return upstream.getCode();
                     });
 
-            if (context != null && context.getMutationField() != null) {
+            if (mutation) {
                 context.setStatus(ScmApiActionStatus.FORWARDED);
+                proposalRegistrar.recordUpstreamResponse(context, null, upstreamStatus, captured[0]);
             }
         } catch (IOException e) {
             log.warn("SCM API proxy forward failed: {}", e.getMessage());

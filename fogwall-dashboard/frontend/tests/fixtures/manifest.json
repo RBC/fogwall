@@ -1,106 +1,174 @@
 {
   "reject-author-noreply": {
-    "id": "b87bf599-718d-42d8-817f-e152af63a26a",
-    "ref": "refs/heads/fixture/author-noreply-314189"
+    "id": "42a89c6b-009b-488d-a6df-e13166043608",
+    "ref": "refs/heads/fixture/author-noreply-620778"
   },
   "reject-author-domain": {
-    "id": "c42c0000-a867-431e-b9c3-38ba5feeb309",
-    "ref": "refs/heads/fixture/author-domain-319315"
+    "id": "3f50e643-3734-4189-98bc-e8cc27fe5ba1",
+    "ref": "refs/heads/fixture/author-domain-624192"
   },
   "reject-message-literal": {
-    "id": "300d9241-374e-4295-b2da-93eaf77a724b",
-    "ref": "refs/heads/fixture/message-wip-321389"
+    "id": "03d80189-5127-49a9-b4f7-0e591511ed8a",
+    "ref": "refs/heads/fixture/message-wip-625794"
   },
   "reject-message-pattern": {
-    "id": "9e99502e-4e3c-4a03-9249-aefca1492d6e",
-    "ref": "refs/heads/fixture/message-pattern-323375"
+    "id": "acb0963c-42fb-455f-870f-64cfc8c7f0b2",
+    "ref": "refs/heads/fixture/message-pattern-627336"
   },
   "reject-secret": {
-    "id": "0fc5e35a-02b1-46ed-9344-d6dd011a457a",
-    "ref": "refs/heads/fixture/secret-aws-326385"
+    "id": "a31078aa-e342-4a3b-bba0-f877ff5bd61a",
+    "ref": "refs/heads/fixture/secret-aws-628781"
   },
   "reject-diff-literal": {
-    "id": "47cf6c3e-cff8-4d91-aa3e-4287bf720dcb",
-    "ref": "refs/heads/fixture/diff-literal-328366"
+    "id": "71bcc23b-4525-4456-92bc-7e8733b5bb2f",
+    "ref": "refs/heads/fixture/diff-literal-631162"
   },
   "reject-diff-pattern": {
-    "id": "80c0c60b-3d11-457d-a291-b9d25d560aae",
-    "ref": "refs/heads/fixture/diff-pattern-330002"
+    "id": "ad381ddb-55a4-4853-bee4-5fb273a343aa",
+    "ref": "refs/heads/fixture/diff-pattern-632701"
   },
   "reject-trailer-no-signoff": {
-    "id": "a141dd29-f637-47bb-a76b-6ed8b04fe2a4",
-    "ref": "refs/heads/fixture/no-signoff-332748"
+    "id": "0489fd19-40a0-4aed-96ae-394780b1b51d",
+    "ref": "refs/heads/fixture/no-signoff-634463"
   },
   "reject-trailer-signoff-mismatch": {
-    "id": "820d9d93-bdf8-41c4-b6a9-0239e7f3082d",
-    "ref": "refs/heads/fixture/signoff-mismatch-334621"
+    "id": "b6476888-7a69-4906-8079-5c0a88a9b34c",
+    "ref": "refs/heads/fixture/signoff-mismatch-635845"
   },
   "reject-trailer-coauthor-denied": {
-    "id": "8e4efa12-756c-48db-9f76-513ce84ff245",
-    "ref": "refs/heads/fixture/coauthor-denied-336323"
+    "id": "0d985749-7e23-41a2-b992-be254742fae0",
+    "ref": "refs/heads/fixture/coauthor-denied-637720"
   },
   "pending-trailer-coauthor-allowed": {
-    "id": "15106dea-fb5f-4f22-a711-b3497932bc2d",
-    "ref": "refs/heads/fixture/coauthor-ok-339411"
+    "id": "59f76466-cee9-48d4-bac5-9dc955575a79",
+    "ref": "refs/heads/fixture/coauthor-ok-639117"
   },
   "reject-multiple": {
-    "id": "cd966354-5012-4826-8f1b-8548b89d8350",
-    "ref": "refs/heads/fixture/multi-fail-341234"
+    "id": "ed117cf9-0789-4341-9561-cf551eff7d42",
+    "ref": "refs/heads/fixture/multi-fail-640429"
   },
   "reject-unmapped-identity": {
-    "id": "470f8a1e-1133-4ba4-a4f4-08ab171eced4",
-    "ref": "refs/heads/fixture/unmapped-344126"
+    "id": "035b2f93-5eb4-46b2-a916-213f5943e2f6",
+    "ref": "refs/heads/fixture/unmapped-642728"
   },
   "pending-branch": {
-    "id": "2756e624-5b3f-493f-b778-e68696e5b212",
-    "ref": "refs/heads/fixture/pending-branch-349210"
+    "id": "0f36835e-186b-4729-955d-5deac7a5b658",
+    "ref": "refs/heads/fixture/pending-branch-646501"
   },
   "pending-tag": {
-    "id": "2b344d35-8288-4689-9b3e-94556a446d57",
-    "ref": "refs/tags/v9.9.9-fixture-1788528352"
+    "id": "358339ec-552e-484d-854a-602be97a7eea",
+    "ref": "refs/tags/v9.9.9-fixture-1788887648"
   },
   "pending-gitea": {
-    "id": "2b19a4e7-4f4f-455c-beeb-f1b8f7f8d5bc",
-    "ref": "refs/heads/fixture/gitea-353717"
+    "id": "14396ba7-ccde-4191-a213-c7b0c891b680",
+    "ref": "refs/heads/fixture/gitea-649576"
   },
   "pending-gitlab-email-warning": {
-    "id": "479f6e01-8769-4394-bd4c-c02cf956ff59",
-    "ref": "refs/heads/fixture/gitlab-warn-357762"
+    "id": "13c11e61-6ce9-4f71-8c95-6b34a08f3f97",
+    "ref": "refs/heads/fixture/gitlab-warn-651991"
   },
   "forwarded-multi-commit": {
-    "id": "35e887d9-3bf6-4305-aaa5-156f22a0fe2e",
-    "ref": "refs/heads/fixture/multi-commit-363725",
+    "id": "2e35354b-3201-4b86-afff-50e7eca07dbb",
+    "ref": "refs/heads/fixture/multi-commit-657207",
     "reviewer": "reviewer",
-    "reason": "go"
+    "reason": "yes"
   },
   "forwarded-lightweight-tag": {
-    "id": "d6a51e32-957f-4c16-ade2-0ced573009af",
-    "ref": "refs/tags/lightweight-fixture-1788528367",
+    "id": "e4c62ba8-143c-4f5a-8eef-584f34a71eb1",
+    "ref": "refs/tags/lightweight-fixture-1788887660",
     "reviewer": "reviewer",
-    "reason": "go"
+    "reason": "ok"
   },
   "rejected-by-reviewer": {
-    "id": "35d4c24b-854f-415d-8f3f-4785d190e760",
-    "ref": "refs/heads/fixture/reviewer-reject-368703",
+    "id": "6c0a3ec7-a4d8-48ee-8f54-269f6f644533",
+    "ref": "refs/heads/fixture/reviewer-reject-661317",
     "reviewer": "reviewer",
-    "reason": "stop"
+    "reason": "missing ticket ref"
   },
   "canceled": {
-    "id": "a0465faa-9794-4bd2-8b25-9fb3048ef5d4",
-    "ref": "refs/heads/fixture/canceled-370474",
+    "id": "24c32427-cee8-42ff-84c8-9918b01cc788",
+    "ref": "refs/heads/fixture/canceled-662750",
     "reviewer": "dev",
     "reason": ""
   },
   "self-certified": {
-    "id": "0fb4b457-a7de-4936-86a4-23d6543c365c",
-    "ref": "refs/heads/fixture/self-certify-373602",
+    "id": "995e7946-c575-4de9-a0cc-6e3f8c0833ff",
+    "ref": "refs/heads/fixture/self-certify-664499",
     "reviewer": "dev",
-    "reason": "self certifying"
+    "reason": "self certify"
   },
   "ssh-server-forwarded": {
-    "id": "9334f10a-5dd9-486c-94e9-4ae60c1e74c2",
-    "ref": "refs/heads/fixture/ssh-server-375282",
+    "id": "f1c0a843-a5e9-4636-8357-7b5d50fd8190",
+    "ref": "refs/heads/fixture/ssh-server-666324",
     "reviewer": "reviewer",
-    "reason": "yes"
+    "reason": "lgtm"
+  },
+  "proposals-gh": {
+    "pr": "1",
+    "issue": "2",
+    "actions": [
+      "a7d9dffe-b246-4cff-a478-85077c7e7c10",
+      "95b39f2d-fe60-44bc-aefb-b3de333277ac",
+      "45d4a123-e75a-4453-bfa6-feee2997b55b",
+      "8b69fb57-f676-48c5-ac54-74429e53a361",
+      "cfe7d449-a86a-4bdc-bb64-5dbed99bf0df",
+      "3bbc245b-e740-4ac9-b8a5-a34db0a764c4"
+    ]
+  },
+  "proposals-gh-rejected": {
+    "actions": [
+      "8c7daee9-9fec-4c9b-a926-bf571148a6a0"
+    ]
+  },
+  "proposals-glab": {
+    "mr": "1",
+    "issue": "1",
+    "actions": [
+      "b36f4383-2e8f-48e7-b8a1-c8e7d9b42770",
+      "116811ba-bb0d-498d-bf16-7e09b7eedfab",
+      "873311f2-1e30-4f7b-8a13-d32ce779a44b",
+      "6e5d1618-b636-4edb-9c28-ff1bc6b6f93a",
+      "b05253dd-a84a-4c90-b3d9-595c992b00bc",
+      "3730409a-0b62-4a43-aee3-4ba7cb745b55"
+    ]
+  },
+  "proposals-glab-rejected": {
+    "actions": [
+      "c332276e-8594-4302-84fa-c7fc99b5201a"
+    ]
+  },
+  "proposals-fj": {
+    "pr": "1",
+    "issue": "2",
+    "actions": [
+      "c320eda2-8b1d-465b-a852-706f4c6c86a3",
+      "65cf03d2-799d-468d-98af-9446a52e4bbb",
+      "9b0daed8-b180-44b5-b74f-2cef5768eb33",
+      "190a9a75-abe6-411e-a6ef-1cb1d04c706c",
+      "f002df37-667e-49f7-acb6-8481f10203dc",
+      "47a73540-0f1f-41f1-bad8-becd870fb835"
+    ]
+  },
+  "proposals-fj-rejected": {
+    "actions": [
+      "59ea1044-113b-434a-b54d-16e5a41d62e9"
+    ]
+  },
+  "proposals-tea": {
+    "pr": "1",
+    "issue": "2",
+    "actions": [
+      "86500a95-4230-4c98-8149-b609b3cc4043",
+      "fb605466-3f81-4b96-ad34-78f3363932fe",
+      "8df35566-b35f-4a39-9a1a-505a821e4b7a",
+      "70174e30-05f1-46e2-94fc-d063dc824417",
+      "699d2f15-c943-4b24-9a62-a49830a3351d",
+      "7f264e7f-4143-46b3-bb02-886b5fa30ca0"
+    ]
+  },
+  "proposals-tea-rejected": {
+    "actions": [
+      "83b466ae-b5dc-41e1-93bd-cd9522164320"
+    ]
   }
 }

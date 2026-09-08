@@ -8,6 +8,7 @@ import com.rbc.fogwall.dashboard.SecurityConfig;
 import com.rbc.fogwall.dashboard.SpringWebConfig;
 import com.rbc.fogwall.db.PushStoreFactory;
 import com.rbc.fogwall.db.ScmApiActionStoreFactory;
+import com.rbc.fogwall.db.ScmApiProposalStoreFactory;
 import com.rbc.fogwall.db.jdbc.DataSourceFactory;
 import com.rbc.fogwall.db.memory.InMemoryFetchStore;
 import com.rbc.fogwall.db.memory.InMemoryUrlRuleRegistry;
@@ -28,6 +29,7 @@ import java.nio.file.Path;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
+import javax.sql.DataSource;
 import org.eclipse.jetty.ee11.servlet.FilterHolder;
 import org.eclipse.jetty.ee11.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee11.servlet.ServletHolder;
@@ -99,10 +101,9 @@ class DashboardFixture implements AutoCloseable {
             bf.registerSingleton("liveConfigLoader", liveConfigLoader);
             bf.registerSingleton("repoRegistry", new InMemoryUrlRuleRegistry());
             bf.registerSingleton("fetchStore", new InMemoryFetchStore());
-            bf.registerSingleton(
-                    "scmApiActionStore",
-                    ScmApiActionStoreFactory.fromDataSource(
-                            DataSourceFactory.h2InMemory("test-scm-api-" + UUID.randomUUID())));
+            DataSource scmApiDataSource = DataSourceFactory.h2InMemory("test-scm-api-" + UUID.randomUUID());
+            bf.registerSingleton("scmApiActionStore", ScmApiActionStoreFactory.fromDataSource(scmApiDataSource));
+            bf.registerSingleton("scmApiProposalStore", ScmApiProposalStoreFactory.fromDataSource(scmApiDataSource));
             bf.registerSingleton("repoPermissionService", new RepoPermissionService(new InMemoryRepoPermissionStore()));
             TokenCipherProvider tokenCipherProvider = TokenCipherProvider.initialize(
                     null,

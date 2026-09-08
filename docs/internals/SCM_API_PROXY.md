@@ -60,9 +60,10 @@ shows up here first.
 ### Encoded separators appear inside single path segments
 
 GitLab addresses a project as one `owner%2Frepo` segment. Gitea encodes a repository-relative file path into one segment
-of its blob endpoints — `fj` reads a pull request template from `/repos/{o}/{r}/raw/.forgejo%2Fpull_request_template.md`
-before creating a pull request. Both must survive to fogwall undecoded, or the segment splits and the repository the
-request names changes.
+of its blob endpoints, and a branch name into the `{base}...{head}` segment of `compare` — `fj` reads a pull request
+template from `/repos/{o}/{r}/raw/.forgejo%2Fpull_request_template.md` and then fetches
+`/repos/{o}/{r}/compare/main...feature%2Fx` before creating a pull request. All of these must survive to fogwall
+undecoded, or the segment splits and the repository the request names changes.
 
 ---
 
@@ -360,6 +361,27 @@ repo comes from `-r/--repo` into `repo_create_pull_request(owner, repo, …)`.
 path-based matcher has to tolerate paths carrying no `owner/repo`.
 
 ---
+
+## What the upstream answers
+
+Read by the dialect's `ProposalResponseReader` after the response has gone to the client, so the registry can name what
+a mutation created. Captured from the same CLI runs as the request shapes above.
+
+| dialect | create returns                                                       | edit / close return                                              | comment returns                                    |
+| ------- | -------------------------------------------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------- |
+| GitHub  | `data.<field>.{issue,pullRequest}.{id,url}` — only what `gh` selects | `clientMutationId` alone; the target is the node ID in the input | nothing naming the target beyond the input node ID |
+| GitLab  | the issue / MR: `iid`, `web_url`, `state`, `title`                   | the same object, `state` updated                                 | the note, with `noteable_iid`                      |
+| Forgejo | the issue / PR: `number`, `html_url`, `state`, `title` (+ `merged`)  | the same object; via `/issues/{n}` it carries `pull_request`     | the comment, with `issue_url`                      |
+
+Consequences:
+
+- GitHub's number comes off the trailing segment of `url`; state on a create is `OPEN`, on a close it is implied by the
+  mutation. An edit or close of a proposal fogwall did not see created cannot be registered — nothing in the response
+  names it beyond the node ID.
+- `tea pr close` and `tea pr edit` go through `PATCH /issues/{n}`, so the response, not the path, decides whether the
+  target is a pull request.
+- GitLab reports `opened` / `closed` / `merged` / `locked`; Forgejo `open` / `closed` plus a `merged` boolean.
+- A label or assignee write returns the labels or the issue; the number falls back to the request path.
 
 ## Credential model
 

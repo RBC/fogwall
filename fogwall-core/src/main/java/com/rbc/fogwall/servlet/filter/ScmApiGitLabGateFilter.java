@@ -26,6 +26,7 @@ import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -95,6 +96,11 @@ public class ScmApiGitLabGateFilter implements Filter {
             return;
         }
 
+        // The request body is the audit evidence for a write, as the GraphQL variables are for GitHub — recorded
+        // before the allowlist so a denied operation carries what it tried to send. The audit filter drops it again
+        // on a content rejection, so the secret fogwall just refused never lands in its own database.
+        context.setVariablesJson(payloadOf(wrapper));
+
         Optional<ScmApiRestMatch> match = GitLabRestAllowlist.match(method, path);
         if (match.isEmpty()) {
             deny(
@@ -159,6 +165,11 @@ public class ScmApiGitLabGateFilter implements Filter {
                         provider, projectId, authHeader, authHeader == null ? null : request.getHeader(authHeader));
             }
         };
+    }
+
+    private static String payloadOf(RequestBodyWrapper wrapper) {
+        byte[] body = wrapper.getBody();
+        return body == null || body.length == 0 ? null : new String(body, StandardCharsets.UTF_8);
     }
 
     private void handleRead(HttpServletResponse response, FilterChain chain, RequestBodyWrapper wrapper)

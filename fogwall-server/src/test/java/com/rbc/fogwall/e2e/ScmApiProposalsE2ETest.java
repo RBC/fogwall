@@ -6,18 +6,22 @@ import com.rbc.fogwall.config.BlockConfig;
 import com.rbc.fogwall.config.ContentPatternConfig;
 import com.rbc.fogwall.config.SecretScanConfig;
 import com.rbc.fogwall.db.ScmApiActionStore;
+import com.rbc.fogwall.db.ScmApiProposalStore;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
 import com.rbc.fogwall.db.model.ScmApiActionQuery;
 import com.rbc.fogwall.db.model.ScmApiActionRecord;
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
+import com.rbc.fogwall.db.model.ScmApiProposalRecord;
 import com.rbc.fogwall.jetty.FogwallServletRegistrar;
 import com.rbc.fogwall.permission.InMemoryRepoPermissionStore;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.ForgejoProvider;
+import com.rbc.fogwall.scmapi.ForgejoProposalResponseReader;
 import com.rbc.fogwall.scmapi.ProposalContent;
 import com.rbc.fogwall.scmapi.ProposalContentInspector;
+import com.rbc.fogwall.scmapi.ProposalRegistrar;
 import com.rbc.fogwall.service.TokenPushIdentityResolver;
 import com.rbc.fogwall.servlet.ScmApiRestForwardServlet;
 import com.rbc.fogwall.servlet.ScmApiRestPathPolicy;
@@ -38,9 +42,13 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.Collection;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.eclipse.jetty.ee11.servlet.FilterHolder;
 import org.eclipse.jetty.ee11.servlet.ServletContextHandler;
@@ -79,9 +87,51 @@ class ScmApiProposalsE2ETest {
     private static String token;
     private static int port;
     private static RecordingActionStore actionStore;
+    private static RecordingProposalStore proposalStore;
     private static HttpClient client;
 
     /** Captures what the audit filter wrote, so the assertions can read fogwall's own account of each request. */
+    /** Map-backed registry, so the tests can assert on what the upstream response was read as. */
+    private static final class RecordingProposalStore implements ScmApiProposalStore {
+        private final Map<String, ScmApiProposalRecord> rows = new ConcurrentHashMap<>();
+
+        @Override
+        public void save(ScmApiProposalRecord record) {
+            rows.put(record.getId(), record);
+        }
+
+        @Override
+        public void update(ScmApiProposalRecord record) {
+            rows.put(record.getId(), record);
+        }
+
+        @Override
+        public Optional<ScmApiProposalRecord> findById(String id) {
+            return Optional.ofNullable(rows.get(id));
+        }
+
+        @Override
+        public Optional<ScmApiProposalRecord> findByTarget(
+                String provider, String owner, String repo, ScmApiProposalRecord.Kind kind, int number) {
+            return rows.values().stream()
+                    .filter(r -> r.getKind() == kind && r.getNumber() == number)
+                    .findFirst();
+        }
+
+        @Override
+        public Optional<ScmApiProposalRecord> findByNodeId(String provider, String nodeId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public List<ScmApiProposalRecord> findByIds(Collection<String> ids) {
+            return ids.stream().map(rows::get).filter(Objects::nonNull).toList();
+        }
+
+        @Override
+        public void initialize() {}
+    }
+
     private static final class RecordingActionStore implements ScmApiActionStore {
         private final List<ScmApiActionRecord> saved = new CopyOnWriteArrayList<>();
 
@@ -163,6 +213,7 @@ class ScmApiProposalsE2ETest {
                 () -> block, () -> secretScan, new SecretScanCheck(secretScan), () -> contentPatterns);
 
         actionStore = new RecordingActionStore();
+        proposalStore = new RecordingProposalStore();
 
         server = new Server();
         var connector = new ServerConnector(
@@ -182,7 +233,9 @@ class ScmApiProposalsE2ETest {
                 new ScmApiContentInspectionFilter(inspector, ProposalContent::fromForgejoBody, body -> List.of()));
         context.addServlet(
                 new ServletHolder(new ScmApiRestForwardServlet(
-                        gitea.getBaseUrl() + "/api/v1", ScmApiRestPathPolicy.EncodedSeparators.FORGEJO_FILE_PATH)),
+                        gitea.getBaseUrl() + "/api/v1",
+                        ScmApiRestPathPolicy.EncodedSeparators.FORGEJO_FILE_PATH,
+                        new ProposalRegistrar(proposalStore, new ForgejoProposalResponseReader()))),
                 "/api/v1/*");
 
         var contexts = new ContextHandlerCollection();
@@ -250,6 +303,16 @@ class ScmApiProposalsE2ETest {
         assertEquals(PROXY_USER, record.getResolvedUser());
         assertEquals(GiteaContainer.TEST_ORG, record.getRepoOwner());
         assertEquals("pulls.create", record.getMutationField());
+
+        // What the upstream created, read from its own response and pointed at from the audit record.
+        assertEquals(201, record.getUpstreamStatus());
+        var proposal = proposalStore.findById(record.getProposalId()).orElseThrow();
+        assertEquals(ScmApiProposalRecord.Kind.PULL_REQUEST, proposal.getKind());
+        assertEquals(1, proposal.getNumber());
+        assertEquals(ScmApiProposalRecord.State.OPEN, proposal.getState());
+        assertEquals("e2e create", proposal.getTitle());
+        assertTrue(proposal.getUrl().endsWith("/pulls/1"), proposal.getUrl());
+        assertEquals(record.getId(), proposal.getCreatedActionId());
     }
 
     /**
@@ -267,12 +330,21 @@ class ScmApiProposalsE2ETest {
 
         assertEquals(201, response.statusCode(), () -> "PATCH must reach the upstream, got " + response.body());
         assertTrue(response.body().contains("\"state\":\"closed\""), response.body());
-        assertEquals(ScmApiActionStatus.FORWARDED, actionStore.only().getStatus());
+        var record = actionStore.only();
+        assertEquals(ScmApiActionStatus.FORWARDED, record.getStatus());
+
+        // The same registry row the create made, now closed and pointing at this record as its latest action.
+        var proposal = proposalStore.findById(record.getProposalId()).orElseThrow();
+        assertEquals(1, proposal.getNumber());
+        assertEquals(ScmApiProposalRecord.State.CLOSED, proposal.getState());
+        assertEquals(record.getId(), proposal.getLastActionId());
+        assertNotEquals(record.getId(), proposal.getCreatedActionId());
     }
 
     /**
-     * The blob fetch {@code fj} makes before creating a pull request. Gitea encodes a repository-relative path into one
-     * segment, so refusing every encoded separator broke {@code fj pr create} outright.
+     * The blob fetch and the branch comparison {@code fj} makes before creating a pull request. Gitea encodes a
+     * repository-relative path, and a branch name, into one segment, so refusing every encoded separator broke
+     * {@code fj pr create} outright — from any {@code feature/x}-style branch, even once the blob path was admitted.
      */
     @Test
     @Order(3)
@@ -281,6 +353,11 @@ class ScmApiProposalsE2ETest {
                 .GET()
                 .build());
         assertNotEquals(400, template.statusCode(), "the file path may carry an encoded separator");
+
+        createBranch("e2e/slashed");
+        var comparison =
+                send(request(repoPath() + "/compare/main...e2e%2Fslashed").GET().build());
+        assertEquals(200, comparison.statusCode(), "a branch name may carry an encoded separator in a comparison");
 
         // The owner segment is where the authorization decision is read from, so it may not.
         var smuggled = send(

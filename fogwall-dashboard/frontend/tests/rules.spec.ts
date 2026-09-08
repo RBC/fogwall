@@ -60,11 +60,11 @@ test.describe('URL rules', () => {
   })
 
   test('rules are listed in priority order', async ({ page }) => {
-    const orders = await page
-      .locator('span[title="Priority order — lower runs first"]')
-      .allTextContents()
-    const numeric = orders.map((o) => Number(o.replace('#', '')))
-    expect(numeric.length).toBeGreaterThanOrEqual(8)
+    // allTextContents() does not wait for the list to load. The profile declares eight rules but the API serves
+    // seven — a disabled config rule is not listed — and the CRUD specs may have added more in parallel.
+    const badges = page.locator('span[title="Priority order — lower runs first"]')
+    await expect.poll(() => badges.count()).toBeGreaterThanOrEqual(7)
+    const numeric = (await badges.allTextContents()).map((o) => Number(o.replace('#', '')))
     expect([...numeric].sort((a, b) => a - b)).toEqual(numeric)
   })
 })

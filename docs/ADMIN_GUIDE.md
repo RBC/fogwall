@@ -1552,10 +1552,22 @@ traffic cheap. Per-repo read gating is not currently implemented.
 
 ### Audit trail
 
-Every proxied **mutation** produces one audit record — who, the resolved repo, the operation performed, and the
-allow/deny outcome — following the same auditability bar as the push path. These are viewable in the dashboard under
-**SCM API** (a plain list, no approval workflow — these are already-decided audit records), or queryable directly from
-the `scm_api_action_records` table/collection.
+Every proxied **mutation** produces one audit record — who, the resolved repo, the operation performed, the request
+payload (GitHub's GraphQL variables, or the REST body on the other dialects), and the allow/deny outcome — following the
+same auditability bar as the push path. The payload is dropped from a record whose content inspection refused the
+request, so a secret fogwall blocked is not kept by fogwall; the reason names the rule and field instead. These are
+viewable in the dashboard under **SCM API** (a plain list, no approval workflow — these are already-decided audit
+records), or queryable directly from the `scm_api_action_records` table/collection.
+
+A forwarded mutation's record also carries **what the upstream answered**: its HTTP status, and — read from the
+upstream's own response — the pull/merge request or issue the mutation created or touched. Those live in a second
+table/collection, `scm_api_proposals`, keyed on what the upstream calls the thing (provider, repository, kind, number),
+holding its URL, title and current state as last reported through fogwall, and pointing back at the action records that
+created and last touched it. The audit log stays append-only; the registry is what changes when a proposal opened
+through fogwall is later closed through it. A proposal opened elsewhere and then edited or closed through fogwall is
+registered from that response too. The one gap is GitHub: `gh`'s edit and close mutations return nothing but an
+acknowledgement, so a GitHub proposal fogwall never saw created stays unregistered until a response names it. Merges are
+not proxied, so a `merged` state is only ever what an upstream response reported for a proposal fogwall was touching.
 
 A **refused** request is recorded too, once the caller has been authenticated — including one fogwall turned away
 because the endpoint matched no allowlist rule, where there is no operation to name and `mutation_field` is null (the

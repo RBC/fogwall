@@ -29,11 +29,15 @@ import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.ForgejoProvider;
 import com.rbc.fogwall.provider.GitHubProvider;
 import com.rbc.fogwall.provider.GitLabProvider;
+import com.rbc.fogwall.scmapi.ForgejoProposalResponseReader;
 import com.rbc.fogwall.scmapi.GitHubNodeIdResolver;
+import com.rbc.fogwall.scmapi.GitHubProposalResponseReader;
 import com.rbc.fogwall.scmapi.GitLabProjectIdResolver;
+import com.rbc.fogwall.scmapi.GitLabProposalResponseReader;
 import com.rbc.fogwall.scmapi.GraphQlLiterals;
 import com.rbc.fogwall.scmapi.ProposalContent;
 import com.rbc.fogwall.scmapi.ProposalContentInspector;
+import com.rbc.fogwall.scmapi.ProposalRegistrar;
 import com.rbc.fogwall.service.PushIdentityResolver;
 import com.rbc.fogwall.servlet.FogwallServlet;
 import com.rbc.fogwall.servlet.ScmApiGraphQlForwardServlet;
@@ -428,7 +432,9 @@ public final class FogwallServletRegistrar {
                 new ScmApiContentInspectionFilter(
                         contentInspector, ProposalContent::fromGraphQlBody, FogwallServletRegistrar::graphQlLiterals));
 
-        var forwardHolder = new ServletHolder(new ScmApiGraphQlForwardServlet(provider.getGraphqlUrl()));
+        var forwardHolder = new ServletHolder(new ScmApiGraphQlForwardServlet(
+                provider.getGraphqlUrl(),
+                new ProposalRegistrar(fogwallContext.scmApiProposalStore(), new GitHubProposalResponseReader())));
         forwardHolder.setName(SCM_API_CONNECTOR_PREFIX + provider.getName());
         context.addServlet(forwardHolder, mapping);
 
@@ -466,7 +472,9 @@ public final class FogwallServletRegistrar {
                         contentInspector, ProposalContent::fromGitLabBody, body -> List.of()));
 
         var forwardHolder = new ServletHolder(new ScmApiRestForwardServlet(
-                provider.getApiUrl(), ScmApiRestPathPolicy.EncodedSeparators.GITLAB_PROJECT_SEGMENT));
+                provider.getApiUrl(),
+                ScmApiRestPathPolicy.EncodedSeparators.GITLAB_PROJECT_SEGMENT,
+                new ProposalRegistrar(fogwallContext.scmApiProposalStore(), new GitLabProposalResponseReader())));
         forwardHolder.setName(SCM_API_CONNECTOR_PREFIX + provider.getName());
         context.addServlet(forwardHolder, mapping);
 
@@ -498,7 +506,9 @@ public final class FogwallServletRegistrar {
                         contentInspector, ProposalContent::fromForgejoBody, body -> List.of()));
 
         var forwardHolder = new ServletHolder(new ScmApiRestForwardServlet(
-                provider.getApiUrl(), ScmApiRestPathPolicy.EncodedSeparators.FORGEJO_FILE_PATH));
+                provider.getApiUrl(),
+                ScmApiRestPathPolicy.EncodedSeparators.FORGEJO_FILE_PATH,
+                new ProposalRegistrar(fogwallContext.scmApiProposalStore(), new ForgejoProposalResponseReader())));
         forwardHolder.setName(SCM_API_CONNECTOR_PREFIX + provider.getName());
         context.addServlet(forwardHolder, mapping);
 

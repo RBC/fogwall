@@ -2,6 +2,7 @@ package com.rbc.fogwall.servlet;
 
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
 import com.rbc.fogwall.net.FogwallHttpExecutor;
+import com.rbc.fogwall.scmapi.ProposalRegistrar;
 import com.rbc.fogwall.scmapi.ScmApiUserAgent;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
@@ -27,11 +28,15 @@ public class ScmApiRestForwardServlet extends HttpServlet {
 
     private final URI upstreamApiBaseUri;
     private final ScmApiRestPathPolicy.EncodedSeparators encodedSeparators;
+    private final ProposalRegistrar proposalRegistrar;
 
     public ScmApiRestForwardServlet(
-            String upstreamApiBaseUrl, ScmApiRestPathPolicy.EncodedSeparators encodedSeparators) {
+            String upstreamApiBaseUrl,
+            ScmApiRestPathPolicy.EncodedSeparators encodedSeparators,
+            ProposalRegistrar proposalRegistrar) {
         this.upstreamApiBaseUri = URI.create(upstreamApiBaseUrl);
         this.encodedSeparators = encodedSeparators;
+        this.proposalRegistrar = proposalRegistrar;
     }
 
     @Override
@@ -180,30 +185,42 @@ public class ScmApiRestForwardServlet extends HttpServlet {
         }
         ScmApiUserAgent.relay(upstreamRequest, ScmApiUserAgent.of(request));
 
+        boolean mutation = context != null && context.getMutationField() != null;
         try {
-            // Streamed rather than buffered: nothing inspects a response, and a blob read can be large. The
+            // A read is streamed rather than buffered: nothing inspects it, and a blob read can be large. The
             // encoded-separator policy deliberately admits Forgejo's raw/contents/media endpoints — fj fetches a pull
             // request template from one before every create — so a response here is not always JSON either. The
-            // upstream's own content type is relayed instead of a guess.
-            upstreamRequest.execute(FogwallHttpExecutor.instance()).handleResponse(upstream -> {
-                response.setStatus(upstream.getCode());
-                var entity = upstream.getEntity();
-                if (entity != null && entity.getContentType() != null) {
-                    response.setContentType(entity.getContentType());
-                }
-                if (entity != null && entity.getContentLength() >= 0) {
-                    response.setContentLengthLong(entity.getContentLength());
-                }
-                if (entity != null) {
-                    try (var in = entity.getContent()) {
-                        in.transferTo(response.getOutputStream());
-                    }
-                }
-                return null;
-            });
+            // upstream's own content type is relayed instead of a guess. A mutation's response is also kept
+            // (bounded): it is the upstream's own statement of what it wrote, which the proposal registry reads once
+            // the client has it.
+            var captured = new byte[1][];
+            int upstreamStatus = upstreamRequest
+                    .execute(FogwallHttpExecutor.instance())
+                    .handleResponse(upstream -> {
+                        response.setStatus(upstream.getCode());
+                        var entity = upstream.getEntity();
+                        if (entity != null && entity.getContentType() != null) {
+                            response.setContentType(entity.getContentType());
+                        }
+                        if (entity != null && entity.getContentLength() >= 0) {
+                            response.setContentLengthLong(entity.getContentLength());
+                        }
+                        if (entity != null) {
+                            try (var in = entity.getContent()) {
+                                if (mutation) {
+                                    captured[0] = UpstreamResponseRelay.relayAndCapture(in, response.getOutputStream());
+                                } else {
+                                    in.transferTo(response.getOutputStream());
+                                }
+                            }
+                        }
+                        return upstream.getCode();
+                    });
 
-            if (context != null && context.getMutationField() != null) {
+            if (mutation) {
                 context.setStatus(ScmApiActionStatus.FORWARDED);
+                proposalRegistrar.recordUpstreamResponse(
+                        context, ScmApiRestPath.rawSubPath(request), upstreamStatus, captured[0]);
             }
         } catch (IOException e) {
             log.warn("SCM API proxy forward failed: {}", e.getMessage());

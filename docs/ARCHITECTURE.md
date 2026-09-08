@@ -157,6 +157,13 @@ Mechanics that carry the actual security decisions:
 - **Allowlists match the raw, undecoded URI.** `getPathInfo()` is decoded by the container, which would split GitLab's
   `acme%2Fwidgets` into two segments — turning every `glab` mutation into a fail-closed denial, and in principle letting
   an encoded slash shift which repository is authorized. `ScmApiRestPath` reads `getRequestURI()` instead.
+- **The upstream response is read, not just relayed.** A push response is an acknowledgement; a client-server API's
+  response is the authoritative statement of what now exists, and fogwall already holds it. The forwarders relay a
+  mutation's response to the client while keeping a bounded copy, and `ProposalRegistrar` then reads it through the
+  dialect's `ProposalResponseReader` — number, URL, node ID and state — into the `scm_api_proposals` registry, a mutable
+  current-state table that the append-only `scm_api_action_records` point at via `proposal_id`. A read is still streamed
+  and never kept. The registry write happens after the client has its response and never throws into the request, so a
+  registry failure costs the link, not the mutation.
 - **Content inspection covers the payload, not a field list.** `ProposalContentInspector` runs `proposals.block`,
   gitleaks and the content-pattern bundles over the raw bytes, every JSON key and scalar at any depth, the query string
   in both forms, and — for GitHub — the GraphQL query's own literals. It **fails closed**: unlike the push path, a

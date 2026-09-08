@@ -39,10 +39,10 @@ public class JdbcScmApiActionStore implements ScmApiActionStore {
         jdbc.update("""
                 INSERT INTO scm_api_action_records (id, timestamp, provider, scm_username, resolved_user, repo_owner,
                     repo_name, mutation_field, node_id, node_type, status, reason, variables_json,
-                    user_agent, client_type, client_version)
+                    user_agent, client_type, client_version, upstream_status, proposal_id)
                 VALUES (:id, :timestamp, :provider, :scmUsername, :resolvedUser, :repoOwner, :repoName, :mutationField,
                     :nodeId, :nodeType, :status, :reason, :variablesJson,
-                    :userAgent, :clientType, :clientVersion)
+                    :userAgent, :clientType, :clientVersion, :upstreamStatus, :proposalId)
                 """, toParams(record));
     }
 
@@ -113,6 +113,8 @@ public class JdbcScmApiActionStore implements ScmApiActionStore {
             .userAgent(rs.getString("user_agent"))
             .clientType(rs.getString("client_type"))
             .clientVersion(rs.getString("client_version"))
+            .upstreamStatus(rs.getObject("upstream_status", Integer.class))
+            .proposalId(rs.getString("proposal_id"))
             .build();
 
     private static MapSqlParameterSource toParams(ScmApiActionRecord r) {
@@ -132,6 +134,8 @@ public class JdbcScmApiActionStore implements ScmApiActionStore {
                 .addValue("variablesJson", r.getVariablesJson())
                 .addValue("userAgent", r.getUserAgent())
                 .addValue("clientType", r.getClientType())
-                .addValue("clientVersion", r.getClientVersion());
+                .addValue("clientVersion", r.getClientVersion())
+                .addValue("upstreamStatus", r.getUpstreamStatus())
+                .addValue("proposalId", r.getProposalId());
     }
 }
