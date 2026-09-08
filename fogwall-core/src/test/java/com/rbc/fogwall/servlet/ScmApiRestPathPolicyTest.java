@@ -73,11 +73,22 @@ class ScmApiRestPathPolicyTest {
 
     /** The exception is the file path only — never the segments the authorization decision is read from. */
     @Test
+    void allowsAnEncodedSlashInAForgejoBranchComparison() {
+        // fj compares base...head before opening a pull request; a feature/x head arrives as feature%2Fx.
+        assertTrue(ScmApiRestPathPolicy.isForwardable(
+                "/repos/acme/widgets/compare/main...feature%2Fx", FORGEJO_FILE_PATH));
+        assertTrue(ScmApiRestPathPolicy.isForwardable(
+                "/repos/acme/widgets/compare/release%2F1.0...feature%2Fx", FORGEJO_FILE_PATH));
+    }
+
+    @Test
     void stillRefusesAnEncodedSlashInForgejoOwnerOrRepo() {
         assertFalse(ScmApiRestPathPolicy.isForwardable("/repos/acme%2Fwidgets/raw/file.md", FORGEJO_FILE_PATH));
         assertFalse(ScmApiRestPathPolicy.isForwardable("/repos/acme/widgets%2Fx/raw/file.md", FORGEJO_FILE_PATH));
         // Not a blob endpoint, so no file path to carry one.
         assertFalse(ScmApiRestPathPolicy.isForwardable("/repos/acme/widgets/issues/1%2Fx", FORGEJO_FILE_PATH));
+        assertFalse(ScmApiRestPathPolicy.isForwardable("/repos/acme/widgets/branches/feature%2Fx", FORGEJO_FILE_PATH));
+        assertFalse(ScmApiRestPathPolicy.isForwardable("/repos/acme%2Fwidgets/compare/main...x", FORGEJO_FILE_PATH));
         assertFalse(ScmApiRestPathPolicy.isForwardable("/repos/acme/widgets/raw/a%5Cb.md", FORGEJO_FILE_PATH));
     }
 

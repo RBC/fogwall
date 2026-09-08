@@ -2,6 +2,7 @@ package com.rbc.fogwall.servlet;
 
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
 import com.rbc.fogwall.scmapi.ScmApiClientType;
+import java.util.UUID;
 import lombok.Data;
 
 /**
@@ -26,6 +27,12 @@ public class ScmApiRequestContext {
 
     /** Request attribute holding the {@link ScmApiRequestContext} for the current request. */
     public static final String SCM_API_REQUEST_ATTR = "com.rbc.fogwall.scmapi.context";
+
+    /**
+     * Id of the audit record this request will produce, fixed up front so the proposal registry can point at it before
+     * the record is written.
+     */
+    private String actionId = UUID.randomUUID().toString();
 
     private String provider;
 
@@ -62,6 +69,10 @@ public class ScmApiRequestContext {
      * audit filter reads this in its {@code finally} block, after the chain has fully unwound either way.
      */
     private ScmApiActionStatus status;
+    /** The upstream's HTTP status, once a mutation has been forwarded. */
+    private Integer upstreamStatus;
+    /** The proposal registry row the mutation created or touched, when the response named one. */
+    private String proposalId;
 
     private String reason;
 }

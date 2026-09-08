@@ -160,7 +160,7 @@ class ScmApiForgejoGateFilterTest {
                 .thenReturn(true);
         var context = new ScmApiRequestContext();
         context.setResolvedUser("alice");
-        HttpServletRequest req = mockRequest("POST", "/repos/acme/widgets/issues", "{}", context);
+        HttpServletRequest req = mockRequest("POST", "/repos/acme/widgets/issues", "{\"title\":\"t\"}", context);
         HttpServletResponse resp = mockResponse(new ByteArrayOutputStream());
         FilterChain chain = mock(FilterChain.class);
 
@@ -170,5 +170,6 @@ class ScmApiForgejoGateFilterTest {
         assertEquals("issues.create", context.getMutationField());
         assertEquals("acme", context.getRepoOwner());
         assertEquals("widgets", context.getRepoName());
+        assertEquals("{\"title\":\"t\"}", context.getVariablesJson(), "the body is the audit evidence");
     }
 }

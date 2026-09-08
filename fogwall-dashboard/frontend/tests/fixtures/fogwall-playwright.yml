@@ -31,12 +31,15 @@ server:
 # Four real providers plus one disabled built-in and one custom-typed instance, so the providers page shows every
 # shape: HTTP-only, HTTP+SSH, disabled, custom name/type/uri. The placeholder OAuth client-id keeps the profile page's
 # "Connected accounts" section rendering on replay (a blank id hides it); capture.py overrides it via env vars.
+# Proposals listeners on github, gitlab, codeberg and gitea: capture.py drives gh, glab, fj and tea through them (over
+# TLS from a throwaway CA it generates), each client against the platform it is built for, so the dump carries SCM API
+# audit records. On replay they come up plaintext and idle — nothing in the suite talks to them; their presence is what
+# makes the PROPOSE grant selectable in the forms.
 providers:
   github:
     enabled: true
     ssh:
       enabled: true
-    # Makes the PROPOSE grant selectable in the permission forms; nothing in the suite talks to the listener.
     proposals:
       enabled: true
       port: 8481
@@ -45,16 +48,25 @@ providers:
       client-id: playwright-placeholder-client-id # replaced by env override during capture; never used on replay
   gitlab:
     enabled: true
+    proposals:
+      enabled: true
+      port: 8482
     oauth:
       enabled: true
       client-id: playwright-placeholder-client-id # replaced by env override during capture; never used on replay
   codeberg:
     enabled: true
+    proposals:
+      enabled: true
+      port: 8483
     oauth:
       enabled: true
       client-id: playwright-placeholder-client-id # replaced by env override during capture; never used on replay
   gitea:
     enabled: true
+    proposals:
+      enabled: true
+      port: 8484
     oauth:
       enabled: true
       client-id: playwright-placeholder-client-id # replaced by env override during capture; never used on replay
@@ -87,7 +99,8 @@ users:
     roles: [SELF_CERTIFY]
     # github and gitlab identities are deliberately NOT declared here: capture.py has you link them via OAuth
     # before the pushes, so their rows are OAuth-verified in the dump. gitea stays config-declared as the
-    # "locked (config)" example. codeberg is never linked — the "unmapped identity" rejection depends on it.
+    # "locked (config)" example. codeberg is not linked until after the pushes — the "unmapped identity" rejection
+    # depends on it — and is then added hand-typed through the API so fj can open proposals on codeberg.
     scm-identities:
       - provider: gitea
         username: fixture-dev
@@ -129,8 +142,7 @@ groups:
           type: GLOB
         grant: PUSH
 
-# Grants are SLUG-based. (OWNER / NAME targets were silently ignored by the permission matcher until #559; once a
-# re-capture is due anyway, switch one grant to OWNER so the fixture covers that shape too.)
+# Mostly SLUG-based; the gitea PUSH grant targets OWNER so every match target is exercised by a real push.
 permissions:
   - username: dev
     provider: github
@@ -149,10 +161,39 @@ permissions:
   - username: dev
     provider: gitea
     match:
-      target: SLUG
-      value: /fixture-dev/.*
-      type: REGEX
+      target: OWNER
+      value: fixture-dev
+      type: LITERAL
     grant: PUSH
+  # PROPOSE on each provider with a proposals listener: the proposals scenarios in capture.py run as dev.
+  - username: dev
+    provider: github
+    match:
+      target: SLUG
+      value: /fixture-dev/*
+      type: GLOB
+    grant: PROPOSE
+  - username: dev
+    provider: gitlab
+    match:
+      target: SLUG
+      value: /fixture-dev/*
+      type: GLOB
+    grant: PROPOSE
+  - username: dev
+    provider: codeberg
+    match:
+      target: SLUG
+      value: /fixture-dev/*
+      type: GLOB
+    grant: PROPOSE
+  - username: dev
+    provider: gitea
+    match:
+      target: SLUG
+      value: /fixture-dev/*
+      type: GLOB
+    grant: PROPOSE
   - username: reviewer
     provider: github
     match:
@@ -203,6 +244,15 @@ commit:
         - 'squash!'
       patterns:
         - '(?i)(password|secret|token)\s*[=:]\s*\S+'
+
+# Proposal text (titles, descriptions, comments) is refused on these, plus secret scanning and the content-pattern
+# bundles, which are on by default. The rejected proposals scenarios in capture.py trip one rule each.
+proposals:
+  block:
+    literals:
+      - 'internal.corp.example.com'
+    patterns:
+      - '(?i)https?://[a-z0-9.-]*\.corp\.example\.com\b'
 
 diff-scan:
   block:

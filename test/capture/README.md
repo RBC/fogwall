@@ -17,9 +17,12 @@ providers, and committed as a plain SQL dump.
 ```bash
 cp test/capture/mapping.env.example test/capture/mapping.env   # fill in
 cp test/capture/secrets.env.example test/capture/secrets.env   # optional, for OAuth-verified badges
-ssh-add ~/.ssh/id_ed25519                                       # the key registered on github.com (python3, git, jq needed)
+ssh-add ~/.ssh/id_ed25519                                       # the key registered on github.com
 python3 test/capture/capture.py
 ```
+
+Needs python3, git, jq, openssl and the four SCM CLIs (`gh`, `glab`, `tea`, `fj`). The CLIs run against throwaway config
+directories under the work dir; your real logins are never read or written.
 
 What happens, in order:
 
@@ -35,13 +38,18 @@ What happens, in order:
    over SSH that is held open for review.
 6. Second pause: a checklist of pushes to approve, reject, or cancel in the dashboard as `reviewer` or `dev`. The script
    watches their status, continues once none is pending, and re-pushes the approved ones so they end up FORWARDED.
-7. The app stops; `scrub.sql` removes secret/session/cache rows; the database is dumped to SQL; every real value is
+7. Proposals: `gh` (GitHub), `glab` (GitLab), `fj` (Codeberg) and `tea` (gitea.com) each open, edit and close a
+   pull/merge request and an issue through the provider's proposals listener (ports 8481–8484, TLS from a throwaway CA
+   the script generates), so the dump carries SCM API audit records for every client and every mutation fogwall proxies.
+   dev's codeberg identity is added here, after the unmapped-identity push has been rejected.
+8. The app stops; `scrub.sql` removes secret/session/cache rows; the database is dumped to SQL; every real value is
    replaced by its placeholder and any email outside the fixture domains becomes `fixture-extra-N@example.com`; the dump
    is checked for every real value and every PAT; the ephemeral repos are deleted.
-8. `fogwall.sql` and `manifest.json` land in the fixtures directory. Review the diff, commit.
+9. `fogwall.sql` and `manifest.json` land in the fixtures directory. Review the diff, commit.
 
 Knobs: `KEEP_WORK=1` keeps the temp directory (logs, clones, unscrubbed dump) for inspection; `SKIP_OAUTH=1` skips the
-OAuth pause; `PUSH_TIMEOUT=<s>` caps how long a server-mode push may be held open.
+OAuth pause (dev's github/gitlab identities are seeded unverified instead — never commit that dump); `SKIP_PUSHES=1`
+runs only the proposals step, for iterating on it; `PUSH_TIMEOUT=<s>` caps how long a server-mode push may be held open.
 
 ## Replay (what CI does)
 
@@ -57,7 +65,8 @@ them.
 
 ## When to re-capture
 
-- A hook or filter changes what it records (step names, content JSON, messages).
+- A hook or filter changes what it records (step names, content JSON, messages) — on the push path or the proposals
+  path.
 - A scenario is added or changed in `capture.py`.
 - The profile changes in a way that affects push outcomes (policy, users, permissions).
 

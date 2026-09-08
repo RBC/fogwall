@@ -53,7 +53,9 @@ public class MongoScmApiActionStore implements ScmApiActionStore {
                 .append("variables_json", r.getVariablesJson())
                 .append("user_agent", r.getUserAgent())
                 .append("client_type", r.getClientType())
-                .append("client_version", r.getClientVersion());
+                .append("client_version", r.getClientVersion())
+                .append("upstream_status", r.getUpstreamStatus())
+                .append("proposal_id", r.getProposalId());
         getCollection().insertOne(doc);
     }
 
@@ -118,6 +120,8 @@ public class MongoScmApiActionStore implements ScmApiActionStore {
                 .userAgent(doc.getString("user_agent"))
                 .clientType(doc.getString("client_type"))
                 .clientVersion(doc.getString("client_version"))
+                .upstreamStatus(doc.getInteger("upstream_status"))
+                .proposalId(doc.getString("proposal_id"))
                 .build();
     }
 

@@ -10,6 +10,8 @@ import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.PushStoreFactory;
 import com.rbc.fogwall.db.ScmApiActionStore;
 import com.rbc.fogwall.db.ScmApiActionStoreFactory;
+import com.rbc.fogwall.db.ScmApiProposalStore;
+import com.rbc.fogwall.db.ScmApiProposalStoreFactory;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.db.jdbc.DataSourceFactory;
 import com.rbc.fogwall.db.jdbc.JdbcFetchStore;
@@ -100,6 +102,7 @@ public class JettyConfigurationBuilder {
     private GitHubNodeIdCache cachedGitHubNodeIdCache;
     private GitLabProjectIdCache cachedGitLabProjectIdCache;
     private ScmApiActionStore cachedScmApiActionStore;
+    private ScmApiProposalStore cachedScmApiProposalStore;
 
     public JettyConfigurationBuilder(FogwallConfig config) {
         this.config = config;
@@ -633,7 +636,8 @@ public class JettyConfigurationBuilder {
                 new SshScmIdentityEnricher(SshScmIdentityEnricher.DEFAULT_TTL, buildSshFingerprintCache()),
                 buildNodeIdCache(),
                 buildGitLabProjectIdCache(),
-                buildScmApiActionStore());
+                buildScmApiActionStore(),
+                buildScmApiProposalStore());
     }
 
     /**
@@ -1088,6 +1092,15 @@ public class JettyConfigurationBuilder {
                 ? requireMongoStoreFactory().scmApiActionStore()
                 : ScmApiActionStoreFactory.fromDataSource(requireJdbcDataSource());
         return cachedScmApiActionStore;
+    }
+
+    /** Builds the {@link ScmApiProposalStore} (the proposal registry) based on the database configuration. */
+    public ScmApiProposalStore buildScmApiProposalStore() {
+        if (cachedScmApiProposalStore != null) return cachedScmApiProposalStore;
+        cachedScmApiProposalStore = "mongo".equals(config.getDatabase().getType())
+                ? requireMongoStoreFactory().scmApiProposalStore()
+                : ScmApiProposalStoreFactory.fromDataSource(requireJdbcDataSource());
+        return cachedScmApiProposalStore;
     }
 
     /**

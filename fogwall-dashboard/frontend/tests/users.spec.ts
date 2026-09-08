@@ -14,10 +14,13 @@ test.describe('users', () => {
   test("dev's overview shows SCM identities and email", async ({ page }) => {
     await page.goto('/dashboard/users/dev')
     const scm = page.locator('section').filter({ has: page.getByText('SCM Identities') })
-    for (const provider of ['github', 'gitlab', 'gitea']) {
-      await expect(scm.getByText(provider, { exact: true })).toBeVisible()
+    for (const provider of ['github', 'gitlab', 'gitea', 'codeberg']) {
+      await expect(scm.getByText(provider, { exact: true }).first()).toBeVisible()
     }
-    await expect(scm.getByText(FIXTURE.handle).first()).toBeVisible()
+    // dev holds two github accounts: the OAuth-linked one and a hand-typed second one.
+    await expect(scm.getByText('github', { exact: true })).toHaveCount(2)
+    await expect(scm.getByText(FIXTURE.handle, { exact: true }).first()).toBeVisible()
+    await expect(scm.getByText(`${FIXTURE.handle}-alt`, { exact: true })).toBeVisible()
     await expect(page.getByText(FIXTURE.email)).toBeVisible()
   })
 
@@ -35,7 +38,11 @@ test.describe('users', () => {
     await expect(
       rows.filter({ hasText: 'github' }).filter({ hasText: /push/i }).first(),
     ).toBeVisible()
-    await expect(rows.filter({ hasText: 'gitea' })).toContainText(/regex/i)
+    // the gitea PUSH grant targets the owner (LITERAL); PROPOSE is a separate gitea grant
+    await expect(
+      rows.filter({ hasText: 'gitea' }).filter({ hasText: /push/i }).first(),
+    ).toContainText(/literal/i)
+    await expect(rows.filter({ hasText: 'gitea' }).filter({ hasText: /propose/i })).toHaveCount(1)
     // inherited via the gitlab-contributors group
     await expect(page.getByText('gitlab-contributors')).toBeVisible()
     // config-sourced rows are locked, not removable

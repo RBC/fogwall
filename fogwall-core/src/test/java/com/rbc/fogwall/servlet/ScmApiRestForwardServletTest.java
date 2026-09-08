@@ -3,6 +3,9 @@ package com.rbc.fogwall.servlet;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.rbc.fogwall.db.InMemoryScmApiProposalStore;
+import com.rbc.fogwall.scmapi.ForgejoProposalResponseReader;
+import com.rbc.fogwall.scmapi.ProposalRegistrar;
 import com.sun.net.httpserver.HttpServer;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletInputStream;
@@ -56,7 +59,8 @@ class ScmApiRestForwardServletTest {
     private ScmApiRestForwardServlet servlet() {
         return new ScmApiRestForwardServlet(
                 "http://localhost:" + upstream.getAddress().getPort() + "/api/v1",
-                ScmApiRestPathPolicy.EncodedSeparators.FORGEJO_FILE_PATH);
+                ScmApiRestPathPolicy.EncodedSeparators.FORGEJO_FILE_PATH,
+                new ProposalRegistrar(new InMemoryScmApiProposalStore(), new ForgejoProposalResponseReader()));
     }
 
     /**

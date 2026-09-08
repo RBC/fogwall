@@ -19,8 +19,9 @@ import java.util.Locale;
  *
  * <p>GitLab addresses a project as a single URL-encoded {@code owner/repo} segment, so
  * {@code /projects/acme%2Fwidgets/issues} is ordinary traffic, confined to the segment after {@code projects}. Forgejo
- * encodes a repository-relative file path into one segment of its blob endpoints, which {@code fj} reads before
- * creating a pull request, confined to the path portion. GitHub needs no exception: one fixed GraphQL path.
+ * encodes a repository-relative file path into one segment of its blob endpoints, and a branch name into the
+ * {@code base...head} segment of {@code compare} — both of which {@code fj} requests before creating a pull request —
+ * confined to the segments past the repository. GitHub needs no exception: one fixed GraphQL path.
  *
  * <p>An encoded separator is refused everywhere else, including in the segments each dialect's authorization decision
  * is read from. That confinement is the other half of the connector's relaxed {@code UriCompliance}: each place an
@@ -35,18 +36,20 @@ public final class ScmApiRestPathPolicy {
         /** Valid only in the segment following {@code projects} — GitLab's URL-encoded {@code owner/repo}. */
         GITLAB_PROJECT_SEGMENT,
         /**
-         * Valid only in the file path of a Forgejo blob endpoint — {@code /repos/{owner}/{repo}/raw/{path}} and its
-         * {@code contents}/{@code media} siblings, where the whole repository-relative path is one encoded segment.
-         * {@code fj} reads {@code .forgejo%2Fpull_request_template.md} before creating a pull request, so refusing this
-         * outright breaks the CLI. The owner and repo segments are still refused, which is what the authorization
-         * decision reads.
+         * Valid only past the repository in the Forgejo endpoints that encode a slash-bearing name into one segment:
+         * the file path of a blob endpoint — {@code /repos/{owner}/{repo}/raw/{path}} and its
+         * {@code contents}/{@code media} siblings — and the {@code {base}...{head}} of {@code compare}, where a branch
+         * such as {@code feature/x} arrives as {@code feature%2Fx}. {@code fj} reads
+         * {@code .forgejo%2Fpull_request_template.md} and compares the two branches before creating a pull request, so
+         * refusing either breaks the CLI. The owner and repo segments are still refused, which is what the
+         * authorization decision reads.
          */
         FORGEJO_FILE_PATH
     }
 
     private static final String PROJECTS_SEGMENT = "projects";
     private static final String REPOS_SEGMENT = "repos";
-    private static final List<String> FORGEJO_BLOB_SEGMENTS = List.of("raw", "contents", "media");
+    private static final List<String> FORGEJO_ENCODED_NAME_SEGMENTS = List.of("raw", "contents", "media", "compare");
     private static final int FORGEJO_FILE_PATH_INDEX = 4;
     private static final String ENCODED_SLASH = "%2f";
     private static final String ENCODED_BACKSLASH = "%5c";
@@ -92,7 +95,7 @@ public final class ScmApiRestPathPolicy {
                 index >= FORGEJO_FILE_PATH_INDEX
                         && segments.length > 3
                         && REPOS_SEGMENT.equals(segments[0])
-                        && FORGEJO_BLOB_SEGMENTS.contains(segments[3]);
+                        && FORGEJO_ENCODED_NAME_SEGMENTS.contains(segments[3]);
         };
     }
 }

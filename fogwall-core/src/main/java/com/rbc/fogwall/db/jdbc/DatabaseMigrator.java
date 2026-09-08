@@ -133,11 +133,13 @@ public class DatabaseMigrator {
                     "push commit co-authored-by trailers (mysql/mariadb)",
                     "db/migration-mysql/V14__push_commit_co_authored_by.sql",
                     Vendor.MYSQL_ONLY),
-            new Migration("15", "scm api proxy", "db/migration/V15__scm_api_proxy.sql", Vendor.EXCEPT_MYSQL),
+            // One file for every engine; the MySQL column-width difference is its own follow-up below rather than a
+            // near-identical copy that every edit has to be made to twice.
+            new Migration("15", "scm api proxy", "db/migration/V15__scm_api_proxy.sql", Vendor.ANY),
             new Migration(
-                    "15",
-                    "scm api proxy (mysql/mariadb)",
-                    "db/migration-mysql/V15__scm_api_proxy.sql",
+                    "15.1",
+                    "scm api proxy variables mediumtext (mysql/mariadb)",
+                    "db/migration-mysql/V15_1__scm_api_variables_mediumtext.sql",
                     Vendor.MYSQL_ONLY),
             // A plain ADD COLUMN, identical on every supported engine, so there is no MySQL-specific variant.
             new Migration(

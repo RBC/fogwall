@@ -20,6 +20,27 @@ export interface ScmApiActionRecord {
   status: ScmApiActionStatus
   reason?: string
   variablesJson?: string
+  /** The upstream's HTTP status for a forwarded mutation. */
+  upstreamStatus?: number
+  proposalId?: string
+  /** The proposal the mutation created or touched, when the upstream response named one (#578). */
+  proposal?: ScmApiProposal
+}
+
+export interface ScmApiProposal {
+  id: string
+  provider: string
+  repoOwner: string
+  repoName: string
+  kind: 'PULL_REQUEST' | 'ISSUE'
+  number: number
+  url?: string
+  nodeId?: string
+  title?: string
+  state: 'OPEN' | 'CLOSED' | 'MERGED'
+  createdBy?: string
+  createdAt?: string | number
+  updatedAt?: string | number
 }
 
 export interface Step {

@@ -182,6 +182,7 @@ class ScmApiGitLabGateFilterTest {
         verify(chain).doFilter(any(), eq(resp));
         assertEquals("issues.create", context.getMutationField());
         assertEquals("acme", context.getRepoOwner());
+        assertNotNull(context.getVariablesJson(), "the body is the audit evidence");
         assertEquals("widgets", context.getRepoName());
     }
 

@@ -187,6 +187,7 @@ public class FogwallDashboardApplication {
             bf.registerSingleton("repoRegistry", urlRuleRegistry);
             bf.registerSingleton("fetchStore", ctx.fetchStore());
             bf.registerSingleton("scmApiActionStore", ctx.scmApiActionStore());
+            bf.registerSingleton("scmApiProposalStore", ctx.scmApiProposalStore());
             bf.registerSingleton("sshScmIdentityEnricher", ctx.sshScmIdentityEnricher());
             bf.registerSingleton("scmOAuthConfig", scmOAuthConfig);
             // #340: expose both local-mirror caches so AdminCacheController can inspect/invalidate them. Both are
