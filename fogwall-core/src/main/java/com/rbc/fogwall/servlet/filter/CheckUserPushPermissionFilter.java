@@ -12,6 +12,7 @@ import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.service.PushIdentityResolver;
+import com.rbc.fogwall.service.ResolvedScmIdentity;
 import com.rbc.fogwall.user.ScmIdentity;
 import com.rbc.fogwall.user.UserEntry;
 import jakarta.servlet.http.HttpServletRequest;
@@ -87,7 +88,8 @@ public class CheckUserPushPermissionFilter extends AbstractFogwallFilter {
         String pushUsername = userPass != null ? userPass[0] : null;
         String pushToken = userPass != null ? userPass[1] : null;
 
-        Optional<UserEntry> resolved = identityResolver.resolve(requestDetails.getProvider(), pushUsername, pushToken);
+        Optional<ResolvedScmIdentity> resolved =
+                identityResolver.resolveIdentity(requestDetails.getProvider(), pushUsername, pushToken);
 
         if (resolved.isEmpty()) {
             String identity = pushUsername != null ? pushUsername : "(unknown)";
@@ -108,7 +110,8 @@ public class CheckUserPushPermissionFilter extends AbstractFogwallFilter {
             return;
         }
 
-        UserEntry user = resolved.get();
+        UserEntry user = resolved.get().user();
+        String tokenScmLogin = resolved.get().scmLogin();
         String providerId = requestDetails.getProvider() != null
                 ? requestDetails.getProvider().getProviderId()
                 : null;
@@ -149,13 +152,15 @@ public class CheckUserPushPermissionFilter extends AbstractFogwallFilter {
             if (identityMode == ScmOAuthConfig.IdentityMode.STRICT) {
                 identities = identities.filter(ScmIdentity::isVerified);
             }
-            Optional<String> scmUsername =
+            Optional<String> identityOnFile =
                     identities.map(ScmIdentity::getUsername).findFirst();
-            if (scmUsername.isEmpty() && identityMode == ScmOAuthConfig.IdentityMode.STRICT) {
+            if (identityOnFile.isEmpty() && identityMode == ScmOAuthConfig.IdentityMode.STRICT) {
                 blockUnverifiedIdentity(request, response, user);
                 return;
             }
-            scmUsername.ifPresent(requestDetails::setScmUsername);
+            // The record names the account the token belongs to. Identities on file only say which accounts the user
+            // has linked, and a user may hold several on one provider.
+            Optional.ofNullable(tokenScmLogin).or(() -> identityOnFile).ifPresent(requestDetails::setScmUsername);
         }
     }
 

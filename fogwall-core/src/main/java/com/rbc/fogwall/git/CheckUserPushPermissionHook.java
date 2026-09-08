@@ -11,6 +11,7 @@ import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.SshKeyFingerprintLookup;
 import com.rbc.fogwall.service.PushIdentityResolver;
+import com.rbc.fogwall.service.ResolvedScmIdentity;
 import com.rbc.fogwall.service.SshScmLoginResolver;
 import com.rbc.fogwall.servlet.filter.CheckUserPushPermissionFilter;
 import com.rbc.fogwall.user.ScmIdentity;
@@ -115,7 +116,7 @@ public class CheckUserPushPermissionHook implements FogwallHook {
         // SSH transport: user resolved by public-key auth — skip token-based identity resolution.
         var preAuthenticated = pushContext.getTransport().preAuthenticatedUser();
         if (preAuthenticated.isPresent()) {
-            checkRepoPermission(preAuthenticated.get(), repoSlug);
+            checkRepoPermission(preAuthenticated.get(), repoSlug, null);
             return;
         }
 
@@ -136,8 +137,7 @@ public class CheckUserPushPermissionHook implements FogwallHook {
             return;
         }
 
-        Optional<UserEntry> resolved =
-                identityResolver != null ? identityResolver.resolve(provider, pushUser, pushToken) : Optional.empty();
+        Optional<ResolvedScmIdentity> resolved = identityResolver.resolveIdentity(provider, pushUser, pushToken);
 
         if (resolved.isEmpty()) {
             log.warn("Push user '{}' could not be resolved to a registered proxy user", pushUser);
@@ -159,10 +159,14 @@ public class CheckUserPushPermissionHook implements FogwallHook {
             return;
         }
 
-        checkRepoPermission(resolved.get(), repoSlug);
+        checkRepoPermission(resolved.get().user(), repoSlug, resolved.get().scmLogin());
     }
 
-    private void checkRepoPermission(UserEntry user, String repoSlug) {
+    /**
+     * @param tokenScmLogin the provider account the push credential named, or null on SSH and for resolvers that map
+     *     credentials to users by some other means than an SCM lookup
+     */
+    private void checkRepoPermission(UserEntry user, String repoSlug, String tokenScmLogin) {
         String providerId = provider != null ? provider.getProviderId() : null;
 
         if (providerId == null
@@ -254,19 +258,20 @@ public class CheckUserPushPermissionHook implements FogwallHook {
             }
             pushContext.setScmUsername(scmLogin.get());
         } else if (provider != null) {
-            // HTTP: scmUsername comes from the token lookup already performed during identity resolution
             var httpScmIdentities = user.getScmIdentities().stream()
                     .filter(id -> provider.getProviderId().equalsIgnoreCase(id.getProvider()));
             if (identityMode == ScmOAuthConfig.IdentityMode.STRICT) {
                 httpScmIdentities = httpScmIdentities.filter(ScmIdentity::isVerified);
             }
-            Optional<String> scmUsername =
+            Optional<String> identityOnFile =
                     httpScmIdentities.map(ScmIdentity::getUsername).findFirst();
-            if (scmUsername.isEmpty() && identityMode == ScmOAuthConfig.IdentityMode.STRICT) {
+            if (identityOnFile.isEmpty() && identityMode == ScmOAuthConfig.IdentityMode.STRICT) {
                 blockUnverifiedIdentity(user);
                 return;
             }
-            scmUsername.ifPresent(pushContext::setScmUsername);
+            // The record names the account the token belongs to. Identities on file only say which accounts the user
+            // has linked, and a user may hold several on one provider.
+            Optional.ofNullable(tokenScmLogin).or(() -> identityOnFile).ifPresent(pushContext::setScmUsername);
         }
         pushContext.addStep(PushStep.builder()
                 .stepName("checkUserPermission")
