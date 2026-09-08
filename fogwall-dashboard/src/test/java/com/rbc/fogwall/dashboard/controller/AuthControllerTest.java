@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
+import com.rbc.fogwall.config.ScmOAuthConfig;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
 import com.rbc.fogwall.user.ScmIdentity;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -50,6 +52,9 @@ class AuthControllerTest {
 
         @Mock
         RepoPermissionService repoPermissionService;
+
+        @Spy
+        ScmOAuthConfig scmOAuthConfig = ScmOAuthConfig.defaultConfig();
 
         @Test
         void mutableStore_returnsVerifiedEmailsAndIdentities() {
@@ -123,6 +128,9 @@ class AuthControllerTest {
 
         @Mock
         RepoPermissionService repoPermissionService;
+
+        @Spy
+        ScmOAuthConfig scmOAuthConfig = ScmOAuthConfig.defaultConfig();
 
         @Test
         void staticStore_emailsUnverifiedAndLocal() {

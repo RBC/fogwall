@@ -3,6 +3,7 @@ package com.rbc.fogwall.jetty;
 import com.rbc.fogwall.build.BuildInfo;
 import com.rbc.fogwall.config.FogwallConfigLoader;
 import com.rbc.fogwall.config.JettyConfigurationBuilder;
+import com.rbc.fogwall.config.ScmOAuthConfig;
 import com.rbc.fogwall.config.ServerConfig;
 import com.rbc.fogwall.config.TlsConfig;
 import com.rbc.fogwall.jetty.reload.LiveConfigLoader;
@@ -49,6 +50,7 @@ public class FogwallJettyApplication {
         var fogwallConfig = FogwallConfigLoader.load();
         var configBuilder = new JettyConfigurationBuilder(fogwallConfig);
         configBuilder.validateProviderReferences(); // fail fast before any DB or port setup
+        rejectDashboardOnlyConfig(configBuilder);
         configBuilder.applyOutboundProxySystemWiring(); // before any outbound connection is made
 
         var threadPool = new QueuedThreadPool();
@@ -140,6 +142,32 @@ public class FogwallJettyApplication {
      * that must be started before use. A limit of 0 (or lower) leaves the platform pool handling requests directly, as
      * an operational escape hatch.
      */
+    /**
+     * Fails startup on configuration that only a dashboard can satisfy.
+     *
+     * <p>This distribution serves git traffic and records its decisions; a push's lifecycle here is automated checks
+     * and nothing else. It has no REST API and no web UI, so settings whose completion depends on one cannot be
+     * satisfied — not partially, not eventually. Accepting them means the operator discovers it one refused or hung
+     * push at a time, which is worse than refusing to start.
+     *
+     * <p>Deliberately fatal rather than ignored: silently downgrading a security setting an operator asked for is the
+     * worse failure. Run the dashboard distribution if you want either of these.
+     */
+    static void rejectDashboardOnlyConfig(JettyConfigurationBuilder configBuilder) {
+        if (configBuilder.buildScmOAuthConfig().getIdentityMode() == ScmOAuthConfig.IdentityMode.STRICT) {
+            throw new IllegalStateException("scm-oauth.identity-mode: strict requires the dashboard distribution."
+                    + " Strict mode honours only OAuth-verified identities and the SSH keys imported with them, and"
+                    + " account linking is a dashboard flow that this server does not serve. With users configured it"
+                    + " would refuse every push; with none it is skipped entirely. Use identity-mode: permissive here,"
+                    + " or run fogwall-dashboard.");
+        }
+        if ("ui".equals(configBuilder.getServerApprovalMode())) {
+            throw new IllegalStateException("server.approval-mode: ui requires the dashboard distribution. This server"
+                    + " has no REST API or review UI, so a push held for review would wait until the approval timeout"
+                    + " and then fail. Use approval-mode: auto here, or run fogwall-dashboard.");
+        }
+    }
+
     public static void enableVirtualThreads(
             Server server, QueuedThreadPool threadPool, String name, int maxConcurrentRequests) {
         if (maxConcurrentRequests <= 0) {
