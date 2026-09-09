@@ -131,10 +131,104 @@ export async function fetchConfig(): Promise<{
   scmIdentityMode: string
   /** Whether any provider has proposals enabled; the PROPOSE grant is offered only when one does. */
   proposalsEnabled: boolean
+  /** Whether any provider has dashboard issue filing enabled; the ISSUE grant is offered only when one does. */
+  issuesEnabled: boolean
 }> {
   const res = await fetch('/api/runtime-config')
   if (!res.ok) throw new Error('Failed to fetch config')
   return res.json()
+}
+
+// --- Dashboard issue filing (create / edit / comment on the user's behalf) ---
+
+export interface IssueResult {
+  number: number
+  url: string
+}
+
+/** Providers the current user may file issues on: issue-enabled in config and linked by this user via OAuth. */
+export async function fetchIssueProviders(): Promise<{ name: string }[]> {
+  const res = await apiFetch('/api/issues/providers')
+  if (!res.ok) throw new Error('Failed to load issue providers')
+  return res.json()
+}
+
+/** Resolves an issue response, folding any content-inspection violations into the thrown error message. */
+async function issueResult(res: Response, fallback: string): Promise<IssueResult> {
+  if (res.ok) return res.json()
+  const text = await res.text()
+  let message = `${fallback} (HTTP ${res.status})`
+  try {
+    const err = JSON.parse(text)
+    if (err.error) message = err.error
+    if (Array.isArray(err.violations) && err.violations.length > 0) {
+      message += ': ' + err.violations.join('; ')
+    }
+  } catch {
+    // not JSON — keep the fallback
+  }
+  throw new Error(message)
+}
+
+export async function createIssue(body: {
+  provider: string
+  owner: string
+  repo: string
+  title: string
+  body: string
+}): Promise<IssueResult> {
+  const res = await apiFetch('/api/issues', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  return issueResult(res, 'Failed to create issue')
+}
+
+export async function editIssue(body: {
+  provider: string
+  owner: string
+  repo: string
+  number: number
+  title?: string
+  body?: string
+}): Promise<IssueResult> {
+  const res = await apiFetch('/api/issues', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  return issueResult(res, 'Failed to edit issue')
+}
+
+export async function commentIssue(body: {
+  provider: string
+  owner: string
+  repo: string
+  number: number
+  body: string
+}): Promise<IssueResult> {
+  const res = await apiFetch('/api/issues/comment', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  return issueResult(res, 'Failed to comment on issue')
+}
+
+export async function setIssueState(body: {
+  provider: string
+  owner: string
+  repo: string
+  number: number
+  close: boolean
+}): Promise<IssueResult> {
+  const res = await apiFetch('/api/issues/state', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  return issueResult(res, body.close ? 'Failed to close issue' : 'Failed to reopen issue')
 }
 
 export async function fetchUsers() {

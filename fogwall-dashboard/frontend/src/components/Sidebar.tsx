@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { NavLink } from 'react-router'
 import type { CurrentUser } from '../types'
 
@@ -6,16 +6,8 @@ interface SidebarProps {
   currentUser: CurrentUser | null
   dark: boolean
   toggleDark: () => void
-}
-
-const COLLAPSE_KEY = 'fogwall-nav-collapsed'
-
-function readCollapsed(): boolean {
-  try {
-    return localStorage.getItem(COLLAPSE_KEY) === '1'
-  } catch {
-    return false
-  }
+  /** Collapsed state is owned by App (the toggle lives in the top bar); the Sidebar only renders from it. */
+  collapsed: boolean
 }
 
 function getCsrfToken(): string | null {
@@ -112,7 +104,7 @@ const PRIMARY: Dest[] = [
   { to: '/', label: 'Overview', icon: 'overview', end: true },
   { to: '/pushes', label: 'Pushes', icon: 'pushes' },
   { to: '/proposals', label: 'Proposals', icon: 'proposals' },
-  { to: '/issues', label: 'Issues', icon: 'issues', disabled: true },
+  { to: '/issues', label: 'Issues', icon: 'issues' },
   { to: '/repos', label: 'Repos', icon: 'repos' },
   { to: '/providers', label: 'Providers', icon: 'providers' },
 ]
@@ -146,7 +138,7 @@ function NavRow({ dest, collapsed }: { dest: Dest; collapsed: boolean }) {
       <div
         title="Not available yet"
         className={
-          'flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium text-slate-500 ' +
+          'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-slate-500 ' +
           (collapsed ? 'justify-center' : '')
         }
       >
@@ -162,7 +154,7 @@ function NavRow({ dest, collapsed }: { dest: Dest; collapsed: boolean }) {
       end={dest.end}
       title={collapsed ? dest.label : undefined}
       className={({ isActive }) =>
-        'flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors ' +
+        'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors ' +
         (collapsed ? 'justify-center ' : '') +
         (isActive ? 'bg-blue-600 text-white' : 'text-slate-200 hover:bg-slate-700')
       }
@@ -173,33 +165,20 @@ function NavRow({ dest, collapsed }: { dest: Dest; collapsed: boolean }) {
   )
 }
 
-export function Sidebar({ currentUser, dark, toggleDark }: SidebarProps) {
-  const [collapsed, setCollapsed] = useState(readCollapsed)
+export function Sidebar({ currentUser, dark, toggleDark, collapsed }: SidebarProps) {
   const isAdmin = currentUser?.authorities.includes('ROLE_ADMIN') ?? false
-
-  function toggleCollapsed() {
-    setCollapsed((v) => {
-      const next = !v
-      try {
-        localStorage.setItem(COLLAPSE_KEY, next ? '1' : '0')
-      } catch {
-        /* private mode — collapse is per-session only */
-      }
-      return next
-    })
-  }
 
   return (
     <aside
       className={
         'sticky top-0 flex h-screen shrink-0 flex-col border-r border-slate-900 bg-slate-800 text-slate-200 transition-[width] ' +
-        (collapsed ? 'w-16' : 'w-60')
+        (collapsed ? 'w-16' : 'w-56')
       }
     >
-      {/* Header: brand → Overview, plus the collapse toggle. */}
+      {/* Header: brand → Overview. The collapse toggle lives in the top bar, next to the breadcrumb. */}
       <div
         className={
-          'flex min-h-[60px] items-center gap-1 border-b border-slate-900 px-3 ' +
+          'flex min-h-[60px] items-center gap-1 px-3 ' +
           (collapsed ? 'flex-col justify-center gap-2 py-2.5' : '')
         }
       >
@@ -245,24 +224,6 @@ export function Sidebar({ currentUser, dark, toggleDark }: SidebarProps) {
             <span className="text-xl font-semibold tracking-tight text-white">fogwall</span>
           )}
         </NavLink>
-        <button
-          onClick={toggleCollapsed}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          aria-expanded={!collapsed}
-          title={collapsed ? 'Expand' : 'Collapse'}
-          className="flex shrink-0 items-center justify-center rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
-        >
-          <svg
-            className={'h-4 w-4 transition-transform ' + (collapsed ? 'rotate-180' : '')}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            aria-hidden="true"
-          >
-            <path d="M13 6l-6 6 6 6M18 6l-6 6 6 6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
       </div>
 
       {/* Destinations */}
@@ -274,7 +235,7 @@ export function Sidebar({ currentUser, dark, toggleDark }: SidebarProps) {
         {isAdmin && (
           <>
             {!collapsed && (
-              <div className="px-2.5 pb-1 pt-4 text-[10.5px] font-semibold uppercase tracking-wider text-slate-500">
+              <div className="px-2.5 pb-1 pt-3 text-[10.5px] font-semibold uppercase tracking-wider text-slate-500">
                 Admin
               </div>
             )}
@@ -334,34 +295,11 @@ export function Sidebar({ currentUser, dark, toggleDark }: SidebarProps) {
               <path d="M10 14 21 3" strokeLinecap="round" />
             </svg>
           </a>
-        </div>
-
-        {/* Personal cluster: profile, theme toggle, sign out. */}
-        <div className={'mt-1.5 flex items-center gap-1.5 ' + (collapsed ? 'flex-col' : '')}>
-          {currentUser && (
-            <NavLink
-              to="/profile"
-              title={currentUser.username}
-              className={
-                'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 hover:bg-slate-700 ' +
-                (collapsed ? 'justify-center px-0' : '')
-              }
-            >
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-gradient-to-br from-blue-600 to-sky-500 text-[13px] font-bold text-white">
-                {currentUser.username.charAt(0).toUpperCase()}
-              </span>
-              {!collapsed && (
-                <span className="truncate text-[13px] font-semibold text-white">
-                  {currentUser.username}
-                </span>
-              )}
-            </NavLink>
-          )}
           <button
             onClick={toggleDark}
             title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
             aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-            className="flex items-center justify-center rounded-md border border-slate-700 p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-slate-700 px-2 py-1.5 text-xs font-medium text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
           >
             {dark ? (
               <svg
@@ -386,31 +324,61 @@ export function Sidebar({ currentUser, dark, toggleDark }: SidebarProps) {
                 <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
               </svg>
             )}
+            {!collapsed && <span>{dark ? 'Light' : 'Dark'}</span>}
           </button>
-          {currentUser && (
-            <button
-              onClick={logout}
-              title="Sign out"
-              aria-label="Sign out"
-              className="flex items-center justify-center rounded-md border border-slate-700 p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
-            >
-              <svg
-                className="h-[15px] w-[15px]"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                aria-hidden="true"
-              >
-                <path
-                  d="M15 12H4M8 8l-4 4 4 4M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-          )}
         </div>
+
+        {/* Profile — name and role (admin/user, from the mapped authorities), links to the profile page. */}
+        {currentUser && (
+          <NavLink
+            to="/profile"
+            title={currentUser.username}
+            className={
+              'mt-2 flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 hover:bg-slate-700 ' +
+              (collapsed ? 'justify-center px-0' : '')
+            }
+          >
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-gradient-to-br from-blue-600 to-sky-500 text-[13px] font-bold text-white">
+              {currentUser.username.charAt(0).toUpperCase()}
+            </span>
+            {!collapsed && (
+              <span className="min-w-0">
+                <span className="block truncate text-[13px] font-semibold text-white">
+                  {currentUser.username}
+                </span>
+                <span className="block truncate text-[11px] text-slate-400">
+                  {isAdmin ? 'admin' : 'user'}
+                </span>
+              </span>
+            )}
+          </NavLink>
+        )}
+
+        {/* Sign out — full width at the very bottom, away from the theme toggle so it isn't a mis-click. */}
+        {currentUser && (
+          <button
+            onClick={logout}
+            title="Sign out"
+            aria-label="Sign out"
+            className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-md border border-slate-700 px-2 py-1.5 text-xs font-medium text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
+          >
+            <svg
+              className="h-[15px] w-[15px]"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              aria-hidden="true"
+            >
+              <path
+                d="M15 12H4M8 8l-4 4 4 4M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            {!collapsed && <span>Sign out</span>}
+          </button>
+        )}
 
         {/* Compact legal/attribution line — always reachable in the persistent rail, costs no content height. */}
         {!collapsed && (

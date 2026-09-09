@@ -20,8 +20,8 @@ import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.ForgejoProvider;
 import com.rbc.fogwall.scmapi.ForgejoProposalResponseReader;
 import com.rbc.fogwall.scmapi.ProposalContent;
-import com.rbc.fogwall.scmapi.ProposalContentInspector;
 import com.rbc.fogwall.scmapi.ProposalRegistrar;
+import com.rbc.fogwall.scmapi.ScmContentInspector;
 import com.rbc.fogwall.service.TokenPushIdentityResolver;
 import com.rbc.fogwall.servlet.ScmApiRestForwardServlet;
 import com.rbc.fogwall.servlet.ScmApiRestPathPolicy;
@@ -209,7 +209,7 @@ class ScmApiProposalsE2ETest {
                 .enabled(true)
                 .bundles(List.of("national-id-ca"))
                 .build();
-        var inspector = new ProposalContentInspector(
+        var inspector = new ScmContentInspector(
                 () -> block, () -> secretScan, new SecretScanCheck(secretScan), () -> contentPatterns);
 
         actionStore = new RecordingActionStore();

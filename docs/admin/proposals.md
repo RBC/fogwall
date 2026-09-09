@@ -254,3 +254,27 @@ asking the provider directly — fogwall relays that token and grants nothing on
 fogwall is the sanctioned route to a self-hosted provider inside your perimeter, read traffic through it is not in
 fogwall's audit trail.** The provider's own access logs are the record of what was read. Worth knowing you are relying
 on them, rather than discovering it during an investigation.
+
+## Filing issues from the dashboard (no CLI)
+
+Reporting a bug or joining an issue discussion needs no code access, so fogwall also lets a developer create, edit,
+comment on and close/reopen issues through the dashboard's **Issues** page — no CLI to install and no personal token to
+manage. It is enabled per provider, separately from the CLI proxy above and off by default:
+
+```yaml
+providers:
+  github:
+    issues-enabled: true
+```
+
+`issues-enabled` sits directly on the provider, not under `proposals`: unlike the proxy, this feature makes the calls
+itself on the user's behalf, so it needs no dedicated listener or port. It does need the user to have linked their
+account for that provider via OAuth (see [SCM OAuth account linking](scm-oauth.md)) — fogwall acts as them — and it uses
+each provider's plain issue REST API, covering the same providers as the proxy (GitHub, GitLab, Forgejo/Gitea). A
+provider is offered in the form only when it is both `issues-enabled` and linked by that user.
+
+Two grants permit it: the narrow `ISSUE` grant (issues only) or `PROPOSE`, which is a superset — so someone can be
+permitted to file bugs while holding no ability to push code or open a pull request. The issue title and body pass
+through the same content inspection as a proposal (secret scanning, blocked literals and patterns, content-pattern
+bundles) before they leave, and every attempt writes one record to the audit trail above, marked with the `dashboard`
+client type. Fail-closed throughout: no grant, no linked account, or a content match, and the operation is refused.

@@ -3,6 +3,7 @@ package com.rbc.fogwall.user;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import javax.sql.DataSource;
@@ -65,6 +66,15 @@ public class JdbcScmOAuthTokenStore implements ScmOAuthTokenStore {
                         (rs, rowNum) -> rs.getBytes("access_token"))
                 .stream()
                 .findFirst();
+    }
+
+    /** Returns the providers {@code username} has a linked OAuth token for. */
+    @Override
+    public List<String> findLinkedProviders(String username) {
+        return jdbc.query(
+                "SELECT provider FROM user_scm_tokens WHERE username = :u ORDER BY provider",
+                Map.of("u", username),
+                (rs, rowNum) -> rs.getString("provider"));
     }
 
     /** Removes the stored token for {@code (username, provider)}, if any. No-ops if none exists. */

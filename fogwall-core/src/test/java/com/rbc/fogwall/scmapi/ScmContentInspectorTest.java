@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
-class ProposalContentInspectorTest {
+class ScmContentInspectorTest {
 
     private static final JsonMapper MAPPER = new JsonMapper();
 
@@ -27,13 +27,13 @@ class ProposalContentInspectorTest {
                 .build();
     }
 
-    private static ProposalContentInspector inspector(BlockConfig block, SecretScanConfig secretScan) {
+    private static ScmContentInspector inspector(BlockConfig block, SecretScanConfig secretScan) {
         return inspector(block, secretScan, ContentPatternConfig.defaultConfig());
     }
 
-    private static ProposalContentInspector inspector(
+    private static ScmContentInspector inspector(
             BlockConfig block, SecretScanConfig secretScan, ContentPatternConfig contentPatterns) {
-        return new ProposalContentInspector(
+        return new ScmContentInspector(
                 () -> block, () -> secretScan, new SecretScanCheck(secretScan), () -> contentPatterns);
     }
 

@@ -90,6 +90,16 @@ public class RepoPermissionService {
     }
 
     /**
+     * Returns {@code true} when {@code username} may file or follow up on issues (create, edit, comment) against
+     * {@code path} at {@code provider} — either through an explicit {@link RepoPermission.Grant#ISSUE} grant or via the
+     * broader {@link RepoPermission.Grant#PROPOSE}, which is a superset. Fail-closed: returns {@code false} if no
+     * grants exist for the path. Drives fogwall's dashboard issue path; reads are not gated here.
+     */
+    public boolean isAllowedToFileIssue(String username, String provider, String path) {
+        return isAllowed(username, provider, path, RepoPermission.Grant.ISSUE);
+    }
+
+    /**
      * Returns {@code true} when {@code username} is authorised to merge a pull/merge request against {@code path} at
      * {@code provider} through the SCM API proxy's maintainer path. Fail-closed: returns {@code false} if no grants
      * exist for the path.
@@ -140,7 +150,7 @@ public class RepoPermissionService {
                 .filter(e -> e.getUsername().equals(incoming.getUsername()))
                 .filter(e -> e.getProvider().equals(incoming.getProvider()))
                 .filter(e -> pathsOverlap(e, incoming))
-                .filter(e -> grantsOverlap(e.getGrant(), incoming.getGrant()))
+                .filter(e -> e.getGrant().overlaps(incoming.getGrant()))
                 .findFirst();
     }
 
@@ -206,43 +216,6 @@ public class RepoPermissionService {
 
     // ---- internals ----
 
-    /**
-     * Whether a {@code configured} grant satisfies a {@code requested} check. {@code PUSH_AND_REVIEW} is shorthand for
-     * {@code PUSH} + {@code REVIEW} only — it must not also satisfy unrelated grants like {@code SELF_CERTIFY} or
-     * {@code PROPOSE}, which are independent axes an operator can permission separately.
-     */
-    private static boolean impliesGrant(RepoPermission.Grant configured, RepoPermission.Grant requested) {
-        if (configured == requested) {
-            return true;
-        }
-        return configured == RepoPermission.Grant.PUSH_AND_REVIEW
-                && (requested == RepoPermission.Grant.PUSH || requested == RepoPermission.Grant.REVIEW);
-    }
-
-    private boolean grantsOverlap(RepoPermission.Grant a, RepoPermission.Grant b) {
-        // SELF_CERTIFY is evaluated by isBypassReviewAllowed(), independent of push/review checks.
-        // A SELF_CERTIFY entry only conflicts with another SELF_CERTIFY entry.
-        if (a == RepoPermission.Grant.SELF_CERTIFY || b == RepoPermission.Grant.SELF_CERTIFY) {
-            return a == b;
-        }
-        // PROPOSE is a separate axis from push/review too — a repo can permission git-push and change
-        // proposals independently, so a PROPOSE entry only conflicts with another PROPOSE entry.
-        if (a == RepoPermission.Grant.PROPOSE || b == RepoPermission.Grant.PROPOSE) {
-            return a == b;
-        }
-        // MERGE is its own axis for the same reason: standalone, and cannot be granted upstream in isolation.
-        if (a == RepoPermission.Grant.MERGE || b == RepoPermission.Grant.MERGE) {
-            return a == b;
-        }
-        // Among PUSH / REVIEW / PUSH_AND_REVIEW: conflict if both entries would affect the same check.
-        // PUSH_AND_REVIEW overlaps with both PUSH and REVIEW; PUSH and REVIEW don't overlap each other.
-        boolean aPush = a == RepoPermission.Grant.PUSH || a == RepoPermission.Grant.PUSH_AND_REVIEW;
-        boolean bPush = b == RepoPermission.Grant.PUSH || b == RepoPermission.Grant.PUSH_AND_REVIEW;
-        boolean aReview = a == RepoPermission.Grant.REVIEW || a == RepoPermission.Grant.PUSH_AND_REVIEW;
-        boolean bReview = b == RepoPermission.Grant.REVIEW || b == RepoPermission.Grant.PUSH_AND_REVIEW;
-        return (aPush && bPush) || (aReview && bReview);
-    }
-
     private boolean pathsOverlap(RepoPermission a, RepoPermission b) {
         if (a.getValue().equalsIgnoreCase(b.getValue())) return true;
         if (matchesPath(a, b.getValue())) return true;
@@ -270,7 +243,7 @@ public class RepoPermissionService {
     public GrantResult evaluateGrant(String username, String provider, String path, RepoPermission.Grant op) {
         Optional<RepoPermission> direct = store.findByProvider(provider).stream()
                 .filter(p -> matchesPath(p, path))
-                .filter(p -> impliesGrant(p.getGrant(), op))
+                .filter(p -> p.getGrant().implies(op))
                 .filter(p -> username.equals(p.getUsername()))
                 .findFirst();
         if (direct.isPresent()) {
@@ -282,7 +255,7 @@ public class RepoPermissionService {
             Optional<GroupPermissionRule> viaGroup = groupStore.findRulesByProvider(provider).stream()
                     .filter(r -> userGroupIds.contains(r.getGroupId()))
                     .filter(r -> matchesPathRule(r, path))
-                    .filter(r -> impliesGrant(r.getGrant(), op))
+                    .filter(r -> r.getGrant().implies(op))
                     .findFirst();
             if (viaGroup.isPresent()) {
                 return new GrantResult.GrantedByGroup(viaGroup.get());

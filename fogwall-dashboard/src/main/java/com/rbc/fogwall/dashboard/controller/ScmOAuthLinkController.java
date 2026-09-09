@@ -115,23 +115,39 @@ public class ScmOAuthLinkController {
                 + "?client_id=" + encode(linkable.settings().getClientId())
                 + "&redirect_uri=" + encode(redirectUri)
                 + "&response_type=code"
-                + scopeParam(linkable.provider())
+                + scopeParam(linkable.provider(), isIssuesEnabled(providerId))
                 + "&state=" + encode(state);
         response.sendRedirect(authorizeUrl);
     }
 
     /**
-     * fogwall's linking flow only ever reads {@code /user} and {@code /user/emails} — hardcode exactly the scope that
-     * needs, rather than making it operator-configurable, so a misconfigured value can't request broader access than
-     * the app actually uses. GitHub Apps take no {@code scope} parameter at all; their permissions come entirely from
-     * the app's own configured account permissions.
+     * The OAuth scope requested at link time — hardcoded per provider type rather than operator-configurable, so a
+     * misconfigured value cannot request broader access than the flow uses. The identity/SSH-key reads always need the
+     * user-read scopes; when the provider has the dashboard issue feature enabled, fogwall also acts on the user's
+     * behalf to write issues, so the scope is widened to a write scope only then (kept off otherwise, so an
+     * identity-only deployment hands fogwall no write access). Empty for a provider type that takes no scope parameter.
+     *
+     * <p>GitHub gives no fine-grained "issues only" OAuth scope — {@code repo} is the narrowest that permits an issue
+     * write on private repositories (use {@code public_repo} instead if only public repos are in scope). GitLab's
+     * {@code api} and Forgejo's {@code write:issue} are the counterparts. A GitHub <em>App</em> would take no scope
+     * parameter at all (its permissions come from the app/installation), so this only applies to a classic OAuth App.
      */
-    private static String scopeParam(FogwallProvider provider) {
+    private static String scopeParam(FogwallProvider provider, boolean issuesEnabled) {
         return switch (provider.getType()) {
-            case "gitlab" -> "&scope=read_user";
-            case "forgejo" -> "&scope=read:user";
+            case "github" ->
+                issuesEnabled
+                        ? "&scope=read:user%20user:email%20read:public_key%20repo"
+                        : "&scope=read:user%20user:email%20read:public_key";
+            case "gitlab" -> issuesEnabled ? "&scope=api" : "&scope=read_user";
+            case "forgejo" -> issuesEnabled ? "&scope=read:user%20write:issue" : "&scope=read:user";
             default -> "";
         };
+    }
+
+    /** Whether the provider has the dashboard issue feature enabled, which requires a write-capable OAuth token. */
+    private boolean isIssuesEnabled(String providerId) {
+        var config = fogwallConfig.getProviders().get(providerId);
+        return config != null && config.isIssuesEnabled();
     }
 
     @Operation(operationId = "scmOAuthCallback", summary = "OAuth callback completing SCM account linking")

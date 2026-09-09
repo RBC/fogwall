@@ -7,6 +7,8 @@ import com.rbc.fogwall.config.FogwallConfigLoader;
 import com.rbc.fogwall.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.config.ScmOAuthConfig;
 import com.rbc.fogwall.crypto.TokenCipherProvider;
+import com.rbc.fogwall.dashboard.issues.DashboardIssueClient;
+import com.rbc.fogwall.dashboard.issues.DashboardIssueService;
 import com.rbc.fogwall.db.MongoStoreFactory;
 import com.rbc.fogwall.db.PendingPushExpiryTask;
 import com.rbc.fogwall.db.UrlRuleRegistry;
@@ -19,10 +21,12 @@ import com.rbc.fogwall.jetty.reload.LiveConfigLoader;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.InMemoryProviderRegistry;
 import com.rbc.fogwall.provider.ProviderRegistry;
+import com.rbc.fogwall.scmapi.ScmContentInspector;
 import com.rbc.fogwall.ssh.SshGitServer;
 import com.rbc.fogwall.ssh.SshServerRegistrar;
 import com.rbc.fogwall.user.JdbcScmOAuthTokenStore;
 import com.rbc.fogwall.user.ScmOAuthTokenStore;
+import com.rbc.fogwall.validation.SecretScanCheck;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.ServletContextEvent;
 import jakarta.servlet.ServletContextListener;
@@ -31,6 +35,7 @@ import java.time.Duration;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jetty.ee11.servlet.FilterHolder;
 import org.eclipse.jetty.ee11.servlet.ServletContextHandler;
@@ -142,6 +147,15 @@ public class FogwallDashboardApplication {
         var jdbcDataSource = configBuilder.getJdbcDataSourceOrNull();
         var mongoFactory = configBuilder.getMongoStoreFactoryOrNull();
         ScmOAuthConfig scmOAuthConfig = configBuilder.buildScmOAuthConfig();
+        // Content inspector for the dashboard issue path, built the same way the SCM API proxy builds its own:
+        // proposals block + content-pattern config, and secret scanning off the reloadable config holder.
+        var proposalsBlock = configBuilder.buildProposalsBlockConfig();
+        var proposalsContentPatterns = configBuilder.buildContentPatternConfig();
+        var scmContentInspector = new ScmContentInspector(
+                () -> proposalsBlock,
+                configHolder::getSecretScanConfig,
+                new SecretScanCheck(configHolder.getSecretScanConfig()),
+                () -> proposalsContentPatterns);
         registerSpringServlet(
                 context,
                 ctx,
@@ -152,7 +166,8 @@ public class FogwallDashboardApplication {
                 urlRuleRegistry,
                 jdbcDataSource,
                 mongoFactory,
-                scmOAuthConfig);
+                scmOAuthConfig,
+                scmContentInspector);
 
         // SCM API dialects live on their own listeners, not under the dashboard's "/" context — see
         // FogwallServletRegistrar.registerScmApiListeners for why a shared path prefix can't work.
@@ -182,7 +197,8 @@ public class FogwallDashboardApplication {
             UrlRuleRegistry urlRuleRegistry,
             javax.sql.DataSource jdbcDataSource,
             MongoStoreFactory mongoFactory,
-            ScmOAuthConfig scmOAuthConfig) {
+            ScmOAuthConfig scmOAuthConfig,
+            ScmContentInspector scmContentInspector) {
         var appContext = new AnnotationConfigWebApplicationContext();
         appContext.register(SpringWebConfig.class, SecurityConfig.class, SessionStoreConfig.class);
         appContext.addBeanFactoryPostProcessor(bf -> {
@@ -228,6 +244,23 @@ public class FogwallDashboardApplication {
             if (oauthTokenStore != null) {
                 bf.registerSingleton("scmOAuthTokenStore", oauthTokenStore);
             }
+            // Dashboard issue path. Acts as the user via their linked OAuth token; enforces the ISSUE/PROPOSE
+            // grant, content inspection and auditing. Wired here since it composes the OAuth token store (which is
+            // resolved conditionally above) with the permission service and audit store.
+            bf.registerSingleton(
+                    "dashboardIssueService",
+                    new DashboardIssueService(
+                            providers,
+                            Objects.requireNonNull(
+                                    ctx.repoPermissionService(),
+                                    "FogwallContext must always carry a RepoPermissionService"),
+                            scmContentInspector,
+                            Optional.ofNullable(oauthTokenStore),
+                            tokenCipherProvider,
+                            ctx.scmApiActionStore(),
+                            ctx.scmApiProposalStore(),
+                            fogwallConfig,
+                            new DashboardIssueClient()));
             // Expose the shared MongoClient + database name for session-store=mongo. Null for JDBC deployments.
             if (mongoFactory != null) {
                 bf.registerSingleton("mongoClient", mongoFactory.getMongoClient());

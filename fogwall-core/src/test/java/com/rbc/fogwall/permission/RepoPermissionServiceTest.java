@@ -711,4 +711,44 @@ class RepoPermissionServiceTest {
         assertEquals(1, githubPerms.size());
         assertEquals("alice", githubPerms.get(0).getUsername());
     }
+
+    // ---- ISSUE grant: the narrow floor under PROPOSE ----
+
+    @Test
+    void noGrants_fileIssue_denied() {
+        assertFalse(svc.isAllowedToFileIssue("alice", "github", "/owner/repo"));
+    }
+
+    @Test
+    void issueGrant_allowsFileIssue() {
+        svc.save(grant("alice", "github", "/owner/repo", MatchType.LITERAL, RepoPermission.Grant.ISSUE));
+        assertTrue(svc.isAllowedToFileIssue("alice", "github", "/owner/repo"));
+    }
+
+    @Test
+    void proposeGrant_alsoAllowsFileIssue() {
+        // PROPOSE is a superset of ISSUE: a proposer may also file/edit/comment on issues.
+        svc.save(grant("alice", "github", "/owner/repo", MatchType.LITERAL, RepoPermission.Grant.PROPOSE));
+        assertTrue(svc.isAllowedToFileIssue("alice", "github", "/owner/repo"));
+    }
+
+    @Test
+    void issueGrant_doesNotAllowPropose() {
+        svc.save(grant("alice", "github", "/owner/repo", MatchType.LITERAL, RepoPermission.Grant.ISSUE));
+        assertFalse(svc.isAllowedToPropose("alice", "github", "/owner/repo"));
+    }
+
+    @Test
+    void issueGrant_doesNotAllowPush() {
+        svc.save(grant("alice", "github", "/owner/repo", MatchType.LITERAL, RepoPermission.Grant.ISSUE));
+        assertFalse(svc.isAllowedToPush("alice", "github", "/owner/repo"));
+    }
+
+    @Test
+    void unrelatedGrant_doesNotAllowFileIssue() {
+        // Fail-closed on the narrow grant: an unrelated grant on the same path must not confer issue access. (A grant
+        // whose capability set does not contain ISSUE cannot imply it.)
+        svc.save(grant("alice", "github", "/owner/repo", MatchType.LITERAL, RepoPermission.Grant.PUSH));
+        assertFalse(svc.isAllowedToFileIssue("alice", "github", "/owner/repo"));
+    }
 }

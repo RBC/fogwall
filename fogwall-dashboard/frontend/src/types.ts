@@ -166,6 +166,8 @@ export interface Provider {
   sshPath: string
   /** True when the SCM API (CLI proposals) proxy is enabled for this provider. Presence-only; no connect address. */
   proposalsEnabled: boolean
+  /** True when the dashboard issue form is enabled for this provider. */
+  issuesEnabled: boolean
   attestationQuestions: AttestationQuestion[]
   requireReviewPermission: boolean
 }
@@ -269,7 +271,7 @@ export interface RepoPermission {
   provider: string
   value: string
   matchType: 'LITERAL' | 'GLOB' | 'REGEX'
-  grant: 'PUSH' | 'REVIEW' | 'PUSH_AND_REVIEW' | 'SELF_CERTIFY' | 'PROPOSE' | 'MERGE'
+  grant: 'PUSH' | 'REVIEW' | 'PUSH_AND_REVIEW' | 'SELF_CERTIFY' | 'ISSUE' | 'PROPOSE' | 'MERGE'
   source: 'CONFIG' | 'DB'
 }
 
@@ -280,7 +282,7 @@ export interface GroupPermissionRule {
   target: string
   value: string
   matchType: 'LITERAL' | 'GLOB' | 'REGEX'
-  grant: 'PUSH' | 'REVIEW' | 'PUSH_AND_REVIEW' | 'SELF_CERTIFY' | 'PROPOSE' | 'MERGE'
+  grant: 'PUSH' | 'REVIEW' | 'PUSH_AND_REVIEW' | 'SELF_CERTIFY' | 'ISSUE' | 'PROPOSE' | 'MERGE'
 }
 
 export interface GroupSummary {

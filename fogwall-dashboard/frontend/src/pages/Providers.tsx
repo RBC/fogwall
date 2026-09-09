@@ -13,9 +13,11 @@ import type { Provider } from '../types'
 function TransportBadges({
   sshEnabled,
   proposalsEnabled,
+  issuesEnabled,
 }: {
   sshEnabled: boolean
   proposalsEnabled: boolean
+  issuesEnabled: boolean
 }) {
   return (
     <span className="flex items-center gap-1">
@@ -33,6 +35,14 @@ function TransportBadges({
           className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"
         >
           SCM API
+        </span>
+      )}
+      {issuesEnabled && (
+        <span
+          title="Dashboard issue form enabled for this provider. Users who have linked their account can file, edit, comment on and close issues here."
+          className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300"
+        >
+          Issues
         </span>
       )}
     </span>
@@ -78,7 +88,11 @@ export function Providers() {
               onError={(e) => (e.currentTarget.style.display = 'none')}
             />
             <span className="font-semibold text-gray-900 dark:text-gray-100">{p.name}</span>
-            <TransportBadges sshEnabled={p.sshEnabled} proposalsEnabled={p.proposalsEnabled} />
+            <TransportBadges
+              sshEnabled={p.sshEnabled}
+              proposalsEnabled={p.proposalsEnabled}
+              issuesEnabled={p.issuesEnabled}
+            />
             <a
               href={p.uri}
               target="_blank"

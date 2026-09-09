@@ -52,6 +52,7 @@ export function Groups() {
   const [ruleMatchType, setRuleMatchType] = useState('GLOB')
   const [ruleGrant, setRuleGrant] = useState('PUSH')
   const [proposalsEnabled, setProposalsEnabled] = useState(false)
+  const [issuesEnabled, setIssuesEnabled] = useState(false)
   const [ruleError, setRuleError] = useState<string | null>(null)
 
   const refreshGroups = () =>
@@ -82,7 +83,10 @@ export function Groups() {
       })
       .catch(() => {})
     fetchConfig()
-      .then((c) => setProposalsEnabled(c.proposalsEnabled))
+      .then((c) => {
+        setProposalsEnabled(c.proposalsEnabled)
+        setIssuesEnabled(c.issuesEnabled)
+      })
       .catch(() => {})
     fetchUsers()
       .then((data: UserSummary[]) => setUsers(data))
@@ -468,6 +472,7 @@ export function Groups() {
                       <option value="REVIEW">Review</option>
                       <option value="PUSH_AND_REVIEW">Push and review</option>
                       <option value="SELF_CERTIFY">Self-certify</option>
+                      {issuesEnabled && <option value="ISSUE">Issue only</option>}
                       {proposalsEnabled && <option value="PROPOSE">Propose</option>}
                       {proposalsEnabled && <option value="MERGE">Merge</option>}
                     </select>

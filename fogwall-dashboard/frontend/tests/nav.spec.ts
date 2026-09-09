@@ -9,12 +9,9 @@ test.describe('navigation', () => {
     await page.goto('/dashboard/')
     const side = page.locator('aside')
 
-    for (const label of ['Overview', 'Pushes', 'Proposals', 'Repos', 'Providers']) {
+    for (const label of ['Overview', 'Pushes', 'Proposals', 'Issues', 'Repos', 'Providers']) {
       await expect(side.getByRole('link', { name: label, exact: true })).toBeVisible()
     }
-    // Issues is shown in place but not yet a destination.
-    await expect(side.getByText('Issues', { exact: true })).toBeVisible()
-    await expect(side.getByRole('link', { name: 'Issues' })).toHaveCount(0)
 
     for (const label of ['Users', 'Groups', 'Operations', 'Mirror cache']) {
       await expect(side.getByRole('link', { name: label, exact: true })).toBeVisible()

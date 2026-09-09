@@ -319,7 +319,52 @@ tasks.register('e2eTest', Test) {
 
 tasks.named('check') {
     dependsOn tasks.named('testCodeCoverageReport', JacocoReport)
+    dependsOn tasks.named('jacocoTestCoverageVerification')
     dependsOn tasks.named('npmLint')
+}
+
+// ---------------------------------------------------------------------------
+// JaCoCo coverage thresholds (dashboard)
+//
+// This gate runs on the unit `test` task only — the LDAP/OIDC e2e suite runs in a separate CI job
+// whose coverage the verification can't see. So the tiers are set for what unit + mock tests can
+// reach, and Spring MVC wiring that is genuinely proven end to end is exempted rather than pinned to
+// a coverage number it can't legitimately hit here. Tiered by testability, mirroring fogwall-core:
+//   90% — baseline: every package not carved out below. A new dashboard package is gated by default
+//         (this is what was missing when a coverage drop went unnoticed). Guards the issue path
+//         (permission check, content inspection, per-dialect upstream calls) and the session store.
+//   75% — audit event mapping (some framework coupling)
+//   no threshold — Spring MVC controllers, the thin service/bootstrap glue, and the composition
+//                  root: wired code proven by the e2e auth suite (separate CI job) and startup tests.
+// ---------------------------------------------------------------------------
+jacocoTestCoverageVerification {
+    dependsOn test
+    violationRules {
+
+        // Baseline — applies to every package except those carved out below.
+        rule {
+            element = 'PACKAGE'
+            excludes = [
+                'com.rbc.fogwall.dashboard',
+                'com.rbc.fogwall.dashboard.controller',
+                'com.rbc.fogwall.dashboard.service',
+                'com.rbc.fogwall.dashboard.audit',
+            ]
+            limit { counter = 'LINE'; minimum = 0.90 }
+        }
+
+        // Audit event mapping — some framework coupling.
+        rule {
+            element = 'PACKAGE'
+            includes = ['com.rbc.fogwall.dashboard.audit']
+            limit { counter = 'LINE'; minimum = 0.75 }
+        }
+
+        // No threshold on:
+        //   com.rbc.fogwall.dashboard            — FogwallDashboardApplication composition root + main; startup/e2e cover
+        //   com.rbc.fogwall.dashboard.controller — Spring MVC endpoints; the LDAP/OIDC e2e suite covers
+        //   com.rbc.fogwall.dashboard.service    — thin request-scoped glue; e2e covers
+    }
 }
 
 // testCodeCoverageReport aggregates fogwall-core's source sets, which include the

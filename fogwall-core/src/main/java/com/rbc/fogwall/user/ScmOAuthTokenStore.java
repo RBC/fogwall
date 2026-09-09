@@ -1,6 +1,7 @@
 package com.rbc.fogwall.user;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -31,4 +32,11 @@ public interface ScmOAuthTokenStore {
 
     /** Removes the stored token for {@code (username, provider)}, if any. No-ops when none exists. */
     void remove(String username, String provider);
+
+    /**
+     * Returns the provider names {@code username} has a linked OAuth token for — i.e. the providers fogwall can act as
+     * this user on. Presence of a row, not token validity: an expired token still lists (the acting path handles
+     * expiry). Used to offer only linked providers in the dashboard issue form.
+     */
+    List<String> findLinkedProviders(String username);
 }

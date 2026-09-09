@@ -1,11 +1,14 @@
 package com.rbc.fogwall.dashboard.e2e;
 
+import static org.mockito.Mockito.mock;
+
 import com.rbc.fogwall.config.FogwallConfig;
 import com.rbc.fogwall.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.config.ScmOAuthConfig;
 import com.rbc.fogwall.crypto.TokenCipherProvider;
 import com.rbc.fogwall.dashboard.SecurityConfig;
 import com.rbc.fogwall.dashboard.SpringWebConfig;
+import com.rbc.fogwall.dashboard.issues.DashboardIssueService;
 import com.rbc.fogwall.db.PushStoreFactory;
 import com.rbc.fogwall.db.ScmApiActionStoreFactory;
 import com.rbc.fogwall.db.ScmApiProposalStoreFactory;
@@ -112,6 +115,9 @@ class DashboardFixture implements AutoCloseable {
             bf.registerSingleton("scmOAuthConfig", ScmOAuthConfig.defaultConfig());
             var sshEnricher = new SshScmIdentityEnricher();
             bf.registerSingleton("sshScmIdentityEnricher", sshEnricher);
+            // IssueController is component-scanned and needs this; the real service is built in the app's
+            // composition root. This fixture only checks context wiring, so a mock is enough.
+            bf.registerSingleton("dashboardIssueService", mock(DashboardIssueService.class));
         });
 
         server = new Server();

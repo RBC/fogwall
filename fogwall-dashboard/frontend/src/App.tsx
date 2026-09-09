@@ -4,6 +4,7 @@ import { fetchConfig, fetchMe } from './api'
 import { Breadcrumbs } from './components/Breadcrumbs'
 import { Sidebar } from './components/Sidebar'
 import { ToastProvider } from './components/Toast'
+import { useNavCollapsed } from './hooks/useNavCollapsed'
 import { useDarkMode } from './hooks/useDarkMode'
 import { MirrorCache } from './pages/MirrorCache'
 import { Operations } from './pages/Operations'
@@ -17,6 +18,7 @@ import { Profile } from './pages/Profile'
 import { Repos } from './pages/Repos'
 import { Setup } from './pages/Setup'
 import { Groups } from './pages/Groups'
+import { Issues } from './pages/Issues'
 import { Legal } from './pages/Legal'
 import { Users } from './pages/Users'
 import { UserDetail } from './pages/UserDetail'
@@ -24,6 +26,7 @@ import type { CurrentUser } from './types'
 
 export default function App() {
   const { dark, toggle: toggleDark } = useDarkMode()
+  const { collapsed, toggle: toggleCollapsed } = useNavCollapsed()
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
   const [authProvider, setAuthProvider] = useState<string>('local')
   const [bulkReview, setBulkReview] = useState<boolean>(false)
@@ -42,9 +45,14 @@ export default function App() {
     <BrowserRouter basename="/dashboard">
       <ToastProvider>
         <div className="bg-gray-100 dark:bg-slate-900 min-h-screen flex" data-hmr-test="1">
-          <Sidebar currentUser={currentUser} dark={dark} toggleDark={toggleDark} />
+          <Sidebar
+            currentUser={currentUser}
+            dark={dark}
+            toggleDark={toggleDark}
+            collapsed={collapsed}
+          />
           <div className="flex-1 flex flex-col min-w-0">
-            <Breadcrumbs />
+            <Breadcrumbs collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
             <main className="flex-1">
               <Routes>
                 <Route path="/" element={<Overview currentUser={currentUser} />} />
@@ -58,6 +66,7 @@ export default function App() {
                 />
                 <Route path="/push/:id/diff" element={<PushDiff dark={dark} />} />
                 <Route path="/providers" element={<Providers />} />
+                <Route path="/issues" element={<Issues />} />
                 <Route path="/setup" element={<Setup />} />
                 <Route path="/repos" element={<Repos currentUser={currentUser} />} />
                 <Route path="/proposals" element={<ScmApiActionList currentUser={currentUser} />} />
