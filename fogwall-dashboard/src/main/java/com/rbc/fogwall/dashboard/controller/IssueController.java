@@ -2,6 +2,7 @@ package com.rbc.fogwall.dashboard.controller;
 
 import com.rbc.fogwall.dashboard.issues.DashboardIssueClient;
 import com.rbc.fogwall.dashboard.issues.DashboardIssueService;
+import com.rbc.fogwall.dashboard.issues.DashboardIssueService.IssueDetailsOutcome;
 import com.rbc.fogwall.dashboard.issues.DashboardIssueService.IssueOutcome;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -90,6 +92,27 @@ public class IssueController {
     public ResponseEntity<?> setState(@RequestBody StateRequest req) {
         return respond(issueService.setState(
                 currentUsername(), req.provider(), req.owner(), req.repo(), req.number(), req.close()));
+    }
+
+    @Operation(operationId = "getCurrentIssue", summary = "Read an issue's current title, body and state")
+    @GetMapping("/current")
+    public ResponseEntity<?> current(
+            @RequestParam String provider,
+            @RequestParam String owner,
+            @RequestParam String repo,
+            @RequestParam int number) {
+        IssueDetailsOutcome outcome = issueService.current(currentUsername(), provider, owner, repo, number);
+        if (outcome.ok()) {
+            DashboardIssueClient.IssueDetails d = outcome.details();
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("number", d.number());
+            body.put("url", d.url());
+            body.put("title", d.title());
+            body.put("body", d.body());
+            body.put("state", d.state());
+            return ResponseEntity.ok(body);
+        }
+        return ResponseEntity.status(outcome.httpStatus()).body(Map.of("error", outcome.error()));
     }
 
     private static ResponseEntity<?> respond(IssueOutcome outcome) {

@@ -4,7 +4,7 @@ import { test, expect } from './fixtures'
 test.describe('providers page', () => {
   test('lists every enabled provider and hides the disabled one', async ({ page }) => {
     await page.goto('/dashboard/providers')
-    await expect(page.getByRole('heading', { name: 'Active Providers' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Providers' })).toBeVisible()
 
     for (const name of ['github', 'gitlab', 'codeberg', 'gitea', 'corp-forge']) {
       await expect(page.getByText(name, { exact: true }).first()).toBeVisible()

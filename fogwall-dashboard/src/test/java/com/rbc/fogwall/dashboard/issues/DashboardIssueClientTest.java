@@ -36,6 +36,7 @@ class DashboardIssueClientTest {
     private volatile int status = 201;
     private static final String RESPONSE =
             "{\"number\":42,\"iid\":42,\"html_url\":\"https://h/42\",\"web_url\":\"https://w/42\"}";
+    private volatile String response = RESPONSE;
 
     @BeforeEach
     void start() throws IOException {
@@ -45,7 +46,7 @@ class DashboardIssueClientTest {
             path = exchange.getRequestURI().getRawPath();
             auth = exchange.getRequestHeaders().getFirst("Authorization");
             body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-            byte[] out = RESPONSE.getBytes(StandardCharsets.UTF_8);
+            byte[] out = response.getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(status, out.length);
             exchange.getResponseBody().write(out);
             exchange.close();
@@ -192,6 +193,45 @@ class DashboardIssueClientTest {
         assertEquals("PATCH", method);
         assertEquals("/api/v1/repos/org/repo/issues/5", path);
         assertTrue(body.contains("\"state\":\"closed\""), body);
+    }
+
+    @Test
+    void github_getIssue_readsTitleBodyStateWithGet() {
+        response = "{\"number\":7,\"html_url\":\"https://h/7\",\"title\":\"T\",\"body\":\"B\",\"state\":\"closed\"}";
+
+        var d = client.getIssue(github(), "octo", "hello", 7, "tok");
+
+        assertEquals("GET", method);
+        assertEquals("/repos/octo/hello/issues/7", path);
+        assertEquals(7, d.number());
+        assertEquals("T", d.title());
+        assertEquals("B", d.body());
+        assertEquals("closed", d.state());
+        assertEquals("https://h/7", d.url());
+    }
+
+    @Test
+    void gitlab_getIssue_usesDescriptionAndNormalizesOpened() {
+        response = "{\"iid\":7,\"web_url\":\"https://w/7\",\"title\":\"T\",\"description\":\"D\",\"state\":\"opened\"}";
+
+        var d = client.getIssue(gitlab(), "grp", "proj", 7, "tok");
+
+        assertEquals("GET", method);
+        assertEquals("/api/v4/projects/grp%2Fproj/issues/7", path);
+        assertEquals("D", d.body()); // description, not body
+        assertEquals("open", d.state()); // GitLab "opened" normalized to "open"
+        assertEquals("https://w/7", d.url());
+    }
+
+    @Test
+    void forgejo_getIssue_getsFromV1Repos() {
+        response = "{\"number\":7,\"html_url\":\"https://h/7\",\"title\":\"T\",\"body\":\"B\",\"state\":\"open\"}";
+
+        var d = client.getIssue(forgejo(), "org", "repo", 7, "tok");
+
+        assertEquals("GET", method);
+        assertEquals("/api/v1/repos/org/repo/issues/7", path);
+        assertEquals("open", d.state());
     }
 
     @Test

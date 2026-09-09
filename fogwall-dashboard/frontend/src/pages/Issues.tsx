@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react'
-import { commentIssue, createIssue, editIssue, fetchIssueProviders, setIssueState } from '../api'
-import type { IssueResult } from '../api'
+import {
+  commentIssue,
+  createIssue,
+  editIssue,
+  fetchCurrentIssue,
+  fetchIssueProviders,
+  setIssueState,
+} from '../api'
+import type { IssueDetails, IssueResult } from '../api'
 import { useToast } from '../components/Toast'
 import { ExtIcon } from '../components/ExtIcon'
 
@@ -65,10 +72,21 @@ export function Issues() {
     repo: loadHistory('repo'),
     number: loadHistory('number'),
   })
+  const [current, setCurrent] = useState<IssueDetails | null>(null)
+  const [loadedKey, setLoadedKey] = useState<string | null>(null)
+  const [loadingCurrent, setLoadingCurrent] = useState(false)
 
   // Issue numbers are digits only; flag junk input in the number-bearing modes.
   const numberValid = /^\d+$/.test(number.trim())
   const numberError = mode !== 'create' && number.trim() !== '' && !numberValid
+
+  // "Load current" doubles as the permission probe: in Edit / Close mode the edit and close/reopen actions stay locked
+  // until a successful load, so the user can only act on an issue they were allowed to read. The load is stale (locked
+  // again) the moment the target changes.
+  const targetKey = `${provider}/${owner.trim()}/${repo.trim()}/${number.trim()}`
+  const loaded = current !== null && loadedKey === targetKey
+  const canLoad =
+    provider !== '' && owner.trim() !== '' && repo.trim() !== '' && numberValid && !loadingCurrent
 
   function remember(usedNumber: string) {
     setHistory({
@@ -76,6 +94,31 @@ export function Issues() {
       repo: pushHistory('repo', repo),
       number: pushHistory('number', usedNumber),
     })
+  }
+
+  async function handleLoadCurrent() {
+    setLoadingCurrent(true)
+    setResult(null)
+    try {
+      const details = await fetchCurrentIssue({
+        provider,
+        owner: owner.trim(),
+        repo: repo.trim(),
+        number: Number(number),
+      })
+      setCurrent(details)
+      setLoadedKey(targetKey)
+      // Start the edit from what's really upstream, so an unchanged field is left as-is.
+      setTitle(details.title)
+      setBody(details.body)
+      remember(number)
+    } catch (err) {
+      setCurrent(null)
+      setLoadedKey(null)
+      toast.error(err instanceof Error ? err.message : 'Failed to load the issue')
+    } finally {
+      setLoadingCurrent(false)
+    }
   }
 
   useEffect(() => {
@@ -142,6 +185,8 @@ export function Issues() {
         setBody('')
       } else {
         remember(number)
+        // The edit landed, so the read-only "current" panel now matches what we sent.
+        setCurrent((c) => (c ? { ...c, title: title.trim() || c.title, body: body || c.body } : c))
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'The issue operation failed')
@@ -167,6 +212,8 @@ export function Issues() {
       })
       setResult(res)
       remember(number)
+      // Flip the state chip so Close/Reopen reflect the new reality without a reload.
+      setCurrent((c) => (c ? { ...c, state: close ? 'closed' : 'open' } : c))
       toast.success(close ? 'Issue closed' : 'Issue reopened')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'The issue operation failed')
@@ -185,13 +232,7 @@ export function Issues() {
 
   return (
     <div className="max-w-6xl px-6 py-8 space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-200">Issues</h1>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          File and follow up on issues without a CLI or a personal token. fogwall acts on your
-          behalf using the account you linked, and inspects the text before it leaves.
-        </p>
-      </div>
+      <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-200">Issues</h1>
 
       {providers.length === 0 ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
@@ -205,7 +246,7 @@ export function Issues() {
       ) : (
         <form
           onSubmit={handleSubmit}
-          className="max-w-2xl space-y-4 rounded-lg border border-gray-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800"
+          className="space-y-4 rounded-lg border border-gray-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800"
         >
           {/* Mode selector */}
           <div className="flex gap-1 rounded-lg border border-gray-200 p-1 dark:border-slate-600">
@@ -310,36 +351,106 @@ export function Issues() {
             </div>
           </div>
 
-          {mode !== 'comment' && (
-            <div>
-              <label className={labelClass}>
-                Title{' '}
-                {mode === 'edit' && <span className="text-gray-400">(leave blank to keep)</span>}
-              </label>
-              <input
-                required={mode === 'create'}
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Something is broken"
-                className={inputClass}
-              />
+          {mode === 'edit' && (
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                disabled={!canLoad}
+                onClick={handleLoadCurrent}
+                className="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                {loadingCurrent ? 'Loading…' : loaded ? 'Reload current' : 'Load current'}
+              </button>
+              {loaded && current ? (
+                <span
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                    current.state === 'closed'
+                      ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                      : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                  }`}
+                >
+                  {current.state === 'closed' ? 'Closed' : 'Open'}
+                </span>
+              ) : (
+                <span className="text-xs text-gray-400 dark:text-gray-500">
+                  Load the issue before editing or closing it.
+                </span>
+              )}
             </div>
           )}
 
-          <div>
-            <label className={labelClass}>
-              {mode === 'comment' ? 'Comment' : 'Body'}{' '}
-              {mode === 'edit' && <span className="text-gray-400">(leave blank to keep)</span>}
-            </label>
-            <textarea
-              required={mode !== 'edit'}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              rows={6}
-              placeholder={mode === 'comment' ? 'Add your comment…' : 'Describe the issue…'}
-              className={`${inputClass} resize-y`}
-            />
-          </div>
+          {mode === 'edit' ? (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-4">
+                <div>
+                  <label className={labelClass}>
+                    Title <span className="text-gray-400">(your change)</span>
+                  </label>
+                  <input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    disabled={!loaded}
+                    className={`${inputClass} disabled:opacity-50`}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>
+                    Body <span className="text-gray-400">(your change)</span>
+                  </label>
+                  <textarea
+                    value={body}
+                    onChange={(e) => setBody(e.target.value)}
+                    disabled={!loaded}
+                    rows={12}
+                    className={`${inputClass} resize-y disabled:opacity-50`}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className={labelClass}>Current (upstream)</label>
+                {loaded && current ? (
+                  <>
+                    <div className="rounded border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-700 dark:border-slate-600 dark:bg-slate-900/40 dark:text-gray-300">
+                      {current.title || <span className="text-gray-400">(no title)</span>}
+                    </div>
+                    <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded border border-gray-200 bg-gray-50 px-3 py-2 font-mono text-xs text-gray-700 dark:border-slate-600 dark:bg-slate-900/40 dark:text-gray-300">
+                      {current.body || '(no description)'}
+                    </pre>
+                  </>
+                ) : (
+                  <div className="rounded border border-dashed border-gray-300 px-3 py-10 text-center text-xs text-gray-400 dark:border-slate-600 dark:text-gray-500">
+                    Load the issue to see its current title and body.
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
+              {mode !== 'comment' && (
+                <div>
+                  <label className={labelClass}>Title</label>
+                  <input
+                    required
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Something is broken"
+                    className={inputClass}
+                  />
+                </div>
+              )}
+              <div>
+                <label className={labelClass}>{mode === 'comment' ? 'Comment' : 'Body'}</label>
+                <textarea
+                  required
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  rows={6}
+                  placeholder={mode === 'comment' ? 'Add your comment…' : 'Describe the issue…'}
+                  className={`${inputClass} resize-y`}
+                />
+              </div>
+            </>
+          )}
 
           {result && (
             <div className="rounded border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-800 dark:border-green-700 dark:bg-green-900/30 dark:text-green-200">
@@ -366,7 +477,7 @@ export function Issues() {
               <>
                 <button
                   type="button"
-                  disabled={submitting}
+                  disabled={submitting || !loaded || current?.state === 'closed'}
                   onClick={() => handleSetState(true)}
                   className="mr-auto rounded border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
                 >
@@ -374,7 +485,7 @@ export function Issues() {
                 </button>
                 <button
                   type="button"
-                  disabled={submitting}
+                  disabled={submitting || !loaded || current?.state === 'open'}
                   onClick={() => handleSetState(false)}
                   className="rounded border border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-slate-700"
                 >
@@ -384,7 +495,9 @@ export function Issues() {
             )}
             <button
               type="submit"
-              disabled={submitting || (mode !== 'create' && !numberValid)}
+              disabled={
+                submitting || (mode !== 'create' && !numberValid) || (mode === 'edit' && !loaded)
+              }
               className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
             >
               {submitting

@@ -99,10 +99,6 @@ export function ScmApiActionList({ currentUser }: ScmApiActionListProps) {
     <div>
       <div className="max-w-6xl px-6 pt-6">
         <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-200">Proposals</h1>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Pull and merge requests opened, edited, closed, and merged through fogwall — the SCM API
-          proxy's action log.
-        </p>
       </div>
 
       {/* Status filter chips */}
