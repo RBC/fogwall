@@ -18,7 +18,7 @@ async function findCard(page: Page, text: string | RegExp) {
 
 test.describe('SCM API actions', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/dashboard/scm-api-actions')
+    await page.goto('/dashboard/proposals')
     await expect(page.getByText('No SCM API action records found.')).toHaveCount(0)
   })
 

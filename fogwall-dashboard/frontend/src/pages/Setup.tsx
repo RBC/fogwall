@@ -29,7 +29,7 @@ export function Setup() {
   const host = setup ? safeHost(setup.serviceUrl) : ''
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
+    <div className="max-w-6xl px-6 py-6 space-y-4">
       <header className="space-y-2">
         <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200">
           Connect your git client

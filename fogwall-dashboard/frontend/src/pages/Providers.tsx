@@ -33,8 +33,8 @@ export function Providers() {
   }, [])
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 space-y-4">
-      <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Active Providers</h2>
+    <div className="max-w-6xl px-6 py-6 space-y-4">
+      <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-200">Active Providers</h1>
 
       {loading && (
         <div className="text-center text-gray-400 dark:text-gray-500 py-16">Loading…</div>

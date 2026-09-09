@@ -1,3 +1,4 @@
+import { ExtIcon } from '../components/ExtIcon'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { approvePush, fetchPushCounts, fetchPushes, rejectPush } from '../api'
@@ -195,8 +196,11 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
 
   return (
     <div>
+      <div className="max-w-6xl px-6 pt-6">
+        <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-200">Pushes</h1>
+      </div>
       {/* Status summary chips */}
-      <div className="max-w-7xl mx-auto px-4 pt-4 flex gap-2 flex-wrap">
+      <div className="max-w-6xl px-6 pt-3 flex gap-2 flex-wrap">
         <button
           onClick={() => {
             setFilterStatus('')
@@ -232,7 +236,7 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
 
       {/* Bulk action bar — shown when items are selected */}
       {selectionEnabled && selectedIds.size > 0 && (
-        <div className="max-w-7xl mx-auto px-4 py-3 flex gap-3 flex-wrap items-center bg-amber-50 border-y border-amber-200 dark:bg-amber-900/20 dark:border-amber-700">
+        <div className="max-w-6xl px-6 py-3 flex gap-3 flex-wrap items-center bg-amber-50 border-y border-amber-200 dark:bg-amber-900/20 dark:border-amber-700">
           <span className="text-sm font-medium text-amber-800 dark:text-amber-300">
             {selectedIds.size} push{selectedIds.size !== 1 ? 'es' : ''} selected
           </span>
@@ -274,7 +278,7 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
       )}
 
       {/* Filter bar */}
-      <div className="max-w-7xl mx-auto px-4 py-3 flex gap-3 flex-wrap items-center border-b border-gray-100 dark:border-slate-700">
+      <div className="max-w-6xl px-6 py-3 flex gap-3 flex-wrap items-center border-b border-gray-100 dark:border-slate-700">
         {selectionEnabled && (
           <label className="flex items-center gap-1.5 text-sm text-gray-500 cursor-pointer select-none dark:text-gray-400">
             <input
@@ -340,7 +344,7 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
       </div>
 
       {/* List */}
-      <div className="max-w-7xl mx-auto px-4 space-y-2 py-4 pb-12">
+      <div className="max-w-6xl px-6 space-y-2 py-4 pb-12">
         {pushes.length === 0 && (
           <div className="text-center text-gray-400 dark:text-gray-500 py-16">
             No push records found.
@@ -382,7 +386,7 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
                       title="Open repo"
                       className="ml-1.5 text-blue-500 no-underline hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
                     >
-                      ↗
+                      <ExtIcon />
                     </a>
                   )}
                 </div>
@@ -400,7 +404,7 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
                       title="Open commit"
                       className="ml-1.5 text-blue-500 no-underline hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
                     >
-                      ↗
+                      <ExtIcon />
                     </a>
                   )}
                 </div>
@@ -440,7 +444,7 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
 
       {/* Pagination */}
       {(page > 0 || hasMore) && (
-        <div className="max-w-7xl mx-auto px-4 pb-12 flex justify-center gap-4">
+        <div className="max-w-6xl px-6 pb-12 flex justify-center gap-4">
           <button
             onClick={() => setPage((p) => Math.max(0, p - 1))}
             disabled={page === 0}

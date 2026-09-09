@@ -1089,30 +1089,6 @@ function PermissionsTab({ username, isAdmin }: { username: string; isAdmin: bool
           </div>
         )}
       </div>
-
-      <div className="pt-2 space-y-2">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide dark:text-gray-500">
-          Coming soon
-        </p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-3 space-y-1 opacity-70 dark:bg-slate-800 dark:border-slate-700">
-            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-              Time-bound permissions
-            </p>
-            <p className="text-xs text-gray-400 dark:text-gray-500">
-              Grant access valid only within a date range, e.g. valid 2025-01-01 → 2025-12-31.
-            </p>
-          </div>
-          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-3 space-y-1 opacity-70 dark:bg-slate-800 dark:border-slate-700">
-            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-              Just-in-time permissions
-            </p>
-            <p className="text-xs text-gray-400 dark:text-gray-500">
-              Self-service, short-lived access requests with automatic expiry and audit trail.
-            </p>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }
