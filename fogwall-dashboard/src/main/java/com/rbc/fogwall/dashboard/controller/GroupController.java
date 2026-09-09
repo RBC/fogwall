@@ -9,6 +9,7 @@ import com.rbc.fogwall.permission.PermissionGroup;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
+import com.rbc.fogwall.user.UserStore;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
@@ -157,6 +158,12 @@ public class GroupController {
         List<String> current = groupStore().findMembers(id);
         if (current.contains(req.username())) {
             return ResponseEntity.badRequest().body(Map.of("error", "user already a member of this group"));
+        }
+        // group_members has an FK to proxy_users, but a config-declared user has no DB row until something references
+        // it — adding one to a group from the dashboard failed the constraint outright. Materialize the row first,
+        // the same idempotent upsert config-defined groups already run at startup.
+        if (userStore instanceof UserStore mutable) {
+            mutable.upsertUser(req.username());
         }
         groupStore().addMember(id, req.username());
         auditLog.success("group.member.add", "group:" + id, "user=" + req.username());

@@ -2,6 +2,7 @@ package com.rbc.fogwall.dashboard.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -17,6 +18,7 @@ import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
 import com.rbc.fogwall.user.UserEntry;
+import com.rbc.fogwall.user.UserStore;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -197,6 +199,21 @@ class PermissionControllerTest {
         assertEquals(MatchTarget.OWNER, saved.getTarget());
         assertEquals(MatchType.GLOB, saved.getMatchType());
         assertEquals(RepoPermission.Grant.PUSH, saved.getGrant());
+    }
+
+    @Test
+    void add_materializesUserRowBeforeSave() {
+        // repo_permissions has an FK to proxy_users and a config-declared user has no row there yet.
+        UserStore mutableStore = mock(UserStore.class);
+        when(mutableStore.findByUsername("alice")).thenReturn(Optional.of(ALICE));
+        var controllerWithMutableStore = new PermissionController(permissionService, mutableStore, auditLog);
+
+        var resp = controllerWithMutableStore.add("alice", req("github", null, "/a/b", null, null));
+
+        assertEquals(HttpStatus.CREATED, resp.getStatusCode());
+        var inOrder = inOrder(mutableStore, permissionService);
+        inOrder.verify(mutableStore).upsertUser("alice");
+        inOrder.verify(permissionService).save(any());
     }
 
     // ── DELETE /api/users/{username}/permissions/{id} ────────────────────────────

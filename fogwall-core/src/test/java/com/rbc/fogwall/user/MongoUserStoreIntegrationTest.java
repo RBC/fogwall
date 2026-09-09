@@ -89,6 +89,16 @@ class MongoUserStoreIntegrationTest {
     }
 
     @Test
+    void upsertUser_preservesExistingRoles() {
+        store.createUser("admin", null, "USER,ADMIN");
+        store.upsertUser("admin"); // materializing a document for a group membership must not demote an existing admin
+
+        var result = store.findByUsername("admin");
+        assertTrue(result.isPresent());
+        assertTrue(result.get().getRoles().contains("ADMIN"));
+    }
+
+    @Test
     void findAll_sortedByUsername() {
         store.createUser("charlie", null, "USER");
         store.createUser("alice", null, "USER");

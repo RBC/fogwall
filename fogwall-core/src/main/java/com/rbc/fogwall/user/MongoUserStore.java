@@ -179,9 +179,21 @@ public class MongoUserStore implements UserStore {
         log.info("Updated password for user '{}'", username);
     }
 
+    /**
+     * Ensures a user document exists. No-op if already present — in particular it leaves {@code roles} alone, since
+     * this is the call that materializes a row for a config-declared user so a group membership, permission, or OAuth
+     * token can reference it. Role sync is {@link #upsertUser(String, List)}.
+     */
     @Override
     public void upsertUser(String username) {
-        upsertUser(username, List.of("USER"));
+        if (getCollection().find(Filters.eq("_id", username)).first() != null) return;
+        getCollection()
+                .insertOne(new Document("_id", username)
+                        .append("passwordHash", null)
+                        .append("roles", "USER")
+                        .append("emails", List.of())
+                        .append("scmIdentities", List.of()));
+        log.debug("Auto-provisioned user document for '{}'", username);
     }
 
     @Override

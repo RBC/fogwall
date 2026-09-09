@@ -5,11 +5,16 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.rbc.fogwall.db.jdbc.DataSourceFactory;
 import com.rbc.fogwall.db.jdbc.DatabaseMigrator;
 import com.rbc.fogwall.db.model.MatchType;
+import com.rbc.fogwall.service.JdbcScmTokenCache;
+import com.rbc.fogwall.user.JdbcUserStore;
+import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 /**
@@ -21,11 +26,13 @@ class JdbcGroupPermissionStoreIntegrationTest {
 
     JdbcGroupPermissionStore store;
     NamedParameterJdbcTemplate jdbc;
+    DataSource dataSource;
 
     @BeforeEach
     void setUp() {
         DataSource ds = DataSourceFactory.h2InMemory("group-test-" + UUID.randomUUID());
         DatabaseMigrator.migrate(ds);
+        dataSource = ds;
         store = new JdbcGroupPermissionStore(ds);
         jdbc = new NamedParameterJdbcTemplate(ds);
         seedUser("alice");
@@ -87,7 +94,7 @@ class JdbcGroupPermissionStoreIntegrationTest {
         dbGroup("alpha");
         dbGroup("middle");
         var names = store.findAllGroups().stream().map(PermissionGroup::getName).toList();
-        assertEquals(java.util.List.of("alpha", "middle", "zebra"), names);
+        assertEquals(List.of("alpha", "middle", "zebra"), names);
     }
 
     @Test
@@ -114,6 +121,20 @@ class JdbcGroupPermissionStoreIntegrationTest {
     }
 
     // ---- members ----
+
+    @Test
+    void addMember_configDeclaredUser_needsAMaterialisedRow() {
+        // "reviewer" is declared in YAML only, so it has no proxy_users row and group_members' FK rejects it. The
+        // dashboard's add-member path calls upsertUser first for exactly this reason.
+        PermissionGroup g = dbGroup("devs");
+        var userStore = new JdbcUserStore(dataSource, new JdbcScmTokenCache(dataSource, Duration.ofDays(1)));
+
+        assertThrows(DataIntegrityViolationException.class, () -> store.addMember(g.getId(), "reviewer"));
+
+        userStore.upsertUser("reviewer");
+        store.addMember(g.getId(), "reviewer");
+        assertEquals(List.of("reviewer"), store.findMembers(g.getId()));
+    }
 
     @Test
     void addMember_findMembers_roundTrip() {

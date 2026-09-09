@@ -87,8 +87,12 @@ public interface UserStore extends ReadOnlyUserStore {
     // ── IdP provisioning ─────────────────────────────────────────────────────────
 
     /**
-     * Ensures a user row exists for IdP-authenticated users. No-op if already present. The password is left NULL so the
-     * account cannot be used for form login.
+     * Ensures a user row exists. No-op if already present — an existing user's roles and password are left untouched.
+     * The password on a newly created row is left NULL so the account cannot be used for form login.
+     *
+     * <p>Two callers: IdP login for a user with no roles to sync, and any path that needs a row to exist before
+     * something references it by username — a config-declared user added to a group, granted a permission, or linking
+     * an OAuth account, none of which get a row from YAML alone.
      */
     void upsertUser(String username);
 
