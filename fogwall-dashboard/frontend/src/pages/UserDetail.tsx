@@ -726,6 +726,7 @@ function AddPermissionModal({
               {requireReviewPermission && <option value="REVIEW">Review only</option>}
               <option value="SELF_CERTIFY">Self-certify</option>
               {proposalsEnabled && <option value="PROPOSE">Propose</option>}
+              {proposalsEnabled && <option value="MERGE">Merge</option>}
             </select>
           </div>
           {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
@@ -834,6 +835,7 @@ function TestPermissionModal({ username, onClose }: { username: string; onClose:
               <option value="PUSH">Push</option>
               <option value="REVIEW">Review</option>
               {proposalsEnabled && <option value="PROPOSE">Propose</option>}
+              {proposalsEnabled && <option value="MERGE">Merge</option>}
             </select>
           </div>
         </div>

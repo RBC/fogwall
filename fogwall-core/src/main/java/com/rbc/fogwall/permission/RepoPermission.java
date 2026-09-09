@@ -82,7 +82,12 @@ public class RepoPermission {
          * <p>Merging is <b>not</b> included — that is a maintainer operation with its own design questions. Neither is
          * review, which stays with the SCM's own UI.
          */
-        PROPOSE
+        PROPOSE,
+        /**
+         * Can merge a pull/merge request through the SCM API proxy's maintainer path. Standalone: does not imply and is
+         * not implied by {@link #PUSH}, {@link #REVIEW} or {@link #PROPOSE}. Fail-closed: no grant, no merge.
+         */
+        MERGE
     }
 
     public enum Source {

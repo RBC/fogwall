@@ -37,6 +37,14 @@ public class ForgejoProposalResponseReader implements ProposalResponseReader {
                     ? Optional.empty()
                     : Optional.of(new ProposalOutcome(kind, number, null, null, null, null));
         }
+        // The merge endpoint returns no body at all on success, so the target is known only from the request path,
+        // and the state is MERGED by construction — the mutation succeeded, and merging is all it does.
+        if (operation.equals("pulls.merge")) {
+            Integer mergedNumber = numberInPath(requestPath);
+            return mergedNumber == null
+                    ? Optional.empty()
+                    : Optional.of(new ProposalOutcome(Kind.PULL_REQUEST, mergedNumber, null, null, null, State.MERGED));
+        }
         boolean isPullObject = json != null && json.has("number") && json.has("head");
         boolean isIssueObject = json != null && json.has("number") && !json.has("head");
         boolean isObject = isPullObject || isIssueObject;

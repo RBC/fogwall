@@ -79,4 +79,7 @@ public class ScmApiActionRecord {
 
     /** {@link ScmApiProposalRecord} the mutation created or touched, when the upstream response named one. */
     private String proposalId;
+
+    /** The SHA a merge produced, when the upstream's own response named one. Null for every non-merge mutation. */
+    private String mergeCommitSha;
 }

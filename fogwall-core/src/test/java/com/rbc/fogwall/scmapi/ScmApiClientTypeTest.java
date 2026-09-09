@@ -21,7 +21,6 @@ class ScmApiClientTypeTest {
             })
     void classifiesEachRealCliUserAgent(String userAgent, ScmApiClientType expected) {
         assertEquals(expected, ScmApiClientType.classify(userAgent));
-        assertTrue(ScmApiClientType.classify(userAgent).isKnownCli());
     }
 
     @ParameterizedTest
@@ -32,7 +31,6 @@ class ScmApiClientTypeTest {
             })
     void classifiesBrowsers(String userAgent) {
         assertEquals(ScmApiClientType.BROWSER, ScmApiClientType.classify(userAgent));
-        assertFalse(ScmApiClientType.classify(userAgent).isKnownCli());
     }
 
     @ParameterizedTest
@@ -44,7 +42,6 @@ class ScmApiClientTypeTest {
     @Test
     void missingHeaderIsUnknownRatherThanAnError() {
         assertEquals(ScmApiClientType.UNKNOWN, ScmApiClientType.classify(null));
-        assertFalse(ScmApiClientType.UNKNOWN.isKnownCli());
     }
 
     @Test

@@ -55,13 +55,18 @@ class ForgejoRestAllowlistTest {
         assertEquals("pulls.update", match.get().operation());
     }
 
-    /** Review is out of scope — reviewers use the SCM's own UI. Merge is a maintainer operation tracked separately. */
+    /** Review is out of scope — reviewers use the SCM's own UI. */
     @Test
-    void deniesReviewAndMerge() {
+    void deniesReview() {
         assertTrue(ForgejoRestAllowlist.match("POST", "/repos/acme/widgets/pulls/3/reviews")
                 .isEmpty());
-        assertTrue(ForgejoRestAllowlist.match("POST", "/repos/acme/widgets/pulls/3/merge")
-                .isEmpty());
+    }
+
+    @Test
+    void matchesPullMerge() {
+        Optional<ScmApiRestMatch> match = ForgejoRestAllowlist.match("POST", "/repos/acme/widgets/pulls/3/merge");
+        assertTrue(match.isPresent());
+        assertEquals("pulls.merge", match.get().operation());
     }
 
     /**

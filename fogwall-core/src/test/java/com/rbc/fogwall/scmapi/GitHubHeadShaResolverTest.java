@@ -99,6 +99,18 @@ class GitHubHeadShaResolverTest {
     }
 
     @Test
+    void resolvePullRequestHeadSha_readsNodeQueryDirectly() {
+        responseBody = """
+                {"data":{"node":{"headRefOid":"merge-time-sha"}}}
+                """;
+
+        Optional<String> sha = new GitHubHeadShaResolver().resolvePullRequestHeadSha(provider, "PR_kwDO1", "token");
+
+        assertEquals(Optional.of("merge-time-sha"), sha);
+        assertEquals("PR_kwDO1", requestedVariables.get(0).get("id").asString());
+    }
+
+    @Test
     void malformedResponse_resolvesEmpty() {
         responseBody = "not json";
 

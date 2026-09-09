@@ -193,7 +193,7 @@ than left out as "metadata".
 
 ```
 createIssue, updateIssue, closeIssue,
-createPullRequest, updatePullRequest, closePullRequest,
+createPullRequest, updatePullRequest, closePullRequest, mergePullRequest,
 addComment,
 replaceActorsForAssignable, addLabelsToLabelable, removeLabelsFromLabelable,
 requestReviewsByLogin
@@ -201,6 +201,28 @@ requestReviewsByLogin
 
 `requestReviewsByLogin` requests a review; `addPullRequestReview` submits one and is absent. Asking a colleague to look
 is part of proposing a change — the verdict is not.
+
+### Merging a pull request
+
+Captured live against a real PR (`GH_DEBUG=api gh pr merge <n> --merge`), the same way as every other row in this
+section except `fj`'s. The merge mutation carries far less than the create/update ones do:
+
+```json
+{ "input": { "pullRequestId": "PR_kwDOKPRwrM8AAAABCwcIng", "mergeMethod": "MERGE" } }
+```
+
+Two things follow, both the opposite of what reading `gh`'s source alone would have suggested:
+
+- **No head-SHA field at all.** `MergePullRequestInput` has an `expectedHeadOid`, but `gh` does not send it — only
+  `pullRequestId` and `mergeMethod` (`--subject`/`--body` add `commitHeadline`/`commitBody`; nothing else appears with
+  the bare command). Provenance at merge time therefore cannot read a field off this mutation the way create-time
+  validation reads `headRefName`; it has to ask the PR's own node for its current head directly
+  (`node(id:){ ... on PullRequest { headRefOid } }`, the caller's own token, same node ID the mutation already targets)
+  — see `GitHubHeadShaResolver.resolvePullRequestHeadSha`.
+- **The response selects nothing beyond `clientMutationId`.** `gh` does not ask for the merge commit's SHA, its own
+  state, or anything else `mergePullRequest`'s schema could return — the captured response body was exactly
+  `{"data":{"mergePullRequest":{"clientMutationId":null}}}`. So while a 2xx response confirms the merge happened
+  (recorded as `MERGED`), there is no merge commit SHA anywhere in what `gh` itself asks for or gets back.
 
 ---
 
@@ -228,11 +250,33 @@ the same path, so the path is self-describing whether the cache is warm or cold.
 | `mr note`      | POST   | `/projects/:path/merge_requests/:iid/notes`   | path + `iid`                                                                 |
 | `mr approve`†  | POST   | `/projects/:path/merge_requests/:iid/approve` | path + `iid`                                                                 |
 | `mr close`     | PUT    | `/projects/:path/merge_requests/:iid`         | body `{"state_event":"close"}`                                               |
+| `mr merge`     | PUT    | `/projects/:path/merge_requests/:iid/merge`   | path + `iid`                                                                 |
 
 `:path` is the URL-encoded `owner%2Frepo` segment; `:iid` is the project-scoped issue/MR number (not a global ID),
 always supplied by the CLI caller from the command-line argument or a preceding `GET`.
 
 † Recorded for completeness; approval is a review operation and is not allowlisted.
+
+### Merging a merge request
+
+Captured live against a real MR (`GLAB_DEBUG_HTTP=true glab mr merge <iid>`). The preceding
+`GET /projects/:path/merge_requests/:iid` — the same mergeability/pipeline check the appendix's capture methodology
+exists to catch — returns the MR object including its current head, `sha`. The merge call itself:
+
+```
+PUT /api/v4/projects/coopernetes%2Ftest-repo-gitlab/merge_requests/11/merge
+{}
+```
+
+**An empty body.** No `sha`, no `squash`, no message fields — `glab mr merge` with no flags sends nothing at all,
+contrary to what GitLab's own REST documentation for the endpoint's optional parameters would suggest a client might
+send. So, like GitHub, provenance at merge time cannot read a field off the mutation itself; it has to ask the merge
+request directly for its current head (`GET /projects/:path/merge_requests/:iid`, the caller's own credential — see
+`GitLabHeadShaResolver.resolveMergeRequestHeadSha`).
+
+The response, unlike GitHub's, is the full updated MR object — `"state":"merged"` and, notably, `"merge_commit_sha"`
+with a real value. That field is the one place across all three dialects' merge responses where fogwall can record what
+the merge actually produced.
 
 ### Flags need no extra endpoints, but do need extra reads
 
@@ -316,13 +360,42 @@ Paths are shown below the `/api/v1` mount point. `{n}` is the project-scoped ind
 | comment update       | PATCH  | `/repos/{o}/{r}/issues/comments/{n}`  | yes   | yes                   |
 | PR create            | POST   | `/repos/{o}/{r}/pulls`                | yes   | yes                   |
 | PR update/close      | PATCH  | `/repos/{o}/{r}/pulls/{n}`            | yes   | no                    |
-| PR merge†            | POST   | `/repos/{o}/{r}/pulls/{n}/merge`      | yes   | yes                   |
+| PR merge             | POST   | `/repos/{o}/{r}/pulls/{n}/merge`      | yes   | yes                   |
 | PR review (approve)† | POST   | `/repos/{o}/{r}/pulls/{n}/reviews`    | yes   | **no**                |
 | add labels           | POST   | `/repos/{o}/{r}/issues/{n}/labels`    | yes   | —                     |
 | add assignees        | POST   | `/repos/{o}/{r}/issues/{n}/assignees` | yes   | —                     |
 | remove assignees     | DELETE | `/repos/{o}/{r}/issues/{n}/assignees` | yes   | —                     |
 
 † Recorded for completeness; not allowlisted.
+
+### Merging a pull request — head-commit provenance differs between `tea` and `fj`
+
+`tea pr merge` was captured live (`tea --debug`, against a real PR on a disposable test repo) after an earlier attempt
+in a different environment hit an interactive credential prompt and was abandoned rather than pushed through unattended.
+With a saved non-interactive login the capture is a normal three-request fan-out: `GET /repos/{o}/{r}/pulls/{n}`
+(mergeability), `GET /version` (not repo-scoped, harmless), then:
+
+```
+POST /repos/{o}/{r}/pulls/{n}/merge
+{"Do":"merge","MergeCommitID":"","MergeTitleField":"","MergeMessageField":"","force_merge":false,
+ "head_commit_id":"<the PR's actual head SHA>","merge_when_checks_succeed":false}
+```
+
+**`tea` populates `head_commit_id` with the real head SHA** — confirmed from the capture, not assumed from source. This
+is an optimistic-concurrency field on the Gitea/Forgejo side: a mismatch against the PR's actual current head answers
+`409 head out of date` (`pull_service.IsErrSHADoesNotMatch`, from `services/forms/repo_form.go` and
+`routers/api/v1/repo/pull.go`), and fogwall's provenance check reuses the same field as its head-SHA source when
+`require-validated-head` is on.
+
+**`fj` never sends it.** `fj` emits no HTTP debug output (see "What the CLIs constrain" above), so this comes from
+source: `merge_pr` in `forgejo-cli`'s `src/prs.rs` builds its `MergePullRequestOption` with `head_commit_id: None`
+hardcoded, with no flag or code path that ever sets it. fogwall's provenance check denies a merge request that omits the
+field when `require-validated-head` is on, so a `fj pr merge` is unconditionally refused under that setting today, the
+same fail-closed posture an unresolvable head ref already gets on the create path. Closing this needs a change in
+`forgejo-cli` upstream — noted for the maintainer to file by hand.
+
+The response, per the capture, is a bare `200 OK` with an empty body — so, as with GitHub, no merge commit SHA is
+available to record from what a successful merge returns.
 
 The last three are what `tea issue edit` reaches for `--add-labels`, `--add-assignees`/`--set-assignees` and
 `--remove-assignees`; a create sets both inline on `POST /issues` instead. The remove is a **DELETE carrying a body** —

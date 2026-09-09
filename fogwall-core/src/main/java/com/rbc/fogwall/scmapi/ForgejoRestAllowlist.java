@@ -19,8 +19,8 @@ import java.util.regex.Pattern;
  * caller-chosen, so the reachable surface is this union regardless.
  *
  * <p>Hardcoded rather than config-driven: this is the security boundary. Scoped to proposing a change — issue and PR
- * create, update, close and comment, plus the label and assignee endpoints an edit reaches. Review, merge,
- * tracked-time, dependency, blocking and release endpoints are absent and therefore denied.
+ * create, update, close and comment, plus the label and assignee endpoints an edit reaches — and to the maintainer
+ * merge path. Review, tracked-time, dependency, blocking and release endpoints are absent and therefore denied.
  */
 public final class ForgejoRestAllowlist {
 
@@ -40,6 +40,7 @@ public final class ForgejoRestAllowlist {
             // Also carries `tea pr close`: tea sends a full-object PATCH, so close and edit are the same request
             // shape on the wire and cannot be told apart here. Granularity is method+path, never intent.
             new Rule("PATCH", Pattern.compile(REPO + "/pulls/\\d+$"), "pulls.update"),
+            new Rule("POST", Pattern.compile(REPO + "/pulls/\\d+/merge$"), "pulls.merge"),
             // Attribute follow-ups. tea inlines labels and assignees on create, but `issue edit` reaches them
             // through their own endpoints, so without these an edit leaves the issue updated and the attribute
             // unchanged. The PR forms are absent because Forgejo models a PR as an issue and tea addresses both here.

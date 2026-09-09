@@ -33,6 +33,18 @@ class ForgejoProposalResponseReaderTest {
         assertEquals("https://gitea.com/acme/widgets/pulls/4", o.url());
     }
 
+    // Per Gitea's own server source, the merge endpoint returns a bare 200 with no body — so the target comes only
+    // from the request path, state is MERGED by construction, and no merge commit SHA is available to record.
+    @Test
+    void merge_emptyBody_stillRecordsMergedFromThePath() {
+        ProposalOutcome o = reader.read(op("pulls.merge"), "/repos/acme/widgets/pulls/4/merge", null)
+                .orElseThrow();
+        assertEquals(Kind.PULL_REQUEST, o.kind());
+        assertEquals(4, o.number());
+        assertEquals(State.MERGED, o.state());
+        assertNull(o.mergeCommitSha());
+    }
+
     @Test
     void teaClosesAPullThroughTheIssueEndpoint_kindComesFromTheResponse() {
         // tea pr close is PATCH /issues/{n} with the full object; the response is an Issue carrying pull_request.

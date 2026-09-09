@@ -42,7 +42,7 @@ public class PermissionController {
             operationId = "addUserPermission",
             summary = "Grant a permission to a user",
             description =
-                    "target: SLUG (owner/repo slug, default), OWNER, REPO_FULL_PATH, PROVIDER. matchType: LITERAL (default), GLOB, REGEX. grant: PUSH (default), REVIEW, SELF_CERTIFY.")
+                    "target: SLUG (owner/repo slug, default), OWNER, REPO_FULL_PATH, PROVIDER. matchType: LITERAL (default), GLOB, REGEX. grant: PUSH (default), REVIEW, PUSH_AND_REVIEW, SELF_CERTIFY, PROPOSE, MERGE.")
     @PostMapping
     public ResponseEntity<?> add(@PathVariable String username, @RequestBody AddPermissionRequest req) {
         if (userStore.findByUsername(username).isEmpty()) {

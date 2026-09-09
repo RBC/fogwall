@@ -61,6 +61,22 @@ class GitLabHeadShaResolverTest {
         assertEquals("/api/v4/projects/acme/widgets/repository/branches/feature", requestedPaths.get(0));
     }
 
+    // glab mr merge sends an empty PUT body — verified live, no `sha` field — so provenance at merge time reads the
+    // merge request directly instead.
+    @Test
+    void resolveMergeRequestHeadSha_readsMergeRequestDirectly() {
+        responseBody = """
+                {"iid":11,"sha":"merge-time-sha"}
+                """;
+
+        Optional<String> sha = new GitLabHeadShaResolver()
+                .resolveMergeRequestHeadSha(
+                        provider, new OwnerRepo("acme", "widgets"), 11, "PRIVATE-TOKEN", "secret-token");
+
+        assertEquals(Optional.of("merge-time-sha"), sha);
+        assertEquals("/api/v4/projects/acme/widgets/merge_requests/11", requestedPaths.get(0));
+    }
+
     @Test
     void notFound_resolvesEmpty() {
         responseStatus = 404;

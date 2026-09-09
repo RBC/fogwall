@@ -267,7 +267,7 @@ export interface RepoPermission {
   provider: string
   value: string
   matchType: 'LITERAL' | 'GLOB' | 'REGEX'
-  grant: 'PUSH' | 'REVIEW' | 'PUSH_AND_REVIEW' | 'SELF_CERTIFY' | 'PROPOSE'
+  grant: 'PUSH' | 'REVIEW' | 'PUSH_AND_REVIEW' | 'SELF_CERTIFY' | 'PROPOSE' | 'MERGE'
   source: 'CONFIG' | 'DB'
 }
 
@@ -278,7 +278,7 @@ export interface GroupPermissionRule {
   target: string
   value: string
   matchType: 'LITERAL' | 'GLOB' | 'REGEX'
-  grant: 'PUSH' | 'REVIEW' | 'PUSH_AND_REVIEW' | 'SELF_CERTIFY' | 'PROPOSE'
+  grant: 'PUSH' | 'REVIEW' | 'PUSH_AND_REVIEW' | 'SELF_CERTIFY' | 'PROPOSE' | 'MERGE'
 }
 
 export interface GroupSummary {

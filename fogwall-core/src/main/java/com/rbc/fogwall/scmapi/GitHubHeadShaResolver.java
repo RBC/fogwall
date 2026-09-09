@@ -12,8 +12,10 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Resolves a {@code createPullRequest} mutation's {@code input.headRefName} to the tip commit SHA it currently names,
- * for {@code providers.github.proposals.require-validated-head} (see {@link HeadCommitValidator}).
+ * Resolves a pull request's head commit SHA, for {@code providers.github.proposals.require-validated-head} (see
+ * {@link HeadCommitValidator}) — either a {@code createPullRequest} mutation's {@code input.headRefName}, or (via
+ * {@link #resolvePullRequestHeadSha}) a {@code mergePullRequest} mutation's target node directly, since that mutation's
+ * input carries no head ref or SHA of its own.
  *
  * <p>{@code input.repositoryId} always names the base repository — the one a fork PR is opened <em>on</em>.
  * {@code headRefName} carries the fork only as an {@code owner:branch} prefix, with no separate repository name; GitHub
@@ -27,6 +29,15 @@ public class GitHubHeadShaResolver {
     private static final String REF_QUERY = "query($owner: String!, $name: String!, $qualifiedName: String!) {"
             + " repository(owner: $owner, name: $name) {"
             + " ref(qualifiedName: $qualifiedName) { target { oid } } } }";
+
+    /**
+     * {@code mergePullRequest}'s own input carries no head-SHA field at all — {@code gh} sends only
+     * {@code pullRequestId} and {@code mergeMethod} (verified live), unlike {@code createPullRequest}'s
+     * {@code headRefName}. So provenance at merge time cannot read the mutation the same way; it asks the PR's node
+     * directly for its current head, the same node ID the mutation itself targets.
+     */
+    private static final String PULL_REQUEST_HEAD_QUERY =
+            "query($id: ID!) { node(id: $id) { ... on PullRequest { headRefOid } } }";
 
     private static final JsonMapper MAPPER = new JsonMapper();
 
@@ -64,6 +75,36 @@ public class GitHubHeadShaResolver {
             log.warn(
                     "Failed to resolve head ref '{}' for provider '{}': {}",
                     headRefName,
+                    provider.getProviderId(),
+                    e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Resolves a pull request's current head SHA directly from its node ID, using {@code callerToken}. Used for
+     * {@code mergePullRequest}, whose input names no head ref or SHA of its own — see {@link #PULL_REQUEST_HEAD_QUERY}.
+     */
+    public Optional<String> resolvePullRequestHeadSha(
+            GitHubProvider provider, String pullRequestNodeId, String callerToken) {
+        try {
+            String body = MAPPER.writeValueAsString(
+                    Map.of("query", PULL_REQUEST_HEAD_QUERY, "variables", Map.of("id", pullRequestNodeId)));
+            Request request =
+                    Request.post(provider.getGraphqlUrl()).addHeader("Authorization", "Bearer " + callerToken);
+            ScmApiUserAgent.self(request);
+            String response = request.bodyString(body, ContentType.APPLICATION_JSON)
+                    .connectTimeout(RESOLVE_TIMEOUT)
+                    .responseTimeout(RESOLVE_TIMEOUT)
+                    .execute(FogwallHttpExecutor.instance())
+                    .returnContent()
+                    .asString();
+            JsonNode oid = MAPPER.readTree(response).path("data").path("node").path("headRefOid");
+            return oid.isString() ? Optional.of(oid.asString()) : Optional.empty();
+        } catch (Exception e) {
+            log.warn(
+                    "Failed to resolve pull request head SHA for node '{}' on provider '{}': {}",
+                    pullRequestNodeId,
                     provider.getProviderId(),
                     e.getMessage());
             return Optional.empty();

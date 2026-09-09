@@ -38,6 +38,10 @@ public class GitHubProposalResponseReader implements ProposalResponseReader {
             case "updateIssue" -> Optional.of(new ProposalOutcome(Kind.ISSUE, null, null, nodeId, title, null));
             case "updatePullRequest" ->
                 Optional.of(new ProposalOutcome(Kind.PULL_REQUEST, null, null, nodeId, title, null));
+            // gh's own mergePullRequest response selects only clientMutationId — no merge commit field, so the
+            // outcome carries a null mergeCommitSha even on a successful merge.
+            case "mergePullRequest" ->
+                Optional.of(new ProposalOutcome(Kind.PULL_REQUEST, null, null, nodeId, title, State.MERGED));
             default -> {
                 // addComment, labels, assignees, review requests: the target's kind is whatever the node resolver
                 // found, which may be either — the registry lookup goes by node ID and does not need it.

@@ -44,12 +44,9 @@ collide between two instances of the same platform, since every GitLab claims `/
 provider has `proposals.enabled: true` with no port, rather than opening a listener no CLI could reach. Developers are
 then given a host and port; see [the user guide](../user/proposals.md).
 
-Optionally add `require-known-cli: true` to refuse callers whose `User-Agent` isn't one of the four recognised SCM CLIs
-— browsers, bare `curl`, unrecognised automation. The raw header is recorded on every audit record either way, which is
-how you spot a CLI upgrade changing its wire format.
-
-> [!WARNING] `User-Agent` is set by the client and can be forged. This is hardening, not a security control — it can
-> only deny requests that would otherwise be allowed, and never grants anything.
+The caller's `User-Agent` and the CLI version it advertises are recorded on every audit record — how you spot a CLI
+upgrade changing its wire format. fogwall does not gate on it: `User-Agent` is client-set and forgeable, so nothing
+branches on it.
 
 ## TLS on the proposals listeners
 
@@ -90,13 +87,13 @@ configuration, and denies everything else:
 | permitted                                    | denied                                                        |
 | -------------------------------------------- | ------------------------------------------------------------- |
 | issue create, edit, close, comment           | submitting a review, approving                                |
-| PR/MR create, edit, close, comment           | merge                                                         |
+| PR/MR create, edit, close, comment, merge    | branch deletion, auto-merge, merge queues                     |
 | label, assignee and reviewer-request changes | release, tracked-time, dependency and project-board endpoints |
 
 Labels, assignees and reviewers are permitted whichever way the CLI sends them — as fields on the create, or as the
 separate follow-up call each CLI makes when the same attribute is changed by an edit. **Requesting** a review is
-permitted; **submitting** one is not, and they are different endpoints. See [Authorization](#authorization) for the full
-scope of a `PROPOSE` grant.
+permitted; **submitting** one is not, and they are different endpoints. Merge is a separate grant from the rest of this
+table — see [Merging](#merging).
 
 Anything the allowlist does not recognise is denied, so a CLI reaching a new endpoint after an upgrade is refused rather
 than forwarded. Per-CLI command names are in [User Guide](../user/proposals.md); the endpoint and mutation tables behind
@@ -124,8 +121,38 @@ consequences:
   three follow-up calls, each authorized against the same repo and recorded separately, so the audit trail holds more
   rows than the developer ran commands.
 
-Merge, and submitting or approving a review, stay out of reach: separate endpoints, none allowlisted. Requesting a
-reviewer is permitted — a different operation from giving the verdict.
+Submitting or approving a review stays out of reach: no allowlisted endpoint reaches it. Requesting a reviewer is
+permitted — a different operation from giving the verdict.
+
+## Merging
+
+Merging a pull/merge request through fogwall is off by default and gated twice — both are required:
+
+- **`merge-enabled`, per provider** (under `proposals`, default off) turns the capability on. Merge is the
+  highest-consequence operation on this path, so exposing it is a deliberate choice rather than a side effect of
+  enabling proposals.
+- **The `MERGE` grant**, standalone from `PROPOSE`: a contributor who can open a pull/merge request cannot merge one
+  with the same grant, and a maintainer given only `MERGE` cannot open one. Grant it the same way as `PROPOSE` (see
+  [Permissions](../configuration/permissions.md)).
+
+With the capability off, a merge is refused even for a caller who holds `MERGE`. Merging is reached through the CLI
+merge commands (`gh pr merge`, `glab mr merge`, `tea`/`fj pr merge`); the `MERGE` grant is assignable in the dashboard,
+but a dashboard-driven merge action is not built yet.
+
+When `require-validated-head` (see [SCM API proxy](../configuration/proposals.md)) is on, it is enforced at merge as
+well, and conclusively so — a create that passed can be undone by a later push, but the branch about to merge is final.
+Enforcement stays opt-in; the check is the same one the proposals docs describe.
+
+Two per-dialect limits come from CLI behaviour rather than fogwall (the
+[SCM API proxy notes](../internals/scm-api-proxy.md) have the detail):
+
+- **`fj pr merge` is refused whenever `require-validated-head` is on** — `fj` sends no head commit for fogwall to
+  validate against.
+- **The audit record's merge commit SHA is populated only for GitLab merges** — GitHub's and Gitea/Forgejo's merge
+  responses do not carry one.
+
+Out of scope: branch deletion after merge, auto-merge, merge queues, and required-status evaluation. fogwall refuses
+nothing upstream would otherwise allow, except on provenance.
 
 ## Content inspection
 
@@ -203,9 +230,8 @@ table/collection, `scm_api_proposals`, keyed on what the upstream calls the thin
 holding its URL, title and current state as last reported through fogwall, and pointing back at the action records that
 created and last touched it. The audit log stays append-only; the registry is what changes when a proposal opened
 through fogwall is later closed through it. A proposal opened elsewhere and then edited or closed through fogwall is
-registered from that response too. The one gap is GitHub: `gh`'s edit and close mutations return nothing but an
-acknowledgement, so a GitHub proposal fogwall never saw created stays unregistered until a response names it. Merges are
-not proxied, so a `merged` state is only ever what an upstream response reported for a proposal fogwall was touching.
+registered from that response too. The one gap is GitHub: `gh`'s edit, close and merge mutations return nothing but an
+acknowledgement, so a GitHub proposal fogwall never saw created stays unregistered until a response names it.
 
 A **refused** request is recorded too, once the caller has been authenticated — including one fogwall turned away
 because the endpoint matched no allowlist rule, where there is no operation to name and `mutation_field` is null (the

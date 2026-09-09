@@ -84,6 +84,7 @@ public class ScmApiAuditFilter implements Filter {
                             .clientVersion(abbreviate(context.getClientVersion(), MAX_CLIENT_VERSION))
                             .upstreamStatus(context.getUpstreamStatus())
                             .proposalId(context.getProposalId())
+                            .mergeCommitSha(context.getMergeCommitSha())
                             .build());
                 } catch (RuntimeException e) {
                     log.error("Failed to write SCM API action audit record", e);

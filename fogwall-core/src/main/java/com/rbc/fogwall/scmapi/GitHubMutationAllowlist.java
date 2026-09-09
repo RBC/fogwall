@@ -17,6 +17,7 @@ public final class GitHubMutationAllowlist {
             "createPullRequest",
             "updatePullRequest",
             "closePullRequest",
+            "mergePullRequest",
             "addComment",
             // Attribute changes gh sends as follow-ups rather than as fields on the create or update. A label named
             // on `issue create` rides along in createIssue's input, but the same label added by `issue edit` is a

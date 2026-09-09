@@ -65,6 +65,8 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jetty.ee11.servlet.FilterHolder;
 import org.eclipse.jetty.ee11.servlet.ServletContextHandler;
@@ -109,6 +111,9 @@ public final class FogwallServletRegistrar {
 
     /** Mount point for the Forgejo REST v1 dialect, shared by {@code fj} and {@code tea}. */
     public static final String FORGEJO_REST_MOUNT = "/api/v1/*";
+
+    /** The {@code :iid} in {@code /projects/:path/merge_requests/:iid/merge} — the merge PUT carries no other field. */
+    private static final Pattern GITLAB_MERGE_IID = Pattern.compile("^/projects/[^/]+/merge_requests/(\\d+)/merge$");
 
     /**
      * Name prefix for the per-provider proposals listeners: {@code scm-api-<provider>}, where {@code <provider>} is the
@@ -424,8 +429,8 @@ public final class FogwallServletRegistrar {
             GitHubProvider provider,
             FogwallContext fogwallContext,
             ProposalContentInspector contentInspector,
-            boolean requireKnownCli,
-            boolean requireValidatedHead) {
+            boolean requireValidatedHead,
+            boolean mergeEnabled) {
         String mapping = GITHUB_GRAPHQL_MOUNT;
 
         var nodeIdResolver = new GitHubNodeIdResolver(fogwallContext.gitHubNodeIdCache());
@@ -433,11 +438,12 @@ public final class FogwallServletRegistrar {
 
         addFilter(context, mapping, new ScmApiAuditFilter(fogwallContext.scmApiActionStore()));
         addFilter(context, mapping, new ScmApiAuthenticateFilter(provider, fogwallContext.pushIdentityResolver()));
-        addFilter(context, mapping, new ScmApiUserAgentFilter(requireKnownCli));
+        addFilter(context, mapping, new ScmApiUserAgentFilter());
         addFilter(
                 context,
                 mapping,
-                new ScmApiGitHubGateFilter(provider, nodeIdResolver, fogwallContext.repoPermissionService()));
+                new ScmApiGitHubGateFilter(
+                        provider, nodeIdResolver, fogwallContext.repoPermissionService(), mergeEnabled));
         addFilter(
                 context,
                 mapping,
@@ -450,6 +456,21 @@ public final class FogwallServletRegistrar {
                             return callerToken == null
                                     ? Optional.empty()
                                     : headShaResolver.resolveHeadSha(provider, baseRepo, headRef, callerToken);
+                        },
+                        new HeadCommitValidator(fogwallContext.pushStore()),
+                        requireValidatedHead));
+        addFilter(
+                context,
+                mapping,
+                new ScmApiHeadValidationFilter(
+                        "mergePullRequest",
+                        body -> JsonBodyField.stringField(body.path("variables").path("input"), "pullRequestId"),
+                        (req, ctx, pullRequestNodeId) -> {
+                            String callerToken = ScmApiTokenExtractor.extractToken(req);
+                            return callerToken == null
+                                    ? Optional.empty()
+                                    : headShaResolver.resolvePullRequestHeadSha(
+                                            provider, pullRequestNodeId, callerToken);
                         },
                         new HeadCommitValidator(fogwallContext.pushStore()),
                         requireValidatedHead));
@@ -479,22 +500,23 @@ public final class FogwallServletRegistrar {
             GitLabProvider provider,
             FogwallContext fogwallContext,
             ProposalContentInspector contentInspector,
-            boolean requireKnownCli,
-            boolean requireValidatedHead) {
+            boolean requireValidatedHead,
+            boolean mergeEnabled) {
         String mapping = GITLAB_REST_MOUNT;
 
         var headShaResolver = new GitLabHeadShaResolver();
 
         addFilter(context, mapping, new ScmApiAuditFilter(fogwallContext.scmApiActionStore()));
         addFilter(context, mapping, new ScmApiAuthenticateFilter(provider, fogwallContext.pushIdentityResolver()));
-        addFilter(context, mapping, new ScmApiUserAgentFilter(requireKnownCli));
+        addFilter(context, mapping, new ScmApiUserAgentFilter());
         addFilter(
                 context,
                 mapping,
                 new ScmApiGitLabGateFilter(
                         provider,
                         new GitLabProjectIdResolver(fogwallContext.gitLabProjectIdCache()),
-                        fogwallContext.repoPermissionService()));
+                        fogwallContext.repoPermissionService(),
+                        mergeEnabled));
         addFilter(
                 context,
                 mapping,
@@ -511,6 +533,33 @@ public final class FogwallServletRegistrar {
                             OwnerRepo sourceRepo = match.get().ownerRepo();
                             return headShaResolver.resolveHeadSha(
                                     provider, sourceRepo, sourceBranch, authHeaderName, req.getHeader(authHeaderName));
+                        },
+                        new HeadCommitValidator(fogwallContext.pushStore()),
+                        requireValidatedHead));
+        addFilter(
+                context,
+                mapping,
+                new ScmApiHeadValidationFilter(
+                        "merge_requests.merge",
+                        // glab's own merge PUT carries an empty body by default (verified live: no `sha` field), so
+                        // there is nothing to extract here — a fixed non-empty placeholder just clears the filter's
+                        // "could not read the head branch" check; the resolver below ignores it and asks the merge
+                        // request directly for its current head.
+                        body -> Optional.of("merge_requests.merge"),
+                        (req, ctx, ignoredHeadRef) -> {
+                            String urlPath = ScmApiRestPath.rawSubPath(req);
+                            Matcher iidMatch = GITLAB_MERGE_IID.matcher(urlPath);
+                            String authHeaderName = ScmApiTokenExtractor.authHeaderName(req);
+                            if (!iidMatch.matches() || authHeaderName == null) {
+                                return Optional.<String>empty();
+                            }
+                            var targetProject = new OwnerRepo(ctx.getRepoOwner(), ctx.getRepoName());
+                            return headShaResolver.resolveMergeRequestHeadSha(
+                                    provider,
+                                    targetProject,
+                                    Integer.parseInt(iidMatch.group(1)),
+                                    authHeaderName,
+                                    req.getHeader(authHeaderName));
                         },
                         new HeadCommitValidator(fogwallContext.pushStore()),
                         requireValidatedHead));
@@ -541,16 +590,19 @@ public final class FogwallServletRegistrar {
             ForgejoProvider provider,
             FogwallContext fogwallContext,
             ProposalContentInspector contentInspector,
-            boolean requireKnownCli,
-            boolean requireValidatedHead) {
+            boolean requireValidatedHead,
+            boolean mergeEnabled) {
         String mapping = FORGEJO_REST_MOUNT;
 
         var headShaResolver = new ForgejoHeadShaResolver();
 
         addFilter(context, mapping, new ScmApiAuditFilter(fogwallContext.scmApiActionStore()));
         addFilter(context, mapping, new ScmApiAuthenticateFilter(provider, fogwallContext.pushIdentityResolver()));
-        addFilter(context, mapping, new ScmApiUserAgentFilter(requireKnownCli));
-        addFilter(context, mapping, new ScmApiForgejoGateFilter(provider, fogwallContext.repoPermissionService()));
+        addFilter(context, mapping, new ScmApiUserAgentFilter());
+        addFilter(
+                context,
+                mapping,
+                new ScmApiForgejoGateFilter(provider, fogwallContext.repoPermissionService(), mergeEnabled));
         addFilter(
                 context,
                 mapping,
@@ -564,6 +616,18 @@ public final class FogwallServletRegistrar {
                                     ? Optional.empty()
                                     : headShaResolver.resolveHeadSha(provider, baseRepo, head, callerToken);
                         },
+                        new HeadCommitValidator(fogwallContext.pushStore()),
+                        requireValidatedHead));
+        addFilter(
+                context,
+                mapping,
+                new ScmApiHeadValidationFilter(
+                        "pulls.merge",
+                        // head_commit_id is Gitea/Forgejo's optional optimistic-concurrency field. tea sends it
+                        // populated (verified live); fj hardcodes it absent. When absent this
+                        // fails closed like any unresolvable head ref: denied for provenance, not silently skipped.
+                        body -> JsonBodyField.stringField(body, "head_commit_id"),
+                        (req, ctx, headCommitId) -> Optional.of(headCommitId),
                         new HeadCommitValidator(fogwallContext.pushStore()),
                         requireValidatedHead));
         addFilter(
@@ -628,8 +692,8 @@ public final class FogwallServletRegistrar {
             }
 
             int port = configBuilder.getProposalsPort(provider);
-            boolean requireKnownCli = configBuilder.isProposalsRequireKnownCli(provider);
             boolean requireValidatedHead = configBuilder.isProposalsRequireValidatedHead(provider);
+            boolean mergeEnabled = configBuilder.isProposalsMergeEnabled(provider);
             String connectorName = SCM_API_CONNECTOR_PREFIX + provider.getName();
             // GitLab and Gitea/Forgejo both address something through an encoded separator, so both relax Jetty's
             // URI compliance; GitHub keeps the strict default and rejects one at the parser. The relaxation is only
@@ -657,28 +721,18 @@ public final class FogwallServletRegistrar {
 
             if (provider instanceof GitHubProvider githubProvider) {
                 registerScmApiProxy(
-                        context,
-                        githubProvider,
-                        fogwallContext,
-                        contentInspector,
-                        requireKnownCli,
-                        requireValidatedHead);
+                        context, githubProvider, fogwallContext, contentInspector, requireValidatedHead, mergeEnabled);
             } else if (provider instanceof GitLabProvider gitlabProvider) {
                 registerScmApiProxyGitLab(
-                        context,
-                        gitlabProvider,
-                        fogwallContext,
-                        contentInspector,
-                        requireKnownCli,
-                        requireValidatedHead);
+                        context, gitlabProvider, fogwallContext, contentInspector, requireValidatedHead, mergeEnabled);
             } else {
                 registerScmApiProxyForgejo(
                         context,
                         (ForgejoProvider) provider,
                         fogwallContext,
                         contentInspector,
-                        requireKnownCli,
-                        requireValidatedHead);
+                        requireValidatedHead,
+                        mergeEnabled);
             }
 
             contexts.addHandler(context);

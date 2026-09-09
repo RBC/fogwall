@@ -52,6 +52,14 @@ class GitLabRestAllowlistTest {
         assertEquals("merge_requests.note", match.get().operation());
     }
 
+    @Test
+    void matchesMrMerge() {
+        Optional<ScmApiRestMatch> match =
+                GitLabRestAllowlist.match("PUT", "/projects/acme%2Fwidgets/merge_requests/3/merge");
+        assertTrue(match.isPresent());
+        assertEquals("merge_requests.merge", match.get().operation());
+    }
+
     /** Review is out of scope — reviewers use GitLab's own UI, so approval is never forwarded. */
     @Test
     void deniesMrApprove() {

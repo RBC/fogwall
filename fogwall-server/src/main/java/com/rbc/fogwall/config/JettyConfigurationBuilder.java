@@ -1136,23 +1136,23 @@ public class JettyConfigurationBuilder {
     }
 
     /**
-     * Whether this provider refuses callers that aren't a recognised SCM CLI —
-     * {@code providers.<name>.proposals.require-known-cli}, default {@code false}. Subtractive hardening only; see
-     * {@link ProposalsProviderSettings#isRequireKnownCli()}.
-     */
-    public boolean isProposalsRequireKnownCli(FogwallProvider provider) {
-        ProviderConfig providerConfig = config.getProviders().get(provider.getName());
-        return providerConfig != null && providerConfig.getProposals().isRequireKnownCli();
-    }
-
-    /**
      * Whether this provider refuses a proposal whose head commit has no push record —
-     * {@code providers.<name>.proposals.require-validated-head}, default {@code false}. See
+     * {@code providers.<name>.proposals.require-validated-head}, default {@code true}. See
      * {@link ProposalsProviderSettings#isRequireValidatedHead()}.
      */
     public boolean isProposalsRequireValidatedHead(FogwallProvider provider) {
         ProviderConfig providerConfig = config.getProviders().get(provider.getName());
         return providerConfig != null && providerConfig.getProposals().isRequireValidatedHead();
+    }
+
+    /**
+     * Whether this provider allows merging a pull/merge request through its SCM API proxy —
+     * {@code providers.<name>.proposals.merge-enabled}, default {@code false}. See
+     * {@link ProposalsProviderSettings#isMergeEnabled()}.
+     */
+    public boolean isProposalsMergeEnabled(FogwallProvider provider) {
+        ProviderConfig providerConfig = config.getProviders().get(provider.getName());
+        return providerConfig != null && providerConfig.getProposals().isMergeEnabled();
     }
 
     private MongoStoreFactory requireMongoStoreFactory() {

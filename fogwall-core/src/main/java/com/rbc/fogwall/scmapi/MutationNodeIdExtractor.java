@@ -37,6 +37,7 @@ public final class MutationNodeIdExtractor {
             Map.entry("addComment", new NodeIdKey("subjectId", MutationNodeIdRef.NodeType.ISSUE_OR_PULL_REQUEST)),
             Map.entry("updatePullRequest", new NodeIdKey("pullRequestId", MutationNodeIdRef.NodeType.PULL_REQUEST)),
             Map.entry("closePullRequest", new NodeIdKey("pullRequestId", MutationNodeIdRef.NodeType.PULL_REQUEST)),
+            Map.entry("mergePullRequest", new NodeIdKey("pullRequestId", MutationNodeIdRef.NodeType.PULL_REQUEST)),
             // Attribute follow-ups. Each names its target by the generic capability it acts through, not by the
             // concrete type: an assignable and a labelable are both "issue or pull request", so the same node ID
             // resolution path already covers them.
