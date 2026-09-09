@@ -74,5 +74,8 @@ public class ScmApiRequestContext {
     /** The proposal registry row the mutation created or touched, when the response named one. */
     private String proposalId;
 
+    /** The SHA a merge produced, when the upstream's own response named one. Null for every non-merge mutation. */
+    private String mergeCommitSha;
+
     private String reason;
 }

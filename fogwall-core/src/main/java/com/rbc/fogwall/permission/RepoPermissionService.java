@@ -90,6 +90,15 @@ public class RepoPermissionService {
     }
 
     /**
+     * Returns {@code true} when {@code username} is authorised to merge a pull/merge request against {@code path} at
+     * {@code provider} through the SCM API proxy's maintainer path. Fail-closed: returns {@code false} if no grants
+     * exist for the path.
+     */
+    public boolean isAllowedToMerge(String username, String provider, String path) {
+        return isAllowed(username, provider, path, RepoPermission.Grant.MERGE);
+    }
+
+    /**
      * Returns {@code true} when {@code username} has an explicit {@link RepoPermission.Grant#SELF_CERTIFY} grant for
      * {@code path} at {@code provider}. Unlike push/approve checks, {@link RepoPermission.Grant#PUSH_AND_REVIEW} does
      * <em>not</em> imply self-certify — the grant must be explicit.
@@ -219,6 +228,10 @@ public class RepoPermissionService {
         // PROPOSE is a separate axis from push/review too — a repo can permission git-push and change
         // proposals independently, so a PROPOSE entry only conflicts with another PROPOSE entry.
         if (a == RepoPermission.Grant.PROPOSE || b == RepoPermission.Grant.PROPOSE) {
+            return a == b;
+        }
+        // MERGE is its own axis for the same reason: standalone, and cannot be granted upstream in isolation.
+        if (a == RepoPermission.Grant.MERGE || b == RepoPermission.Grant.MERGE) {
             return a == b;
         }
         // Among PUSH / REVIEW / PUSH_AND_REVIEW: conflict if both entries would affect the same check.

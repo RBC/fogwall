@@ -226,8 +226,8 @@ class ScmApiProposalsE2ETest {
         var context = FogwallServletRegistrar.scmApiContext(CONNECTOR, true);
         addFilter(context, new ScmApiAuditFilter(actionStore));
         addFilter(context, new ScmApiAuthenticateFilter(provider, new TokenPushIdentityResolver(userStore)));
-        addFilter(context, new ScmApiUserAgentFilter(false));
-        addFilter(context, new ScmApiForgejoGateFilter(provider, permissionService));
+        addFilter(context, new ScmApiUserAgentFilter());
+        addFilter(context, new ScmApiForgejoGateFilter(provider, permissionService, false));
         addFilter(
                 context,
                 new ScmApiContentInspectionFilter(inspector, ProposalContent::fromForgejoBody, body -> List.of()));

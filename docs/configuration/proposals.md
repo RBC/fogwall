@@ -38,8 +38,8 @@ providers:
     proposals:
       enabled: true
       port: 9445
-      require-known-cli: true # optional hardening; default false
-      require-validated-head: true # optional provenance check; default false
+      require-validated-head: false # relax the head-provenance check; default true
+      merge-enabled: true # allow merging PR/MRs through this provider; default false
 ```
 
 **Each enabled provider needs its own `port`**, and fogwall fails to start if one is enabled without it. The dialect is
@@ -56,26 +56,31 @@ over HTTPS, so TLS has to terminate either at fogwall this way or at an ingress 
 unset, fogwall logs a warning naming each plaintext listener. See
 [TLS on the proposals listeners](../admin/proposals.md#tls-on-the-proposals-listeners).
 
-`require-known-cli` refuses callers whose `User-Agent` isn't one of the four recognised SCM CLIs — browsers, bare
-`curl`, unrecognised automation. It is **hardening, not a security boundary**: `User-Agent` is caller-controlled, so the
-setting can only deny a request that would otherwise be allowed, never permit one the allowlist and permission engine
-would refuse. It defaults off because a CLI release that changes its `User-Agent` format would otherwise start failing
-for reasons unrelated to policy. The raw header is recorded on every audit record either way, since each CLI advertises
-its version there.
+The caller's `User-Agent` and the CLI version it advertises are recorded on every audit record — the anchor for noticing
+a CLI upgrade has changed its wire format, which otherwise surfaces only as an unexplained denial. It is not used to
+gate: `User-Agent` is caller-controlled, so nothing branches on it.
 
 `require-validated-head` refuses a proposal-create request whose head commit fogwall has no push record for — closing
 the gap where a contributor pushes straight to their fork, never touching fogwall, then opens the pull request through
 it. The lookup is keyed on the commit SHA alone, not the repository, since a fork push and the upstream proposal are two
 different repositories.
 
-It defaults off because it breaks legitimately in a few common workflows: a rebase, amend, or force-push after pushing
-through fogwall changes the SHA a validated push recorded, and a commit authored in the SCM's own web UI never went
-through fogwall at all. A denial names the remedy — push the branch through fogwall, then reopen — rather than just
-refusing.
+It defaults on, so a proposal's head must trace to a push fogwall saw. Relax it (set `false`) where these workflows are
+common: a rebase, amend, or force-push after pushing through fogwall changes the SHA a validated push recorded, and a
+commit authored in the SCM's own web UI never went through fogwall at all — each leaves the head with no matching push
+record. A denial names the remedy — push the branch through fogwall, then reopen — rather than just refusing.
+
+`merge-enabled` allows merging a pull/merge request through this provider's SCM API proxy (`gh pr merge`,
+`glab mr merge`, `tea`/`fj pr merge`). It defaults off because merge is the highest-consequence operation on this path,
+so exposing it is an explicit operator decision rather than a side effect of enabling proposals. It is **independent of
+the `MERGE` grant, and both are required**: the capability must be enabled here, and the caller must hold the grant (see
+[Permissions](permissions.md)). With it off, a merge request is refused even for a caller who holds `MERGE`.
 
 Per-repo authorization for **mutations** (issue/PR create, edit, comment, review) goes through the existing
 `RepoPermission` grants — see [Permissions](permissions.md) below — with a dedicated `PROPOSE` grant kept independent
-from `PUSH`/`REVIEW`, so an operator can permission git-push and SCM API mutations separately:
+from `PUSH`/`REVIEW`, so an operator can permission git-push and SCM API mutations separately. Merging a pull/merge
+request is its own grant, `MERGE`, independent again from `PROPOSE` — see
+[the administrator guide's merging section](../admin/proposals.md#merging):
 
 ```yaml
 permissions:
@@ -92,13 +97,13 @@ resolution, no extra round-trip.
 
 ## Proposal properties
 
-| Property                                            | Type    | Default | Description                                                                                                       |
-| --------------------------------------------------- | ------- | ------- | ----------------------------------------------------------------------------------------------------------------- |
-| `proposals.node-id-cache-ttl`                       | string  | `PT5M`  | ISO-8601 duration. See the security note above.                                                                   |
-| `providers.<name>.proposals.enabled`                | boolean | `false` | Whether the SCM API proxy is mounted for this provider.                                                           |
-| `providers.<name>.proposals.port`                   | int     | —       | Dedicated listener port. **Required** when `enabled`; startup fails without it.                                   |
-| `providers.<name>.proposals.require-known-cli`      | boolean | `false` | Refuse callers whose `User-Agent` isn't a recognised SCM CLI. Subtractive hardening only.                         |
-| `providers.<name>.proposals.require-validated-head` | boolean | `false` | Refuse a proposal whose head commit has no fogwall push record. Breaks on rebase/amend/force-push/web-UI commits. |
+| Property                                            | Type    | Default | Description                                                                                                                    |
+| --------------------------------------------------- | ------- | ------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `proposals.node-id-cache-ttl`                       | string  | `PT5M`  | ISO-8601 duration. See the security note above.                                                                                |
+| `providers.<name>.proposals.enabled`                | boolean | `false` | Whether the SCM API proxy is mounted for this provider.                                                                        |
+| `providers.<name>.proposals.port`                   | int     | —       | Dedicated listener port. **Required** when `enabled`; startup fails without it.                                                |
+| `providers.<name>.proposals.require-validated-head` | boolean | `true`  | Refuse a proposal whose head commit has no fogwall push record. Relax where rebase/amend/force-push/web-UI commits are common. |
+| `providers.<name>.proposals.merge-enabled`          | boolean | `false` | Allow merging PR/MRs through this provider. Independent of the `MERGE` grant; both are required.                               |
 
 ## Token model
 

@@ -27,21 +27,19 @@ public class ProposalsProviderSettings {
     private int port = 0;
 
     /**
-     * Refuse any caller whose {@code User-Agent} isn't one of the recognised SCM CLIs — browsers, bare {@code curl},
-     * unrecognised automation. Default {@code false}.
+     * Refuse a proposal whose head commit fogwall has no push record for. Default {@code true}.
      *
-     * <p>Purely subtractive hardening, never a security boundary: {@code User-Agent} is caller-controlled, so this can
-     * only deny a request that would otherwise be allowed, never permit one the allowlist and permission engine would
-     * refuse. Left off by default because a CLI release that changes its {@code User-Agent} format would otherwise
-     * start failing for reasons unrelated to policy.
+     * <p>Relax it (set {@code false}) where these workflows are common: a rebase, amend, force-push, or a commit
+     * authored in the SCM's own web UI changes only the SHA that identifies the code, not the code itself, yet leaves
+     * the head with no matching push record — so the proposal is refused until the branch is pushed through fogwall.
      */
-    private boolean requireKnownCli = false;
+    private boolean requireValidatedHead = true;
 
     /**
-     * Refuse a proposal whose head commit fogwall has no push record for. Default {@code false}.
-     *
-     * <p>Breaks legitimately on a rebase, amend, force-push, or a commit authored in the SCM's own web UI — none of
-     * those change the code, only the SHA that identifies it, so this is opt-in rather than a default posture.
+     * Allow merging a pull/merge request through this provider's SCM API proxy. Default {@code false}. Independent of
+     * the {@code MERGE} grant: both are required — the capability must be enabled here, and the caller must hold the
+     * grant. Off by default because merge is the highest-consequence operation on this path, so exposing it is an
+     * explicit operator decision rather than a side effect of enabling proposals.
      */
-    private boolean requireValidatedHead = false;
+    private boolean mergeEnabled = false;
 }

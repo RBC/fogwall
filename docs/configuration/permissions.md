@@ -56,15 +56,15 @@ permissions:
 
 ## Permission properties
 
-| Property       | Type   | Default           | Description                                                                                                                                                              |
-| -------------- | ------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `username`     | string | —                 | Proxy username (must match a `users:` entry or a DB user)                                                                                                                |
-| `provider`     | string | —                 | Provider name as defined in `providers:` config                                                                                                                          |
-| `match`        | object | —                 | Repository match criteria — see below                                                                                                                                    |
-| `match.target` | enum   | `SLUG`            | What to match: `SLUG` (the full repository path), `OWNER`, or `NAME`                                                                                                     |
-| `match.value`  | string | —                 | The pattern to match against the chosen target                                                                                                                           |
-| `match.type`   | enum   | `GLOB`            | How to interpret the pattern: `LITERAL`, `GLOB`, or `REGEX`                                                                                                              |
-| `grant`        | enum   | `PUSH_AND_REVIEW` | What the user may do: `PUSH`, `REVIEW`, `PUSH_AND_REVIEW`, `SELF_CERTIFY`, `PROPOSE` (v1.4.0+, [SCM API proxy](proposals.md) mutations — independent of `PUSH`/`REVIEW`) |
+| Property       | Type   | Default           | Description                                                                                                                                                                                    |
+| -------------- | ------ | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `username`     | string | —                 | Proxy username (must match a `users:` entry or a DB user)                                                                                                                                      |
+| `provider`     | string | —                 | Provider name as defined in `providers:` config                                                                                                                                                |
+| `match`        | object | —                 | Repository match criteria — see below                                                                                                                                                          |
+| `match.target` | enum   | `SLUG`            | What to match: `SLUG` (the full repository path), `OWNER`, or `NAME`                                                                                                                           |
+| `match.value`  | string | —                 | The pattern to match against the chosen target                                                                                                                                                 |
+| `match.type`   | enum   | `GLOB`            | How to interpret the pattern: `LITERAL`, `GLOB`, or `REGEX`                                                                                                                                    |
+| `grant`        | enum   | `PUSH_AND_REVIEW` | What the user may do: `PUSH`, `REVIEW`, `PUSH_AND_REVIEW`, `SELF_CERTIFY`, `PROPOSE`, `MERGE` (v1.4.0+, [SCM API proxy](proposals.md) — both independent of `PUSH`/`REVIEW` and of each other) |
 
 ## Pattern matching
 
@@ -165,12 +165,14 @@ permissions:
 
 ## Grant
 
-| Value             | Effect                                                                                                                    |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `PUSH`            | User may push to matching repositories                                                                                    |
-| `REVIEW`          | User may approve or reject pushes submitted by others                                                                     |
-| `PUSH_AND_REVIEW` | Shorthand for both PUSH and REVIEW; does **not** include SELF_CERTIFY                                                     |
-| `SELF_CERTIFY`    | Trusted contributor: may approve their own clean pushes without a peer reviewer. Requires the `SELF_CERTIFY` role as well |
+| Value             | Effect                                                                                                                           |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `PUSH`            | User may push to matching repositories                                                                                           |
+| `REVIEW`          | User may approve or reject pushes submitted by others                                                                            |
+| `PUSH_AND_REVIEW` | Shorthand for both PUSH and REVIEW; does **not** include SELF_CERTIFY                                                            |
+| `SELF_CERTIFY`    | Trusted contributor: may approve their own clean pushes without a peer reviewer. Requires the `SELF_CERTIFY` role as well        |
+| `PROPOSE`         | User may open and edit pull/merge requests and issues through the [SCM API proxy](proposals.md) — independent of `PUSH`/`REVIEW` |
+| `MERGE`           | User may merge a pull/merge request through the SCM API proxy's maintainer path — independent of `PUSH`/`REVIEW`/`PROPOSE`       |
 
 <!-- prettier-ignore-start -->
 > [!IMPORTANT]

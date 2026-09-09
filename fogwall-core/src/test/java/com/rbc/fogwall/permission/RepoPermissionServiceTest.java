@@ -124,6 +124,21 @@ class RepoPermissionServiceTest {
         assertFalse(svc.isAllowedToPropose("alice", "github", "/owner/repo"));
     }
 
+    @Test
+    void mergeOnlyGrant_allowsMerge_deniesEverythingElse() {
+        svc.save(grant("alice", "github", "/owner/repo", MatchType.LITERAL, RepoPermission.Grant.MERGE));
+        assertTrue(svc.isAllowedToMerge("alice", "github", "/owner/repo"));
+        assertFalse(svc.isAllowedToPush("alice", "github", "/owner/repo"));
+        assertFalse(svc.isAllowedToReview("alice", "github", "/owner/repo"));
+        assertFalse(svc.isAllowedToPropose("alice", "github", "/owner/repo"));
+    }
+
+    @Test
+    void proposeGrant_doesNotImplyMerge() {
+        svc.save(grant("alice", "github", "/owner/repo", MatchType.LITERAL, RepoPermission.Grant.PROPOSE));
+        assertFalse(svc.isAllowedToMerge("alice", "github", "/owner/repo"));
+    }
+
     // ---- provider isolation ----
 
     @Test
@@ -450,6 +465,27 @@ class RepoPermissionServiceTest {
         RepoPermission incoming =
                 grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Grant.SELF_CERTIFY);
         assertTrue(svc.findConflict(incoming).isPresent());
+    }
+
+    @Test
+    void findConflict_mergeVsMerge_detected() {
+        svc.save(grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Grant.MERGE));
+        RepoPermission incoming = grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Grant.MERGE);
+        assertTrue(svc.findConflict(incoming).isPresent());
+    }
+
+    @Test
+    void findConflict_pushAndReviewVsMerge_noConflict() {
+        svc.save(grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Grant.PUSH_AND_REVIEW));
+        RepoPermission incoming = grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Grant.MERGE);
+        assertTrue(svc.findConflict(incoming).isEmpty());
+    }
+
+    @Test
+    void findConflict_proposeVsMerge_noConflict() {
+        svc.save(grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Grant.PROPOSE));
+        RepoPermission incoming = grant("alice", "github", "/acme/repo", MatchType.LITERAL, RepoPermission.Grant.MERGE);
+        assertTrue(svc.findConflict(incoming).isEmpty());
     }
 
     @Test

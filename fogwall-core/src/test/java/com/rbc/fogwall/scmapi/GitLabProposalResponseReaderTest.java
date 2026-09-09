@@ -34,6 +34,20 @@ class GitLabProposalResponseReaderTest {
         assertEquals("Proposed via glab", o.title());
     }
 
+    // Verified live: the response is the full updated MR object, including merge_commit_sha — the one dialect whose
+    // merge response actually names what the merge produced.
+    @Test
+    void mergeMergeRequest_readsMergedStateAndCommitSha() {
+        ProposalOutcome o = reader.read(
+                        op("merge_requests.merge"),
+                        "/projects/acme%2Fwidgets/merge_requests/11/merge",
+                        "{\"iid\":11,\"state\":\"merged\",\"web_url\":\"https://gitlab.com/acme/widgets/-/merge_requests/11\",\"merge_commit_sha\":\"3a0bc7f011690f05b3baf5821b10d17b3be247d5\"}")
+                .orElseThrow();
+        assertEquals(Kind.PULL_REQUEST, o.kind());
+        assertEquals(State.MERGED, o.state());
+        assertEquals("3a0bc7f011690f05b3baf5821b10d17b3be247d5", o.mergeCommitSha());
+    }
+
     @Test
     void updateWithStateEvent_reportsTheNewState() {
         ProposalOutcome o = reader.read(

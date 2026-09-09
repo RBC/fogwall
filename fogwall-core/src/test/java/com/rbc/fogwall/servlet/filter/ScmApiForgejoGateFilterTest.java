@@ -33,7 +33,11 @@ class ScmApiForgejoGateFilterTest {
     }
 
     private ScmApiForgejoGateFilter filter() {
-        return new ScmApiForgejoGateFilter(provider, repoPermissionService);
+        return filter(true);
+    }
+
+    private ScmApiForgejoGateFilter filter(boolean mergeEnabled) {
+        return new ScmApiForgejoGateFilter(provider, repoPermissionService, mergeEnabled);
     }
 
     /**
@@ -171,5 +175,59 @@ class ScmApiForgejoGateFilterTest {
         assertEquals("acme", context.getRepoOwner());
         assertEquals("widgets", context.getRepoName());
         assertEquals("{\"title\":\"t\"}", context.getVariablesJson(), "the body is the audit evidence");
+    }
+
+    /** pulls.merge checks MERGE, never PROPOSE — a PROPOSE grant alone must not let a maintainer merge. */
+    @Test
+    void pullsMerge_checksMergeGrant_notPropose() throws Exception {
+        when(repoPermissionService.isAllowedToPropose("alice", "gitea", "/acme/widgets"))
+                .thenReturn(true);
+        when(repoPermissionService.isAllowedToMerge("alice", "gitea", "/acme/widgets"))
+                .thenReturn(false);
+        var context = new ScmApiRequestContext();
+        context.setResolvedUser("alice");
+        HttpServletRequest req = mockRequest("POST", "/repos/acme/widgets/pulls/3/merge", "{}", context);
+        HttpServletResponse resp = mockResponse(new ByteArrayOutputStream());
+        FilterChain chain = mock(FilterChain.class);
+
+        filter().doFilter(req, resp, chain);
+
+        verify(resp).setStatus(HttpServletResponse.SC_FORBIDDEN);
+        verifyNoInteractions(chain);
+    }
+
+    @Test
+    void pullsMerge_mergeGrant_allowsEvenWithoutPropose() throws Exception {
+        when(repoPermissionService.isAllowedToPropose("alice", "gitea", "/acme/widgets"))
+                .thenReturn(false);
+        when(repoPermissionService.isAllowedToMerge("alice", "gitea", "/acme/widgets"))
+                .thenReturn(true);
+        var context = new ScmApiRequestContext();
+        context.setResolvedUser("alice");
+        HttpServletRequest req = mockRequest("POST", "/repos/acme/widgets/pulls/3/merge", "{}", context);
+        HttpServletResponse resp = mockResponse(new ByteArrayOutputStream());
+        FilterChain chain = mock(FilterChain.class);
+
+        filter().doFilter(req, resp, chain);
+
+        verify(chain).doFilter(any(), eq(resp));
+        assertEquals("pulls.merge", context.getMutationField());
+    }
+
+    /** With merge-enabled off for the provider, a merge is refused before any grant is even consulted. */
+    @Test
+    void pullsMerge_deniedWhenMergeNotEnabledForProvider() throws Exception {
+        var context = new ScmApiRequestContext();
+        context.setResolvedUser("alice");
+        HttpServletRequest req = mockRequest("POST", "/repos/acme/widgets/pulls/3/merge", "{}", context);
+        HttpServletResponse resp = mockResponse(new ByteArrayOutputStream());
+        FilterChain chain = mock(FilterChain.class);
+
+        filter(false).doFilter(req, resp, chain);
+
+        verify(resp).setStatus(HttpServletResponse.SC_FORBIDDEN);
+        verifyNoInteractions(chain);
+        verify(repoPermissionService, never()).isAllowedToMerge(any(), any(), any());
+        verify(repoPermissionService, never()).isAllowedToPropose(any(), any(), any());
     }
 }

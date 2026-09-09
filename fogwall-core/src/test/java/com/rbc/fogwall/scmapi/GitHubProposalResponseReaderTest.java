@@ -52,6 +52,25 @@ class GitHubProposalResponseReaderTest {
                 .isEmpty());
     }
 
+    // gh's own merge mutation selects only clientMutationId — verified live — so there is no merge commit SHA
+    // anywhere in the response to read.
+    @Test
+    void mergePullRequest_marksMerged_noCommitShaAvailable() {
+        ProposalOutcome o = reader.read(
+                        context(
+                                "mergePullRequest",
+                                "PR_kwDO1",
+                                "PULL_REQUEST",
+                                "{\"input\":{\"pullRequestId\":\"PR_kwDO1\",\"mergeMethod\":\"MERGE\"}}"),
+                        null,
+                        "{\"data\":{\"mergePullRequest\":{\"clientMutationId\":null}}}")
+                .orElseThrow();
+        assertEquals(Kind.PULL_REQUEST, o.kind());
+        assertEquals(State.MERGED, o.state());
+        assertEquals("PR_kwDO1", o.nodeId());
+        assertNull(o.mergeCommitSha());
+    }
+
     @Test
     void closeAndUpdate_areKeyedOnTheAddressedNode() {
         ProposalOutcome close = reader.read(

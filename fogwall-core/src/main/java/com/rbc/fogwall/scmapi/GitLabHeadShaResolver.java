@@ -68,4 +68,38 @@ public class GitLabHeadShaResolver {
         JsonNode id = branchResponse.path("commit").path("id");
         return id.isString() ? Optional.of(id.asString()) : Optional.empty();
     }
+
+    /**
+     * Resolves a merge request's current head SHA directly, for {@code merge_requests.merge}: {@code glab mr merge}
+     * sends an empty {@code PUT .../merge} body by default (verified live — no {@code sha} field), unlike {@code mr
+     * create}'s {@code source_branch}. {@code targetProject} is the project the merge request's {@code :iid} is scoped
+     * to — the same project the merge PUT's URL already addresses.
+     */
+    public Optional<String> resolveMergeRequestHeadSha(
+            GitLabProvider provider, OwnerRepo targetProject, int iid, String authHeaderName, String authHeaderValue) {
+        String path = URLEncoder.encode(targetProject.owner() + "/" + targetProject.name(), StandardCharsets.UTF_8);
+        try {
+            var request = Request.get(provider.getApiUrl() + "/projects/" + path + "/merge_requests/" + iid);
+            if (authHeaderName != null) {
+                request.addHeader(authHeaderName, authHeaderValue);
+            }
+            ScmApiUserAgent.self(request);
+            String response = request.connectTimeout(RESOLVE_TIMEOUT)
+                    .responseTimeout(RESOLVE_TIMEOUT)
+                    .execute(FogwallHttpExecutor.instance())
+                    .returnContent()
+                    .asString();
+            JsonNode sha = MAPPER.readTree(response).path("sha");
+            return sha.isString() ? Optional.of(sha.asString()) : Optional.empty();
+        } catch (Exception e) {
+            log.warn(
+                    "Failed to resolve merge request !{} head SHA in {}/{} for provider '{}': {}",
+                    iid,
+                    targetProject.owner(),
+                    targetProject.name(),
+                    provider.getProviderId(),
+                    e.getMessage());
+            return Optional.empty();
+        }
+    }
 }

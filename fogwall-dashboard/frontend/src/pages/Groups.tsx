@@ -467,6 +467,7 @@ export function Groups() {
                       <option value="PUSH_AND_REVIEW">Push and review</option>
                       <option value="SELF_CERTIFY">Self-certify</option>
                       {proposalsEnabled && <option value="PROPOSE">Propose</option>}
+                      {proposalsEnabled && <option value="MERGE">Merge</option>}
                     </select>
                     <button
                       onClick={handleAddRule}

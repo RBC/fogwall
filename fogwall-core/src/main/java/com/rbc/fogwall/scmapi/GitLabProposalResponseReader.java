@@ -46,7 +46,8 @@ public class GitLabProposalResponseReader implements ProposalResponseReader {
         State state = json != null && json.hasNonNull("state")
                 ? state(json.get("state").asText())
                 : null;
-        return Optional.of(new ProposalOutcome(kind, number, text(json, "web_url"), null, text(json, "title"), state));
+        return Optional.of(new ProposalOutcome(
+                kind, number, text(json, "web_url"), null, text(json, "title"), state, text(json, "merge_commit_sha")));
     }
 
     private static State state(String state) {

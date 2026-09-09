@@ -42,8 +42,10 @@ public class ProposalRegistrar {
         }
         try {
             reader.read(context, requestPath, body == null ? null : new String(body, StandardCharsets.UTF_8))
-                    .flatMap(outcome -> register(context, outcome))
-                    .ifPresent(context::setProposalId);
+                    .ifPresent(outcome -> {
+                        context.setMergeCommitSha(outcome.mergeCommitSha());
+                        register(context, outcome).ifPresent(context::setProposalId);
+                    });
         } catch (RuntimeException e) {
             log.warn(
                     "Proposal registry not updated for {} {} on {}/{}: {}",

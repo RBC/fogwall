@@ -38,7 +38,11 @@ class ScmApiGitHubGateFilterTest {
     }
 
     private ScmApiGitHubGateFilter filter() {
-        return new ScmApiGitHubGateFilter(provider, gitHubNodeIdResolver, repoPermissionService);
+        return filter(true);
+    }
+
+    private ScmApiGitHubGateFilter filter(boolean mergeEnabled) {
+        return new ScmApiGitHubGateFilter(provider, gitHubNodeIdResolver, repoPermissionService, mergeEnabled);
     }
 
     private static HttpServletRequest mockRequest(String body, ScmApiRequestContext context) throws Exception {
@@ -234,5 +238,71 @@ class ScmApiGitHubGateFilterTest {
         assertEquals("R_1", context.getNodeId());
         assertEquals("acme", context.getRepoOwner());
         assertEquals("widgets", context.getRepoName());
+    }
+
+    /** mergePullRequest checks MERGE, never PROPOSE — a PROPOSE grant alone must not let a maintainer merge. */
+    @Test
+    void mergeMutation_checksMergeGrant_notPropose() throws Exception {
+        when(gitHubNodeIdResolver.resolve(eq(provider), any(MutationNodeIdRef.class), eq("caller-token")))
+                .thenReturn(Optional.of(new OwnerRepo("acme", "widgets")));
+        when(repoPermissionService.isAllowedToPropose("alice", "github", "/acme/widgets"))
+                .thenReturn(true);
+        when(repoPermissionService.isAllowedToMerge("alice", "github", "/acme/widgets"))
+                .thenReturn(false);
+        var context = new ScmApiRequestContext();
+        context.setResolvedUser("alice");
+        String body =
+                "{\"query\":\"mutation($input: MergePullRequestInput!) { mergePullRequest(input: $input) { clientMutationId } }\",\"variables\":{\"input\":{\"pullRequestId\":\"PR_1\"}}}";
+        HttpServletRequest req = mockRequest(body, context);
+        HttpServletResponse resp = mockResponse(new ByteArrayOutputStream());
+        FilterChain chain = mock(FilterChain.class);
+
+        filter().doFilter(req, resp, chain);
+
+        verify(resp).setStatus(HttpServletResponse.SC_FORBIDDEN);
+        verifyNoInteractions(chain);
+    }
+
+    @Test
+    void mergeMutation_mergeGrant_allowsEvenWithoutPropose() throws Exception {
+        when(gitHubNodeIdResolver.resolve(eq(provider), any(MutationNodeIdRef.class), eq("caller-token")))
+                .thenReturn(Optional.of(new OwnerRepo("acme", "widgets")));
+        when(repoPermissionService.isAllowedToPropose("alice", "github", "/acme/widgets"))
+                .thenReturn(false);
+        when(repoPermissionService.isAllowedToMerge("alice", "github", "/acme/widgets"))
+                .thenReturn(true);
+        var context = new ScmApiRequestContext();
+        context.setResolvedUser("alice");
+        String body =
+                "{\"query\":\"mutation($input: MergePullRequestInput!) { mergePullRequest(input: $input) { clientMutationId } }\",\"variables\":{\"input\":{\"pullRequestId\":\"PR_1\"}}}";
+        HttpServletRequest req = mockRequest(body, context);
+        HttpServletResponse resp = mockResponse(new ByteArrayOutputStream());
+        FilterChain chain = mock(FilterChain.class);
+
+        filter().doFilter(req, resp, chain);
+
+        verify(chain).doFilter(any(), eq(resp));
+        assertEquals("mergePullRequest", context.getMutationField());
+    }
+
+    /** With merge-enabled off for the provider, a merge is refused before any grant is even consulted. */
+    @Test
+    void mergeMutation_deniedWhenMergeNotEnabledForProvider() throws Exception {
+        when(gitHubNodeIdResolver.resolve(eq(provider), any(MutationNodeIdRef.class), eq("caller-token")))
+                .thenReturn(Optional.of(new OwnerRepo("acme", "widgets")));
+        var context = new ScmApiRequestContext();
+        context.setResolvedUser("alice");
+        String body =
+                "{\"query\":\"mutation($input: MergePullRequestInput!) { mergePullRequest(input: $input) { clientMutationId } }\",\"variables\":{\"input\":{\"pullRequestId\":\"PR_1\"}}}";
+        HttpServletRequest req = mockRequest(body, context);
+        HttpServletResponse resp = mockResponse(new ByteArrayOutputStream());
+        FilterChain chain = mock(FilterChain.class);
+
+        filter(false).doFilter(req, resp, chain);
+
+        verify(resp).setStatus(HttpServletResponse.SC_FORBIDDEN);
+        verifyNoInteractions(chain);
+        verify(repoPermissionService, never()).isAllowedToMerge(any(), any(), any());
+        verify(repoPermissionService, never()).isAllowedToPropose(any(), any(), any());
     }
 }

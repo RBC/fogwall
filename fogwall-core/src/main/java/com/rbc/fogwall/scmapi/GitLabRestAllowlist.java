@@ -25,7 +25,8 @@ public final class GitLabRestAllowlist {
             new Rule("POST", Pattern.compile("^/projects/([^/]+)/issues/\\d+/notes$"), "issues.note"),
             new Rule("POST", Pattern.compile("^/projects/([^/]+)/merge_requests$"), "merge_requests.create"),
             new Rule("PUT", Pattern.compile("^/projects/([^/]+)/merge_requests/\\d+$"), "merge_requests.update"),
-            new Rule("POST", Pattern.compile("^/projects/([^/]+)/merge_requests/\\d+/notes$"), "merge_requests.note"));
+            new Rule("POST", Pattern.compile("^/projects/([^/]+)/merge_requests/\\d+/notes$"), "merge_requests.note"),
+            new Rule("PUT", Pattern.compile("^/projects/([^/]+)/merge_requests/\\d+/merge$"), "merge_requests.merge"));
 
     private GitLabRestAllowlist() {}
 

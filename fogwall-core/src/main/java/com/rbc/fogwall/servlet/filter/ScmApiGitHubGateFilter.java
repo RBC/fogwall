@@ -1,10 +1,7 @@
 package com.rbc.fogwall.servlet.filter;
 
 import static com.rbc.fogwall.servlet.ScmApiGateResponse.deny;
-import static com.rbc.fogwall.servlet.ScmApiGateResponse.denyWithoutNamingTarget;
 import static com.rbc.fogwall.servlet.ScmApiGateResponse.fail;
-import static com.rbc.fogwall.servlet.ScmApiGateResponse.tooLarge;
-import static com.rbc.fogwall.servlet.ScmApiRequestContext.SCM_API_REQUEST_ATTR;
 
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.GitHubProvider;
@@ -17,63 +14,58 @@ import com.rbc.fogwall.scmapi.MutationNodeIdRef;
 import com.rbc.fogwall.scmapi.OwnerRepo;
 import com.rbc.fogwall.scmapi.ScmApiGraphQlRequest;
 import com.rbc.fogwall.scmapi.ScmApiGraphQlRequestParser;
-import com.rbc.fogwall.servlet.PushTooLargeException;
 import com.rbc.fogwall.servlet.RequestBodyWrapper;
 import com.rbc.fogwall.servlet.ScmApiRequestContext;
 import com.rbc.fogwall.servlet.ScmApiTokenExtractor;
 import graphql.language.Field;
-import jakarta.servlet.Filter;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.ServletRequest;
-import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
- * The SCM API proxy decision pipeline for GitHub's GraphQL dialect: parses the request, allowlists the mutation on the
- * parsed AST, resolves its opaque node ID to {@code owner/repo}, and authorizes through the permission engine. Reads
- * (pure {@code query} documents) are gated by authentication alone — no allowlist, no resolution, no extra round-trip.
- * See {@link ScmApiGitLabGateFilter} for the REST dialects.
- *
- * <p>Denies are terminal: this filter responds directly without calling the chain further, so the forward servlet never
- * sees a denied request. The refusal shapes themselves live in {@link com.rbc.fogwall.servlet.ScmApiGateResponse},
- * shared with the other two dialects' gate filters — only how a request gets parsed into one of those decision points
- * differs per dialect.
+ * The GraphQL dialect of {@link ScmApiGateFilter}, for {@code gh}. A mutation is allowlisted on the parsed AST, then
+ * its opaque node ID is resolved to {@code owner/repo}; a pure {@code query} document is a read and forwards without a
+ * permission check. The REST dialects share {@link ScmApiRestGateFilter} instead.
  */
-@Slf4j
 @RequiredArgsConstructor
-public class ScmApiGitHubGateFilter implements Filter {
+public class ScmApiGitHubGateFilter implements ScmApiGateFilter {
+
+    static final String MERGE_OPERATION = "mergePullRequest";
 
     private final GitHubProvider provider;
     private final GitHubNodeIdResolver gitHubNodeIdResolver;
     private final RepoPermissionService repoPermissionService;
+    private final boolean mergeEnabled;
 
     @Override
-    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
-            throws IOException, ServletException {
-        HttpServletRequest httpRequest = (HttpServletRequest) request;
-        HttpServletResponse httpResponse = (HttpServletResponse) response;
-        var context = (ScmApiRequestContext) httpRequest.getAttribute(SCM_API_REQUEST_ATTR);
+    public RepoPermissionService repoPermissionService() {
+        return repoPermissionService;
+    }
 
-        // Cheap pre-check, then a counting read: a chunked request declares no length, so the wrapper is the bound.
-        long declared = httpRequest.getContentLengthLong();
-        if (declared > ScmApiRequestContext.MAX_BODY_BYTES) {
-            tooLarge(context, httpResponse, declared);
-            return;
-        }
-        RequestBodyWrapper wrapper;
-        try {
-            wrapper = new RequestBodyWrapper(httpRequest, ScmApiRequestContext.MAX_BODY_BYTES);
-        } catch (PushTooLargeException e) {
-            tooLarge(context, httpResponse, e.getBytesRead());
-            return;
-        }
+    @Override
+    public String providerId() {
+        return provider.getProviderId();
+    }
 
+    @Override
+    public String mergeOperation() {
+        return MERGE_OPERATION;
+    }
+
+    @Override
+    public boolean mergeEnabled() {
+        return mergeEnabled;
+    }
+
+    @Override
+    public GateOutcome evaluate(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            ScmApiRequestContext context,
+            RequestBodyWrapper wrapper)
+            throws IOException {
         ScmApiGraphQlRequest graphQlRequest;
         Optional<Field> mutation;
         try {
@@ -81,17 +73,12 @@ public class ScmApiGitHubGateFilter implements Filter {
             mutation =
                     GraphQlMutationParser.selectMutationField(graphQlRequest.query(), graphQlRequest.operationName());
         } catch (GraphQlParseException e) {
-            fail(
-                    context,
-                    httpResponse,
-                    HttpServletResponse.SC_BAD_REQUEST,
-                    "Malformed GraphQL request: " + e.getMessage());
-            return;
+            fail(context, response, HttpServletResponse.SC_BAD_REQUEST, "Malformed GraphQL request: " + e.getMessage());
+            return GateOutcome.REFUSED;
         }
 
         if (mutation.isEmpty()) {
-            handleRead(httpResponse, chain, wrapper);
-            return;
+            return GateOutcome.FORWARD;
         }
 
         Field mutationAst = mutation.get();
@@ -103,10 +90,10 @@ public class ScmApiGitHubGateFilter implements Filter {
         if (!GitHubMutationAllowlist.isAllowed(mutationField)) {
             deny(
                     context,
-                    httpResponse,
+                    response,
                     HttpServletResponse.SC_FORBIDDEN,
                     "Mutation '" + mutationField + "' is not allowlisted");
-            return;
+            return GateOutcome.REFUSED;
         }
 
         Optional<MutationNodeIdRef> nodeIdRef =
@@ -114,42 +101,24 @@ public class ScmApiGitHubGateFilter implements Filter {
         if (nodeIdRef.isEmpty()) {
             fail(
                     context,
-                    httpResponse,
+                    response,
                     HttpServletResponse.SC_BAD_REQUEST,
                     "Could not extract a target node ID from mutation '" + mutationField + "'");
-            return;
+            return GateOutcome.REFUSED;
         }
         context.setNodeId(nodeIdRef.get().nodeId());
         context.setNodeType(nodeIdRef.get().nodeType().name());
 
-        String callerToken = ScmApiTokenExtractor.extractToken(httpRequest);
+        String callerToken = ScmApiTokenExtractor.extractToken(request);
         Optional<OwnerRepo> ownerRepo = gitHubNodeIdResolver.resolve(provider, nodeIdRef.get(), callerToken);
         if (ownerRepo.isEmpty()) {
             fail(
                     context,
-                    httpResponse,
+                    response,
                     HttpServletResponse.SC_FORBIDDEN,
                     "Could not resolve node ID '" + nodeIdRef.get().nodeId() + "' to a repository");
-            return;
+            return GateOutcome.REFUSED;
         }
-        context.setRepoOwner(ownerRepo.get().owner());
-        context.setRepoName(ownerRepo.get().name());
-
-        String path = "/" + ownerRepo.get().owner() + "/" + ownerRepo.get().name();
-        if (!repoPermissionService.isAllowedToPropose(context.getResolvedUser(), provider.getProviderId(), path)) {
-            denyWithoutNamingTarget(
-                    context,
-                    httpResponse,
-                    HttpServletResponse.SC_FORBIDDEN,
-                    "User '" + context.getResolvedUser() + "' is not permitted to perform API mutations on " + path);
-            return;
-        }
-
-        chain.doFilter(wrapper, response);
-    }
-
-    private void handleRead(HttpServletResponse response, FilterChain chain, RequestBodyWrapper wrapper)
-            throws IOException, ServletException {
-        chain.doFilter(wrapper, response);
+        return new GateOutcome.Mutation(mutationField, ownerRepo.get());
     }
 }

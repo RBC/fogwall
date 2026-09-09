@@ -5,13 +5,10 @@ import java.util.Locale;
 /**
  * The kind of client behind an SCM API proxy request, classified from its {@code User-Agent}.
  *
- * <p><b>This is not an authorization boundary.</b> {@code User-Agent} is chosen by the caller and trivially forged, so
- * nothing here may ever <i>widen</i> what a request is allowed to do. It is used only to narrow — a deployment can
- * refuse client types it never intends to serve — and to record the CLI version in the audit trail. A forged header
- * buys an attacker nothing beyond what the allowlist and permission engine already enforce.
- *
- * <p>The version each CLI advertises is the anchor for detecting a wire-format break after an upgrade (see the SCM API
- * proxy notes), so the raw header is audited alongside the classification.
+ * <p><b>Recorded, never gated.</b> {@code User-Agent} is chosen by the caller and trivially forged, so nothing branches
+ * on this classification — it exists only to label the audit record. The version each CLI advertises is the anchor for
+ * detecting a wire-format break after an upgrade (see the SCM API proxy notes), so the raw header is audited alongside
+ * the classification.
  */
 public enum ScmApiClientType {
 
@@ -36,15 +33,10 @@ public enum ScmApiClientType {
     /** Longest string {@link #version} will treat as a version; beyond it the header is not naming a release. */
     private static final int MAX_VERSION = 64;
 
-    /** Whether this is one of the SCM CLIs the proxy exists to serve. */
-    public boolean isKnownCli() {
-        return this == GH_CLI || this == GLAB_CLI || this == TEA_CLI || this == FJ_CLI;
-    }
-
     /**
      * Classifies a {@code User-Agent} header. Matching is loose, since a CLI's exact format may change between
-     * releases; because the classification only narrows access, a false {@link #UNKNOWN} is a visible failure rather
-     * than a silent bypass.
+     * releases. The result is recorded for audit only — nothing gates on it — so a misclassification costs a
+     * mislabelled record, never access.
      */
     public static ScmApiClientType classify(String userAgent) {
         if (userAgent == null || userAgent.isBlank()) return UNKNOWN;

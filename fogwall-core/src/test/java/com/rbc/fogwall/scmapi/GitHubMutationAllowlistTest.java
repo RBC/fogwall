@@ -17,6 +17,7 @@ class GitHubMutationAllowlistTest {
                 "createPullRequest",
                 "updatePullRequest",
                 "closePullRequest",
+                "mergePullRequest",
                 "addComment",
                 // Attribute follow-ups gh sends after the create or update, verified from live traffic.
                 "replaceActorsForAssignable",
@@ -42,7 +43,6 @@ class GitHubMutationAllowlistTest {
     @ValueSource(
             strings = {
                 "deleteIssue",
-                "mergePullRequest",
                 // Review is out of scope — reviewers use the SCM's own UI, so fogwall never forwards these.
                 "addPullRequestReview",
                 "submitPullRequestReview",
