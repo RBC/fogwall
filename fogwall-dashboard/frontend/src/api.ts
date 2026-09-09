@@ -154,7 +154,7 @@ async function parseErrorResponse(res: Response, fallback: string): Promise<neve
   let message = `${fallback} (HTTP ${res.status})`
   try {
     const err = JSON.parse(text)
-    if (err.error) message = err.error
+    if (err.error) message = `${fallback}: ${err.error}`
   } catch {
     // not JSON — keep the fallback
   }

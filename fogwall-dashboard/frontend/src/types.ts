@@ -164,6 +164,8 @@ export interface Provider {
   sshPort: number
   /** SSH route path (leading slash), keyed on the provider's host, e.g. `/github.com`. */
   sshPath: string
+  /** True when the SCM API (CLI proposals) proxy is enabled for this provider. Presence-only; no connect address. */
+  proposalsEnabled: boolean
   attestationQuestions: AttestationQuestion[]
   requireReviewPermission: boolean
 }

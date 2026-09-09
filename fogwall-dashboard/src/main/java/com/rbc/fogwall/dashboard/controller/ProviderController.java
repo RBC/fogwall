@@ -2,6 +2,7 @@ package com.rbc.fogwall.dashboard.controller;
 
 import com.rbc.fogwall.config.AttestationQuestion;
 import com.rbc.fogwall.config.FogwallConfig;
+import com.rbc.fogwall.config.ProviderConfig;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.provider.ProviderRegistry;
 import io.swagger.v3.oas.annotations.Operation;
@@ -45,9 +46,17 @@ public class ProviderController {
                         sshServerEnabled && p.getSshUri().isPresent(),
                         sshPort,
                         p.servletPath(),
+                        proposalsEnabled(p.getName()),
                         attestations,
                         requireReviewPermission))
                 .toList();
+    }
+
+    // Whether the SCM API (CLI proposals) proxy is enabled for this provider. Static config, keyed on the provider's
+    // name (the same key the registry builds providers under); read directly like the SSH toggle, not hot-reloaded.
+    private boolean proposalsEnabled(String providerName) {
+        ProviderConfig config = fogwallConfig.getProviders().get(providerName);
+        return config != null && config.getProposals().isEnabled();
     }
 
     public record ProviderInfo(
@@ -60,6 +69,7 @@ public class ProviderController {
             boolean sshEnabled,
             int sshPort,
             String sshPath,
+            boolean proposalsEnabled,
             List<AttestationQuestion> attestationQuestions,
             boolean requireReviewPermission) {}
 }

@@ -6,6 +6,7 @@ import { ColorSchemeType } from 'diff2html/lib/types'
 import 'diff2html/bundles/css/diff2html.min.css'
 import { approvePush, cancelPush, fetchDiff, fetchProviders, fetchPush, rejectPush } from '../api'
 import { StatusBadge } from '../components/StatusBadge'
+import { useToast } from '../components/Toast'
 import type {
   AttestationLink,
   AttestationQuestion,
@@ -482,10 +483,10 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
   const [record, setRecord] = useState<PushRecord | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const toast = useToast()
 
   const [reviewReason, setReviewReason] = useState('')
   const [saving, setSaving] = useState(false)
-  const [actionError, setActionError] = useState('')
   const [openSteps, setOpenSteps] = useState<Record<string, boolean>>({})
   const [canceling, setCanceling] = useState(false)
   const [attestationQuestions, setAttestationQuestions] = useState<AttestationQuestion[]>([])
@@ -507,7 +508,6 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
     setError('')
     setRecord(null)
     setReviewReason('')
-    setActionError('')
     setOpenSteps({})
     setAttestationAnswers({})
     setAdminOverrideEnabled(false)
@@ -583,7 +583,6 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
   async function handleApprove() {
     if (!record || !reviewReason.trim()) return
     setSaving(true)
-    setActionError('')
     try {
       await approvePush(record.id, {
         reviewerUsername: currentUser?.username ?? '',
@@ -594,7 +593,7 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
       })
       await load(record.id)
     } catch (e) {
-      setActionError(errorMessage(e))
+      toast.error(errorMessage(e))
     } finally {
       setSaving(false)
     }
@@ -603,7 +602,6 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
   async function handleReject() {
     if (!record || !reviewReason.trim()) return
     setSaving(true)
-    setActionError('')
     try {
       await rejectPush(record.id, {
         reviewerUsername: currentUser?.username ?? '',
@@ -612,7 +610,7 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
       })
       await load(record.id)
     } catch (e) {
-      setActionError(errorMessage(e))
+      toast.error(errorMessage(e))
     } finally {
       setSaving(false)
     }
@@ -621,12 +619,11 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
   async function handleCancel() {
     if (!record) return
     setCanceling(true)
-    setActionError('')
     try {
       await cancelPush(record.id)
       await load(record.id)
     } catch (e) {
-      setActionError(errorMessage(e))
+      toast.error(errorMessage(e))
     } finally {
       setCanceling(false)
     }
@@ -1096,9 +1093,6 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
                     disabled={isSelfReview && !adminOverrideEnabled}
                     className="w-full border border-gray-300 rounded px-3 py-2 text-sm mb-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-gray-50 disabled:text-gray-400 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400 dark:disabled:bg-gray-800 dark:disabled:text-gray-500"
                   />
-                  {actionError && (
-                    <div className="text-red-600 text-sm mb-3 dark:text-red-400">{actionError}</div>
-                  )}
                   <div className="flex gap-3">
                     <button
                       onClick={handleApprove}

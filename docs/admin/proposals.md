@@ -44,6 +44,10 @@ collide between two instances of the same platform, since every GitLab claims `/
 provider has `proposals.enabled: true` with no port, rather than opening a listener no CLI could reach. Developers are
 then given a host and port; see [the user guide](../user/proposals.md).
 
+The dashboard's **Providers** page shows an **SCM API** badge on each provider that has the proxy enabled, alongside the
+HTTP/SSH transport badges. It is presence-only — it confirms the capability is on, not how to connect, since the connect
+address is deployment-determined (dedicated port, its own TLS termination).
+
 The caller's `User-Agent` and the CLI version it advertises are recorded on every audit record — how you spot a CLI
 upgrade changing its wire format. fogwall does not gate on it: `User-Agent` is client-set and forgeable, so nothing
 branches on it.
