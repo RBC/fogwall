@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 import com.rbc.fogwall.config.FogwallConfig;
+import com.rbc.fogwall.config.ProviderConfig;
 import com.rbc.fogwall.config.ServerConfig;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.provider.FogwallProvider;
@@ -13,6 +14,7 @@ import com.rbc.fogwall.provider.ForgejoProvider;
 import com.rbc.fogwall.provider.ProviderRegistry;
 import java.net.URI;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -94,5 +96,24 @@ class ProviderControllerTest {
                 .orElseThrow();
 
         assertFalse(httpOnly.sshEnabled(), "a provider with no sshUri never advertises SSH");
+    }
+
+    @Test
+    void proposalsEnabled_reflectsPerProviderProposalsFlag() {
+        ProviderConfig giteaCfg = new ProviderConfig();
+        giteaCfg.getProposals().setEnabled(true);
+        ProviderConfig gitlabCfg = new ProviderConfig(); // proposals disabled by default
+        when(fogwallConfig.getProviders()).thenReturn(Map.of("gitea", giteaCfg, "gitlab-http", gitlabCfg));
+
+        var infos = controller.list();
+        var gitea =
+                infos.stream().filter(p -> p.name().equals("gitea")).findFirst().orElseThrow();
+        var gitlab = infos.stream()
+                .filter(p -> p.name().equals("gitlab-http"))
+                .findFirst()
+                .orElseThrow();
+
+        assertTrue(gitea.proposalsEnabled(), "provider with proposals.enabled must advertise the SCM API proxy");
+        assertFalse(gitlab.proposalsEnabled(), "provider without proposals enabled must not");
     }
 }

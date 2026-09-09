@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { CacheEntry, CacheListResponse, CacheRef } from '../types'
 import { fetchCache, fetchCacheRefs, invalidateCacheAll, invalidateCacheEntry } from '../api'
+import { useToast } from '../components/Toast'
 
 function humanBytes(n: number): string {
   if (n <= 0) return '0 B'
@@ -33,6 +34,7 @@ function CacheRow({
   const [refs, setRefs] = useState<CacheRef[] | null>(null)
   const [refsError, setRefsError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const toast = useToast()
 
   async function toggleRefs() {
     const next = !expanded
@@ -54,7 +56,7 @@ function CacheRow({
       await invalidateCacheEntry(mode, entry.cacheKey)
       onChanged()
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Invalidation failed')
+      toast.error(e instanceof Error ? e.message : 'Invalidation failed')
       setBusy(false)
     }
   }
@@ -150,6 +152,7 @@ function CacheModeTable({
   onChanged: () => void
 }) {
   const [busy, setBusy] = useState(false)
+  const toast = useToast()
 
   async function invalidateAll() {
     if (
@@ -163,7 +166,7 @@ function CacheModeTable({
       await invalidateCacheAll(mode)
       onChanged()
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Invalidation failed')
+      toast.error(e instanceof Error ? e.message : 'Invalidation failed')
       setBusy(false)
     }
   }

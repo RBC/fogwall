@@ -2,6 +2,7 @@ import { ExtIcon } from '../components/ExtIcon'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { approvePush, fetchPushCounts, fetchPushes, rejectPush } from '../api'
+import { useToast } from '../components/Toast'
 import { StatusBadge } from '../components/StatusBadge'
 import type { CurrentUser, PushRecord, PushStatus } from '../types'
 
@@ -61,7 +62,7 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkReason, setBulkReason] = useState('')
   const [bulkWorking, setBulkWorking] = useState(false)
-  const [bulkError, setBulkError] = useState('')
+  const toast = useToast()
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -89,7 +90,6 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
   async function handleBulkApprove() {
     if (!bulkReason.trim() || selectedIds.size === 0) return
     setBulkWorking(true)
-    setBulkError('')
     try {
       await Promise.all(
         [...selectedIds].map((id) =>
@@ -104,7 +104,7 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
       setBulkReason('')
       await load(filterStatus, filterRepo, myPushesOnly, newestFirst, page)
     } catch (e) {
-      setBulkError(String(e))
+      toast.error(String(e))
     } finally {
       setBulkWorking(false)
     }
@@ -113,7 +113,6 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
   async function handleBulkReject() {
     if (!bulkReason.trim() || selectedIds.size === 0) return
     setBulkWorking(true)
-    setBulkError('')
     try {
       await Promise.all(
         [...selectedIds].map((id) =>
@@ -128,7 +127,7 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
       setBulkReason('')
       await load(filterStatus, filterRepo, myPushesOnly, newestFirst, page)
     } catch (e) {
-      setBulkError(String(e))
+      toast.error(String(e))
     } finally {
       setBulkWorking(false)
     }
@@ -265,15 +264,11 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
             onClick={() => {
               setSelectedIds(new Set())
               setBulkReason('')
-              setBulkError('')
             }}
             className="text-sm text-amber-700 hover:underline ml-auto dark:text-amber-400"
           >
             Clear
           </button>
-          {bulkError && (
-            <div className="w-full text-sm text-red-600 dark:text-red-400">{bulkError}</div>
-          )}
         </div>
       )}
 

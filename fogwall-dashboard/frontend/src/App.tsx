@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from 'react-router'
 import { fetchConfig, fetchMe } from './api'
 import { Breadcrumbs } from './components/Breadcrumbs'
 import { Sidebar } from './components/Sidebar'
+import { ToastProvider } from './components/Toast'
 import { useDarkMode } from './hooks/useDarkMode'
 import { MirrorCache } from './pages/MirrorCache'
 import { Operations } from './pages/Operations'
@@ -39,40 +40,42 @@ export default function App() {
 
   return (
     <BrowserRouter basename="/dashboard">
-      <div className="bg-gray-100 dark:bg-slate-900 min-h-screen flex" data-hmr-test="1">
-        <Sidebar currentUser={currentUser} dark={dark} toggleDark={toggleDark} />
-        <div className="flex-1 flex flex-col min-w-0">
-          <Breadcrumbs />
-          <main className="flex-1">
-            <Routes>
-              <Route path="/" element={<Overview currentUser={currentUser} />} />
-              <Route
-                path="/pushes"
-                element={<PushList currentUser={currentUser} bulkReviewEnabled={bulkReview} />}
-              />
-              <Route
-                path="/push/:id"
-                element={<PushDetail currentUser={currentUser} dark={dark} />}
-              />
-              <Route path="/push/:id/diff" element={<PushDiff dark={dark} />} />
-              <Route path="/providers" element={<Providers />} />
-              <Route path="/setup" element={<Setup />} />
-              <Route path="/repos" element={<Repos currentUser={currentUser} />} />
-              <Route path="/proposals" element={<ScmApiActionList currentUser={currentUser} />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/users" element={<Users authProvider={authProvider} />} />
-              <Route
-                path="/users/:username"
-                element={<UserDetail authProvider={authProvider} currentUser={currentUser} />}
-              />
-              <Route path="/groups" element={<Groups />} />
-              <Route path="/operations" element={<Operations />} />
-              <Route path="/mirror-cache" element={<MirrorCache />} />
-              <Route path="/legal" element={<Legal />} />
-            </Routes>
-          </main>
+      <ToastProvider>
+        <div className="bg-gray-100 dark:bg-slate-900 min-h-screen flex" data-hmr-test="1">
+          <Sidebar currentUser={currentUser} dark={dark} toggleDark={toggleDark} />
+          <div className="flex-1 flex flex-col min-w-0">
+            <Breadcrumbs />
+            <main className="flex-1">
+              <Routes>
+                <Route path="/" element={<Overview currentUser={currentUser} />} />
+                <Route
+                  path="/pushes"
+                  element={<PushList currentUser={currentUser} bulkReviewEnabled={bulkReview} />}
+                />
+                <Route
+                  path="/push/:id"
+                  element={<PushDetail currentUser={currentUser} dark={dark} />}
+                />
+                <Route path="/push/:id/diff" element={<PushDiff dark={dark} />} />
+                <Route path="/providers" element={<Providers />} />
+                <Route path="/setup" element={<Setup />} />
+                <Route path="/repos" element={<Repos currentUser={currentUser} />} />
+                <Route path="/proposals" element={<ScmApiActionList currentUser={currentUser} />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/users" element={<Users authProvider={authProvider} />} />
+                <Route
+                  path="/users/:username"
+                  element={<UserDetail authProvider={authProvider} currentUser={currentUser} />}
+                />
+                <Route path="/groups" element={<Groups />} />
+                <Route path="/operations" element={<Operations />} />
+                <Route path="/mirror-cache" element={<MirrorCache />} />
+                <Route path="/legal" element={<Legal />} />
+              </Routes>
+            </main>
+          </div>
         </div>
-      </div>
+      </ToastProvider>
     </BrowserRouter>
   )
 }

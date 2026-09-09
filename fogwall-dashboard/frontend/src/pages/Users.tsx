@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { createUser, fetchUsers } from '../api'
+import { useToast } from '../components/Toast'
 import type { PushStatus, UserSummary } from '../types'
 
 interface UsersProps {
@@ -72,19 +73,18 @@ function AddUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   const [email, setEmail] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const toast = useToast()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSubmitting(true)
-    setError(null)
     try {
       const roles = isAdmin ? ['USER', 'ADMIN'] : ['USER']
       await createUser(username.trim(), password, email.trim() || undefined, roles)
       onCreated()
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create user')
+      toast.error(err instanceof Error ? err.message : 'Failed to create user')
     } finally {
       setSubmitting(false)
     }
@@ -138,7 +138,6 @@ function AddUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
             />
             Grant admin role
           </label>
-          {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"

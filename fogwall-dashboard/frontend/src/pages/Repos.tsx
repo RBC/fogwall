@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createUrlRule, deleteUrlRule, fetchProviders, testUrlRules } from '../api'
 import type { RuleTestResponse } from '../api'
+import { useToast } from '../components/Toast'
 import type { Provider, CurrentUser } from '../types'
 
 interface ActiveRepo {
@@ -166,6 +167,7 @@ function AddRuleModal({
   const [regexError, setRegexError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [providers, setProviders] = useState<Provider[]>([])
+  const toast = useToast()
 
   useEffect(() => {
     fetchProviders()
@@ -228,7 +230,7 @@ function AddRuleModal({
       onCreated(created)
       onClose()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error')
+      toast.error(e instanceof Error ? e.message : 'Failed to create rule')
     } finally {
       setSubmitting(false)
     }
@@ -426,6 +428,7 @@ function TestRuleModal({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<RuleTestResponse | null>(null)
+  const toast = useToast()
 
   useEffect(() => {
     fetchProviders()
@@ -453,7 +456,7 @@ function TestRuleModal({ onClose }: { onClose: () => void }) {
       })
       setResult(res)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error')
+      toast.error(e instanceof Error ? e.message : 'Rule test failed')
     } finally {
       setSubmitting(false)
     }
@@ -629,6 +632,7 @@ function TestRuleModal({ onClose }: { onClose: () => void }) {
 
 export function Repos({ currentUser }: { currentUser: CurrentUser | null }) {
   const isAdmin = currentUser?.authorities.includes('ROLE_ADMIN') ?? false
+  const toast = useToast()
   const [tab, setTab] = useState<Tab>('active')
   const [activeRepos, setActiveRepos] = useState<ActiveRepo[]>([])
   const [rules, setRules] = useState<Rule[]>([])
@@ -653,11 +657,22 @@ export function Repos({ currentUser }: { currentUser: CurrentUser | null }) {
         else setRules(data)
         setLoadedTab(tab)
       })
-  }, [tab])
+      .catch((e) =>
+        toast.error(
+          e instanceof Error
+            ? e.message
+            : `Failed to load ${tab === 'active' ? 'repositories' : 'rules'}`,
+        ),
+      )
+  }, [tab, toast])
 
   const deleteRule = async (id: string) => {
-    await deleteUrlRule(id)
-    setRules((prev) => prev.filter((r) => r.id !== id))
+    try {
+      await deleteUrlRule(id)
+      setRules((prev) => prev.filter((r) => r.id !== id))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to delete rule')
+    }
   }
 
   return (

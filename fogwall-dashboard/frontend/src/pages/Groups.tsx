@@ -13,6 +13,7 @@ import {
   removeGroupMember,
   updateGroup,
 } from '../api'
+import { useToast } from '../components/Toast'
 import type {
   GroupDetail,
   GroupPermissionRule,
@@ -28,6 +29,7 @@ export function Groups() {
   const [users, setUsers] = useState<UserSummary[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const toast = useToast()
 
   // create group form
   const [newName, setNewName] = useState('')
@@ -102,7 +104,7 @@ export function Groups() {
       setSelected(updated)
       await refreshGroups()
     } catch (e) {
-      setEditError(e instanceof Error ? e.message : 'Failed to update group')
+      toast.error(e instanceof Error ? e.message : 'Failed to update group')
     } finally {
       setEditSaving(false)
     }
@@ -120,7 +122,7 @@ export function Groups() {
       setNewDesc('')
       await refreshGroups()
     } catch (e) {
-      setCreateError(e instanceof Error ? e.message : 'Failed to create group')
+      toast.error(e instanceof Error ? e.message : 'Failed to create group')
     }
   }
 
@@ -130,7 +132,7 @@ export function Groups() {
       if (selected?.id === id) setSelected(null)
       await refreshGroups()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to delete group')
+      toast.error(e instanceof Error ? e.message : 'Failed to delete group')
     }
   }
 
@@ -145,7 +147,7 @@ export function Groups() {
       setNewMember('')
       await loadDetail(selected.id)
     } catch (e) {
-      setMemberError(e instanceof Error ? e.message : 'Failed to add member')
+      toast.error(e instanceof Error ? e.message : 'Failed to add member')
     }
   }
 
@@ -155,7 +157,7 @@ export function Groups() {
       await removeGroupMember(selected.id, username)
       await loadDetail(selected.id)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to remove member')
+      toast.error(e instanceof Error ? e.message : 'Failed to remove member')
     }
   }
 
@@ -177,7 +179,7 @@ export function Groups() {
       setRuleValue('')
       await loadDetail(selected.id)
     } catch (e) {
-      setRuleError(e instanceof Error ? e.message : 'Failed to add permission rule')
+      toast.error(e instanceof Error ? e.message : 'Failed to add permission rule')
     }
   }
 
@@ -187,7 +189,7 @@ export function Groups() {
       await deleteGroupPermission(selected.id, ruleId)
       await loadDetail(selected.id)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to delete rule')
+      toast.error(e instanceof Error ? e.message : 'Failed to delete rule')
     }
   }
 

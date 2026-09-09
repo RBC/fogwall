@@ -19,6 +19,7 @@ import {
 } from '../api'
 import type { PermissionTestResponse } from '../api'
 import { OperationsBadge, PathTypeBadge } from '../components/PermissionBadges'
+import { useToast } from '../components/Toast'
 import { StatusBadge } from '../components/StatusBadge'
 import type {
   CurrentUser,
@@ -85,18 +86,17 @@ function AddEmailModal({
 }) {
   const [email, setEmail] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const toast = useToast()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSubmitting(true)
-    setError(null)
     try {
       await addUserEmail(username, email.trim())
       onAdded()
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add email')
+      toast.error(err instanceof Error ? err.message : 'Failed to add email')
     } finally {
       setSubmitting(false)
     }
@@ -115,7 +115,6 @@ function AddEmailModal({
             placeholder="user@example.com"
             className={inputClass}
           />
-          {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onClose} className={cancelBtnClass}>
               Cancel
@@ -143,7 +142,7 @@ function AddScmIdentityModal({
   const [provider, setProvider] = useState('')
   const [scmUsername, setScmUsername] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const toast = useToast()
 
   useEffect(() => {
     fetchProviders()
@@ -157,13 +156,12 @@ function AddScmIdentityModal({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSubmitting(true)
-    setError(null)
     try {
       await addUserIdentity(username, provider.trim(), scmUsername.trim())
       onAdded()
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add identity')
+      toast.error(err instanceof Error ? err.message : 'Failed to add identity')
     } finally {
       setSubmitting(false)
     }
@@ -201,7 +199,6 @@ function AddScmIdentityModal({
               className={inputClass}
             />
           </div>
-          {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onClose} className={cancelBtnClass}>
               Cancel
@@ -222,6 +219,7 @@ function ResetPasswordModal({ username, onClose }: { username: string; onClose: 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
+  const toast = useToast()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -235,7 +233,7 @@ function ResetPasswordModal({ username, onClose }: { username: string; onClose: 
       await resetUserPassword(username, password)
       setDone(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to reset password')
+      toast.error(err instanceof Error ? err.message : 'Failed to reset password')
     } finally {
       setSubmitting(false)
     }
@@ -313,16 +311,15 @@ function OverviewTab({
   const [deletingEmail, setDeletingEmail] = useState<string | null>(null)
   const [deletingScm, setDeletingScm] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const [actionError, setActionError] = useState<string | null>(null)
+  const toast = useToast()
 
   async function handleRemoveEmail(email: string) {
     setDeletingEmail(email)
-    setActionError(null)
     try {
       await removeUserEmail(user.username, email)
       onRefresh()
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Failed to remove email')
+      toast.error(err instanceof Error ? err.message : 'Failed to remove email')
     } finally {
       setDeletingEmail(null)
     }
@@ -331,12 +328,11 @@ function OverviewTab({
   async function handleRemoveScm(provider: string, scmUsername: string) {
     const key = `${provider}/${scmUsername}`
     setDeletingScm(key)
-    setActionError(null)
     try {
       await removeUserIdentity(user.username, provider, scmUsername)
       onRefresh()
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Failed to remove SCM identity')
+      toast.error(err instanceof Error ? err.message : 'Failed to remove SCM identity')
     } finally {
       setDeletingScm(null)
     }
@@ -345,12 +341,11 @@ function OverviewTab({
   async function handleDelete() {
     if (!confirm(`Delete user "${user.username}"? This cannot be undone.`)) return
     setDeleting(true)
-    setActionError(null)
     try {
       await deleteUser(user.username)
       onDeleted()
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Failed to delete user')
+      toast.error(err instanceof Error ? err.message : 'Failed to delete user')
       setDeleting(false)
     }
   }
@@ -489,8 +484,6 @@ function OverviewTab({
         </div>
       </section>
 
-      {actionError && <p className="text-xs text-red-500 dark:text-red-400">{actionError}</p>}
-
       {isAdmin && (
         <section className="border-t border-gray-100 pt-4 dark:border-slate-700">
           <h3 className="text-sm font-semibold text-gray-700 mb-2 dark:text-gray-300">
@@ -521,6 +514,7 @@ function OverviewTab({
 
 function PushesTab({ username }: { username: string }) {
   const navigate = useNavigate()
+  const toast = useToast()
   const [pushes, setPushes] = useState<PushRecord[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -528,9 +522,9 @@ function PushesTab({ username }: { username: string }) {
     const params = new URLSearchParams({ user: username, limit: '50', newestFirst: 'true' })
     fetchPushes(params)
       .then(setPushes)
-      .catch(console.error)
+      .catch((err) => toast.error(err instanceof Error ? err.message : 'Failed to load pushes'))
       .finally(() => setLoading(false))
-  }, [username])
+  }, [username, toast])
 
   if (loading)
     return <div className="py-8 text-center text-gray-400 text-sm dark:text-gray-500">Loading…</div>
@@ -593,8 +587,8 @@ function AddPermissionModal({
   const [pathType, setPathType] = useState<'LITERAL' | 'GLOB' | 'REGEX'>('GLOB')
   const [grant, setGrant] = useState<RepoPermission['grant']>('PUSH')
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [regexError, setRegexError] = useState<string | null>(null)
+  const toast = useToast()
 
   const [proposalsEnabled, setProposalsEnabled] = useState(false)
 
@@ -646,7 +640,6 @@ function AddPermissionModal({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSubmitting(true)
-    setError(null)
     try {
       await addUserPermission(username, {
         provider: provider.trim(),
@@ -657,7 +650,7 @@ function AddPermissionModal({
       onAdded()
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add permission')
+      toast.error(err instanceof Error ? err.message : 'Failed to add permission')
     } finally {
       setSubmitting(false)
     }
@@ -729,7 +722,6 @@ function AddPermissionModal({
               {proposalsEnabled && <option value="MERGE">Merge</option>}
             </select>
           </div>
-          {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onClose} className={cancelBtnClass}>
               Cancel
@@ -753,6 +745,7 @@ function TestPermissionModal({ username, onClose }: { username: string; onClose:
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<PermissionTestResponse | null>(null)
   const [proposalsEnabled, setProposalsEnabled] = useState(false)
+  const toast = useToast()
 
   useEffect(() => {
     fetchProviders()
@@ -778,7 +771,7 @@ function TestPermissionModal({ username, onClose }: { username: string; onClose:
       const res = await testUserPermission(username, { provider, path: path.trim(), grant })
       setResult(res)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Permission test failed')
+      toast.error(err instanceof Error ? err.message : 'Permission test failed')
     } finally {
       setSubmitting(false)
     }
@@ -892,7 +885,7 @@ function PermissionsTab({ username, isAdmin }: { username: string; isAdmin: bool
   const [showAdd, setShowAdd] = useState(false)
   const [showTest, setShowTest] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
+  const toast = useToast()
 
   const loadPermissions = useCallback(() => {
     setLoading(true)
@@ -901,9 +894,11 @@ function PermissionsTab({ username, isAdmin }: { username: string; isAdmin: bool
         setPermissions(perms)
         setGroups(grps)
       })
-      .catch(console.error)
+      .catch((err) =>
+        toast.error(err instanceof Error ? err.message : 'Failed to load permissions'),
+      )
       .finally(() => setLoading(false))
-  }, [username])
+  }, [username, toast])
 
   useEffect(() => {
     void Promise.resolve().then(() => loadPermissions())
@@ -911,12 +906,11 @@ function PermissionsTab({ username, isAdmin }: { username: string; isAdmin: bool
 
   async function handleDelete(id: string) {
     setDeletingId(id)
-    setActionError(null)
     try {
       await deleteUserPermission(username, id)
       loadPermissions()
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Failed to remove permission')
+      toast.error(err instanceof Error ? err.message : 'Failed to remove permission')
     } finally {
       setDeletingId(null)
     }
@@ -999,8 +993,6 @@ function PermissionsTab({ username, isAdmin }: { username: string; isAdmin: bool
           </table>
         </div>
       )}
-
-      {actionError && <p className="text-xs text-red-500 dark:text-red-400">{actionError}</p>}
 
       {isAdmin && (
         <div className="flex gap-2">

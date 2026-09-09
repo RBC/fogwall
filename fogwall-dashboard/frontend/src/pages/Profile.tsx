@@ -15,6 +15,7 @@ import {
 } from '../api'
 import type { UserGroupView } from '../api'
 import { OperationsBadge, PathTypeBadge } from '../components/PermissionBadges'
+import { useToast } from '../components/Toast'
 import type {
   CurrentUser,
   EmailEntry,
@@ -121,6 +122,7 @@ export function Profile() {
   const [profile, setProfile] = useState<CurrentUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const toast = useToast()
 
   const [tab, setTab] = useState<'emails' | 'identities' | 'sshkeys' | 'permissions'>('emails')
   const [permissions, setPermissions] = useState<RepoPermission[]>([])
@@ -130,17 +132,14 @@ export function Profile() {
   const [newSshKey, setNewSshKey] = useState('')
   const [newSshLabel, setNewSshLabel] = useState('')
   const [sshLabelTouched, setSshLabelTouched] = useState(false)
-  const [sshError, setSshError] = useState<string | null>(null)
   const [sshBusy, setSshBusy] = useState(false)
 
   const [newEmail, setNewEmail] = useState('')
-  const [emailError, setEmailError] = useState<string | null>(null)
   const [emailBusy, setEmailBusy] = useState(false)
 
   const [providers, setProviders] = useState<{ name: string; id: string; host: string }[]>([])
   const [newProvider, setNewProvider] = useState('')
   const [newScmUsername, setNewScmUsername] = useState('')
-  const [identityError, setIdentityError] = useState<string | null>(null)
   const [identityBusy, setIdentityBusy] = useState(false)
 
   const [scmOAuthProviders, setScmOAuthProviders] = useState<ScmOAuthProviderInfo[]>([])
@@ -203,26 +202,24 @@ export function Profile() {
     e.preventDefault()
     if (!newEmail.trim()) return
     setEmailBusy(true)
-    setEmailError(null)
     try {
       await addEmail(newEmail.trim())
       const updated = await fetchMe()
       setProfile(updated)
       setNewEmail('')
     } catch (err: unknown) {
-      setEmailError(err instanceof Error ? err.message : 'Failed to add email')
+      toast.error(err instanceof Error ? err.message : 'Failed to add email')
     } finally {
       setEmailBusy(false)
     }
   }
 
   async function handleRemoveEmail(entry: EmailEntry) {
-    setEmailError(null)
     try {
       await removeEmail(entry.email)
       setProfile((p) => p && { ...p, emails: p.emails.filter((e) => e.email !== entry.email) })
     } catch (err: unknown) {
-      setEmailError(err instanceof Error ? err.message : 'Failed to remove email')
+      toast.error(err instanceof Error ? err.message : 'Failed to remove email')
     }
   }
 
@@ -230,21 +227,19 @@ export function Profile() {
     e.preventDefault()
     if (!newScmUsername.trim()) return
     setIdentityBusy(true)
-    setIdentityError(null)
     try {
       await addScmIdentity(newProvider, newScmUsername.trim())
       const updated = await fetchMe()
       setProfile(updated)
       setNewScmUsername('')
     } catch (err: unknown) {
-      setIdentityError(err instanceof Error ? err.message : 'Failed to add identity')
+      toast.error(err instanceof Error ? err.message : 'Failed to add identity')
     } finally {
       setIdentityBusy(false)
     }
   }
 
   async function handleRemoveIdentity(identity: ScmIdentity) {
-    setIdentityError(null)
     try {
       await removeScmIdentity(identity.provider, identity.username)
       setProfile(
@@ -257,12 +252,11 @@ export function Profile() {
           },
       )
     } catch (err: unknown) {
-      setIdentityError(err instanceof Error ? err.message : 'Failed to remove identity')
+      toast.error(err instanceof Error ? err.message : 'Failed to remove identity')
     }
   }
 
   async function handleUnlinkOAuth(provider: string) {
-    setIdentityError(null)
     try {
       await unlinkScmOAuth(provider)
       setProfile(
@@ -275,7 +269,7 @@ export function Profile() {
         .then((keys: SshKeyEntry[]) => setSshKeys(keys))
         .catch(() => {})
     } catch (err: unknown) {
-      setIdentityError(err instanceof Error ? err.message : 'Failed to unlink OAuth account')
+      toast.error(err instanceof Error ? err.message : 'Failed to unlink OAuth account')
     }
   }
 
@@ -283,7 +277,6 @@ export function Profile() {
     e.preventDefault()
     if (!newSshKey.trim()) return
     setSshBusy(true)
-    setSshError(null)
     try {
       const entry = await addSshKey(newSshKey.trim(), newSshLabel.trim())
       setSshKeys((prev) => [...prev, entry])
@@ -291,19 +284,18 @@ export function Profile() {
       setNewSshLabel('')
       setSshLabelTouched(false)
     } catch (err: unknown) {
-      setSshError(err instanceof Error ? err.message : 'Failed to add SSH key')
+      toast.error(err instanceof Error ? err.message : 'Failed to add SSH key')
     } finally {
       setSshBusy(false)
     }
   }
 
   async function handleRemoveSshKey(key: SshKeyEntry) {
-    setSshError(null)
     try {
       await removeSshKey(key.id)
       setSshKeys((prev) => prev.filter((k) => k.id !== key.id))
     } catch (err: unknown) {
-      setSshError(err instanceof Error ? err.message : 'Failed to remove SSH key')
+      toast.error(err instanceof Error ? err.message : 'Failed to remove SSH key')
     }
   }
 
@@ -476,8 +468,6 @@ export function Profile() {
             </ul>
           )}
 
-          {emailError && <p className="text-sm text-red-600 dark:text-red-400">{emailError}</p>}
-
           <form onSubmit={handleAddEmail} className="flex gap-2">
             <input
               type="email"
@@ -557,8 +547,6 @@ export function Profile() {
               ))}
             </ul>
           )}
-
-          {sshError && <p className="text-sm text-red-600 dark:text-red-400">{sshError}</p>}
 
           <form onSubmit={handleAddSshKey} className="space-y-2">
             <textarea
@@ -758,10 +746,6 @@ export function Profile() {
                 </li>
               ))}
             </ul>
-          )}
-
-          {identityError && (
-            <p className="text-sm text-red-600 dark:text-red-400">{identityError}</p>
           )}
 
           {scmIdentityMode === 'strict' ? (

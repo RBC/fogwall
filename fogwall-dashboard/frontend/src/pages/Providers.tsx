@@ -1,12 +1,22 @@
 import { useEffect, useState } from 'react'
 import { fetchProviders } from '../api'
+import { useToast } from '../components/Toast'
 import type { Provider } from '../types'
 
 /**
  * Shows which transports a provider serves: HTTP is always available; SSH appears when the provider has SSH
  * enabled (the listener is on and the entry opts in). Both badges together = the entry serves both (#442/#531).
+ *
+ * The SCM API badge is presence-only: it states the CLI proposals proxy is enabled for the provider, not how to
+ * reach it — the connect address is deployment-determined (dedicated per-provider listener, separate TLS termination).
  */
-function TransportBadges({ sshEnabled }: { sshEnabled: boolean }) {
+function TransportBadges({
+  sshEnabled,
+  proposalsEnabled,
+}: {
+  sshEnabled: boolean
+  proposalsEnabled: boolean
+}) {
   return (
     <span className="flex items-center gap-1">
       <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
@@ -17,6 +27,14 @@ function TransportBadges({ sshEnabled }: { sshEnabled: boolean }) {
           SSH
         </span>
       )}
+      {proposalsEnabled && (
+        <span
+          title="SCM API proxy enabled for this provider. Connection details are deployment-specific — see the admin and configuration docs."
+          className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"
+        >
+          SCM API
+        </span>
+      )}
     </span>
   )
 }
@@ -24,13 +42,14 @@ function TransportBadges({ sshEnabled }: { sshEnabled: boolean }) {
 export function Providers() {
   const [providers, setProviders] = useState<Provider[]>([])
   const [loading, setLoading] = useState(true)
+  const toast = useToast()
 
   useEffect(() => {
     fetchProviders()
       .then(setProviders)
-      .catch(console.error)
+      .catch((err) => toast.error(err instanceof Error ? err.message : 'Failed to load providers'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [toast])
 
   return (
     <div className="max-w-6xl px-6 py-6 space-y-4">
@@ -59,7 +78,7 @@ export function Providers() {
               onError={(e) => (e.currentTarget.style.display = 'none')}
             />
             <span className="font-semibold text-gray-900 dark:text-gray-100">{p.name}</span>
-            <TransportBadges sshEnabled={p.sshEnabled} />
+            <TransportBadges sshEnabled={p.sshEnabled} proposalsEnabled={p.proposalsEnabled} />
             <a
               href={p.uri}
               target="_blank"
