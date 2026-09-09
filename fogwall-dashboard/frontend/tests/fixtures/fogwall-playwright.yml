@@ -38,6 +38,9 @@ server:
 providers:
   github:
     enabled: true
+    # Dashboard issue filing is enabled here, but no OAuth token is seeded for the fixture users, so the issue form's
+    # provider list resolves empty (enabled ∩ linked) — the "link your account first" gating, exercised by issues.spec.
+    issues-enabled: true
     ssh:
       enabled: true
     proposals:

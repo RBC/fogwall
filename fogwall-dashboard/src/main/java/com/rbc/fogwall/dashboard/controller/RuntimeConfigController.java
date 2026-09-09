@@ -1,6 +1,7 @@
 package com.rbc.fogwall.dashboard.controller;
 
 import com.rbc.fogwall.config.FogwallConfig;
+import com.rbc.fogwall.config.ProviderConfig;
 import com.rbc.fogwall.crypto.TokenCipherProvider;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.ProviderRegistry;
@@ -64,6 +65,8 @@ public class RuntimeConfigController {
         String scmIdentityMode = fogwallConfig.getScmOauth().getIdentityMode();
         boolean proposalsEnabled = fogwallConfig.getProviders().values().stream()
                 .anyMatch(p -> p.getProposals().isEnabled());
+        boolean issuesEnabled =
+                fogwallConfig.getProviders().values().stream().anyMatch(ProviderConfig::isIssuesEnabled);
 
         return Map.of(
                 "allowedOrigins", allowedOrigins,
@@ -72,6 +75,7 @@ public class RuntimeConfigController {
                 "scmOAuthProviders", scmOAuthProviders,
                 "scmOAuthLinkAvailable", scmOAuthLinkAvailable,
                 "scmIdentityMode", scmIdentityMode,
-                "proposalsEnabled", proposalsEnabled);
+                "proposalsEnabled", proposalsEnabled,
+                "issuesEnabled", issuesEnabled);
     }
 }

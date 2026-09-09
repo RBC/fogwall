@@ -591,12 +591,16 @@ function AddPermissionModal({
   const toast = useToast()
 
   const [proposalsEnabled, setProposalsEnabled] = useState(false)
+  const [issuesEnabled, setIssuesEnabled] = useState(false)
 
   const requireReviewPermission = providers.length > 0 && providers[0].requireReviewPermission
 
   useEffect(() => {
     fetchConfig()
-      .then((c) => setProposalsEnabled(c.proposalsEnabled))
+      .then((c) => {
+        setProposalsEnabled(c.proposalsEnabled)
+        setIssuesEnabled(c.issuesEnabled)
+      })
       .catch(console.error)
   }, [])
 
@@ -718,6 +722,7 @@ function AddPermissionModal({
               <option value="PUSH">Push only</option>
               {requireReviewPermission && <option value="REVIEW">Review only</option>}
               <option value="SELF_CERTIFY">Self-certify</option>
+              {issuesEnabled && <option value="ISSUE">Issue only</option>}
               {proposalsEnabled && <option value="PROPOSE">Propose</option>}
               {proposalsEnabled && <option value="MERGE">Merge</option>}
             </select>
@@ -745,6 +750,7 @@ function TestPermissionModal({ username, onClose }: { username: string; onClose:
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<PermissionTestResponse | null>(null)
   const [proposalsEnabled, setProposalsEnabled] = useState(false)
+  const [issuesEnabled, setIssuesEnabled] = useState(false)
   const toast = useToast()
 
   useEffect(() => {
@@ -755,7 +761,10 @@ function TestPermissionModal({ username, onClose }: { username: string; onClose:
       })
       .catch(console.error)
     fetchConfig()
-      .then((c) => setProposalsEnabled(c.proposalsEnabled))
+      .then((c) => {
+        setProposalsEnabled(c.proposalsEnabled)
+        setIssuesEnabled(c.issuesEnabled)
+      })
       .catch(console.error)
   }, [])
 
@@ -827,6 +836,7 @@ function TestPermissionModal({ username, onClose }: { username: string; onClose:
             >
               <option value="PUSH">Push</option>
               <option value="REVIEW">Review</option>
+              {issuesEnabled && <option value="ISSUE">Issue only</option>}
               {proposalsEnabled && <option value="PROPOSE">Propose</option>}
               {proposalsEnabled && <option value="MERGE">Merge</option>}
             </select>

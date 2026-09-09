@@ -4,8 +4,8 @@ import static com.rbc.fogwall.servlet.ScmApiRequestContext.SCM_API_REQUEST_ATTR;
 
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
 import com.rbc.fogwall.scmapi.ProposalContent;
-import com.rbc.fogwall.scmapi.ProposalContentInspector;
 import com.rbc.fogwall.scmapi.ProposalPayload;
+import com.rbc.fogwall.scmapi.ScmContentInspector;
 import com.rbc.fogwall.servlet.RequestBodyWrapper;
 import com.rbc.fogwall.servlet.ScmApiErrorResponse;
 import com.rbc.fogwall.servlet.ScmApiRequestContext;
@@ -42,7 +42,7 @@ public class ScmApiContentInspectionFilter implements Filter {
 
     private static final JsonMapper MAPPER = new JsonMapper();
 
-    private final ProposalContentInspector inspector;
+    private final ScmContentInspector inspector;
     /** Pulls the dialect's prose fields out of the parsed request body, for attribution. */
     private final Function<JsonNode, List<ProposalContent>> extractor;
     /**

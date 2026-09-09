@@ -131,4 +131,13 @@ class ScmOAuthTokenStoreTest {
                 "token".getBytes(StandardCharsets.UTF_8),
                 store.findAccessToken("bob", "github").orElseThrow());
     }
+
+    @Test
+    void findLinkedProviders_returnsSortedProvidersForUser_emptyForNone() {
+        store.save("alice", "gitlab", "gl".getBytes(StandardCharsets.UTF_8), null, null, null);
+        store.save("alice", "github", "gh".getBytes(StandardCharsets.UTF_8), null, null, null);
+
+        assertEquals(List.of("github", "gitlab"), store.findLinkedProviders("alice"));
+        assertEquals(List.of(), store.findLinkedProviders("nobody"));
+    }
 }

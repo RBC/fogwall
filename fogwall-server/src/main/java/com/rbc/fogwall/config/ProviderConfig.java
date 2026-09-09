@@ -74,6 +74,15 @@ public class ProviderConfig {
     private ProposalsProviderSettings proposals = new ProposalsProviderSettings();
 
     /**
+     * Whether fogwall's dashboard issue form may create, edit and comment on issues on this provider on a user's
+     * behalf. Off by default; opt-in per provider. Distinct from {@link #proposals}: this feature makes outbound calls
+     * with the user's linked OAuth token and needs no listener or port, so it is a plain provider-level toggle rather
+     * than part of the SCM API (CLI) proxy settings. Also requires the user to have linked their account for this
+     * provider via OAuth — fogwall acts as them.
+     */
+    private boolean issuesEnabled = false;
+
+    /**
      * SSH transport settings for this provider instance (#531). Lets a single entry serve both HTTP and SSH access to
      * the same upstream. See the configuration reference.
      */

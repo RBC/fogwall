@@ -116,4 +116,23 @@ class ProviderControllerTest {
         assertTrue(gitea.proposalsEnabled(), "provider with proposals.enabled must advertise the SCM API proxy");
         assertFalse(gitlab.proposalsEnabled(), "provider without proposals enabled must not");
     }
+
+    @Test
+    void issuesEnabled_reflectsPerProviderIssuesFlag() {
+        ProviderConfig giteaCfg = new ProviderConfig();
+        giteaCfg.setIssuesEnabled(true);
+        ProviderConfig gitlabCfg = new ProviderConfig(); // issues disabled by default
+        when(fogwallConfig.getProviders()).thenReturn(Map.of("gitea", giteaCfg, "gitlab-http", gitlabCfg));
+
+        var infos = controller.list();
+        var gitea =
+                infos.stream().filter(p -> p.name().equals("gitea")).findFirst().orElseThrow();
+        var gitlab = infos.stream()
+                .filter(p -> p.name().equals("gitlab-http"))
+                .findFirst()
+                .orElseThrow();
+
+        assertTrue(gitea.issuesEnabled(), "provider with issues-enabled must advertise the issue form");
+        assertFalse(gitlab.issuesEnabled(), "provider without issues enabled must not");
+    }
 }

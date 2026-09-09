@@ -43,8 +43,8 @@ import com.rbc.fogwall.scmapi.HeadCommitValidator;
 import com.rbc.fogwall.scmapi.JsonBodyField;
 import com.rbc.fogwall.scmapi.OwnerRepo;
 import com.rbc.fogwall.scmapi.ProposalContent;
-import com.rbc.fogwall.scmapi.ProposalContentInspector;
 import com.rbc.fogwall.scmapi.ProposalRegistrar;
+import com.rbc.fogwall.scmapi.ScmContentInspector;
 import com.rbc.fogwall.service.PushIdentityResolver;
 import com.rbc.fogwall.servlet.FogwallServlet;
 import com.rbc.fogwall.servlet.ScmApiGraphQlForwardServlet;
@@ -428,7 +428,7 @@ public final class FogwallServletRegistrar {
             ServletContextHandler context,
             GitHubProvider provider,
             FogwallContext fogwallContext,
-            ProposalContentInspector contentInspector,
+            ScmContentInspector contentInspector,
             boolean requireValidatedHead,
             boolean mergeEnabled) {
         String mapping = GITHUB_GRAPHQL_MOUNT;
@@ -499,7 +499,7 @@ public final class FogwallServletRegistrar {
             ServletContextHandler context,
             GitLabProvider provider,
             FogwallContext fogwallContext,
-            ProposalContentInspector contentInspector,
+            ScmContentInspector contentInspector,
             boolean requireValidatedHead,
             boolean mergeEnabled) {
         String mapping = GITLAB_REST_MOUNT;
@@ -589,7 +589,7 @@ public final class FogwallServletRegistrar {
             ServletContextHandler context,
             ForgejoProvider provider,
             FogwallContext fogwallContext,
-            ProposalContentInspector contentInspector,
+            ScmContentInspector contentInspector,
             boolean requireValidatedHead,
             boolean mergeEnabled) {
         String mapping = FORGEJO_REST_MOUNT;
@@ -672,7 +672,7 @@ public final class FogwallServletRegistrar {
         ConfigHolder scmApiConfigHolder = configBuilder.buildConfigHolder();
         var proposalsBlock = configBuilder.buildProposalsBlockConfig();
         var proposalsContentPatterns = configBuilder.buildContentPatternConfig();
-        var contentInspector = new ProposalContentInspector(
+        var contentInspector = new ScmContentInspector(
                 () -> proposalsBlock,
                 scmApiConfigHolder::getSecretScanConfig,
                 new SecretScanCheck(scmApiConfigHolder.getSecretScanConfig()),

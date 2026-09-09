@@ -21,8 +21,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Runs fogwall's existing content rules over the prose a proposal carries, so a secret or blocked term cannot reach the
- * upstream through a pull request description when the same text would be blocked in a push.
+ * Runs fogwall's existing content rules over prose bound for an SCM upstream, so a secret or blocked term cannot reach
+ * it through a pull request description or an issue body when the same text would be blocked in a push. Used by both
+ * the SCM API (CLI) proxy and the dashboard issue path — it is not tied to either channel's enablement.
  *
  * <p>Blocked literals and patterns come from {@code proposals.block}. Secret scanning reuses {@link SecretScanCheck}:
  * gitleaks reads stdin, and scans prose as readily as a diff. Content-pattern bundles reuse
@@ -35,7 +36,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @RequiredArgsConstructor
-public class ProposalContentInspector {
+public class ScmContentInspector {
 
     private final Supplier<BlockConfig> blockConfig;
     private final Supplier<SecretScanConfig> secretScanConfig;

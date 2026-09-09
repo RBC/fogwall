@@ -47,6 +47,7 @@ public class ProviderController {
                         sshPort,
                         p.servletPath(),
                         proposalsEnabled(p.getName()),
+                        issuesEnabled(p.getName()),
                         attestations,
                         requireReviewPermission))
                 .toList();
@@ -57,6 +58,13 @@ public class ProviderController {
     private boolean proposalsEnabled(String providerName) {
         ProviderConfig config = fogwallConfig.getProviders().get(providerName);
         return config != null && config.getProposals().isEnabled();
+    }
+
+    // Whether the dashboard issue form is enabled for this provider. Same static, per-provider config shape as the
+    // proposals toggle above.
+    private boolean issuesEnabled(String providerName) {
+        ProviderConfig config = fogwallConfig.getProviders().get(providerName);
+        return config != null && config.isIssuesEnabled();
     }
 
     public record ProviderInfo(
@@ -70,6 +78,7 @@ public class ProviderController {
             int sshPort,
             String sshPath,
             boolean proposalsEnabled,
+            boolean issuesEnabled,
             List<AttestationQuestion> attestationQuestions,
             boolean requireReviewPermission) {}
 }

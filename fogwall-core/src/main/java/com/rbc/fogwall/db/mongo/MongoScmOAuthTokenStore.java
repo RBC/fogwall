@@ -9,7 +9,10 @@ import com.mongodb.client.model.Indexes;
 import com.mongodb.client.model.ReplaceOptions;
 import com.rbc.fogwall.user.ScmOAuthTokenStore;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
+import java.util.List;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.bson.Document;
@@ -70,6 +73,16 @@ public class MongoScmOAuthTokenStore implements ScmOAuthTokenStore {
         }
         Binary token = doc.get("access_token", Binary.class);
         return Optional.ofNullable(token).map(Binary::getData);
+    }
+
+    @Override
+    public List<String> findLinkedProviders(String username) {
+        List<String> providers = new ArrayList<>();
+        getCollection()
+                .distinct("provider", Filters.eq("username", username), String.class)
+                .into(providers);
+        Collections.sort(providers);
+        return providers;
     }
 
     @Override

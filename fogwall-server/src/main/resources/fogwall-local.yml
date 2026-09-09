@@ -47,6 +47,9 @@ providers:
   #      SSH:   git clone ssh://localhost:2222/github.com/<org>/<repo>.git   (agent forwarding required: ssh -A)
   github:
     enabled: true
+    # Dashboard issue filing (create/edit/comment) on your behalf — link your github account under Profile first,
+    # then use the dashboard's Issues page. Needs no listener or port, unlike proposals below.
+    issues-enabled: true
     ssh:
       enabled: true
     # Proposals on their own listener — this is the common case: open a PR against a real
