@@ -299,9 +299,21 @@ public class JdbcUserStore implements UserStore {
     /**
      * Ensures a user row exists for IdP-authenticated users who are not in the YAML config. No-op if already present.
      * The password is left NULL so the account cannot be used for form login.
+     *
+     * <p>Deliberately does not touch {@code roles} on an existing row: this is the "materialize a row so an FK can
+     * point at it" call (config-declared user added to a group, granted a permission, or linking an OAuth account), and
+     * routing it through the role-syncing overload demoted established admins to plain {@code USER}. Role sync is
+     * {@link #upsertUser(String, List)}, which callers use only when they have authoritative roles from an IdP.
      */
     public void upsertUser(String username) {
-        upsertUser(username, List.of("USER"));
+        boolean exists = !jdbc.queryForList(
+                        "SELECT username FROM proxy_users WHERE username = :u", Map.of("u", username), String.class)
+                .isEmpty();
+        if (exists) return;
+        jdbc.update(
+                "INSERT INTO proxy_users (username, password_hash, roles) VALUES (:u, NULL, 'USER')",
+                Map.of("u", username));
+        log.debug("Auto-provisioned user row for '{}'", username);
     }
 
     @Override

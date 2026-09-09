@@ -13,6 +13,7 @@ import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
 import com.rbc.fogwall.user.UserEntry;
+import com.rbc.fogwall.user.UserStore;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,6 +52,14 @@ class GroupControllerTest {
             .name("admins")
             .description("Admins from config")
             .source(PermissionGroup.Source.CONFIG)
+            .build();
+
+    private static final UserEntry REVIEWER = UserEntry.builder()
+            .username("reviewer")
+            .passwordHash("{noop}pw")
+            .emails(List.of())
+            .scmIdentities(List.of())
+            .roles(List.of("USER"))
             .build();
 
     private static final UserEntry ALICE = UserEntry.builder()
@@ -268,6 +277,25 @@ class GroupControllerTest {
 
         assertEquals(HttpStatus.CREATED, resp.getStatusCode());
         verify(groupStore).addMember(DB_GROUP.getId(), "alice");
+    }
+
+    @Test
+    void addMember_materializesUserRowBeforeInsert() {
+        // A config-declared user has no proxy_users row, and group_members has an FK to it — without this the insert
+        // dies on a referential integrity violation and the endpoint 500s.
+        UserStore mutableStore = mock(UserStore.class);
+        when(mutableStore.findByUsername("reviewer")).thenReturn(Optional.of(REVIEWER));
+        var controllerWithMutableStore = new GroupController(permissionService, mutableStore, auditLog);
+        when(groupStore.findGroupById(DB_GROUP.getId())).thenReturn(Optional.of(DB_GROUP));
+        when(groupStore.findMembers(DB_GROUP.getId())).thenReturn(List.of());
+
+        var resp =
+                controllerWithMutableStore.addMember(DB_GROUP.getId(), new GroupController.MemberRequest("reviewer"));
+
+        assertEquals(HttpStatus.CREATED, resp.getStatusCode());
+        var inOrder = inOrder(mutableStore, groupStore);
+        inOrder.verify(mutableStore).upsertUser("reviewer");
+        inOrder.verify(groupStore).addMember(DB_GROUP.getId(), "reviewer");
     }
 
     // ── DELETE /api/groups/{id}/members/{username} ───────────────────────────────

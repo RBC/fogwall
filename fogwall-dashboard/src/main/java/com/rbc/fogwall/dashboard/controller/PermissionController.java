@@ -8,6 +8,7 @@ import com.rbc.fogwall.permission.PermissionGroup;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
+import com.rbc.fogwall.user.UserStore;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
@@ -96,6 +97,11 @@ public class PermissionController {
                     c.getValue(), c.getTarget(), c.getMatchType());
             auditLog.denied("permission.grant", "user:" + username, reason);
             return ResponseEntity.badRequest().body(Map.of("error", reason));
+        }
+        // repo_permissions has an FK to proxy_users; a config-declared user has no DB row until something references
+        // it. Same materialization the group-membership path does.
+        if (userStore instanceof UserStore mutable) {
+            mutable.upsertUser(username);
         }
         permissionService.save(permission);
         auditLog.success("permission.grant", "user:" + username, "value=" + permission.getValue() + " grant=" + grant);

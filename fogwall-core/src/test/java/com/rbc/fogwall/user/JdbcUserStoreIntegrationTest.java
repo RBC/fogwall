@@ -253,6 +253,16 @@ class JdbcUserStoreIntegrationTest {
     }
 
     @Test
+    void upsertUser_preservesExistingRoles() {
+        store.createUser("admin", "{noop}pw", "USER,ADMIN");
+        store.upsertUser("admin"); // materializing a row for an FK must not demote an existing admin
+
+        var result = store.findByUsername("admin");
+        assertTrue(result.isPresent());
+        assertTrue(result.get().getRoles().contains("ADMIN"));
+    }
+
+    @Test
     void upsertUser_withRoles_setsRolesOnNewUser() {
         store.upsertUser("oidcuser", List.of("USER", "ADMIN"));
 

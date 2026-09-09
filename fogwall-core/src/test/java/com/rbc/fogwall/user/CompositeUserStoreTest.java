@@ -352,6 +352,20 @@ class CompositeUserStoreTest {
     }
 
     @Test
+    void upsertUser_dbAdmin_keepsAdminRole() {
+        // The composite is what the dashboard holds, and ScmOAuthLinkController calls this on every OAuth link to
+        // materialize the row before saving the token. Routing it through the role-syncing overload demoted a DB
+        // admin to plain USER just for linking an account from their own profile page.
+        jdbcStore.createUser("bob", "{noop}pw", "USER,ADMIN");
+
+        store.upsertUser("bob");
+
+        var result = store.findByUsername("bob");
+        assertTrue(result.isPresent());
+        assertTrue(result.get().getRoles().contains("ADMIN"));
+    }
+
+    @Test
     void addEmail_addsToJdbc() {
         jdbcStore.createUser("bob", "{noop}pw", "USER");
         store.addEmail("bob", "bob@example.com");
