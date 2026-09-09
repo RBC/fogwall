@@ -190,19 +190,17 @@ export function Users({ authProvider }: UsersProps) {
 
   if (loading)
     return (
-      <div className="max-w-5xl mx-auto px-4 py-16 text-center text-gray-400 dark:text-gray-500">
+      <div className="max-w-6xl px-6 py-16 text-center text-gray-400 dark:text-gray-500">
         Loading…
       </div>
     )
   if (error)
     return (
-      <div className="max-w-5xl mx-auto px-4 py-16 text-center text-red-500 dark:text-red-400">
-        {error}
-      </div>
+      <div className="max-w-6xl px-6 py-16 text-center text-red-500 dark:text-red-400">{error}</div>
     )
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 space-y-4">
+    <div className="max-w-6xl px-6 py-6 space-y-4">
       {showAddModal && (
         <AddUserModal onClose={() => setShowAddModal(false)} onCreated={loadUsers} />
       )}

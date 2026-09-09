@@ -2,7 +2,7 @@ import { Diff2HtmlUI } from 'diff2html/lib/ui/js/diff2html-ui-slim'
 import { ColorSchemeType } from 'diff2html/lib/types'
 import 'diff2html/bundles/css/diff2html.min.css'
 import { useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { useParams } from 'react-router'
 import { fetchDiff, fetchPush } from '../api'
 
 function diffStats(raw: string): { files: number; insertions: number; deletions: number } {
@@ -107,18 +107,7 @@ export function PushDiff({ dark = false }: { dark?: boolean }) {
     <div className="min-h-screen flex flex-col bg-white dark:bg-slate-900">
       {/* Header */}
       <div className="bg-slate-800 text-white px-6 py-3 flex items-center gap-4 text-sm shrink-0 flex-wrap">
-        <Link
-          to={`/push/${id}`}
-          className="text-slate-300 hover:text-white transition-colors flex items-center gap-1"
-        >
-          ← Back to push record
-        </Link>
-        {repoName && (
-          <>
-            <span className="text-slate-600">|</span>
-            <span className="font-mono text-slate-300">{repoName}</span>
-          </>
-        )}
+        {repoName && <span className="font-mono text-slate-300">{repoName}</span>}
         {stats && (
           <>
             <span className="text-slate-600">|</span>

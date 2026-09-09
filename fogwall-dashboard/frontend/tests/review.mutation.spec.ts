@@ -71,7 +71,7 @@ test('pusher cancels their own pending push', async ({ asRole }) => {
 })
 
 test('the status chips reflect the three decisions', async ({ page }) => {
-  await page.goto('/dashboard/')
+  await page.goto('/dashboard/pushes')
   // Approved and Canceled chips exist only once such records exist; both were created above.
   await expect(page.getByRole('button', { name: /^Approved · \d+$/ })).toBeVisible()
   await expect(page.getByRole('button', { name: /^Canceled · \d+$/ })).toBeVisible()

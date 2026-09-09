@@ -104,7 +104,7 @@ export function Legal() {
   }, [notices, search])
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 space-y-4">
+    <div className="max-w-6xl px-6 py-6 space-y-4">
       <div>
         <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Legal</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">

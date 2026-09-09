@@ -97,8 +97,16 @@ export function ScmApiActionList({ currentUser }: ScmApiActionListProps) {
 
   return (
     <div>
+      <div className="max-w-6xl px-6 pt-6">
+        <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-200">Proposals</h1>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          Pull and merge requests opened, edited, closed, and merged through fogwall — the SCM API
+          proxy's action log.
+        </p>
+      </div>
+
       {/* Status filter chips */}
-      <div className="max-w-7xl mx-auto px-4 pt-4 flex gap-2 flex-wrap">
+      <div className="max-w-6xl px-6 pt-4 flex gap-2 flex-wrap">
         <button
           onClick={() => {
             setFilterStatus('')
@@ -131,7 +139,7 @@ export function ScmApiActionList({ currentUser }: ScmApiActionListProps) {
       </div>
 
       {/* Filter bar */}
-      <div className="max-w-7xl mx-auto px-4 py-3 flex gap-3 flex-wrap items-center border-b border-gray-100 dark:border-slate-700">
+      <div className="max-w-6xl px-6 py-3 flex gap-3 flex-wrap items-center border-b border-gray-100 dark:border-slate-700">
         <input
           value={filterSearch}
           onChange={(e) => handleSearchChange(e.target.value)}
@@ -183,7 +191,7 @@ export function ScmApiActionList({ currentUser }: ScmApiActionListProps) {
       </div>
 
       {/* List */}
-      <div className="max-w-7xl mx-auto px-4 space-y-2 py-4 pb-12">
+      <div className="max-w-6xl px-6 space-y-2 py-4 pb-12">
         {actions.length === 0 && (
           <div className="text-center text-gray-400 dark:text-gray-500 py-16">
             No SCM API action records found.
@@ -262,7 +270,7 @@ export function ScmApiActionList({ currentUser }: ScmApiActionListProps) {
 
       {/* Pagination */}
       {(page > 0 || hasMore) && (
-        <div className="max-w-7xl mx-auto px-4 pb-12 flex justify-center gap-4">
+        <div className="max-w-6xl px-6 pb-12 flex justify-center gap-4">
           <button
             onClick={() => setPage((p) => Math.max(0, p - 1))}
             disabled={page === 0}

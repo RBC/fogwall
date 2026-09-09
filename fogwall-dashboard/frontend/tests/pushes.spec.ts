@@ -21,7 +21,7 @@ const step = (page: Page, name: string) =>
 test.describe('push list', () => {
   test('status chips carry counts and filter the list', async ({ page }) => {
     requireCapture()
-    await page.goto('/dashboard/')
+    await page.goto('/dashboard/pushes')
     for (const status of ['Pending', 'Rejected', 'Forwarded', 'Canceled']) {
       await expect(
         page.getByRole('button', { name: new RegExp(`^${status} · \\d+$`) }),
@@ -35,7 +35,7 @@ test.describe('push list', () => {
 
   test('rows show repo, ref, head sha and identity resolution', async ({ page }) => {
     const { id, ref } = scenario('pending-branch')
-    await page.goto('/dashboard/')
+    await page.goto('/dashboard/pushes')
     await page.getByRole('button', { name: /^Pending · \d+$/ }).click()
     const row = page.locator('div.cursor-pointer').filter({ hasText: ref })
     await expect(row).toContainText(REPO)
@@ -48,7 +48,7 @@ test.describe('push list', () => {
   test('"My pushes" as the pusher shows only their own', async ({ asRole }) => {
     scenario('pending-branch')
     const page = await asRole('dev')
-    await page.goto('/dashboard/')
+    await page.goto('/dashboard/pushes')
     await page.getByRole('button', { name: 'My pushes' }).click()
     await expect(page.getByText(/\d+ records?/)).toBeVisible()
     await expect(page.getByText('identity unresolved')).toHaveCount(0)

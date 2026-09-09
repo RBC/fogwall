@@ -1,5 +1,6 @@
+import { ExtIcon } from '../components/ExtIcon'
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 import { Diff2HtmlUI } from 'diff2html/lib/ui/js/diff2html-ui-slim'
 import { ColorSchemeType } from 'diff2html/lib/types'
 import 'diff2html/bundles/css/diff2html.min.css'
@@ -261,9 +262,10 @@ function PushTimeline({ record }: { record: PushRecord }) {
                 href={ev.link}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-blue-600 hover:underline mt-0.5 block dark:text-blue-400"
+                className="mt-0.5 inline-flex items-center gap-1 text-xs text-blue-600 hover:underline dark:text-blue-400"
               >
-                View commit ↗
+                View commit
+                <ExtIcon />
               </a>
             )}
             {ev.time && (
@@ -304,9 +306,10 @@ function AttestationQuestionField({
           href={link.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-xs text-blue-500 hover:underline dark:text-blue-400"
+          className="inline-flex items-center gap-1 text-xs text-blue-500 hover:underline dark:text-blue-400"
         >
-          {link.text} ↗
+          {link.text}
+          <ExtIcon />
         </a>
       ))}
     </div>
@@ -474,7 +477,6 @@ const DIFF_INLINE_THRESHOLD = 1000
 
 export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
   const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
   const diffRef = useRef<HTMLDivElement>(null)
 
   const [record, setRecord] = useState<PushRecord | null>(null)
@@ -631,14 +633,7 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
-      <button
-        onClick={() => navigate('/')}
-        className="text-sm text-blue-600 hover:underline dark:text-blue-400"
-      >
-        ← Back to push records
-      </button>
-
+    <div className="max-w-6xl px-6 py-6 space-y-6">
       {loading && (
         <div className="text-center text-gray-400 py-16 dark:text-gray-500">Loading…</div>
       )}
@@ -665,7 +660,7 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
                       title="Open repo"
                       className="ml-1.5 text-blue-500 no-underline hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
                     >
-                      ↗
+                      <ExtIcon />
                     </a>
                   )}
                 </div>
@@ -682,7 +677,7 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
                       title="Open commit"
                       className="ml-1.5 text-blue-500 no-underline hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
                     >
-                      ↗
+                      <ExtIcon />
                     </a>
                   )}
                 </div>

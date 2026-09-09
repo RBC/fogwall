@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createUrlRule, deleteUrlRule, fetchProviders, testUrlRules } from '../api'
 import type { RuleTestResponse } from '../api'
-import type { Provider } from '../types'
+import type { Provider, CurrentUser } from '../types'
 
 interface ActiveRepo {
   provider: string
@@ -240,7 +240,7 @@ function AddRuleModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 dark:bg-black/60">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 space-y-4 dark:bg-slate-800">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 space-y-4 dark:bg-slate-800 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Add Rule</h3>
           <button
@@ -480,7 +480,7 @@ function TestRuleModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 dark:bg-black/60">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4 dark:bg-slate-800">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4 dark:bg-slate-800 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Test a rule</h3>
           <button
@@ -627,7 +627,8 @@ function TestRuleModal({ onClose }: { onClose: () => void }) {
   )
 }
 
-export function Repos() {
+export function Repos({ currentUser }: { currentUser: CurrentUser | null }) {
+  const isAdmin = currentUser?.authorities.includes('ROLE_ADMIN') ?? false
   const [tab, setTab] = useState<Tab>('active')
   const [activeRepos, setActiveRepos] = useState<ActiveRepo[]>([])
   const [rules, setRules] = useState<Rule[]>([])
@@ -660,7 +661,7 @@ export function Repos() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 space-y-4">
+    <div className="max-w-6xl px-6 py-6 space-y-4">
       {showAddRule && (
         <AddRuleModal
           onClose={() => setShowAddRule(false)}
@@ -670,7 +671,7 @@ export function Repos() {
       {showTestRule && <TestRuleModal onClose={() => setShowTestRule(false)} />}
 
       <div className="flex items-baseline gap-3">
-        <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Repositories</h2>
+        <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-200">Repositories</h1>
       </div>
 
       {/* Tabs */}
@@ -690,7 +691,7 @@ export function Repos() {
             </button>
           ))}
         </div>
-        {tab === 'rules' && (
+        {tab === 'rules' && isAdmin && (
           <div className="flex gap-2 mb-px">
             <button
               onClick={() => setShowTestRule(true)}
