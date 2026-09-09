@@ -86,6 +86,16 @@ not imitate those.
 - **One line per change, not one line per PR.** Related PRs collapse into a single bullet with their numbers grouped at
   the end: `(#379, #432, #451)`. This is what GitHub's own auto-gen achieves through linking — the PR is where the
   detail lives, so the bullet does not restate it.
+- **Never hard-wrap the body.** GitHub renders a single newline in a release body as a `<br>`, so a bullet wrapped at
+  120 columns comes out ragged. Write each bullet and each paragraph on one physical line, however long, with blank
+  lines between them. The repo's `proseWrap: always` governs Markdown files in the tree, not text posted through the
+  API. Verify before handing over the link — the count must be `0`:
+
+  ```bash
+  gh api repos/:owner/:repo/releases/tags/"$TAG" -H "Accept: application/vnd.github.html+json" \
+    --jq .body_html | grep -c '<br'
+  ```
+
 - **Bold lead-in, then plain language.**
   `- **Fetch toggle for server mode** — an operator can now run a push-only gateway…`. Lead with what a developer or
   operator sees change, then why, then the PR refs.
