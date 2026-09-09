@@ -70,8 +70,5 @@ if grep -Eq 'gh +api( +[^;&|]*)? +(-X|--method)[ =]POST( +[^;&|]*)? +(repos/)' <
    && ! grep -Eq 'repos/RBC/fogwall/' <<<"$cmd"; then
     block "never open issues or PRs on external repos on the maintainer's behalf."
 fi
-if is_gh && grep -Eiq 'Generated with \[?Claude Code|claude\.com/claude-code' <<<"$text"; then
-    block "no 'Generated with Claude Code' footer on issues or PRs in this public repo."
-fi
 
 exit 0
