@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
@@ -228,6 +229,39 @@ class DashboardIssueServiceTest {
 
         assertFalse(outcome.ok());
         assertEquals(403, outcome.httpStatus());
+    }
+
+    @Test
+    void current_success_returnsDetails_andReadsNoAudit() {
+        providerEnabled();
+        when(permissions.isAllowedToFileIssue("alice", "github", "/octocat/hello"))
+                .thenReturn(true);
+        tokenAvailable();
+        when(client.getIssue(github, "octocat", "hello", 42, "gho_token"))
+                .thenReturn(new DashboardIssueClient.IssueDetails(
+                        42, "https://github.com/octocat/hello/issues/42", "Bug", "It broke", "open"));
+
+        var outcome = service.current("alice", "github", "octocat", "hello", 42);
+
+        assertTrue(outcome.ok());
+        assertEquals(200, outcome.httpStatus());
+        assertEquals("Bug", outcome.details().title());
+        assertEquals("open", outcome.details().state());
+        // A read mutates nothing, so it writes no audit record.
+        verify(auditStore, never()).save(any());
+    }
+
+    @Test
+    void current_withoutGrant_isForbidden_andNeverCallsUpstream() {
+        providerEnabled();
+        when(permissions.isAllowedToFileIssue("alice", "github", "/octocat/hello"))
+                .thenReturn(false);
+
+        var outcome = service.current("alice", "github", "octocat", "hello", 42);
+
+        assertFalse(outcome.ok());
+        assertEquals(403, outcome.httpStatus());
+        verify(client, never()).getIssue(any(), anyString(), anyString(), anyInt(), anyString());
     }
 
     @Test

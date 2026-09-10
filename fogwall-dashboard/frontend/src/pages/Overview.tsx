@@ -5,13 +5,13 @@ interface OverviewProps {
   currentUser: CurrentUser | null
 }
 
-// Placeholder activity tiles. The live per-contribution and aggregate numbers are #573 (needs its own
-// aggregate endpoints); until then the shape is shown but marked unavailable rather than faked.
+// Placeholder activity tiles. The live per-contribution and aggregate numbers need their own aggregate
+// endpoints; until those exist the shape is shown but marked unavailable rather than faked.
 const ACTIVITY = [
   { label: 'Pushes', hint: 'submitted · approved · forwarded' },
   { label: 'Proposals', hint: 'PRs & MRs opened' },
   { label: 'Merged', hint: 'outcome known through fogwall' },
-  { label: 'Issues', hint: 'arrives with #563', tag: '#563' },
+  { label: 'Issues', hint: 'filed · commented · closed' },
 ] as const
 
 const QUICK_LINKS = [
@@ -33,12 +33,11 @@ export function Overview({ currentUser }: OverviewProps) {
   return (
     <div className="max-w-6xl px-6 py-8">
       <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-200">
-        {currentUser ? `Welcome back, ${currentUser.username}` : 'Welcome to fogwall'}
+        {currentUser ? `Welcome to fogwall, ${currentUser.username}` : 'Welcome to fogwall'}
       </h1>
       <p className="mt-1 max-w-[62ch] text-sm text-gray-500 dark:text-gray-400">
-        Everything that moved through fogwall — your pushes and proposals, and, for operators, the
-        whole estate. This is contribution made <em>through</em> fogwall, not a full inventory of
-        every repository.
+        Git, secured. Every push, fetch, pull request, and issue, inspected and audited on the way
+        through.
       </p>
 
       <div className="mb-3 mt-8 text-xs font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500">
@@ -52,11 +51,6 @@ export function Overview({ currentUser }: OverviewProps) {
           >
             <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400">
               {a.label}
-              {'tag' in a && a.tag && (
-                <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[9.5px] font-semibold text-gray-400 dark:bg-slate-700 dark:text-gray-500">
-                  {a.tag}
-                </span>
-              )}
             </div>
             <div className="my-1 text-3xl font-bold tracking-tight text-gray-300 dark:text-slate-600">
               —
@@ -77,10 +71,7 @@ export function Overview({ currentUser }: OverviewProps) {
           <circle cx="12" cy="12" r="9.2" />
           <path d="M12 11v5M12 8h.01" strokeLinecap="round" />
         </svg>
-        <span>
-          Activity metrics — per person and in aggregate for operators — arrive with the
-          contribution activity view (#573).
-        </span>
+        <span>Metrics not yet available.</span>
       </div>
 
       <div className="mb-3 mt-8 text-xs font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500">

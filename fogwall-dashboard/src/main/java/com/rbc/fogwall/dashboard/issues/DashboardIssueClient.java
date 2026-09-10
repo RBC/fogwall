@@ -39,6 +39,11 @@ public class DashboardIssueClient {
     /** The created or edited issue's number on the provider and its browsable web URL (for linking the user to it). */
     public record IssueResult(int number, String url) {}
 
+    /**
+     * An issue's current upstream state, read before an edit or close/reopen so the user acts on what is really there.
+     */
+    public record IssueDetails(int number, String url, String title, String body, String state) {}
+
     /** Non-2xx from the upstream (or an unreachable provider), carrying the status for auditing and a clean reason. */
     public static class IssueApiException extends RuntimeException {
         private final int upstreamStatus;
@@ -160,6 +165,35 @@ public class DashboardIssueClient {
         };
     }
 
+    /**
+     * Reads an issue's current title, body and state — the "what is upstream right now" the edit UI shows read-only.
+     */
+    public IssueDetails getIssue(FogwallProvider provider, String owner, String repo, int number, String token) {
+        return switch (dialect(provider)) {
+            case GITHUB ->
+                details(
+                        getJson(githubIssuesUrl(provider, owner, repo) + "/" + number, token),
+                        "number",
+                        "html_url",
+                        "body",
+                        number);
+            case GITLAB ->
+                details(
+                        getJson(gitlabIssuesUrl(provider, owner, repo) + "/" + number, token),
+                        "iid",
+                        "web_url",
+                        "description",
+                        number);
+            case FORGEJO ->
+                details(
+                        getJson(forgejoIssuesUrl(provider, owner, repo) + "/" + number, token),
+                        "number",
+                        "html_url",
+                        "body",
+                        number);
+        };
+    }
+
     private enum Dialect {
         GITHUB,
         GITLAB,
@@ -181,6 +215,21 @@ public class DashboardIssueClient {
     private static IssueResult asIssue(JsonNode r, String numberField, String urlField, int fallbackNumber) {
         return new IssueResult(
                 r.path(numberField).asInt(fallbackNumber), r.path(urlField).asString(""));
+    }
+
+    private static IssueDetails details(
+            JsonNode r, String numberField, String urlField, String bodyField, int fallbackNumber) {
+        return new IssueDetails(
+                r.path(numberField).asInt(fallbackNumber),
+                r.path(urlField).asString(""),
+                r.path("title").asString(""),
+                r.path(bodyField).asString(""),
+                normalizeState(r.path("state").asString("")));
+    }
+
+    /** GitLab reports an open issue as {@code opened}; GitHub and Forgejo use {@code open}. Normalize to the latter. */
+    private static String normalizeState(String raw) {
+        return "opened".equals(raw) ? "open" : raw;
     }
 
     private static String githubIssuesUrl(FogwallProvider p, String owner, String repo) {
@@ -233,19 +282,39 @@ public class DashboardIssueClient {
                     .connectTimeout(TIMEOUT)
                     .responseTimeout(TIMEOUT);
             ScmApiUserAgent.self(request);
-            try (ClassicHttpResponse response = (ClassicHttpResponse)
-                    request.execute(FogwallHttpExecutor.instance()).returnResponse()) {
-                int status = response.getCode();
-                String responseBody = response.getEntity() == null ? "" : EntityUtils.toString(response.getEntity());
-                if (status < 200 || status >= 300) {
-                    throw new IssueApiException(status, "the provider returned HTTP " + status);
-                }
-                return responseBody.isEmpty() ? MAPPER.createObjectNode() : MAPPER.readTree(responseBody);
-            }
+            return execute(request);
         } catch (IssueApiException e) {
             throw e;
         } catch (Exception e) {
             throw new IssueApiException(0, "could not reach the provider: " + e.getMessage(), e);
+        }
+    }
+
+    private JsonNode getJson(String url, String token) {
+        try {
+            Request request = Request.get(url)
+                    .addHeader("Authorization", "Bearer " + token)
+                    .addHeader("Accept", "application/json")
+                    .connectTimeout(TIMEOUT)
+                    .responseTimeout(TIMEOUT);
+            ScmApiUserAgent.self(request);
+            return execute(request);
+        } catch (IssueApiException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IssueApiException(0, "could not reach the provider: " + e.getMessage(), e);
+        }
+    }
+
+    private JsonNode execute(Request request) throws Exception {
+        try (ClassicHttpResponse response = (ClassicHttpResponse)
+                request.execute(FogwallHttpExecutor.instance()).returnResponse()) {
+            int status = response.getCode();
+            String responseBody = response.getEntity() == null ? "" : EntityUtils.toString(response.getEntity());
+            if (status < 200 || status >= 300) {
+                throw new IssueApiException(status, "the provider returned HTTP " + status);
+            }
+            return responseBody.isEmpty() ? MAPPER.createObjectNode() : MAPPER.readTree(responseBody);
         }
     }
 }

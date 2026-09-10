@@ -231,6 +231,39 @@ export async function setIssueState(body: {
   return issueResult(res, body.close ? 'Failed to close issue' : 'Failed to reopen issue')
 }
 
+export interface IssueDetails {
+  number: number
+  url: string
+  title: string
+  body: string
+  state: string
+}
+
+export async function fetchCurrentIssue(params: {
+  provider: string
+  owner: string
+  repo: string
+  number: number
+}): Promise<IssueDetails> {
+  const q = new URLSearchParams({
+    provider: params.provider,
+    owner: params.owner,
+    repo: params.repo,
+    number: String(params.number),
+  })
+  const res = await apiFetch(`/api/issues/current?${q}`)
+  if (res.ok) return res.json()
+  const text = await res.text()
+  let message = `Failed to load the issue (HTTP ${res.status})`
+  try {
+    const err = JSON.parse(text)
+    if (err.error) message = err.error
+  } catch {
+    // not JSON — keep the fallback
+  }
+  throw new Error(message)
+}
+
 export async function fetchUsers() {
   const res = await apiFetch('/api/users')
   if (!res.ok) throw new Error('Failed to fetch users')

@@ -94,6 +94,13 @@ public class DashboardIssueService {
         }
     }
 
+    /** The outcome of reading an issue's current upstream state, mapped to HTTP by the controller. */
+    public record IssueDetailsOutcome(int httpStatus, DashboardIssueClient.IssueDetails details, String error) {
+        public boolean ok() {
+            return details != null;
+        }
+    }
+
     /**
      * Provider names the current user may file issues on: {@code issues-enabled} in config and linked by this user via
      * OAuth. Whether any grant matches a given repo is decided per operation, since grants are path patterns.
@@ -160,6 +167,42 @@ public class DashboardIssueService {
                 null,
                 null,
                 (provider, token) -> client.setState(provider, owner, repo, number, close, token));
+    }
+
+    /**
+     * Reads an issue's current title, body and state so the Edit / Close UI can show what is really upstream before the
+     * user edits or flips its state. Grant-gated exactly like a write — this read <em>is</em> the UI's permission
+     * probe, so a viewer who can load an issue here is one who could act on it. Not audited: it mutates nothing.
+     */
+    public IssueDetailsOutcome current(String username, String providerName, String owner, String repo, int number) {
+        Optional<FogwallProvider> resolved = providers.getProviders().stream()
+                .filter(p -> p.getName().equals(providerName))
+                .findFirst();
+        if (resolved.isEmpty() || !isSupported(resolved.get())) {
+            return new IssueDetailsOutcome(400, null, "Unknown or unsupported provider: " + providerName);
+        }
+        FogwallProvider provider = resolved.get();
+
+        if (!isIssuesEnabled(providerName)) {
+            return new IssueDetailsOutcome(403, null, "Issue filing is not enabled for " + providerName);
+        }
+        if (!permissions.isAllowedToFileIssue(username, providerName, "/" + owner + "/" + repo)) {
+            return new IssueDetailsOutcome(
+                    403, null, "You do not have permission to act on issues on " + owner + "/" + repo);
+        }
+        Optional<String> token = accessToken(username, providerName);
+        if (token.isEmpty()) {
+            return new IssueDetailsOutcome(409, null, "Link your " + providerName + " account first");
+        }
+
+        try {
+            DashboardIssueClient.IssueDetails details = client.getIssue(provider, owner, repo, number, token.get());
+            return new IssueDetailsOutcome(200, details, null);
+        } catch (DashboardIssueClient.IssueApiException e) {
+            log.warn(
+                    "Dashboard issue status read on {}/{} at {} failed: {}", owner, repo, providerName, e.getMessage());
+            return new IssueDetailsOutcome(502, null, "The provider rejected the request: " + e.getMessage());
+        }
     }
 
     @FunctionalInterface
