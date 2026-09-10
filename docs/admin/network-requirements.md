@@ -75,6 +75,32 @@ after TCP and TLS both pass.
 provider's git endpoint. A transparent HTTPS inspection proxy (MITM) will also break JGit's certificate pinning — the
 proxy host's egress IP should bypass SSL inspection, not just be allowlisted at the IP layer.
 
+## TLS termination and forwarded headers
+
+The git and proposals listeners need nothing special behind a TLS-terminating proxy: the git protocol does not consult
+forwarded headers, and fogwall reads none and emits none on those paths. The **dashboard** is the exception — it
+resolves the external scheme, host and port so that OIDC login redirects, other absolute URLs, and the session cookie's
+`Secure` flag reflect the address the browser used. `server.trust-forwarded-headers` (default `true`) controls where it
+reads that address from. There are two supported shapes.
+
+**TLS terminated at fogwall.** The browser reaches fogwall's own HTTPS connector directly on the external hostname (see
+[TLS configuration](../configuration/server.md)). fogwall's own request is already `https` on the right host, so it can
+resolve the external address from the connection itself. Set `server.trust-forwarded-headers: false` — there is no proxy
+in front setting the headers, and leaving them trusted would let any client that reaches the port spoof them.
+
+**TLS terminated at an ingress, plaintext inside the cluster.** The browser reaches an ingress or load balancer over
+HTTPS, which forwards plaintext HTTP to fogwall. fogwall's own request is `http` on an internal host, so it cannot
+derive the external address from the connection — it must read the `Forwarded` / `X-Forwarded-*` headers the ingress
+sets. Keep `server.trust-forwarded-headers: true` (the default), and also **set `server.service-url`** to the external
+base URL: it is separate from forwarded-header handling and needed by the paths that run without a browser request in
+scope — SCM OAuth account-linking (which refuses to build a `redirect_uri` without it) and the links embedded in
+sideband messages to git clients (which are omitted without it).
+
+The precondition for `trust-forwarded-headers: true` is that the dashboard listener is reachable **only** through the
+ingress that sets the headers; a client able to reach the dashboard port directly could otherwise spoof scheme and host.
+A startup log line names the active setting and this precondition. Turning the setting off on a deployment behind a TLS
+ingress breaks login redirects and drops the session cookie's `Secure` flag, which is why the default is `true`.
+
 ## Large pushes failing behind a reverse proxy (chunked transfer-encoding)
 
 When fogwall is deployed behind a reverse proxy (HAProxy, nginx, a cloud load balancer), pushes with large packs (> 1

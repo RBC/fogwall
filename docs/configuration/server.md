@@ -105,6 +105,15 @@ server:
   #   - http://localhost:5173
   #   - https://dashboard.example.com
 
+  # Whether the dashboard trusts Forwarded / X-Forwarded-* headers to resolve the external
+  # scheme, host and port. These drive OIDC login redirects, other absolute URLs, and the
+  # session cookie's Secure flag. Only the dashboard reads them; the git and proposals
+  # listeners read none. Default true — existing ingress deployments depend on it.
+  # Precondition when true: the dashboard listener must be reachable only through the ingress
+  # that sets the headers. Set false when TLS terminates at fogwall, or whenever the listener
+  # is directly reachable; then also set service-url. See docs/admin/network-requirements.md.
+  # trust-forwarded-headers: true
+
   # HTTP session persistence backend. Controls where authenticated sessions are stored.
   # Options:
   #   none   — in-memory (default); sessions lost on restart, not shared across pods

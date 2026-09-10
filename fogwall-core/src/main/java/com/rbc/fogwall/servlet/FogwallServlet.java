@@ -89,7 +89,6 @@ public class FogwallServlet extends AsyncProxyServlet.Transparent {
         }
     }
 
-    // Sending a Via header to upstream, opt-in and configurable, is tracked separately.
     @Override
     protected void addViaHeader(Request proxyRequest) {
         // no-op - don't send "Via" header to upstream
@@ -100,7 +99,6 @@ public class FogwallServlet extends AsyncProxyServlet.Transparent {
         // no-op - don't send "Via" header to upstream
     }
 
-    // Sending X-Forwarded-*/Forwarded headers to upstream, opt-in and configurable, is tracked separately.
     @Override
     protected void addProxyHeaders(HttpServletRequest clientRequest, Request proxyRequest) {
         // no-op - don't send proxy headers (X-Forwarded-*, Forwarded) to upstream
