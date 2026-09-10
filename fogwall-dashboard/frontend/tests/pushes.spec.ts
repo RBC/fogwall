@@ -53,6 +53,26 @@ test.describe('push list', () => {
     await expect(page.getByText(/\d+ records?/)).toBeVisible()
     await expect(page.getByText('identity unresolved')).toHaveCount(0)
   })
+
+  test('advanced filters: apply a provider filter as a chip, then clear it', async ({ page }) => {
+    await page.goto('/dashboard/pushes')
+    // Panel is collapsed until the Filters button is clicked.
+    await expect(page.getByText('Advanced filters')).toHaveCount(0)
+    await page.getByRole('button', { name: 'Filters' }).click()
+    await expect(page.getByText('Advanced filters')).toBeVisible()
+
+    // Provider options come from /api/providers; picking one raises a removable chip.
+    await page.getByLabel('Provider').selectOption('github')
+    const chip = page.locator('span', {
+      has: page.getByRole('button', { name: 'Remove provider filter' }),
+    })
+    await expect(chip).toContainText('github')
+    // …and the Filters button shows the active-filter count.
+    await expect(page.getByRole('button', { name: /Filters\s*1/ })).toBeVisible()
+
+    await page.getByRole('button', { name: 'Clear all' }).click()
+    await expect(page.getByRole('button', { name: 'Remove provider filter' })).toHaveCount(0)
+  })
 })
 
 test.describe('pending pushes', () => {

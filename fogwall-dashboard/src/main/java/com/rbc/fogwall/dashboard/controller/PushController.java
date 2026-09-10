@@ -15,6 +15,8 @@ import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.ProviderRegistry;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -59,14 +61,19 @@ public class PushController {
             operationId = "listPushes",
             summary = "List push records",
             description =
-                    "Returns push records ordered by most recent first. Filter by status (PENDING, APPROVED, REJECTED, FORWARDED, BLOCKED, CANCELED), project slug, repo, or username. Paginate with limit/offset.")
+                    "Returns push records ordered by most recent first. Filter by status (PENDING, APPROVED, REJECTED, FORWARDED, BLOCKED, CANCELED), project slug, repo, provider, branch, author email, username, or a timestamp window (from/to, ISO-8601). Paginate with limit/offset.")
     @GetMapping
     public List<PushSummary> list(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String project,
             @RequestParam(required = false) String repo,
+            @RequestParam(required = false) String provider,
+            @RequestParam(required = false) String branch,
+            @RequestParam(required = false) String authorEmail,
             @RequestParam(required = false) String user,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to,
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") int offset,
             @RequestParam(defaultValue = "true") boolean newestFirst) {
@@ -84,14 +91,50 @@ public class PushController {
                         e);
             }
         }
-        if (project != null && !project.isBlank()) query.project(project);
-        if (repo != null && !repo.isBlank()) query.repoName(repo);
-        if (user != null && !user.isBlank()) query.user(user);
-        if (search != null && !search.isBlank()) query.search(search);
+        applyFilters(query, project, repo, provider, branch, authorEmail, user, search, from, to);
 
         return pushStore.findSummaries(query.build()).stream()
                 .map(this::enrichUrls)
                 .toList();
+    }
+
+    /**
+     * Applies the shared filter params to {@code query}. Blank values are ignored; {@code from}/{@code to} are ISO-8601
+     * instants bounding the push timestamp ({@code from} inclusive, {@code to} exclusive) and a malformed one is a 400.
+     */
+    private void applyFilters(
+            PushQuery.PushQueryBuilder query,
+            String project,
+            String repo,
+            String provider,
+            String branch,
+            String authorEmail,
+            String user,
+            String search,
+            String from,
+            String to) {
+        if (project != null && !project.isBlank()) query.project(project);
+        if (repo != null && !repo.isBlank()) query.repoName(repo);
+        if (provider != null && !provider.isBlank()) query.provider(provider);
+        if (branch != null && !branch.isBlank()) query.branch(branch);
+        if (authorEmail != null && !authorEmail.isBlank()) query.authorEmail(authorEmail);
+        if (user != null && !user.isBlank()) query.user(user);
+        if (search != null && !search.isBlank()) query.search(search);
+        Instant newerThan = parseInstant(from, "from");
+        if (newerThan != null) query.newerThan(newerThan);
+        Instant olderThan = parseInstant(to, "to");
+        if (olderThan != null) query.olderThan(olderThan);
+    }
+
+    /** Parses an ISO-8601 instant param, returning null when blank and a 400 when malformed. */
+    private static Instant parseInstant(String value, String param) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return Instant.parse(value);
+        } catch (DateTimeParseException e) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Invalid " + param + " timestamp (expected ISO-8601): " + value, e);
+        }
     }
 
     /**
@@ -143,19 +186,21 @@ public class PushController {
             operationId = "countPushes",
             summary = "Count push records by status",
             description =
-                    "Returns a map of status → count. Supports the same project/repo/user/search filters as listPushes but excludes the status filter.")
+                    "Returns a map of status → count. Supports the same project/repo/provider/branch/author-email/user/search/date-window filters as listPushes but excludes the status filter.")
     @GetMapping("/counts")
     public Map<String, Long> counts(
             @RequestParam(required = false) String project,
             @RequestParam(required = false) String repo,
+            @RequestParam(required = false) String provider,
+            @RequestParam(required = false) String branch,
+            @RequestParam(required = false) String authorEmail,
             @RequestParam(required = false) String user,
-            @RequestParam(required = false) String search) {
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to) {
 
         PushQuery.PushQueryBuilder query = PushQuery.builder();
-        if (project != null && !project.isBlank()) query.project(project);
-        if (repo != null && !repo.isBlank()) query.repoName(repo);
-        if (user != null && !user.isBlank()) query.user(user);
-        if (search != null && !search.isBlank()) query.search(search);
+        applyFilters(query, project, repo, provider, branch, authorEmail, user, search, from, to);
 
         return pushStore.countByStatus(query.build());
     }

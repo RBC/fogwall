@@ -20,6 +20,9 @@ public class PushQuery {
     /** Matches records with a timestamp strictly before this instant. */
     private Instant olderThan;
 
+    /** Matches records with a timestamp at or after this instant. */
+    private Instant newerThan;
+
     /** Free-text search: matches records where project OR repo_name contains this value (case-insensitive LIKE). */
     private String search;
 

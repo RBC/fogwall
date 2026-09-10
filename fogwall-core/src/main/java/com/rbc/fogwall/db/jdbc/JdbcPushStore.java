@@ -290,6 +290,10 @@ public class JdbcPushStore implements PushStore {
             sql.append(" AND timestamp < :olderThan");
             params.addValue("olderThan", Timestamp.from(query.getOlderThan()));
         }
+        if (query.getNewerThan() != null) {
+            sql.append(" AND timestamp >= :newerThan");
+            params.addValue("newerThan", Timestamp.from(query.getNewerThan()));
+        }
         if (query.getSearch() != null && !query.getSearch().isBlank()) {
             sql.append(
                     " AND (LOWER(provider) LIKE :search OR LOWER(project) LIKE :search OR LOWER(repo_name) LIKE :search)");

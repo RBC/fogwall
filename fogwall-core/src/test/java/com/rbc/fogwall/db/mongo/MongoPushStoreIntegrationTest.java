@@ -122,6 +122,34 @@ class MongoPushStoreIntegrationTest {
     }
 
     @Test
+    void find_byDateWindow_intersectsNewerThanAndOlderThan() {
+        String inside = UUID.randomUUID().toString();
+        store.save(recordAt(UUID.randomUUID().toString(), Instant.parse("2026-09-01T00:00:00Z")));
+        store.save(recordAt(inside, Instant.parse("2026-09-05T00:00:00Z")));
+        store.save(recordAt(UUID.randomUUID().toString(), Instant.parse("2026-09-10T00:00:00Z")));
+
+        var results = store.find(PushQuery.builder()
+                .newerThan(Instant.parse("2026-09-03T00:00:00Z"))
+                .olderThan(Instant.parse("2026-09-08T00:00:00Z"))
+                .build());
+
+        assertEquals(1, results.size());
+        assertEquals(inside, results.get(0).getId());
+    }
+
+    private PushRecord recordAt(String id, Instant timestamp) {
+        return PushRecord.builder()
+                .id(id)
+                .url("https://github.com/org/repo")
+                .project("org")
+                .repoName("repo")
+                .branch("refs/heads/main")
+                .status(PushStatus.RECEIVED)
+                .timestamp(timestamp)
+                .build();
+    }
+
+    @Test
     void find_withLimit_returnsAtMostLimitRecords() {
         for (int i = 0; i < 5; i++) {
             store.save(record(UUID.randomUUID().toString()));
