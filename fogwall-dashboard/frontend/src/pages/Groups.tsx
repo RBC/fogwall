@@ -475,6 +475,7 @@ export function Groups() {
                       {issuesEnabled && <option value="ISSUE">Issue only</option>}
                       {proposalsEnabled && <option value="PROPOSE">Propose</option>}
                       {proposalsEnabled && <option value="MERGE">Merge</option>}
+                      {proposalsEnabled && <option value="MAINTAIN">Maintain</option>}
                     </select>
                     <button
                       onClick={handleAddRule}

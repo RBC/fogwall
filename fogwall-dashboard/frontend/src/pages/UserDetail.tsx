@@ -725,6 +725,7 @@ function AddPermissionModal({
               {issuesEnabled && <option value="ISSUE">Issue only</option>}
               {proposalsEnabled && <option value="PROPOSE">Propose</option>}
               {proposalsEnabled && <option value="MERGE">Merge</option>}
+              {proposalsEnabled && <option value="MAINTAIN">Maintain</option>}
             </select>
           </div>
           <div className="flex justify-end gap-2">
@@ -839,6 +840,7 @@ function TestPermissionModal({ username, onClose }: { username: string; onClose:
               {issuesEnabled && <option value="ISSUE">Issue only</option>}
               {proposalsEnabled && <option value="PROPOSE">Propose</option>}
               {proposalsEnabled && <option value="MERGE">Merge</option>}
+              {proposalsEnabled && <option value="MAINTAIN">Maintain</option>}
             </select>
           </div>
         </div>

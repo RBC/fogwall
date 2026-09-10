@@ -24,15 +24,15 @@ groups:
 
 ## Group properties
 
-| Property            | Type   | Default | Description                                                                                                             |
-| ------------------- | ------ | ------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `name`              | string | —       | Group name, shown in the dashboard                                                                                      |
-| `description`       | string | `""`    | Free-text description                                                                                                   |
-| `members`           | list   | `[]`    | Usernames belonging to this group (must match a `users:` entry or a DB user)                                            |
-| `grants`            | list   | `[]`    | Permission grants applied to every member — same shape as `permissions:` entries, minus `username`                      |
-| `grants[].provider` | string | —       | Provider name as defined in `providers:` config                                                                         |
-| `grants[].match`    | object | —       | Repository match criteria — same semantics as [Permissions](permissions.md)                                             |
-| `grants[].grant`    | enum   | `PUSH`  | `PUSH`, `REVIEW`, `PUSH_AND_REVIEW`, `SELF_CERTIFY`, `ISSUE`, `PROPOSE`, or `MERGE` — see [Grant](permissions.md#grant) |
+| Property            | Type   | Default | Description                                                                                                                         |
+| ------------------- | ------ | ------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `name`              | string | —       | Group name, shown in the dashboard                                                                                                  |
+| `description`       | string | `""`    | Free-text description                                                                                                               |
+| `members`           | list   | `[]`    | Usernames belonging to this group (must match a `users:` entry or a DB user)                                                        |
+| `grants`            | list   | `[]`    | Permission grants applied to every member — same shape as `permissions:` entries, minus `username`                                  |
+| `grants[].provider` | string | —       | Provider name as defined in `providers:` config                                                                                     |
+| `grants[].match`    | object | —       | Repository match criteria — same semantics as [Permissions](permissions.md)                                                         |
+| `grants[].grant`    | enum   | `PUSH`  | `PUSH`, `REVIEW`, `PUSH_AND_REVIEW`, `SELF_CERTIFY`, `ISSUE`, `PROPOSE`, `MERGE`, or `MAINTAIN` — see [Grant](permissions.md#grant) |
 
 <!-- prettier-ignore-start -->
 > [!NOTE]
