@@ -43,6 +43,11 @@ public class BitbucketCredentialRewriteHook implements FogwallHook {
     }
 
     @Override
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.BITBUCKET_CREDENTIAL_REWRITE);
+    }
+
+    @Override
     public void onPreReceive(ReceivePack rp, Collection<ReceiveCommand> commands) {
         String pushEmail = pushContext.getPushUser();
         String pushToken = pushContext.getPushToken();

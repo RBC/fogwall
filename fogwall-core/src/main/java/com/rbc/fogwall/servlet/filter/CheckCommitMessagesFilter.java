@@ -6,6 +6,7 @@ import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.git.Commit;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.validation.CommitMessageCheck;
 import com.rbc.fogwall.validation.Violation;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,6 +14,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
@@ -41,8 +43,8 @@ public class CheckCommitMessagesFilter extends AbstractFogwallFilter {
     }
 
     @Override
-    public String getStepName() {
-        return "checkCommitMessages";
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.COMMIT_MESSAGE);
     }
 
     @Override

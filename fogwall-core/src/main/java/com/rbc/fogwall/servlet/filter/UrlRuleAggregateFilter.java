@@ -9,12 +9,14 @@ import com.rbc.fogwall.db.model.FetchRecord;
 import com.rbc.fogwall.git.GitClientUtils;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.servlet.FogwallServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Optional;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 
@@ -57,8 +59,8 @@ public class UrlRuleAggregateFilter extends ProviderAwareFogwallFilter<FogwallPr
     }
 
     @Override
-    public String getStepName() {
-        return "checkUrlRules";
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.URL_RULE);
     }
 
     @Override

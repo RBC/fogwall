@@ -9,6 +9,7 @@ import static com.rbc.fogwall.servlet.FogwallServlet.GIT_REQUEST_ATTR;
 import com.rbc.fogwall.git.GitClientUtils;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.git.RepoPath;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.servlet.PushTooLargeException;
@@ -20,6 +21,7 @@ import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Optional;
 import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.transport.PacketLineIn;
@@ -100,6 +102,11 @@ public class ParseGitRequestFilter extends ProviderAwareFogwallFilter<FogwallPro
 
         // Continue with the wrapped request (important!)
         chain.doFilter(wrapper, response);
+    }
+
+    @Override
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.PARSE_REQUEST);
     }
 
     @Override

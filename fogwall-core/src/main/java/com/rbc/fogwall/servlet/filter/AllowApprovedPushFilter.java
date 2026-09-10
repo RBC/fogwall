@@ -13,10 +13,12 @@ import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.PushStepKind;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -47,6 +49,11 @@ public class AllowApprovedPushFilter extends AbstractFogwallFilter {
         super(ORDER);
         this.pushStore = pushStore;
         this.serviceUrl = serviceUrl;
+    }
+
+    @Override
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.ALLOW_APPROVED_PUSH);
     }
 
     @Override

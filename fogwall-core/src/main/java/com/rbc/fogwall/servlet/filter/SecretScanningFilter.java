@@ -8,6 +8,7 @@ import com.rbc.fogwall.config.SecretScanConfig;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.GitleaksRunner;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.git.QuarantineObjectStore;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -66,8 +67,8 @@ public class SecretScanningFilter extends AbstractFogwallFilter {
     }
 
     @Override
-    public String getStepName() {
-        return "scanSecrets";
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.SECRET_SCAN);
     }
 
     @Override

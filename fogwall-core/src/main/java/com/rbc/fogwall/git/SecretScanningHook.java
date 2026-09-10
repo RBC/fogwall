@@ -33,7 +33,6 @@ import org.eclipse.jgit.transport.ReceivePack;
 public class SecretScanningHook implements FogwallHook {
 
     private static final int ORDER = 340;
-    private static final String STEP_NAME = "scanSecrets";
     private static final String REMEDIATION_HINT =
             "→ Rotate any exposed credentials and remove the secret from your commit history before pushing.";
 
@@ -97,7 +96,7 @@ public class SecretScanningHook implements FogwallHook {
                 allViolations.add(new Violation(msg, msg, sym(CROSS_MARK) + "  " + msg + "\n" + REMEDIATION_HINT));
             } else {
                 pushContext.addStep(PushStep.builder()
-                        .stepName(STEP_NAME)
+                        .stepName(getStepName())
                         .stepOrder(ORDER)
                         .status(StepStatus.SKIPPED)
                         .build());
@@ -107,7 +106,7 @@ public class SecretScanningHook implements FogwallHook {
 
         if (allViolations.isEmpty()) {
             pushContext.addStep(PushStep.builder()
-                    .stepName(STEP_NAME)
+                    .stepName(getStepName())
                     .stepOrder(ORDER)
                     .status(StepStatus.PASS)
                     .build());
@@ -115,7 +114,7 @@ public class SecretScanningHook implements FogwallHook {
         }
 
         for (Violation v : allViolations) {
-            validationContext.addIssue(STEP_NAME, v.reason(), v.formattedDetail());
+            validationContext.addIssue(getStepName(), v.reason(), v.formattedDetail());
         }
     }
 
@@ -127,5 +126,10 @@ public class SecretScanningHook implements FogwallHook {
     @Override
     public String getName() {
         return "SecretScanningHook";
+    }
+
+    @Override
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.SECRET_SCAN);
     }
 }

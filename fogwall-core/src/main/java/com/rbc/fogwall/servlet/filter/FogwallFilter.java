@@ -8,6 +8,7 @@ import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.git.GitClientUtils;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.PushStepKind;
 // import org.springframework.core.Ordered;
 import com.rbc.fogwall.servlet.FogwallServlet;
 import jakarta.servlet.*;
@@ -18,6 +19,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.HashMap;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
 import org.eclipse.jgit.http.server.GitSmartHttpTools;
@@ -219,8 +221,17 @@ public interface FogwallFilter extends Filter {
         }
     }
 
+    /**
+     * The canonical identity of the step this filter implements, or empty for infrastructure filters that are not
+     * audited pipeline steps. Filters that record a {@link PushStep} override this so their step name is the shared,
+     * mode-independent {@link PushStepKind#key()} rather than the class name.
+     */
+    default Optional<PushStepKind> stepKind() {
+        return Optional.empty();
+    }
+
     default String getStepName() {
-        return getClass().getSimpleName();
+        return stepKind().map(PushStepKind::key).orElseGet(() -> getClass().getSimpleName());
     }
 
     default void recordStep(HttpServletRequest request, StepStatus status, String reason, String content) {

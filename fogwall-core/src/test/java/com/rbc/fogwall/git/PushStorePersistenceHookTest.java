@@ -175,7 +175,7 @@ class PushStorePersistenceHookTest {
         String pushId = stampPushId();
 
         ValidationContext ctx = new ValidationContext();
-        ctx.addIssue("checkAuthorEmails", "Email blocked", "noreply@ address is not allowed");
+        ctx.addIssue("author-email", "Email blocked", "noreply@ address is not allowed");
         hook.validationResultHook(ctx).onPreReceive(rp, List.of(cmd));
 
         var record = pushStore.findById(pushId).orElseThrow();
@@ -190,7 +190,7 @@ class PushStorePersistenceHookTest {
         stampPushId();
 
         ValidationContext ctx = new ValidationContext();
-        ctx.addIssue("checkCommitMessages", "WIP commit", "message contains blocked term");
+        ctx.addIssue("commit-message", "WIP commit", "message contains blocked term");
         hook.validationResultHook(ctx).onPreReceive(rp, List.of(cmd));
 
         assertEquals(
@@ -206,7 +206,7 @@ class PushStorePersistenceHookTest {
         String pushId = stampPushId();
 
         ValidationContext ctx = new ValidationContext();
-        ctx.addIssue("checkAuthorEmails", "Email blocked", "some detail");
+        ctx.addIssue("author-email", "Email blocked", "some detail");
         hook.validationResultHook(ctx).onPreReceive(rp, List.of(cmd));
 
         String blocked = pushStore.findById(pushId).orElseThrow().getBlockedMessage();
@@ -223,8 +223,8 @@ class PushStorePersistenceHookTest {
         String pushId = stampPushId();
 
         ValidationContext ctx = new ValidationContext();
-        ctx.addIssue("checkAuthorEmails", "Email blocked", "noreply@ address");
-        ctx.addIssue("checkCommitMessages", "WIP commit", "message contains WIP");
+        ctx.addIssue("author-email", "Email blocked", "noreply@ address");
+        ctx.addIssue("commit-message", "WIP commit", "message contains WIP");
 
         hook.validationResultHook(ctx).onPreReceive(rp, List.of(cmd));
 

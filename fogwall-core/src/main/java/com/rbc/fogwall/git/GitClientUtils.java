@@ -236,43 +236,48 @@ public class GitClientUtils {
      */
     public static String buildValidationSummary(List<PushStep> steps) {
         // Pure data / infrastructure steps that don't represent a user-visible check
-        Set<String> skipSteps = Set.of("diff", "diff:default-branch", "forward", "inspection", "commitEnrichment");
+        Set<String> skipSteps = Set.of(
+                DiffGenerationHook.STEP_NAME_PUSH_DIFF,
+                DiffGenerationHook.STEP_NAME_BRANCH_DIFF,
+                "forward",
+                PushStepKind.COMMIT_INSPECTION.key(),
+                PushStepKind.PRIOR_PUSH_ENRICHMENT.key());
 
-        // Human-readable label for each step name (header line). Every step's internal stepName (used for
-        // ordering/lookup/tests) needs an entry here and in passResults below — a step missing from both silently
-        // falls back to printing its raw internal name to the git client instead of failing the build.
+        // Human-readable label for each step's PushStepKind (header line). A step's stepName is its kind's key; every
+        // kind shown to the client needs an entry here and in passResults below — a step missing from both silently
+        // falls back to printing its raw key to the git client instead of failing the build.
         Map<String, String> labels = new HashMap<>(Map.ofEntries(
-                Map.entry("checkUrlRules", "Checking URL allow rules"),
-                Map.entry("checkUserPermission", "Checking user permission"),
-                Map.entry("commitAttributionPolicy", "Checking commit attribution policy"),
-                Map.entry("checkEmptyBranch", "Checking branch"),
-                Map.entry("checkHiddenCommits", "Checking for hidden commits"),
-                Map.entry("checkAuthorEmails", "Checking author emails"),
-                Map.entry("checkTrailers", "Checking Co-Authored-By/Signed-off-by trailers"),
-                Map.entry("checkCommitMessages", "Checking commit messages"),
-                Map.entry("scanContentPatternsMessages", "Scanning commit messages for PII/identifiers"),
-                Map.entry("scanDiff", "Scanning diff content"),
-                Map.entry("checkSignatures", "Checking GPG signatures"),
-                Map.entry("scanSecrets", "Scanning for secrets"),
-                Map.entry("scanContentPatternsDiff", "Scanning diff for PII/identifiers"),
-                Map.entry("binaryBlob", "Scanning for binary blobs")));
+                Map.entry(PushStepKind.URL_RULE.key(), "Checking URL allow rules"),
+                Map.entry(PushStepKind.PUSH_PERMISSION.key(), "Checking user permission"),
+                Map.entry(PushStepKind.COMMIT_ATTRIBUTION.key(), "Checking commit attribution policy"),
+                Map.entry(PushStepKind.EMPTY_BRANCH.key(), "Checking branch"),
+                Map.entry(PushStepKind.HIDDEN_COMMITS.key(), "Checking for hidden commits"),
+                Map.entry(PushStepKind.AUTHOR_EMAIL.key(), "Checking author emails"),
+                Map.entry(PushStepKind.TRAILERS.key(), "Checking Co-Authored-By/Signed-off-by trailers"),
+                Map.entry(PushStepKind.COMMIT_MESSAGE.key(), "Checking commit messages"),
+                Map.entry(PushStepKind.CONTENT_PATTERN_MESSAGE.key(), "Scanning commit messages for PII/identifiers"),
+                Map.entry(PushStepKind.DIFF_SCAN.key(), "Scanning diff content"),
+                Map.entry(PushStepKind.GPG_SIGNATURE.key(), "Checking GPG signatures"),
+                Map.entry(PushStepKind.SECRET_SCAN.key(), "Scanning for secrets"),
+                Map.entry(PushStepKind.CONTENT_PATTERN_DIFF.key(), "Scanning diff for PII/identifiers"),
+                Map.entry(PushStepKind.BINARY_BLOB.key(), "Scanning for binary blobs")));
 
         // Short pass-result text shown on the second line
         Map<String, String> passResults = new HashMap<>(Map.ofEntries(
-                Map.entry("checkUrlRules", "repository allowed"),
-                Map.entry("checkUserPermission", "user authorized"),
-                Map.entry("commitAttributionPolicy", "commit emails OK"),
-                Map.entry("checkEmptyBranch", "branch OK"),
-                Map.entry("checkHiddenCommits", "no hidden commits"),
-                Map.entry("checkAuthorEmails", "emails OK"),
-                Map.entry("checkTrailers", "trailers OK"),
-                Map.entry("checkCommitMessages", "messages OK"),
-                Map.entry("scanContentPatternsMessages", "no PII/identifiers detected"),
-                Map.entry("scanDiff", "clean"),
-                Map.entry("checkSignatures", "signatures OK"),
-                Map.entry("scanSecrets", "no secrets detected"),
-                Map.entry("scanContentPatternsDiff", "no PII/identifiers detected"),
-                Map.entry("binaryBlob", "no blocked binary content")));
+                Map.entry(PushStepKind.URL_RULE.key(), "repository allowed"),
+                Map.entry(PushStepKind.PUSH_PERMISSION.key(), "user authorized"),
+                Map.entry(PushStepKind.COMMIT_ATTRIBUTION.key(), "commit emails OK"),
+                Map.entry(PushStepKind.EMPTY_BRANCH.key(), "branch OK"),
+                Map.entry(PushStepKind.HIDDEN_COMMITS.key(), "no hidden commits"),
+                Map.entry(PushStepKind.AUTHOR_EMAIL.key(), "emails OK"),
+                Map.entry(PushStepKind.TRAILERS.key(), "trailers OK"),
+                Map.entry(PushStepKind.COMMIT_MESSAGE.key(), "messages OK"),
+                Map.entry(PushStepKind.CONTENT_PATTERN_MESSAGE.key(), "no PII/identifiers detected"),
+                Map.entry(PushStepKind.DIFF_SCAN.key(), "clean"),
+                Map.entry(PushStepKind.GPG_SIGNATURE.key(), "signatures OK"),
+                Map.entry(PushStepKind.SECRET_SCAN.key(), "no secrets detected"),
+                Map.entry(PushStepKind.CONTENT_PATTERN_DIFF.key(), "no PII/identifiers detected"),
+                Map.entry(PushStepKind.BINARY_BLOB.key(), "no blocked binary content")));
 
         List<PushStep> relevant = steps.stream()
                 .filter(s -> s.getStepOrder() >= 100 && s.getStepOrder() <= 400)

@@ -9,6 +9,7 @@ import com.rbc.fogwall.validation.PatternBundleScanner;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.lib.ObjectId;
@@ -28,7 +29,6 @@ import org.eclipse.jgit.transport.ReceivePack;
 public class ContentPatternCommitMessageHook implements FogwallHook {
 
     private static final int ORDER = 265;
-    static final String STEP_NAME = "scanContentPatternsMessages";
 
     private final ContentPatternConfig config;
     private final PushContext pushContext;
@@ -37,7 +37,7 @@ public class ContentPatternCommitMessageHook implements FogwallHook {
     public void onPreReceive(ReceivePack rp, Collection<ReceiveCommand> commands) {
         if (!config.isEnabled() || !config.isScanCommitMessages()) {
             pushContext.addStep(PushStep.builder()
-                    .stepName(STEP_NAME)
+                    .stepName(getStepName())
                     .stepOrder(ORDER)
                     .status(StepStatus.SKIPPED)
                     .build());
@@ -66,7 +66,7 @@ public class ContentPatternCommitMessageHook implements FogwallHook {
             }
         }
 
-        ContentPatternStepRecorder.record(pushContext, STEP_NAME, ORDER, allFindings);
+        ContentPatternStepRecorder.record(pushContext, getStepName(), ORDER, allFindings);
     }
 
     @Override
@@ -77,6 +77,11 @@ public class ContentPatternCommitMessageHook implements FogwallHook {
     @Override
     public String getName() {
         return "ContentPatternCommitMessageHook";
+    }
+
+    @Override
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.CONTENT_PATTERN_MESSAGE);
     }
 
     private List<Commit> getCommits(Repository repo, ReceiveCommand cmd) throws Exception {

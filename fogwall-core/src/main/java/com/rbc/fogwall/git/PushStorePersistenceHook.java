@@ -45,11 +45,11 @@ public class PushStorePersistenceHook {
      * records sort validation steps in the same order as proxy mode.
      */
     private static final Map<String, Integer> HOOK_STEP_ORDER = Map.of(
-            "checkUrlRules", 100,
-            "checkAuthorEmails", 2100,
-            "checkCommitMessages", 2200,
-            "scanDiff", 2300,
-            "scanSecrets", 2500);
+            PushStepKind.URL_RULE.key(), 100,
+            PushStepKind.AUTHOR_EMAIL.key(), 2100,
+            PushStepKind.COMMIT_MESSAGE.key(), 2200,
+            PushStepKind.DIFF_SCAN.key(), 2300,
+            PushStepKind.SECRET_SCAN.key(), 2500);
 
     private final PushStore pushStore;
     private final FogwallProvider provider;

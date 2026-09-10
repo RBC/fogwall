@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,7 +34,6 @@ import org.eclipse.jgit.transport.ReceivePack;
 public class BinaryBlobDetectionHook implements FogwallHook {
 
     private static final int ORDER = 290;
-    private static final String STEP_NAME = "binaryBlob";
 
     private final BinaryBlobConfig binaryBlobConfig;
     private final ValidationContext validationContext;
@@ -43,7 +43,7 @@ public class BinaryBlobDetectionHook implements FogwallHook {
     public void onPreReceive(ReceivePack rp, Collection<ReceiveCommand> commands) {
         if (!binaryBlobConfig.isEnabled()) {
             pushContext.addStep(PushStep.builder()
-                    .stepName(STEP_NAME)
+                    .stepName(getStepName())
                     .stepOrder(ORDER)
                     .status(StepStatus.SKIPPED)
                     .build());
@@ -77,7 +77,7 @@ public class BinaryBlobDetectionHook implements FogwallHook {
                     logs.add("PASS: aggregate: " + cmd.getRefName());
                 } else {
                     for (Violation v : violations) {
-                        validationContext.addIssue(STEP_NAME, v.reason(), v.formattedDetail());
+                        validationContext.addIssue(getStepName(), v.reason(), v.formattedDetail());
                         logs.add("FAIL: aggregate: " + v.reason());
                     }
                     anyFailed.set(true);
@@ -86,7 +86,7 @@ public class BinaryBlobDetectionHook implements FogwallHook {
                 // Fail closed: the blob scan could not run for this ref — block rather than skip.
                 log.warn("Binary blob detection failed for {}", cmd.getRefName(), e);
                 validationContext.addError(
-                        STEP_NAME,
+                        getStepName(),
                         "binary blob scan could not complete for " + cmd.getRefName(),
                         "binary blob scan error: " + e.getMessage());
                 logs.add("ERROR: " + cmd.getRefName() + " - binary blob scan could not run");
@@ -104,7 +104,7 @@ public class BinaryBlobDetectionHook implements FogwallHook {
                         for (Violation v : violations) {
                             String reason = shortSha + ": " + v.reason();
                             String detail = "commit " + shortSha + ": " + v.formattedDetail();
-                            validationContext.addIssue(STEP_NAME, reason, detail);
+                            validationContext.addIssue(getStepName(), reason, detail);
                             logs.add("FAIL: " + reason);
                         }
                         anyFailed.set(true);
@@ -114,7 +114,7 @@ public class BinaryBlobDetectionHook implements FogwallHook {
                 // Fail closed: the per-commit blob scan could not run for this ref — block rather than skip.
                 log.warn("Could not enumerate commits for per-commit binary blob scan on {}", cmd.getRefName(), e);
                 validationContext.addError(
-                        STEP_NAME,
+                        getStepName(),
                         "binary blob scan could not complete for " + cmd.getRefName(),
                         "binary blob scan error: " + e.getMessage());
                 logs.add("ERROR: " + cmd.getRefName() + " - per-commit binary blob scan could not run");
@@ -124,7 +124,7 @@ public class BinaryBlobDetectionHook implements FogwallHook {
 
         if (!anyFailed.get()) {
             pushContext.addStep(PushStep.builder()
-                    .stepName(STEP_NAME)
+                    .stepName(getStepName())
                     .stepOrder(ORDER)
                     .status(StepStatus.PASS)
                     .logs(logs)
@@ -140,5 +140,10 @@ public class BinaryBlobDetectionHook implements FogwallHook {
     @Override
     public String getName() {
         return "BinaryBlobDetectionHook";
+    }
+
+    @Override
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.BINARY_BLOB);
     }
 }

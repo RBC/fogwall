@@ -10,6 +10,7 @@ import static com.rbc.fogwall.servlet.FogwallServlet.*;
 import com.rbc.fogwall.approval.ApprovalGateway;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.PushStepKind;
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletRequestWrapper;
@@ -19,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.Optional;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 
@@ -52,6 +54,11 @@ public class PushFinalizerFilter extends AbstractFogwallFilter {
         super(ORDER, Set.of(HttpOperation.PUSH));
         this.serviceUrl = serviceUrl;
         this.approvalGateway = approvalGateway;
+    }
+
+    @Override
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.PUSH_FINALIZER);
     }
 
     /**

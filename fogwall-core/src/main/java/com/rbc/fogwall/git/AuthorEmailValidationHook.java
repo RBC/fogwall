@@ -8,6 +8,7 @@ import com.rbc.fogwall.validation.Violation;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.lib.ObjectId;
@@ -45,18 +46,18 @@ public class AuthorEmailValidationHook implements FogwallHook {
                 CommitInspectionService.getAnnotatedTagTagger(repo, cmd.getNewId())
                         .ifPresent(tagger -> violations.addAll(check.checkTagger(tagger)));
                 for (Violation v : violations) {
-                    validationContext.addIssue("checkAuthorEmails", v.reason(), v.formattedDetail());
+                    validationContext.addIssue(getStepName(), v.reason(), v.formattedDetail());
                     allViolations.add(v);
                 }
             } catch (Exception e) {
                 // Fail closed: a validation control that cannot run must block the push, not silently pass.
                 log.error("Failed to validate author emails for {}", cmd.getRefName(), e);
                 validationContext.addError(
-                        "checkAuthorEmails",
+                        getStepName(),
                         "author email validation could not complete for " + cmd.getRefName(),
                         "Validation error: " + e.getMessage());
                 pushContext.addStep(PushStep.builder()
-                        .stepName("checkAuthorEmails")
+                        .stepName(getStepName())
                         .stepOrder(ORDER)
                         .status(StepStatus.FAIL)
                         .errorMessage("Validation error: " + e.getMessage())
@@ -67,7 +68,7 @@ public class AuthorEmailValidationHook implements FogwallHook {
 
         if (allViolations.isEmpty() && !hadError) {
             pushContext.addStep(PushStep.builder()
-                    .stepName("checkAuthorEmails")
+                    .stepName(getStepName())
                     .stepOrder(ORDER)
                     .status(StepStatus.PASS)
                     .build());
@@ -82,6 +83,11 @@ public class AuthorEmailValidationHook implements FogwallHook {
     @Override
     public String getName() {
         return "AuthorEmailValidationHook";
+    }
+
+    @Override
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.AUTHOR_EMAIL);
     }
 
     private List<Commit> getCommits(Repository repo, ReceiveCommand cmd) throws Exception {

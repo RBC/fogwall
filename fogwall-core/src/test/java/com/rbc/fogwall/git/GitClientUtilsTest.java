@@ -13,7 +13,7 @@ class GitClientUtilsTest {
     @Test
     void buildValidationSummary_checkTrailers_usesHumanReadableLabel() {
         PushStep step = PushStep.builder()
-                .stepName("checkTrailers")
+                .stepName("trailers")
                 .stepOrder(255)
                 .status(StepStatus.PASS)
                 .build();

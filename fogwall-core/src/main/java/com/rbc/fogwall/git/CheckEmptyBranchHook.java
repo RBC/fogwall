@@ -9,6 +9,7 @@ import com.rbc.fogwall.db.model.PushStep;
 import com.rbc.fogwall.db.model.StepStatus;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.lib.ObjectId;
@@ -33,7 +34,6 @@ import org.eclipse.jgit.transport.ReceivePack;
 public class CheckEmptyBranchHook implements FogwallHook {
 
     private static final int ORDER = 210;
-    private static final String STEP_NAME = "checkEmptyBranch";
 
     private final PushContext pushContext;
 
@@ -69,7 +69,7 @@ public class CheckEmptyBranchHook implements FogwallHook {
 
         if (pushContext != null) {
             pushContext.addStep(PushStep.builder()
-                    .stepName(STEP_NAME)
+                    .stepName(getStepName())
                     .stepOrder(ORDER)
                     .status(StepStatus.PASS)
                     .build());
@@ -84,6 +84,11 @@ public class CheckEmptyBranchHook implements FogwallHook {
     @Override
     public String getName() {
         return "CheckEmptyBranchHook";
+    }
+
+    @Override
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.EMPTY_BRANCH);
     }
 
     private List<Commit> getCommits(Repository repo, ReceiveCommand cmd) throws Exception {

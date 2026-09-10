@@ -257,13 +257,13 @@ class JdbcPushStoreIntegrationTest {
         PushRecord r = record("abc", "refs/heads/main", "repo");
         PushStep pass = PushStep.builder()
                 .pushId(r.getId())
-                .stepName("checkAuthorEmails")
+                .stepName("author-email")
                 .stepOrder(2100)
                 .status(StepStatus.PASS)
                 .build();
         PushStep fail = PushStep.builder()
                 .pushId(r.getId())
-                .stepName("checkCommitMessages")
+                .stepName("commit-message")
                 .stepOrder(2200)
                 .status(StepStatus.FAIL)
                 .errorMessage("contains WIP")
@@ -276,13 +276,13 @@ class JdbcPushStoreIntegrationTest {
 
         assertEquals(2, loaded.getSteps().size());
         PushStep loadedPass = loaded.getSteps().stream()
-                .filter(s -> s.getStepName().equals("checkAuthorEmails"))
+                .filter(s -> s.getStepName().equals("author-email"))
                 .findFirst()
                 .orElseThrow();
         assertEquals(StepStatus.PASS, loadedPass.getStatus());
 
         PushStep loadedFail = loaded.getSteps().stream()
-                .filter(s -> s.getStepName().equals("checkCommitMessages"))
+                .filter(s -> s.getStepName().equals("commit-message"))
                 .findFirst()
                 .orElseThrow();
         assertEquals(StepStatus.FAIL, loadedFail.getStatus());

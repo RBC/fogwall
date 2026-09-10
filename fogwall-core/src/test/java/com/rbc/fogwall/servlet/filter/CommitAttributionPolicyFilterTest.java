@@ -238,7 +238,7 @@ class CommitAttributionPolicyFilterTest {
         assertFalse(resp.committed.get());
         assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
         assertFalse(details.getSteps().isEmpty());
-        assertEquals("commitAttributionPolicy", details.getSteps().get(0).getStepName());
+        assertEquals("commit-attribution", details.getSteps().get(0).getStepName());
     }
 
     // ---- warn mode + email mismatch → passes without recording an issue ----
@@ -262,7 +262,7 @@ class CommitAttributionPolicyFilterTest {
         // WARN mode records a WARN step with violation details in content (for the amber dashboard badge)
         assertFalse(details.getSteps().isEmpty(), "WARN mode should record a step");
         var step = details.getSteps().get(0);
-        assertEquals("commitAttributionPolicy", step.getStepName());
+        assertEquals("commit-attribution", step.getStepName());
         assertEquals(StepStatus.WARN, step.getStatus());
         assertNotNull(step.getContent(), "WARN mode step should carry violation details in content");
     }

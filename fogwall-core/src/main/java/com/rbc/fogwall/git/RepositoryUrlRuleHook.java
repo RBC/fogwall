@@ -98,7 +98,7 @@ public class RepositoryUrlRuleHook implements FogwallHook {
         String detail =
                 GitClientUtils.format(sym(NO_ENTRY) + "  " + title, sym(CROSS_MARK) + "  " + message, RED, null);
         if (validationContext != null) {
-            validationContext.addIssue("checkUrlRules", reason, detail);
+            validationContext.addIssue(getStepName(), reason, detail);
             // PushStorePersistenceHook creates the FAIL step from the issue; don't also add it to pushContext
         } else {
             rp.sendMessage(detail);
@@ -108,7 +108,7 @@ public class RepositoryUrlRuleHook implements FogwallHook {
                 }
             }
             pushContext.addStep(PushStep.builder()
-                    .stepName("checkUrlRules")
+                    .stepName(getStepName())
                     .stepOrder(ORDER)
                     .status(StepStatus.FAIL)
                     .content(reason)
@@ -118,7 +118,7 @@ public class RepositoryUrlRuleHook implements FogwallHook {
 
     private void recordPass() {
         pushContext.addStep(PushStep.builder()
-                .stepName("checkUrlRules")
+                .stepName(getStepName())
                 .stepOrder(ORDER)
                 .status(StepStatus.PASS)
                 .build());
@@ -132,5 +132,10 @@ public class RepositoryUrlRuleHook implements FogwallHook {
     @Override
     public String getName() {
         return "RepositoryUrlRuleHook";
+    }
+
+    @Override
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.URL_RULE);
     }
 }
