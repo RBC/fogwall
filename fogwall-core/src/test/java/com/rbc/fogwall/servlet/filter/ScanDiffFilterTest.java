@@ -198,7 +198,7 @@ class ScanDiffFilterTest {
         assertFalse(resp.committed.get(), "filter must not commit response (ValidationSummaryFilter does that)");
         assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
         boolean hasScanStep = details.getSteps().stream()
-                .anyMatch(s -> "scanDiff".equals(s.getStepName()) && s.getStatus() == StepStatus.FAIL);
+                .anyMatch(s -> "diff-scan".equals(s.getStepName()) && s.getStatus() == StepStatus.FAIL);
         assertTrue(hasScanStep, "scan step should record FAIL on violation");
     }
 
@@ -251,7 +251,7 @@ class ScanDiffFilterTest {
         filterWithLiteral("supersecret").doHttpFilter(mockRequest(details), resp.mock);
 
         PushStep scanStep = details.getSteps().stream()
-                .filter(s -> "scanDiff".equals(s.getStepName()) && s.getStatus() == StepStatus.FAIL)
+                .filter(s -> "diff-scan".equals(s.getStepName()) && s.getStatus() == StepStatus.FAIL)
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("scanDiff FAIL step not found"));
 

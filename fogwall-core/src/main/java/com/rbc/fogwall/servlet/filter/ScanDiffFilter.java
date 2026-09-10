@@ -9,12 +9,14 @@ import com.rbc.fogwall.git.CommitInspectionService;
 import com.rbc.fogwall.git.DiffGenerationHook;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.validation.BlockedContentDiffCheck;
 import com.rbc.fogwall.validation.Violation;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
@@ -55,8 +57,8 @@ public class ScanDiffFilter extends AbstractFogwallFilter {
     }
 
     @Override
-    public String getStepName() {
-        return "scanDiff";
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.DIFF_SCAN);
     }
 
     @Override

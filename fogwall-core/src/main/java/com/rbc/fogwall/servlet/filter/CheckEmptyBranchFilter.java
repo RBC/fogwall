@@ -8,9 +8,11 @@ import static com.rbc.fogwall.servlet.FogwallServlet.GIT_REQUEST_ATTR;
 import com.rbc.fogwall.git.GitClientUtils;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.PushStepKind;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Optional;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 
@@ -39,8 +41,8 @@ public class CheckEmptyBranchFilter extends AbstractFogwallFilter {
     }
 
     @Override
-    public String getStepName() {
-        return "checkEmptyBranch";
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.EMPTY_BRANCH);
     }
 
     @Override

@@ -123,7 +123,7 @@ public class CheckUserPushPermissionHook implements FogwallHook {
         if (identityResolver == null) {
             log.debug("No identity resolver configured (open mode), skipping permission check");
             pushContext.addStep(PushStep.builder()
-                    .stepName("checkUserPermission")
+                    .stepName(getStepName())
                     .stepOrder(ORDER)
                     .status(StepStatus.PASS)
                     .build());
@@ -206,7 +206,7 @@ public class CheckUserPushPermissionHook implements FogwallHook {
                 }
                 pushContext.setScmUsername(importedLogin.get());
                 pushContext.addStep(PushStep.builder()
-                        .stepName("checkUserPermission")
+                        .stepName(getStepName())
                         .stepOrder(ORDER)
                         .status(StepStatus.PASS)
                         .build());
@@ -280,7 +280,7 @@ public class CheckUserPushPermissionHook implements FogwallHook {
             Optional.ofNullable(tokenScmLogin).or(() -> identityOnFile).ifPresent(pushContext::setScmUsername);
         }
         pushContext.addStep(PushStep.builder()
-                .stepName("checkUserPermission")
+                .stepName(getStepName())
                 .stepOrder(ORDER)
                 .status(StepStatus.PASS)
                 .build());
@@ -347,5 +347,10 @@ public class CheckUserPushPermissionHook implements FogwallHook {
     @Override
     public String getName() {
         return "CheckUserPushPermissionHook";
+    }
+
+    @Override
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.PUSH_PERMISSION);
     }
 }

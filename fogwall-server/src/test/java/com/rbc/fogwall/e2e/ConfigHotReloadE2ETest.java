@@ -227,7 +227,7 @@ class ConfigHotReloadE2ETest {
                     "[secretScanningReload] gitleaks unavailable — scanner ran fail-open, skipping block assertion");
         } else {
             assertTrue(
-                    blocked.output().contains("scanSecrets")
+                    blocked.output().contains("secret-scan")
                             || blocked.output().contains("secret")
                             || blocked.output().contains("blocked"),
                     "blocked output should mention secret scanning; got: " + blocked.output());

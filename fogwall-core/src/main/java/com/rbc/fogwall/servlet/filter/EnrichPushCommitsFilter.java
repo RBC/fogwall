@@ -11,6 +11,7 @@ import com.rbc.fogwall.git.CommitInspectionService;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
 import com.rbc.fogwall.git.LocalRepositoryCache;
+import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.git.QuarantineObjectStore;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.servlet.RequestBodyWrapper;
@@ -25,6 +26,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.errors.MissingObjectException;
@@ -61,6 +63,11 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
 
     public EnrichPushCommitsFilter(FogwallProvider provider, LocalRepositoryCache repositoryCache) {
         this(provider, repositoryCache, 0);
+    }
+
+    @Override
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.ENRICH_COMMITS);
     }
 
     /** @param maxObjectSizeBytes largest decompressed size of any single pushed object; 0 = unlimited */

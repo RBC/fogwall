@@ -13,6 +13,7 @@ import com.rbc.fogwall.validation.Violation;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.lib.ObjectId;
@@ -64,7 +65,7 @@ public class GpgSignatureHook implements FogwallHook {
 
         if (allViolations.isEmpty() && !hadError) {
             pushContext.addStep(PushStep.builder()
-                    .stepName("checkSignatures")
+                    .stepName(getStepName())
                     .stepOrder(ORDER)
                     .status(StepStatus.PASS)
                     .build());
@@ -79,6 +80,11 @@ public class GpgSignatureHook implements FogwallHook {
     @Override
     public String getName() {
         return "GpgSignatureHook";
+    }
+
+    @Override
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.GPG_SIGNATURE);
     }
 
     private List<Commit> getCommits(Repository repo, ReceiveCommand cmd) throws Exception {

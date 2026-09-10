@@ -8,6 +8,7 @@ import com.rbc.fogwall.validation.ContentPatternFinding;
 import com.rbc.fogwall.validation.PatternBundleScanner;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.eclipse.jgit.transport.ReceiveCommand;
 import org.eclipse.jgit.transport.ReceivePack;
@@ -24,7 +25,6 @@ import org.eclipse.jgit.transport.ReceivePack;
 public class ContentPatternDiffHook implements FogwallHook {
 
     private static final int ORDER = 345;
-    static final String STEP_NAME = "scanContentPatternsDiff";
 
     private final ContentPatternConfig config;
     private final PushContext pushContext;
@@ -33,7 +33,7 @@ public class ContentPatternDiffHook implements FogwallHook {
     public void onPreReceive(ReceivePack rp, Collection<ReceiveCommand> commands) {
         if (!config.isEnabled() || !config.isScanDiff()) {
             pushContext.addStep(PushStep.builder()
-                    .stepName(STEP_NAME)
+                    .stepName(getStepName())
                     .stepOrder(ORDER)
                     .status(StepStatus.SKIPPED)
                     .build());
@@ -45,7 +45,7 @@ public class ContentPatternDiffHook implements FogwallHook {
                 .orElse(null);
         if (aggregateDiff == null || aggregateDiff.isBlank()) {
             pushContext.addStep(PushStep.builder()
-                    .stepName(STEP_NAME)
+                    .stepName(getStepName())
                     .stepOrder(ORDER)
                     .status(StepStatus.PASS)
                     .build());
@@ -54,7 +54,7 @@ public class ContentPatternDiffHook implements FogwallHook {
 
         var scanner = new PatternBundleScanner(ContentPatternBundleResolver.resolve(config));
         List<ContentPatternFinding> findings = scanner.scan(aggregateDiff);
-        ContentPatternStepRecorder.record(pushContext, STEP_NAME, ORDER, findings);
+        ContentPatternStepRecorder.record(pushContext, getStepName(), ORDER, findings);
     }
 
     @Override
@@ -65,5 +65,10 @@ public class ContentPatternDiffHook implements FogwallHook {
     @Override
     public String getName() {
         return "ContentPatternDiffHook";
+    }
+
+    @Override
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.CONTENT_PATTERN_DIFF);
     }
 }

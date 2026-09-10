@@ -194,7 +194,7 @@ class CommitAttributionPolicyHookTest {
 
         assertTrue(vc.hasIssues());
         assertEquals(
-                CommitAttributionPolicyHook.STEP_NAME, vc.getIssues().get(0).hookName());
+                PushStepKind.COMMIT_ATTRIBUTION.key(), vc.getIssues().get(0).hookName());
         assertTrue(vc.getIssues().get(0).summary().contains("alice"));
     }
 
@@ -335,7 +335,7 @@ class CommitAttributionPolicyHookTest {
 
         assertFalse(vc.hasIssues());
         var step = pc.getSteps().stream()
-                .filter(s -> "commitAttributionPolicy".equals(s.getStepName()))
+                .filter(s -> "commit-attribution".equals(s.getStepName()))
                 .findFirst();
         assertTrue(step.isPresent(), "WARN mode should record a commitAttributionPolicy step");
         assertNotNull(step.get().getContent(), "Step content should contain violation details");
@@ -380,7 +380,7 @@ class CommitAttributionPolicyHookTest {
 
         assertFalse(vc.hasIssues());
         var step = pc.getSteps().stream()
-                .filter(s -> "commitAttributionPolicy".equals(s.getStepName()))
+                .filter(s -> "commit-attribution".equals(s.getStepName()))
                 .findFirst();
         assertTrue(step.isPresent(), "SSH push should run the commit attribution policy, not skip it");
         assertEquals(StepStatus.WARN, step.get().getStatus());

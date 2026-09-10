@@ -6,6 +6,7 @@ import com.rbc.fogwall.config.ContentPatternConfig;
 import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.validation.ContentPatternBundleResolver;
 import com.rbc.fogwall.validation.ContentPatternFinding;
 import com.rbc.fogwall.validation.PatternBundleScanner;
@@ -14,6 +15,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
@@ -39,8 +41,8 @@ public class ContentPatternMessageFilter extends AbstractFogwallFilter {
     }
 
     @Override
-    public String getStepName() {
-        return "scanContentPatternsMessages";
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.CONTENT_PATTERN_MESSAGE);
     }
 
     @Override

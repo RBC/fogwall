@@ -71,7 +71,7 @@ class ContentPatternDiffHookTest {
         runHooks(ContentPatternConfig.defaultConfig(), pushCtx, c1.getId(), c2.getId());
 
         var step = pushCtx.getSteps().stream()
-                .filter(s -> s.getStepName().equals("scanContentPatternsDiff"))
+                .filter(s -> s.getStepName().equals("content-pattern-diff"))
                 .findFirst()
                 .orElseThrow();
         assertEquals(StepStatus.SKIPPED, step.getStatus());
@@ -86,7 +86,7 @@ class ContentPatternDiffHookTest {
         runHooks(enabledConfig(), pushCtx, c1.getId(), c2.getId());
 
         var step = pushCtx.getSteps().stream()
-                .filter(s -> s.getStepName().equals("scanContentPatternsDiff"))
+                .filter(s -> s.getStepName().equals("content-pattern-diff"))
                 .findFirst()
                 .orElseThrow();
         assertEquals(StepStatus.WARN, step.getStatus());
@@ -110,7 +110,7 @@ class ContentPatternDiffHookTest {
         runHooks(config, pushCtx, c1.getId(), c2.getId());
 
         var step = pushCtx.getSteps().stream()
-                .filter(s -> s.getStepName().equals("scanContentPatternsDiff"))
+                .filter(s -> s.getStepName().equals("content-pattern-diff"))
                 .findFirst()
                 .orElseThrow();
         assertEquals(StepStatus.SKIPPED, step.getStatus());
@@ -125,7 +125,7 @@ class ContentPatternDiffHookTest {
         runHooks(enabledConfig(), pushCtx, c1.getId(), c2.getId());
 
         var step = pushCtx.getSteps().stream()
-                .filter(s -> s.getStepName().equals("scanContentPatternsDiff"))
+                .filter(s -> s.getStepName().equals("content-pattern-diff"))
                 .findFirst()
                 .orElseThrow();
         assertEquals(StepStatus.PASS, step.getStatus());

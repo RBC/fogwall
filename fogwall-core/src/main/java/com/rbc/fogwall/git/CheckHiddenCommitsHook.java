@@ -10,6 +10,7 @@ import com.rbc.fogwall.db.model.StepStatus;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,7 +44,6 @@ import org.eclipse.jgit.transport.ReceivePack;
 public class CheckHiddenCommitsHook implements FogwallHook {
 
     private static final int ORDER = 220;
-    private static final String STEP_NAME = "checkHiddenCommits";
 
     private final PushContext pushContext;
 
@@ -61,7 +61,7 @@ public class CheckHiddenCommitsHook implements FogwallHook {
                 log.debug("checkHiddenCommits: all {} new commit(s) are within the introduced range", allNew.size());
                 if (pushContext != null) {
                     pushContext.addStep(PushStep.builder()
-                            .stepName(STEP_NAME)
+                            .stepName(getStepName())
                             .stepOrder(ORDER)
                             .status(StepStatus.PASS)
                             .build());
@@ -105,6 +105,11 @@ public class CheckHiddenCommitsHook implements FogwallHook {
     @Override
     public String getName() {
         return "CheckHiddenCommitsHook";
+    }
+
+    @Override
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.HIDDEN_COMMITS);
     }
 
     private Set<String> collectIntroducedCommits(Repository repo, Collection<ReceiveCommand> commands)

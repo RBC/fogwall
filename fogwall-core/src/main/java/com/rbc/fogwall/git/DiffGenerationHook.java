@@ -4,6 +4,7 @@ import com.rbc.fogwall.db.model.PushStep;
 import com.rbc.fogwall.db.model.StepStatus;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.lib.ObjectId;
@@ -165,6 +166,11 @@ public class DiffGenerationHook implements FogwallHook {
     @Override
     public String getName() {
         return "DiffGenerationHook";
+    }
+
+    @Override
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.DIFF_GENERATION);
     }
 
     /**

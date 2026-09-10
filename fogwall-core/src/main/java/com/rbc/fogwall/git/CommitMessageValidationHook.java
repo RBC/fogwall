@@ -8,6 +8,7 @@ import com.rbc.fogwall.validation.Violation;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.lib.ObjectId;
@@ -47,18 +48,18 @@ public class CommitMessageValidationHook implements FogwallHook {
                                 msg -> toCheck.add(Commit.builder().message(msg).build()));
                 List<Violation> violations = check.check(toCheck);
                 for (Violation v : violations) {
-                    validationContext.addIssue("checkCommitMessages", v.reason(), v.formattedDetail());
+                    validationContext.addIssue(getStepName(), v.reason(), v.formattedDetail());
                     allViolations.add(v);
                 }
             } catch (Exception e) {
                 // Fail closed: a validation control that cannot run must block the push, not silently pass.
                 log.error("Failed to validate commit messages for {}", cmd.getRefName(), e);
                 validationContext.addError(
-                        "checkCommitMessages",
+                        getStepName(),
                         "commit message validation could not complete for " + cmd.getRefName(),
                         "Validation error: " + e.getMessage());
                 pushContext.addStep(PushStep.builder()
-                        .stepName("checkCommitMessages")
+                        .stepName(getStepName())
                         .stepOrder(ORDER)
                         .status(StepStatus.FAIL)
                         .errorMessage("Validation error: " + e.getMessage())
@@ -69,7 +70,7 @@ public class CommitMessageValidationHook implements FogwallHook {
 
         if (allViolations.isEmpty() && !hadError) {
             pushContext.addStep(PushStep.builder()
-                    .stepName("checkCommitMessages")
+                    .stepName(getStepName())
                     .stepOrder(ORDER)
                     .status(StepStatus.PASS)
                     .build());
@@ -84,6 +85,11 @@ public class CommitMessageValidationHook implements FogwallHook {
     @Override
     public String getName() {
         return "CommitMessageValidationHook";
+    }
+
+    @Override
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.COMMIT_MESSAGE);
     }
 
     private List<Commit> getCommits(Repository repo, ReceiveCommand cmd) throws Exception {

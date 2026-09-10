@@ -4,10 +4,12 @@ import static com.rbc.fogwall.servlet.FogwallServlet.GIT_REQUEST_ATTR;
 
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.PushStepKind;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Optional;
 import java.util.Set;
 
 // A filter that sets a git request to be ALLOWED for fetch requests so long as the request
@@ -19,6 +21,11 @@ public class FetchFinalizerFilter extends AbstractFogwallFilter {
 
     public FetchFinalizerFilter() {
         super(ORDER, Set.of(HttpOperation.FETCH));
+    }
+
+    @Override
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.FETCH_FINALIZER);
     }
 
     @Override

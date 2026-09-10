@@ -5,12 +5,14 @@ import static com.rbc.fogwall.servlet.FogwallServlet.GIT_REQUEST_ATTR;
 import com.rbc.fogwall.config.GpgConfig;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.validation.GpgSignatureCheck;
 import com.rbc.fogwall.validation.Violation;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 
@@ -32,8 +34,8 @@ public class GpgSignatureFilter extends AbstractFogwallFilter {
     }
 
     @Override
-    public String getStepName() {
-        return "checkSignatures";
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.GPG_SIGNATURE);
     }
 
     @Override

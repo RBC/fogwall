@@ -5,6 +5,7 @@ import com.rbc.fogwall.db.model.StepStatus;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.Repository;
@@ -55,7 +56,7 @@ public class ProxyPreReceiveHook implements FogwallHook {
         }
 
         pushContext.addStep(PushStep.builder()
-                .stepName("inspection")
+                .stepName(getStepName())
                 .stepOrder(ORDER)
                 .status(StepStatus.PASS)
                 .logs(logs)
@@ -70,6 +71,11 @@ public class ProxyPreReceiveHook implements FogwallHook {
     @Override
     public String getName() {
         return "ProxyPreReceiveHook";
+    }
+
+    @Override
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.COMMIT_INSPECTION);
     }
 
     private void inspectCommits(Repository repo, ReceiveCommand cmd, List<String> logs) throws Exception {

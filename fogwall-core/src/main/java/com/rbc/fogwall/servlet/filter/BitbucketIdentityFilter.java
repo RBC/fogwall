@@ -4,6 +4,7 @@ import static com.rbc.fogwall.servlet.FogwallServlet.GIT_REQUEST_ATTR;
 
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.provider.BitbucketProvider;
 import com.rbc.fogwall.provider.ScmUserInfo;
 import jakarta.servlet.http.HttpServletRequest;
@@ -37,6 +38,11 @@ public class BitbucketIdentityFilter extends ProviderAwareFogwallFilter<Bitbucke
 
     public BitbucketIdentityFilter(BitbucketProvider provider) {
         super(ORDER, Set.of(HttpOperation.PUSH), provider);
+    }
+
+    @Override
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.BITBUCKET_CREDENTIAL_REWRITE);
     }
 
     @Override

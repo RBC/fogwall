@@ -61,7 +61,7 @@ class RepositoryUrlRuleHookTest {
         hook.onPreReceive(new ReceivePack(repo), List.of(cmd));
 
         assertFalse(pushContext.getSteps().isEmpty());
-        assertEquals("checkUrlRules", pushContext.getSteps().get(0).getStepName());
+        assertEquals("url-rule", pushContext.getSteps().get(0).getStepName());
         assertEquals(StepStatus.FAIL, pushContext.getSteps().get(0).getStatus());
     }
 

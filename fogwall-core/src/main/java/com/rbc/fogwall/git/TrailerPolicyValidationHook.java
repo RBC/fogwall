@@ -8,6 +8,7 @@ import com.rbc.fogwall.validation.Violation;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.lib.ObjectId;
@@ -25,7 +26,6 @@ import org.eclipse.jgit.transport.ReceivePack;
 public class TrailerPolicyValidationHook implements FogwallHook {
 
     private static final int ORDER = 255;
-    private static final String STEP_NAME = "checkTrailers";
 
     private final CommitConfig commitConfig;
     private final ValidationContext validationContext;
@@ -42,18 +42,18 @@ public class TrailerPolicyValidationHook implements FogwallHook {
             if (cmd.getType() == ReceiveCommand.Type.DELETE) continue;
             try {
                 for (Violation v : check.check(getCommits(repo, cmd))) {
-                    validationContext.addIssue(STEP_NAME, v.reason(), v.formattedDetail());
+                    validationContext.addIssue(getStepName(), v.reason(), v.formattedDetail());
                     allViolations.add(v);
                 }
             } catch (Exception e) {
                 // Fail closed: a validation control that cannot run must block the push, not silently pass.
                 log.error("Failed to validate commit trailers for {}", cmd.getRefName(), e);
                 validationContext.addError(
-                        STEP_NAME,
+                        getStepName(),
                         "commit trailer policy could not complete for " + cmd.getRefName(),
                         "Validation error: " + e.getMessage());
                 pushContext.addStep(PushStep.builder()
-                        .stepName(STEP_NAME)
+                        .stepName(getStepName())
                         .stepOrder(ORDER)
                         .status(StepStatus.FAIL)
                         .errorMessage("Validation error: " + e.getMessage())
@@ -64,7 +64,7 @@ public class TrailerPolicyValidationHook implements FogwallHook {
 
         if (allViolations.isEmpty() && !hadError) {
             pushContext.addStep(PushStep.builder()
-                    .stepName(STEP_NAME)
+                    .stepName(getStepName())
                     .stepOrder(ORDER)
                     .status(StepStatus.PASS)
                     .build());
@@ -79,6 +79,11 @@ public class TrailerPolicyValidationHook implements FogwallHook {
     @Override
     public String getName() {
         return "TrailerPolicyValidationHook";
+    }
+
+    @Override
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.TRAILERS);
     }
 
     private List<Commit> getCommits(Repository repo, ReceiveCommand cmd) throws Exception {

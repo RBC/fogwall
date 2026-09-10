@@ -10,10 +10,12 @@ import com.rbc.fogwall.git.Commit;
 import com.rbc.fogwall.git.GitClientUtils;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.PushStepKind;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
@@ -53,8 +55,8 @@ public class CheckHiddenCommitsFilter extends AbstractFogwallFilter {
     }
 
     @Override
-    public String getStepName() {
-        return "checkHiddenCommits";
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.HIDDEN_COMMITS);
     }
 
     @Override

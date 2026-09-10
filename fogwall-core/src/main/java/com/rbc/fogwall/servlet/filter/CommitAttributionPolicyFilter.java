@@ -41,7 +41,6 @@ import lombok.extern.slf4j.Slf4j;
 public class CommitAttributionPolicyFilter extends AbstractFogwallFilter {
 
     private static final int ORDER = 160;
-    private static final String STEP_NAME = "commitAttributionPolicy";
 
     private final PushIdentityResolver identityResolver;
     private final Supplier<CommitConfig.CommitAttributionPolicyConfig> configSupplier;
@@ -71,8 +70,8 @@ public class CommitAttributionPolicyFilter extends AbstractFogwallFilter {
     }
 
     @Override
-    public String getStepName() {
-        return STEP_NAME;
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.COMMIT_ATTRIBUTION);
     }
 
     @Override

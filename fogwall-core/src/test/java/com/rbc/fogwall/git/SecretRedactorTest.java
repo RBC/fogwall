@@ -83,7 +83,7 @@ class SecretRedactorTest {
         PushRecord record = PushRecord.builder().build();
         List<PushStep> steps = new ArrayList<>();
         steps.add(PushStep.builder()
-                .stepName("scanSecrets")
+                .stepName("secret-scan")
                 .errorMessage("leaked value: sk_test_abc123 in config.txt")
                 .build());
         record.setSteps(steps);

@@ -1,6 +1,8 @@
 package com.rbc.fogwall.servlet.filter;
 
 import com.rbc.fogwall.git.GitRequestDetails;
+import com.rbc.fogwall.git.PushStepKind;
+import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 
 /** A default implementation of {@link AuditFilter} that logs audit messages using SLF4J logger. */
@@ -10,6 +12,11 @@ public class AuditLogFilter extends AbstractFogwallFilter implements AuditFilter
     /** Apply audit logging to all operations by default and after all other filters. */
     public AuditLogFilter() {
         super(Integer.MAX_VALUE);
+    }
+
+    @Override
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.AUDIT_LOG);
     }
 
     @Override

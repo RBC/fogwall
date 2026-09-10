@@ -10,6 +10,7 @@ import com.rbc.fogwall.config.ScmOAuthConfig;
 import com.rbc.fogwall.git.GitClientUtils;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.service.PushIdentityResolver;
 import com.rbc.fogwall.service.ResolvedScmIdentity;
@@ -56,8 +57,8 @@ public class CheckUserPushPermissionFilter extends AbstractFogwallFilter {
     }
 
     @Override
-    public String getStepName() {
-        return "checkUserPermission";
+    public Optional<PushStepKind> stepKind() {
+        return Optional.of(PushStepKind.PUSH_PERMISSION);
     }
 
     @Override
