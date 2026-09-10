@@ -37,6 +37,14 @@ class FogwallConfigLoaderTest {
         assertEquals(10, config.getServer().getHeartbeatIntervalSeconds());
     }
 
+    @Test
+    void defaultTrustForwardedHeaders_isTrue() throws GestaltException {
+        // Backcompat: existing ingress deployments depend on forwarded-header resolution for login
+        // redirects and cookie security, so the default must stay on.
+        FogwallConfig config = FogwallConfigLoader.load();
+        assertTrue(config.getServer().isTrustForwardedHeaders());
+    }
+
     // --- database defaults ---
 
     @Test
@@ -211,6 +219,16 @@ class FogwallConfigLoaderTest {
         // Base secret-scan default must survive
         assertTrue(
                 config.getSecretScan().isEnabled(), "base secret-scan.enabled: true must survive a partial override");
+    }
+
+    @Test
+    void loadWithOverride_trustForwardedHeaders_canBeDisabled() throws GestaltException, IOException {
+        Path override = writeYaml("""
+                server:
+                  trust-forwarded-headers: false
+                """);
+        var config = FogwallConfigLoader.loadWithOverride(override);
+        assertFalse(config.getServer().isTrustForwardedHeaders());
     }
 
     @Test

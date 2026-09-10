@@ -161,6 +161,25 @@ public class ServerConfig {
      */
     private String serviceUrl;
 
+    /**
+     * Whether the dashboard trusts {@code Forwarded} / {@code X-Forwarded-*} headers on incoming requests. When
+     * {@code true} the dashboard resolves the external scheme, host and port from those headers so that OIDC login
+     * redirects, other absolute URLs, and the session cookie's {@code Secure} flag reflect the address the browser used
+     * rather than the plaintext address inside the cluster.
+     *
+     * <p><strong>Precondition:</strong> when on, the dashboard listener must be reachable only through the ingress or
+     * load balancer that sets these headers. A client able to reach the dashboard port directly could otherwise spoof
+     * them. Set {@code false} when TLS terminates at fogwall itself, or whenever the listener is directly reachable.
+     *
+     * <p>Defaults to {@code true}: existing deployments run the dashboard behind a TLS-terminating ingress and depend
+     * on this resolution for login redirects and cookie security, so turning it off silently on upgrade would break
+     * them. Only the dashboard consults forwarded headers — the git and proposals listeners read none.
+     *
+     * <p>Set via YAML ({@code server.trust-forwarded-headers:}) or env var
+     * ({@code fogwall_SERVER_TRUSTFORWARDEDHEADERS}).
+     */
+    private boolean trustForwardedHeaders = true;
+
     /** TLS configuration for the server listener and upstream trust. Omit entirely to use plain HTTP. */
     private TlsConfig tls = new TlsConfig();
 

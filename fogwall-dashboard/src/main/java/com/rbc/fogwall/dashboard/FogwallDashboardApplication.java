@@ -293,10 +293,20 @@ public class FogwallDashboardApplication {
         // ForwardedHeaderFilter — must be registered first so that X-Forwarded-Proto/Host/Port
         // headers from TLS-terminating ingress (OCP Route, nginx, etc.) are resolved before any
         // downstream filter builds absolute URLs (e.g. OAuth2 redirect URIs in Spring Security).
-        var forwardedHeaderFilter = new FilterHolder(new ForwardedHeaderFilter());
-        forwardedHeaderFilter.setAsyncSupported(true);
-        for (String path : new String[] {"/api/*", "/login", "/logout", "/", "/oauth2/*", "/login/oauth2/*"}) {
-            context.addFilter(forwardedHeaderFilter, path, EnumSet.of(DispatcherType.REQUEST, DispatcherType.ERROR));
+        // Gated on server.trust-forwarded-headers: trusting these headers is safe only when the
+        // listener is reachable solely through the ingress that sets them.
+        if (fogwallConfig.getServer().isTrustForwardedHeaders()) {
+            var forwardedHeaderFilter = new FilterHolder(new ForwardedHeaderFilter());
+            forwardedHeaderFilter.setAsyncSupported(true);
+            for (String path : new String[] {"/api/*", "/login", "/logout", "/", "/oauth2/*", "/login/oauth2/*"}) {
+                context.addFilter(
+                        forwardedHeaderFilter, path, EnumSet.of(DispatcherType.REQUEST, DispatcherType.ERROR));
+            }
+            log.info("Trusting forwarded headers (server.trust-forwarded-headers=true); the dashboard listener must"
+                    + " be reachable only through the ingress that sets them.");
+        } else {
+            log.info("Not trusting forwarded headers (server.trust-forwarded-headers=false); external URLs and the"
+                    + " cookie Secure flag derive from the request as received.");
         }
 
         // Spring Session filter — must be registered before Spring Security so that the distributed
