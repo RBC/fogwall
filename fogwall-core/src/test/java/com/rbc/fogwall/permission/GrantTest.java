@@ -68,12 +68,13 @@ class GrantTest {
         // propose/issue axis.
         assertEquals(true, Grant.PROPOSE.overlaps(Grant.ISSUE));
 
-        // standalone axes overlap nothing but themselves.
+        // standalone axes overlap nothing but themselves. MAINTAIN is a bundle over push/propose/issue/merge, so
+        // it shares MERGE's capability — but never SELF_CERTIFY's, which it deliberately leaves out.
         for (Grant other : Grant.values()) {
             if (other != Grant.SELF_CERTIFY) {
                 assertEquals(false, Grant.SELF_CERTIFY.overlaps(other), "SELF_CERTIFY should not overlap " + other);
             }
-            if (other != Grant.MERGE) {
+            if (other != Grant.MERGE && other != Grant.MAINTAIN) {
                 assertEquals(false, Grant.MERGE.overlaps(other), "MERGE should not overlap " + other);
             }
         }
@@ -82,5 +83,33 @@ class GrantTest {
         assertEquals(false, Grant.PUSH.overlaps(Grant.PROPOSE));
         assertEquals(false, Grant.PUSH_AND_REVIEW.overlaps(Grant.ISSUE));
         assertEquals(false, Grant.REVIEW.overlaps(Grant.MERGE));
+    }
+
+    @Test
+    void maintain_bundlesPushProposeIssueMerge_butNotSelfCertifyOrReview() {
+        // The bundle satisfies each of its parts.
+        assertEquals(true, Grant.MAINTAIN.implies(Grant.PUSH));
+        assertEquals(true, Grant.MAINTAIN.implies(Grant.PROPOSE));
+        assertEquals(true, Grant.MAINTAIN.implies(Grant.ISSUE));
+        assertEquals(true, Grant.MAINTAIN.implies(Grant.MERGE));
+
+        // Deliberately excluded: self-certify is a peer-review bypass, review stays on the SCM's own UI.
+        assertEquals(false, Grant.MAINTAIN.implies(Grant.SELF_CERTIFY));
+        assertEquals(false, Grant.MAINTAIN.implies(Grant.REVIEW));
+        assertEquals(false, Grant.MAINTAIN.implies(Grant.PUSH_AND_REVIEW));
+
+        // Directional: a part never satisfies the whole bundle.
+        assertEquals(false, Grant.PUSH.implies(Grant.MAINTAIN));
+        assertEquals(false, Grant.MERGE.implies(Grant.MAINTAIN));
+        assertEquals(false, Grant.PROPOSE.implies(Grant.MAINTAIN));
+
+        // Overlaps every axis it carries, plus PUSH_AND_REVIEW via the shared PUSH capability; never SELF_CERTIFY.
+        assertEquals(true, Grant.MAINTAIN.overlaps(Grant.PUSH));
+        assertEquals(true, Grant.MAINTAIN.overlaps(Grant.PROPOSE));
+        assertEquals(true, Grant.MAINTAIN.overlaps(Grant.ISSUE));
+        assertEquals(true, Grant.MAINTAIN.overlaps(Grant.MERGE));
+        assertEquals(true, Grant.MAINTAIN.overlaps(Grant.PUSH_AND_REVIEW));
+        assertEquals(false, Grant.MAINTAIN.overlaps(Grant.SELF_CERTIFY));
+        assertEquals(false, Grant.MAINTAIN.overlaps(Grant.REVIEW));
     }
 }

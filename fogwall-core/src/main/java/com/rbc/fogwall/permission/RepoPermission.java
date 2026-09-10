@@ -105,7 +105,18 @@ public class RepoPermission {
          * Can merge a pull/merge request through the SCM API proxy's maintainer path. Standalone: does not imply and is
          * not implied by {@link #PUSH}, {@link #REVIEW} or {@link #PROPOSE}. Fail-closed: no grant, no merge.
          */
-        MERGE(Capability.MERGE);
+        MERGE(Capability.MERGE),
+        /**
+         * Sole-maintainer bundle: {@link #PUSH} + {@link #PROPOSE} (which already carries {@link #ISSUE}) +
+         * {@link #MERGE}, so a trusted maintainer is one permission entry instead of three.
+         *
+         * <p>Deliberately omits {@link #SELF_CERTIFY}: certifying one's own push bypasses peer review, so it stays a
+         * separate, explicit grant. A maintainer who also needs to certify their own clean pushes still holds the two
+         * latches independently ({@code ROLE_SELF_CERTIFY} plus a {@code SELF_CERTIFY} grant). Bundling it here would
+         * presume that bypass for every sole maintainer. When a maintainer pool grows past one, drop this bundle back
+         * to the narrower grants each person actually needs rather than reaching for a wider bundle.
+         */
+        MAINTAIN(Capability.PUSH, Capability.PROPOSE, Capability.ISSUE, Capability.MERGE);
 
         /**
          * The atomic, independently-permissionable abilities a grant confers. A grant is defined by the set of these it

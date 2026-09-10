@@ -139,6 +139,19 @@ class RepoPermissionServiceTest {
         assertFalse(svc.isAllowedToMerge("alice", "github", "/owner/repo"));
     }
 
+    @Test
+    void maintainGrant_allowsPushProposeIssueMerge_butNotSelfCertify() {
+        svc.save(grant("alice", "github", "/owner/repo", MatchType.LITERAL, RepoPermission.Grant.MAINTAIN));
+        assertTrue(svc.isAllowedToPush("alice", "github", "/owner/repo"));
+        assertTrue(svc.isAllowedToPropose("alice", "github", "/owner/repo"));
+        assertTrue(svc.isAllowedToFileIssue("alice", "github", "/owner/repo"));
+        assertTrue(svc.isAllowedToMerge("alice", "github", "/owner/repo"));
+        // The bundle deliberately omits self-certify — a peer-review bypass stays its own explicit grant.
+        assertFalse(svc.isBypassReviewAllowed("alice", "github", "/owner/repo"));
+        // Nor does it confer review, which stays on the SCM's own UI.
+        assertFalse(svc.isAllowedToReview("alice", "github", "/owner/repo"));
+    }
+
     // ---- provider isolation ----
 
     @Test
