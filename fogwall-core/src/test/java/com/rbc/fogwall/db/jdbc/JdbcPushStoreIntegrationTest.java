@@ -7,6 +7,7 @@ import com.rbc.fogwall.db.PushStoreFactory;
 import com.rbc.fogwall.db.model.*;
 import com.rbc.fogwall.db.model.PushSummary;
 import com.rbc.fogwall.db.model.StepStatus;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -40,6 +41,17 @@ class JdbcPushStoreIntegrationTest {
                 .repoName(repoName)
                 .user("dev")
                 .authorEmail("dev@example.com")
+                .build();
+    }
+
+    private static PushRecord recordAt(String commitTo, Instant timestamp) {
+        return PushRecord.builder()
+                .commitTo(commitTo)
+                .branch("refs/heads/main")
+                .repoName("repo")
+                .user("dev")
+                .authorEmail("dev@example.com")
+                .timestamp(timestamp)
                 .build();
     }
 
@@ -131,6 +143,34 @@ class JdbcPushStoreIntegrationTest {
 
         assertEquals(1, results.size());
         assertEquals("refs/heads/feature", results.get(0).getBranch());
+    }
+
+    @Test
+    void find_byNewerThan_returnsOnlyRecordsAtOrAfterTheBound() {
+        Instant cutoff = Instant.parse("2026-09-05T00:00:00Z");
+        store.save(recordAt("old", cutoff.minusSeconds(3600)));
+        store.save(recordAt("new", cutoff.plusSeconds(3600)));
+
+        List<PushRecord> results =
+                store.find(PushQuery.builder().newerThan(cutoff).build());
+
+        assertEquals(1, results.size());
+        assertEquals("new", results.get(0).getCommitTo());
+    }
+
+    @Test
+    void find_byDateWindow_intersectsNewerThanAndOlderThan() {
+        store.save(recordAt("before", Instant.parse("2026-09-01T00:00:00Z")));
+        store.save(recordAt("inside", Instant.parse("2026-09-05T00:00:00Z")));
+        store.save(recordAt("after", Instant.parse("2026-09-10T00:00:00Z")));
+
+        List<PushRecord> results = store.find(PushQuery.builder()
+                .newerThan(Instant.parse("2026-09-03T00:00:00Z"))
+                .olderThan(Instant.parse("2026-09-08T00:00:00Z"))
+                .build());
+
+        assertEquals(1, results.size());
+        assertEquals("inside", results.get(0).getCommitTo());
     }
 
     @Test

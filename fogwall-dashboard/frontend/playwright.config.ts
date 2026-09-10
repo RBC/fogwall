@@ -9,6 +9,10 @@ import { defineConfig, devices } from '@playwright/test'
 // Per-role storage states are written by tests/auth.setup.ts; pick one with the `asRole` fixture in tests/fixtures.ts.
 export default defineConfig({
   testDir: './tests',
+  reporter: [
+    [ process.env.CI ? 'dot' : 'line' ],
+    ['html', { open: 'never' }]
+  ],
   use: {
     baseURL: 'http://localhost:8080',
     trace: 'on-first-retry',
