@@ -45,8 +45,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AuthorizeHttpRequestsConfigurer;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -101,6 +103,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @Slf4j
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -141,29 +144,7 @@ public class SecurityConfig {
                 : new String[] {"/api/**", "/login", "/logout"};
 
         http.securityMatcher(protectedPaths)
-                .authorizeHttpRequests(auth -> auth.requestMatchers(
-                                "/api",
-                                "/api/runtime-config",
-                                "/api/setup",
-                                "/api/health",
-                                "/api/openapi.yaml",
-                                "/api/openapi.json",
-                                "/webjars/**")
-                        .permitAll()
-                        .requestMatchers("/api/users", "/api/users/**")
-                        .hasRole("ADMIN")
-                        .requestMatchers("/api/admin/**")
-                        .hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/api/repos/rules/**")
-                        .hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/api/repos/rules")
-                        .hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/api/config/reload")
-                        .hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/api/push/*/authorise", "/api/push/*/reject")
-                        .authenticated()
-                        .anyRequest()
-                        .authenticated())
+                .authorizeHttpRequests(SecurityConfig::authorizeApiRequests)
                 .logout(logout -> logout.logoutSuccessUrl("/login.html?logout").permitAll())
                 // Return 401 to SPA fetch() calls instead of redirecting to the login page.
                 .exceptionHandling(ex -> ex.defaultAuthenticationEntryPointFor(
@@ -201,6 +182,66 @@ public class SecurityConfig {
         }
 
         return http.build();
+    }
+
+    /**
+     * Authorization rules for the dashboard API, factored out so the ordered set can be reasoned about and tested in
+     * one place (see {@code ApiAuthorizationMatrixTest}, which discovers every controller endpoint by reflection and
+     * asserts each mutating one is either admin-gated or an intentional user-facing exception).
+     *
+     * <p>The model is default-deny for mutations: reads fall through to {@code authenticated()}, but every
+     * {@code POST/PUT/PATCH/DELETE} under {@code /api} that is not explicitly granted to users requires
+     * {@code ROLE_ADMIN}. A newly added mutating endpoint that nobody classified therefore fails closed (a non-admin
+     * gets 403) rather than inheriting any-authenticated access — a forgotten gate becomes a visible functional bug,
+     * not a silent privilege-escalation hole. The explicit user-facing mutations below are self-scoped (a user's own
+     * profile, OAuth links) or run their own identity/permission checks inside the controller (push approve, reject,
+     * cancel).
+     */
+    private static void authorizeApiRequests(
+            AuthorizeHttpRequestsConfigurer<HttpSecurity>.AuthorizationManagerRequestMatcherRegistry auth) {
+        auth.requestMatchers(
+                        "/api",
+                        "/api/runtime-config",
+                        "/api/setup",
+                        "/api/health",
+                        "/api/openapi.yaml",
+                        "/api/openapi.json",
+                        "/webjars/**")
+                .permitAll()
+                // Administrative surfaces, gated whole (reads included): user administration, operational/cache
+                // endpoints, and permission groups — the last because creating a group, managing members, and
+                // attaching permission rules all grant repo-level entitlements, and even reading membership and rules
+                // is admin-only in the UI.
+                .requestMatchers("/api/users", "/api/users/**")
+                .hasRole("ADMIN")
+                .requestMatchers("/api/admin/**")
+                .hasRole("ADMIN")
+                .requestMatchers("/api/groups", "/api/groups/**")
+                .hasRole("ADMIN")
+                // User-facing mutations: self-scoped, or the push-review actions that police their own identity and
+                // permissions inside the controller. Listed before the admin catch-all so they win.
+                .requestMatchers("/api/me", "/api/me/**")
+                .authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/push/*/authorise", "/api/push/*/reject", "/api/push/*/cancel")
+                .authenticated()
+                .requestMatchers("/api/issues", "/api/issues/**")
+                .authenticated()
+                .requestMatchers("/api/scm-oauth/**")
+                .authenticated()
+                // Default-deny for every other mutation: admin only. This is what closes the gap where an ungated
+                // mutating endpoint (e.g. group management, a rule update) would otherwise fall through to
+                // authenticated().
+                .requestMatchers(HttpMethod.POST, "/api/**")
+                .hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/**")
+                .hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PATCH, "/api/**")
+                .hasRole("ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/**")
+                .hasRole("ADMIN")
+                // Reads and the login/logout/OAuth endpoints: any authenticated user.
+                .anyRequest()
+                .authenticated();
     }
 
     @Bean

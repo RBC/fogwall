@@ -25,6 +25,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Repos", description = "Access control rules and repository traffic")
@@ -60,6 +61,7 @@ public class RepoController {
 
     @Operation(operationId = "createRule", summary = "Create an access control rule")
     @PostMapping("/rules")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> createRule(@RequestBody AccessRule rule) {
         if (rule.getProvider() != null && !rule.getProvider().isBlank()) {
             ResponseEntity<?> err = validateProviderId(rule.getProvider());
@@ -73,6 +75,7 @@ public class RepoController {
 
     @Operation(operationId = "updateRule", summary = "Update an access control rule")
     @PutMapping("/rules/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> updateRule(@PathVariable String id, @RequestBody AccessRule rule) {
         if (urlRuleRegistry.findById(id).isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -94,6 +97,7 @@ public class RepoController {
                     "Read-only evaluation against the live ruleset. Returns the full ordered trail of enabled rules "
                             + "considered, which one (if any) matched first, and the resulting decision.")
     @PostMapping("/rules/test")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> testRules(@RequestBody RuleTestRequest req) {
         if (req.provider() == null || req.provider().isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "provider is required"));
@@ -170,6 +174,7 @@ public class RepoController {
 
     @Operation(operationId = "deleteRule", summary = "Delete an access control rule")
     @DeleteMapping("/rules/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> deleteRule(@PathVariable String id) {
         var existing = urlRuleRegistry.findById(id);
         if (existing.isEmpty()) {
