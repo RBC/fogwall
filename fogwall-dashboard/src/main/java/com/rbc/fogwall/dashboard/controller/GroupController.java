@@ -17,11 +17,13 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Groups", description = "Permission group management — requires ROLE_ADMIN")
 @RestController
 @RequestMapping("/api/groups")
+@PreAuthorize("hasRole('ADMIN')")
 @RequiredArgsConstructor
 public class GroupController {
 
