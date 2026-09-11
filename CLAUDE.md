@@ -165,6 +165,11 @@ This is a public repository.
 - Detailed, not exhaustive. An issue sketches what will be implemented and names the boundaries; it does not argue the
   case, rehearse alternatives that were rejected, or explain the same point twice. If a section could be cut without
   changing what gets built, cut it.
+- An issue is sized to a capability, not to a PR. Several PRs closing one issue is normal; each says "part of #N" and
+  the last one closes it. Split an issue only when a piece has value on its own, could ship in a different release, or
+  carries a separate design decision — never just because the issue is large.
+- No tracker, meta, or sub-issues. Related work is a checklist in the body of the issue it belongs to; an item becomes
+  its own issue only when it will ship separately, and is then linked by mention.
 - No narrative anywhere in the shipped artifact. Commit messages, PR bodies, issues and comments describe what is there,
   not the path taken to it — a comment recording what was tried and abandoned on a feature branch is noise once the
   branch merges.
