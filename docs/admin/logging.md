@@ -98,10 +98,10 @@ grep "your-request-id" logs/application.log
 
 The `requestId` is also printed in the sideband output to the git client, so you can match terminal output to log lines.
 
-<!-- prettier-ignore-start -->
-> [!NOTE]
-> **Roadmap:** OpenTelemetry tracing support (propagating trace/span IDs into the log MDC and exporting spans to a collector) is tracked in [#106](https://github.com/RBC/fogwall/issues/106). Once implemented, the `requestId` will be correlatable across distributed systems without manual log grepping.
-<!-- prettier-ignore-end -->
+When OpenTelemetry is enabled, each log line emitted inside a request span also carries `trace_id` and `span_id`, so a
+log entry can be pivoted straight to its trace in the collector. Those fields are omitted (and the log format is
+unchanged) when observability is off. See [Observability](../configuration/observability.md) for enabling it and the
+full list of exported traces and metrics.
 
 ## Git client output formatting
 

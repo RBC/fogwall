@@ -18,6 +18,7 @@ import com.rbc.fogwall.jetty.FogwallJettyApplication;
 import com.rbc.fogwall.jetty.FogwallServletRegistrar;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.jetty.reload.LiveConfigLoader;
+import com.rbc.fogwall.observability.OpenTelemetryBootstrap;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.InMemoryProviderRegistry;
 import com.rbc.fogwall.provider.ProviderRegistry;
@@ -73,6 +74,9 @@ public class FogwallDashboardApplication {
         var configBuilder = new JettyConfigurationBuilder(fogwallConfig);
         configBuilder.validateProviderReferences(); // fail fast before any DB or port setup
         configBuilder.applyOutboundProxySystemWiring(); // before any outbound connection is made
+        // Inject observability before buildPushStore() below, so the store is wrapped for metrics when enabled.
+        configBuilder.setTelemetry(OpenTelemetryBootstrap.build(
+                fogwallConfig.getOtel(), BuildInfo.get().version()));
 
         var threadPool = new QueuedThreadPool();
         threadPool.setName("fogwall-dashboard");

@@ -23,6 +23,7 @@ import com.rbc.fogwall.git.ServerUploadPackFactory;
 import com.rbc.fogwall.git.UpstreamAuthProbe;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.net.ResolvedOutboundProxy;
+import com.rbc.fogwall.observability.ObservabilityFilter;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.BitbucketProvider;
 import com.rbc.fogwall.provider.FogwallProvider;
@@ -180,6 +181,23 @@ public final class FogwallServletRegistrar {
         // ForceGitClientFilter is registered once at each top-level path prefix so it covers any path with the
         // right prefix, including paths that don't match a configured provider. Both server-mode prefixes
         // (/server canonical, /push legacy alias) and the transparent-proxy prefix are covered.
+        // Observability filter is registered first, when enabled, so it is the outermost wrapper: it opens the
+        // per-request parent span and records transport-level push metrics around the entire chain. One instance per
+        // mode so the metric/span "mode" label needs no path parsing. Not registered when telemetry is off, so the
+        // default push path has no extra filter.
+        if (fogwallContext.telemetry().isEnabled()) {
+            var proxyObservabilityHolder =
+                    new FilterHolder(new ObservabilityFilter(fogwallContext.telemetry(), "proxy"));
+            proxyObservabilityHolder.setAsyncSupported(true);
+            context.addFilter(proxyObservabilityHolder, PROXY_PATH_PREFIX + "/*", EnumSet.of(DispatcherType.REQUEST));
+            var serverObservabilityHolder =
+                    new FilterHolder(new ObservabilityFilter(fogwallContext.telemetry(), "server"));
+            serverObservabilityHolder.setAsyncSupported(true);
+            for (String serverPrefix : SERVER_PATH_PREFIXES) {
+                context.addFilter(serverObservabilityHolder, serverPrefix + "/*", EnumSet.of(DispatcherType.REQUEST));
+            }
+        }
+
         var forceGitClientHolder = new FilterHolder(new ForceGitClientFilter());
         forceGitClientHolder.setAsyncSupported(true);
         context.addFilter(forceGitClientHolder, PROXY_PATH_PREFIX + "/*", EnumSet.of(DispatcherType.REQUEST));

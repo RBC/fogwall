@@ -71,6 +71,15 @@ dependencies {
     // Jackson YAML — validates config structure before Gestalt loads it; BOM pins the version
     implementation "tools.jackson.dataformat:jackson-dataformat-yaml"
 
+    // OpenTelemetry SDK — this runnable module builds the OpenTelemetry instance from otel.* config and
+    // hands it to fogwall-core. The API itself comes transitively from core. The alpha instrumentation BOM
+    // version-manages the Log4j2 context-data bridge, which is a ServiceLoader ContextDataProvider that
+    // copies trace_id/span_id into the ThreadContext for the log layout, so it is runtimeOnly.
+    implementation platform("io.opentelemetry.instrumentation:opentelemetry-instrumentation-bom-alpha:${opentelemetryInstrumentationAlphaBomVersion}")
+    implementation "io.opentelemetry:opentelemetry-sdk"
+    implementation "io.opentelemetry:opentelemetry-exporter-otlp"
+    runtimeOnly "io.opentelemetry.instrumentation:opentelemetry-log4j-context-data-2.17-autoconfigure"
+
     // Database drivers - include all so standalone Jetty server can use any backend
     runtimeOnly "com.h2database:h2:${h2Version}"
     runtimeOnly "org.postgresql:postgresql:${postgresVersion}"

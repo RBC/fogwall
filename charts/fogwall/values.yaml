@@ -50,6 +50,18 @@ config: |
       type: github
       enabled: true
 
+  # OpenTelemetry observability (docs/configuration/observability.md). Off by default; point endpoint
+  # at an in-cluster OTLP collector — a sidecar, a DaemonSet, or the OpenTelemetry Operator's Collector.
+  # service.version is filled from the build automatically. Traces and metrics can be toggled separately.
+  # otel:
+  #   enabled: true
+  #   endpoint: http://otel-collector.observability:4317
+  #   protocol: grpc          # grpc | http
+  #   tracing:
+  #     enabled: true
+  #   metrics:
+  #     enabled: true
+
 # Name of an existing Secret to project as environment variables (e.g. FOGWALL_API_KEY,
 # FOGWALL_DATABASE_PASSWORD). This chart does not create the Secret — bring your own.
 extraEnvFrom: []

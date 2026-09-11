@@ -42,6 +42,7 @@ public class FogwallConfig {
     private RulesConfig rules = new RulesConfig();
     private ScmOAuthSettings scmOauth = new ScmOAuthSettings();
     private ProposalsSettings proposals = new ProposalsSettings();
+    private OtelConfig otel = new OtelConfig();
 
     /**
      * Global attestation questions shown to reviewers in the dashboard approval form. Applies to all providers —

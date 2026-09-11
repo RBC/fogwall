@@ -28,6 +28,8 @@ import com.rbc.fogwall.net.FogwallHttpExecutor;
 import com.rbc.fogwall.net.OutboundProxyResolver;
 import com.rbc.fogwall.net.OutboundProxySystemProperties;
 import com.rbc.fogwall.net.ResolvedOutboundProxy;
+import com.rbc.fogwall.observability.FogwallTelemetry;
+import com.rbc.fogwall.observability.MeteringPushStore;
 import com.rbc.fogwall.permission.GroupPermissionRule;
 import com.rbc.fogwall.permission.GroupPermissionStore;
 import com.rbc.fogwall.permission.JdbcGroupPermissionStore;
@@ -91,6 +93,23 @@ public class JettyConfigurationBuilder {
     private DataSource cachedDataSource;
     private MongoStoreFactory cachedMongoStoreFactory;
     private PushStore cachedPushStore;
+
+    /**
+     * Observability instruments, injected by the runnable module before {@link #buildProxyContext()}. Defaults to
+     * disabled so tests and any path that skips {@link #setTelemetry} carry no instrumentation.
+     */
+    private FogwallTelemetry telemetry = FogwallTelemetry.disabled();
+
+    /** Inject the observability instruments built at startup. Must be called before {@link #buildProxyContext()}. */
+    public void setTelemetry(FogwallTelemetry telemetry) {
+        this.telemetry = telemetry;
+    }
+
+    /** The injected observability instruments (disabled by default). */
+    public FogwallTelemetry getTelemetry() {
+        return telemetry;
+    }
+
     private FetchStore cachedFetchStore;
     private UserStore cachedUserStore;
     private ScmTokenCache cachedTokenCache;
@@ -641,7 +660,8 @@ public class JettyConfigurationBuilder {
                 buildNodeIdCache(),
                 buildGitLabProjectIdCache(),
                 buildScmApiActionStore(),
-                buildScmApiProposalStore());
+                buildScmApiProposalStore(),
+                telemetry);
     }
 
     /**
@@ -750,14 +770,17 @@ public class JettyConfigurationBuilder {
         if (cachedPushStore != null) return cachedPushStore;
         DatabaseConfig db = config.getDatabase();
         log.info("Initializing push store: type={}", db.getType());
-        cachedPushStore = switch (db.getType()) {
-            case "h2-mem", "h2-file", "postgres", "mysql", "mariadb" ->
-                PushStoreFactory.fromDataSource(requireJdbcDataSource());
-            case "mongo" -> requireMongoStoreFactory().pushStore();
-            default ->
-                throw new IllegalArgumentException("Unknown database type: " + db.getType()
-                        + ". Supported: h2-mem, h2-file, postgres, mysql, mariadb, mongo");
-        };
+        PushStore store =
+                switch (db.getType()) {
+                    case "h2-mem", "h2-file", "postgres", "mysql", "mariadb" ->
+                        PushStoreFactory.fromDataSource(requireJdbcDataSource());
+                    case "mongo" -> requireMongoStoreFactory().pushStore();
+                    default ->
+                        throw new IllegalArgumentException("Unknown database type: " + db.getType()
+                                + ". Supported: h2-mem, h2-file, postgres, mysql, mariadb, mongo");
+                };
+        // Wrap for decision/forward metrics only when observability is on, so the default path is unchanged.
+        cachedPushStore = telemetry.isEnabled() ? new MeteringPushStore(store, telemetry) : store;
         return cachedPushStore;
     }
 

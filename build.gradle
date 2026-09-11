@@ -87,6 +87,9 @@ ext {
     swaggerCoreVersion = '2.2.55'
     swaggerUiVersion = '5.32.14'
 
+    // OpenTelemetry
+    opentelemetryBomVersion = '1.64.0'
+    opentelemetryInstrumentationAlphaBomVersion = '2.31.1-alpha'
 }
 
 allprojects {

@@ -8,6 +8,7 @@ import com.rbc.fogwall.config.ServerConfig;
 import com.rbc.fogwall.config.TlsConfig;
 import com.rbc.fogwall.db.PendingPushExpiryTask;
 import com.rbc.fogwall.jetty.reload.LiveConfigLoader;
+import com.rbc.fogwall.observability.OpenTelemetryBootstrap;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.ssh.SshGitServer;
 import com.rbc.fogwall.ssh.SshServerRegistrar;
@@ -54,6 +55,8 @@ public class FogwallJettyApplication {
         configBuilder.validateProviderReferences(); // fail fast before any DB or port setup
         rejectDashboardOnlyConfig(configBuilder);
         configBuilder.applyOutboundProxySystemWiring(); // before any outbound connection is made
+        configBuilder.setTelemetry(OpenTelemetryBootstrap.build(
+                fogwallConfig.getOtel(), BuildInfo.get().version()));
 
         var threadPool = new QueuedThreadPool();
         threadPool.setName("fogwall-server");

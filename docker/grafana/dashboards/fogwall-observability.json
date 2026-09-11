@@ -1,0 +1,95 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 0,
+  "tags": ["fogwall"],
+  "templating": { "list": [] },
+  "time": { "from": "now-30m", "to": "now" },
+  "timepicker": {},
+  "title": "fogwall — Observability",
+  "uid": "fogwall-observability",
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Push decisions (per second, by status)",
+      "datasource": { "type": "prometheus", "uid": "fogwall-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "fieldConfig": {
+        "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 15, "stacking": { "mode": "normal" } }, "unit": "ops" },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "fogwall-prometheus" },
+          "expr": "sum by (fogwall_push_status) (rate(fogwall_push_decisions[$__rate_interval]))",
+          "legendFormat": "{{fogwall_push_status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Upstream forward outcomes (per second)",
+      "datasource": { "type": "prometheus", "uid": "fogwall-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "fieldConfig": {
+        "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 15 }, "unit": "ops" },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "fogwall-prometheus" },
+          "expr": "sum by (fogwall_forward_outcome) (rate(fogwall_push_forward[$__rate_interval]))",
+          "legendFormat": "{{fogwall_forward_outcome}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Push duration p95 (by mode)",
+      "datasource": { "type": "prometheus", "uid": "fogwall-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 3,
+      "fieldConfig": {
+        "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 10 }, "unit": "s" },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "fogwall-prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le, fogwall_mode) (rate(fogwall_push_duration_bucket[$__rate_interval])))",
+          "legendFormat": "{{fogwall_mode}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Pushes in flight (by mode)",
+      "datasource": { "type": "prometheus", "uid": "fogwall-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 4,
+      "fieldConfig": {
+        "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 10 }, "unit": "short" },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "fogwall-prometheus" },
+          "expr": "sum by (fogwall_mode) (fogwall_push_active)",
+          "legendFormat": "{{fogwall_mode}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+# OpenTelemetry Collector config for the local `--otel` stack.
+#
+# Receives OTLP from fogwall (gRPC :4317, HTTP :4318), prints everything it receives to the collector's own logs via
+# the debug exporter (so traces AND metrics are verifiable with `docker compose logs otel-collector`), and forwards
+# traces to Jaeger for a browsable UI at http://localhost:16686.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+
+exporters:
+  # Prints received spans and metrics to stdout — the quickest way to confirm the pipeline end to end.
+  debug:
+    verbosity: detailed
+  # Forwards traces to Jaeger's OTLP endpoint for the UI.
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+  # Exposes received metrics as a Prometheus scrape endpoint (:8889/metrics) for the Prometheus server.
+  # add_metric_suffixes off keeps names close to the OTLP originals (fogwall_push_duration, not ..._seconds).
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    add_metric_suffixes: false
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug, otlp/jaeger]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug, prometheus]

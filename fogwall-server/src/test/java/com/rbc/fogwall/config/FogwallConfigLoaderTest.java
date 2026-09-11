@@ -45,6 +45,16 @@ class FogwallConfigLoaderTest {
         assertTrue(config.getServer().isTrustForwardedHeaders());
     }
 
+    @Test
+    void defaultOtel_isDisabled() throws GestaltException {
+        // Observability is opt-in: the default push path must carry no instrumentation cost.
+        OtelConfig otel = FogwallConfigLoader.load().getOtel();
+        assertNotNull(otel);
+        assertFalse(otel.isEnabled());
+        assertTrue(otel.getTracing().isEnabled());
+        assertTrue(otel.getMetrics().isEnabled());
+    }
+
     // --- database defaults ---
 
     @Test
