@@ -135,7 +135,7 @@ class HotReloadJettyFixture implements AutoCloseable {
         addFilter(context, proxyMapping, new ForceGitClientFilter());
         addFilter(context, proxyMapping, new ParseGitRequestFilter(provider));
         addFilter(context, proxyMapping, new EnrichPushCommitsFilter(provider, proxyCache));
-        addFilter(context, proxyMapping, new AllowApprovedPushFilter(pushStore, serviceUrl));
+        addFilter(context, proxyMapping, new AllowApprovedPushFilter(pushStore, serviceUrl, null));
         // Always register the URL rule filter, backed by the live configRegistry.
         // Note: proxy is fail-closed — no matching rule results in 403.
         // Tests must seed the registry with at least one allow rule before making requests.

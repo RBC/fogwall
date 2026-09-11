@@ -152,6 +152,7 @@ public class ApprovalPreReceiveHook implements PreReceiveHook {
         if (record.getStatus() == PushStatus.APPROVED) {
             if (!verifySelfApprovalEntitled(record)) {
                 String reason = "Self-approved push rejected: no SELF_CERTIFY permission for this repository";
+                demoteUnentitledSelfApproval(record.getId(), reason);
                 sendAndFlush(rp, msgOut, color(RED, "" + sym(CROSS_MARK) + "  " + reason));
                 rejectAll(commands, reason);
                 return;
@@ -213,6 +214,7 @@ public class ApprovalPreReceiveHook implements PreReceiveHook {
                     var approvedRecord = pushStore.findById(validationRecordId).orElse(null);
                     if (approvedRecord != null && !verifySelfApprovalEntitled(approvedRecord)) {
                         String reason = "Self-approved push rejected: no SELF_CERTIFY permission for this repository";
+                        demoteUnentitledSelfApproval(validationRecordId, reason);
                         sendAndFlush(rp, msgOut, color(RED, "" + sym(CROSS_MARK) + "  " + reason));
                         rejectAll(commands, reason);
                         return;
@@ -286,9 +288,12 @@ public class ApprovalPreReceiveHook implements PreReceiveHook {
      */
     private boolean verifySelfApprovalEntitled(PushRecord record) {
         Attestation att = record.getAttestation();
+        // No reviewer attestation means no human approver to police (e.g. an auto-approved push). Not a self-approval,
+        // so nothing for this check to act on.
         if (att == null) return true;
         String pusher = record.getResolvedUser();
         String approver = att.getReviewerUsername();
+        // Only a pusher approving their own push is in scope here; anything else is left to the other controls.
         if (pusher == null || approver == null || !pusher.equals(approver)) return true;
         if (record.getProvider() == null || record.getUrl() == null) return true;
         // Fail closed: this IS a self-approval, and without the permission service the entitlement
@@ -309,6 +314,20 @@ public class ApprovalPreReceiveHook implements PreReceiveHook {
                     record.getUrl());
         }
         return entitled;
+    }
+
+    /**
+     * A record that reached APPROVED without a valid self-certify entitlement can never be forwarded. Transition it to
+     * ERROR so it does not linger as an approval that will never complete — {@link PushStore#updateForwardStatus} sets
+     * only the status and error message, leaving the approval attestation intact as audit evidence. Best-effort: a
+     * cleanup failure must not change the rejection outcome the caller is about to apply.
+     */
+    private void demoteUnentitledSelfApproval(String id, String reason) {
+        try {
+            pushStore.updateForwardStatus(id, PushStatus.ERROR, reason);
+        } catch (RuntimeException e) {
+            log.warn("Could not demote unentitled self-approval {} to ERROR: {}", id, e.getMessage());
+        }
     }
 
     private void rejectAll(Collection<ReceiveCommand> commands, String reason) {

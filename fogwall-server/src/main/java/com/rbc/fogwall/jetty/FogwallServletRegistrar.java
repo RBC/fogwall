@@ -916,7 +916,7 @@ public final class FogwallServletRegistrar {
         List<FogwallFilter> filters = new ArrayList<>();
         filters.add(new ParseGitRequestFilter(provider, configBuilder.getMaxPushBytes()));
         filters.add(new EnrichPushCommitsFilter(provider, repositoryCache, configBuilder.getMaxObjectSizeBytes()));
-        filters.add(new AllowApprovedPushFilter(pushStore, serviceUrl));
+        filters.add(new AllowApprovedPushFilter(pushStore, serviceUrl, repoPermissionService));
 
         filters.add(new UrlRuleAggregateFilter(100, provider, fetchStore, urlRuleRegistry));
 

@@ -74,7 +74,10 @@ all) to their existing directory/IAM procedures, while the per-repo entitlement 
 How to grant `ROLE_SELF_CERTIFY`:
 
 - **LDAP / AD / OIDC:** add `SELF_CERTIFY` to `auth.role-mappings` and map it to the appropriate IdP group.
-- **Local auth:** add `SELF_CERTIFY` to `roles:` in the user's `users:` YAML entry.
+- **Local auth (config user):** add `SELF_CERTIFY` to `roles:` in the user's `users:` YAML entry.
+- **Local auth (dashboard-created user):** tick the "Grant self-certify role" box in the Add User form. Local auth is
+  intended for demonstration and proof-of-concept; a production deployment grants the capability through its IdP
+  instead.
 
 <!-- prettier-ignore-start -->
 > [!NOTE]

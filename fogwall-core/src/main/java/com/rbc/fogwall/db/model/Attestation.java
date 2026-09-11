@@ -35,7 +35,11 @@ public class Attestation {
     @Builder.Default
     private boolean automated = false;
 
-    /** Whether an admin approved/rejected their own push, bypassing the normal self-approval block. */
+    /**
+     * Whether an admin override was applied — an admin approving a push on admin authority rather than through the
+     * normal review path. Does not imply the reviewer is the pusher; compare {@code reviewerUsername} against the
+     * push's {@code resolvedUser} when that distinction matters.
+     */
     @Builder.Default
     private boolean selfApproval = false;
 

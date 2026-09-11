@@ -56,7 +56,7 @@ class PushControllerTest {
     // Not injected by default — individual tests that need it set it on the controller directly.
     RepoPermissionService repoPermissionService;
 
-    /** Empty approve body — no attestations, mirrors previous Map.of() usage. */
+    /** Empty approve body — no attestations, no admin override. */
     private static PushController.ApproveBody approveBody() {
         return new PushController.ApproveBody(null, null, null, null, false);
     }
@@ -456,45 +456,93 @@ class PushControllerTest {
         }
 
         @Test
-        void admin_selfApproval_withoutOverride_returns403() {
+        void admin_selfApproval_withoutSelfCertify_returns403() {
             when(pushStore.findById("p1")).thenReturn(Optional.of(blockedPush("p1", "alice")));
-            loginAs("alice", true); // same user as pusher, no adminOverride flag
+            loginAs("alice", true); // admin, but also the pusher and without ROLE_SELF_CERTIFY
+
+            // ROLE_ADMIN alone does not let an admin approve their own push — there is no override path.
+            assertEquals(
+                    HttpStatus.FORBIDDEN,
+                    controller.approve("p1", approveBody()).getStatusCode());
+            verify(pushStore, never()).approve(any(), any());
+        }
+
+        @Test
+        void admin_selfApproval_withSelfCertify_returns200() throws Exception {
+            when(pushStore.findById("p1")).thenReturn(Optional.of(blockedPush("p1", "alice")));
+            when(pushStore.approve(eq("p1"), any())).thenReturn(approvedPush("p1"));
+            loginAs("alice", true, true); // admin + ROLE_SELF_CERTIFY
+
+            repoPermissionService = mock(RepoPermissionService.class);
+            when(repoPermissionService.isBypassReviewAllowed("alice", "github", "github.com/acme/repo.git"))
+                    .thenReturn(true);
+            var field = PushController.class.getDeclaredField("repoPermissionService");
+            field.setAccessible(true);
+            field.set(controller, repoPermissionService);
+
+            assertEquals(HttpStatus.OK, controller.approve("p1", approveBody()).getStatusCode());
+        }
+
+        @Test
+        void admin_withoutOverride_isSubjectToRequireReviewPermission() throws Exception {
+            // With require-review-permission on, an admin reviewing someone else's push is treated like any other
+            // user — no free bypass. Without override and without a REVIEW permission, they are refused.
+            when(pushStore.findById("p1")).thenReturn(Optional.of(blockedPush("p1", "alice")));
+            loginAs("admin", true); // admin, reviewing alice's push, no override
+
+            var serverConfig = new ServerConfig();
+            serverConfig.setRequireReviewPermission(true);
+            when(fogwallConfig.getServer()).thenReturn(serverConfig);
+
+            repoPermissionService = mock(RepoPermissionService.class);
+            when(repoPermissionService.isAllowedToReview("admin", "github", "github.com/acme/repo.git"))
+                    .thenReturn(false);
+            var field = PushController.class.getDeclaredField("repoPermissionService");
+            field.setAccessible(true);
+            field.set(controller, repoPermissionService);
 
             assertEquals(
                     HttpStatus.FORBIDDEN,
                     controller.approve("p1", approveBody()).getStatusCode());
+            verify(pushStore, never()).approve(any(), any());
         }
 
         @Test
-        void admin_selfApproval_withOverride_returns200() {
+        void admin_withOverride_breakGlassBypassesReviewPermission() {
+            // Break-glass: an admin approving someone else's push with override set is permitted, short-circuiting
+            // before the review-permission check entirely (the companion test above proves that same admin is refused
+            // without override when require-review-permission is on).
             when(pushStore.findById("p1")).thenReturn(Optional.of(blockedPush("p1", "alice")));
             when(pushStore.approve(eq("p1"), any())).thenReturn(approvedPush("p1"));
-            loginAs("alice", true);
+            loginAs("admin", true);
 
             assertEquals(
                     HttpStatus.OK,
                     controller.approve("p1", approveBodyWithAdminOverride()).getStatusCode());
-        }
-
-        @Test
-        void admin_selfApproval_withOverride_flaggedInAttestation() {
-            when(pushStore.findById("p1")).thenReturn(Optional.of(blockedPush("p1", "alice")));
-            when(pushStore.approve(eq("p1"), any())).thenReturn(approvedPush("p1"));
-            loginAs("alice", true);
-
-            controller.approve("p1", approveBodyWithAdminOverride());
-
+            // The break-glass override is recorded on the attestation for the audit trail.
             verify(pushStore).approve(eq("p1"), argThat(Attestation::isSelfApproval));
         }
 
         @Test
-        void admin_selfApproval_withoutOverride_notFlaggedAsAdminOverride() {
+        void nonAdmin_overrideFlag_isIgnored() throws Exception {
+            // A non-admin cannot conjure break-glass by sending the flag — they still need REVIEW permission.
             when(pushStore.findById("p1")).thenReturn(Optional.of(blockedPush("p1", "alice")));
-            loginAs("alice", true);
+            loginAs("reviewer", false);
 
-            // Returns 403 — no interaction with pushStore at all
-            controller.approve("p1", approveBody());
-            verify(pushStore, never()).approve(any(), any());
+            var serverConfig = new ServerConfig();
+            serverConfig.setRequireReviewPermission(true);
+            when(fogwallConfig.getServer()).thenReturn(serverConfig);
+
+            repoPermissionService = mock(RepoPermissionService.class);
+            when(repoPermissionService.isAllowedToReview("reviewer", "github", "github.com/acme/repo.git"))
+                    .thenReturn(false);
+            var field = PushController.class.getDeclaredField("repoPermissionService");
+            field.setAccessible(true);
+            field.set(controller, repoPermissionService);
+
+            assertEquals(
+                    HttpStatus.FORBIDDEN,
+                    controller.approve("p1", approveBodyWithAdminOverride()).getStatusCode());
         }
 
         @Test
