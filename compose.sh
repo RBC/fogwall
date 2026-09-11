@@ -2,7 +2,7 @@
 # Wrapper around docker/podman compose that assembles the right overlay flags.
 #
 # Usage:
-#   bash compose.sh [--auth ldap|oidc] [--db postgres|mysql|mariadb|mongo] -- <compose subcommand> [args...]
+#   bash compose.sh [--auth ldap|oidc] [--db postgres|mysql|mariadb|mongo] [--otel] -- <compose subcommand> [args...]
 #
 # Examples:
 #   bash compose.sh -- up -d
@@ -10,12 +10,15 @@
 #   bash compose.sh --db postgres -- up -d
 #   bash compose.sh --db mysql -- up -d
 #   bash compose.sh --auth ldap --db postgres -- up -d
+#   bash compose.sh --otel -- up -d
+#   bash compose.sh --db postgres --otel -- up -d
 #   bash compose.sh --auth ldap --db postgres -- down -v
 
 set -euo pipefail
 
 AUTH=""
 DB=""
+OTEL=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -27,13 +30,17 @@ while [[ $# -gt 0 ]]; do
       DB="$2"
       shift 2
       ;;
+    --otel)
+      OTEL="1"
+      shift
+      ;;
     --)
       shift
       break
       ;;
     *)
       echo "Unknown option: $1" >&2
-      echo "Usage: bash compose.sh [--auth ldap|oidc] [--db postgres|mysql|mariadb|mongo] -- <compose subcommand> [args...]" >&2
+      echo "Usage: bash compose.sh [--auth ldap|oidc] [--db postgres|mysql|mariadb|mongo] [--otel] -- <compose subcommand> [args...]" >&2
       exit 1
       ;;
   esac
@@ -69,6 +76,10 @@ fi
 
 if [[ -n "$DB" ]]; then
   ARGS+=(--profile "$DB" -f "${COMPOSE_DIR}/docker-compose.${DB}.yml")
+fi
+
+if [[ -n "$OTEL" ]]; then
+  ARGS+=(--profile otel -f "${COMPOSE_DIR}/docker-compose.otel.yml")
 fi
 
 $COMPOSE "${ARGS[@]}" "$@"

@@ -1,0 +1,26 @@
+# Observability overlay — OpenTelemetry.
+#
+# Activates the otel-collector + jaeger services from docker-compose.yml (--profile otel) and turns fogwall's
+# OpenTelemetry export on, pointing it at the collector. Composes freely with any auth or db overlay — add both -f
+# flags.
+#
+# Examples:
+#   # Static auth + default H2 + OTel
+#   bash compose.sh --otel -- up -d
+#
+#   # Postgres + OTel
+#   bash compose.sh --db postgres --otel -- up -d
+#
+# After a push through the proxy:
+#   - traces:  http://localhost:16686 (Jaeger UI, service "fogwall")
+#   - metrics: http://localhost:3001  (Grafana, "fogwall — Observability" dashboard; no login)
+#              http://localhost:9090  (Prometheus, to explore fogwall_push_* directly)
+#   - raw spans + metrics as text: docker compose logs otel-collector
+services:
+  fogwall:
+    environment:
+      FOGWALL_OTEL_ENABLED: "true"
+      FOGWALL_OTEL_ENDPOINT: "http://otel-collector:4317"
+      FOGWALL_OTEL_PROTOCOL: grpc
+    # Deliberately no depends_on the collector: telemetry export is best-effort and the OTLP exporter retries, so a
+    # collector that is slow, down, or crash-looping must never hold the proxy back from serving pushes.

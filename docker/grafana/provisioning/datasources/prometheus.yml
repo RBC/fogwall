@@ -1,0 +1,10 @@
+# Auto-provisions the Prometheus datasource so Grafana works with no manual setup on the --otel stack.
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    uid: fogwall-prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true

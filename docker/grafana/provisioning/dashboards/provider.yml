@@ -1,0 +1,11 @@
+# Loads any dashboard JSON under /var/lib/grafana/dashboards (mounted from docker/grafana/dashboards) at startup,
+# so the fogwall observability dashboard is present the moment Grafana comes up.
+apiVersion: 1
+providers:
+  - name: fogwall
+    type: file
+    disableDeletion: false
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

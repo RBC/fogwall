@@ -341,3 +341,19 @@ users:
 #   # bulk-review: enable checkboxes on the push list so reviewers can approve/reject multiple
 #   # PENDING pushes at once. Disable (default) when your audit policy requires individual sign-off.
 #   bulk-review: false
+
+# OpenTelemetry observability. Off by default — enable to export traces and metrics to an OTLP collector
+# (Grafana/Tempo, Jaeger, Datadog, etc.). service.version is filled from the build automatically.
+#
+# otel:
+#   enabled: false
+#   # OTLP collector endpoint. Left blank, the exporter's default is used (gRPC :4317, HTTP :4318).
+#   endpoint: http://otel-collector:4317
+#   protocol: grpc          # grpc | http
+#   service-name: fogwall
+#   tracing:
+#     enabled: true
+#   metrics:
+#     enabled: true
+#   resource-attributes:
+#     deployment.environment: prod

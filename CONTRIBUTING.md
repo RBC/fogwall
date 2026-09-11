@@ -395,11 +395,19 @@ provider, one for the database backend. They can be combined freely.
 | `docker/docker-compose.mariadb.yml`  | MariaDB      | `--profile mariadb`  | Adminer at :8082       |
 | `docker/docker-compose.mongo.yml`    | MongoDB      | `--profile mongo`    | Mongo Express at :8081 |
 
-Any auth overlay can be combined with any database overlay (or none, to keep H2). Use the `compose.sh` wrapper rather
-than bare `docker compose` — it assembles the right `-f`/`--profile` flags and auto-detects docker vs podman:
+**Observability overlay** — turns fogwall's OpenTelemetry export on and adds the full telemetry stack (collector, Jaeger
+for traces, Prometheus + Grafana for metrics):
+
+| File                             | What it adds                                                    | Flag     | UIs                                                         |
+| -------------------------------- | --------------------------------------------------------------- | -------- | ----------------------------------------------------------- |
+| `docker/docker-compose.otel.yml` | OTel Collector, Jaeger (traces), Prometheus + Grafana (metrics) | `--otel` | Jaeger :16686 · Grafana :3001 (no login) · Prometheus :9090 |
+
+Any auth overlay can be combined with any database overlay (or none, to keep H2), and `--otel` composes with all of
+them. Use the `compose.sh` wrapper rather than bare `docker compose` — it assembles the right `-f`/`--profile` flags and
+auto-detects docker vs podman:
 
 ```bash
-bash compose.sh [--auth ldap|oidc] [--db postgres|mysql|mariadb|mongo] -- up -d
+bash compose.sh [--auth ldap|oidc] [--db postgres|mysql|mariadb|mongo] [--otel] -- up -d
 ```
 
 ### First-time setup
@@ -441,6 +449,16 @@ bash compose.sh --auth oidc --db postgres -- up -d
 ```shell
 bash compose.sh --auth ldap --db mongo -- up -d
 ```
+
+**OpenTelemetry** (any base — here static + H2):
+
+```shell
+bash compose.sh --otel -- up -d
+```
+
+After a push through the proxy, traces are at the Jaeger UI (http://localhost:16686, service `fogwall`), metrics are
+graphed in Grafana (http://localhost:3001, the "fogwall — Observability" dashboard, no login) and explorable directly in
+Prometheus (http://localhost:9090), and the raw spans + metrics also stream to `docker compose logs otel-collector`.
 
 ### Auth provider details
 

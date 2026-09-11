@@ -33,3 +33,4 @@ environment variable overrides are applied on top in a defined order.
 - [Groups](groups.md) — naming a set of users once and reusing it
 - [Attestations](attestations.md) — the questions a reviewer answers before approving
 - [Running and logging](running-and-logging.md) — starting the process, log levels, and git client output
+- [Observability](observability.md) — OpenTelemetry traces and metrics over OTLP, and trace/span log correlation

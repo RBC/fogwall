@@ -5,6 +5,8 @@ import com.rbc.fogwall.db.model.PushStatus;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.net.OutboundProxyJetty;
 import com.rbc.fogwall.net.ResolvedOutboundProxy;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -27,6 +29,14 @@ public class FogwallServlet extends AsyncProxyServlet.Transparent {
     public static final String PRE_APPROVED_ATTR = "fogwall.preApproved";
     /** Request attribute holding the UUID of the original APPROVED push record for a transparent-proxy re-push. */
     public static final String APPROVED_PUSH_ID_ATTR = "fogwall.approvedPushId";
+
+    /**
+     * Request attribute holding the OpenTelemetry {@link Context} of the per-request span, set by
+     * {@code ObservabilityFilter} when observability is on. The async proxy-forward callbacks below run on Jetty
+     * threads after the request thread's span scope has closed, so they re-activate this context to keep their log
+     * lines (and the forward-status write) correlated to the trace. Absent when observability is off.
+     */
+    public static final String OTEL_CONTEXT_ATTR = "fogwall.otelContext";
 
     public static final String SERVICE_URL_ATTR = "fogwall.serviceUrl";
 
@@ -128,11 +138,13 @@ public class FogwallServlet extends AsyncProxyServlet.Transparent {
             HttpServletRequest clientRequest, HttpServletResponse proxyResponse, Response serverResponse) {
         String pushId = (String) clientRequest.getAttribute(APPROVED_PUSH_ID_ATTR);
         if (pushId != null) {
-            log.info(
-                    "Transparent proxy re-push {} forwarded successfully (upstream HTTP {})",
-                    pushId,
-                    serverResponse.getStatus());
-            pushStore.updateForwardStatus(pushId, PushStatus.FORWARDED, null);
+            try (Scope ignored = otelScope(clientRequest)) {
+                log.info(
+                        "Transparent proxy re-push {} forwarded successfully (upstream HTTP {})",
+                        pushId,
+                        serverResponse.getStatus());
+                pushStore.updateForwardStatus(pushId, PushStatus.FORWARDED, null);
+            }
         }
         super.onProxyResponseSuccess(clientRequest, proxyResponse, serverResponse);
     }
@@ -153,9 +165,21 @@ public class FogwallServlet extends AsyncProxyServlet.Transparent {
             String errorMessage = upstreamStatus > 0
                     ? "Upstream returned HTTP " + upstreamStatus
                     : "Upstream error: " + (failure != null ? failure.getMessage() : "unknown");
-            log.warn("Transparent proxy re-push {} failed: {}", pushId, errorMessage);
-            pushStore.updateForwardStatus(pushId, PushStatus.ERROR, errorMessage);
+            try (Scope ignored = otelScope(clientRequest)) {
+                log.warn("Transparent proxy re-push {} failed: {}", pushId, errorMessage);
+                pushStore.updateForwardStatus(pushId, PushStatus.ERROR, errorMessage);
+            }
         }
         super.onProxyResponseFailure(clientRequest, proxyResponse, serverResponse, failure);
+    }
+
+    /**
+     * Re-activates the request's OpenTelemetry span context (captured by {@code ObservabilityFilter}) on this async
+     * callback thread so log lines and the forward-status write are stamped with the trace. Returns a no-op scope when
+     * observability is off or no context was captured.
+     */
+    private static Scope otelScope(HttpServletRequest clientRequest) {
+        Object context = clientRequest.getAttribute(OTEL_CONTEXT_ATTR);
+        return context instanceof Context otelContext ? otelContext.makeCurrent() : Scope.noop();
     }
 }

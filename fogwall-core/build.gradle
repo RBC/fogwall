@@ -66,7 +66,14 @@ dependencies {
     api "org.eclipse.jetty:jetty-server:${jettyVersion}"
     api "org.eclipse.jetty.ee11:jetty-ee11-servlet:${jettyVersion}"
     api "org.eclipse.jetty.ee11:jetty-ee11-proxy:${jettyVersion}"
-    
+
+    // OpenTelemetry API — spans and metrics are recorded from the filter chain and JGit hooks here.
+    // Only the vendor-neutral API lives in core; the SDK that wires exporters is bootstrapped in the
+    // runnable modules (fogwall-server / fogwall-dashboard) and passed in as an OpenTelemetry instance.
+    // Exposed as api so those modules share the BOM's version alignment and see the OpenTelemetry type.
+    api platform("io.opentelemetry:opentelemetry-bom:${opentelemetryBomVersion}")
+    api "io.opentelemetry:opentelemetry-api"
+
     // Spring JDBC (NamedParameterJdbcTemplate, RowMapper) + transaction abstraction
     implementation "org.springframework:spring-jdbc:${springVersion}"
     implementation "org.springframework:spring-tx:${springVersion}"

@@ -159,6 +159,63 @@ services:
     ports:
       - "8082:8080"
 
+  # ── OpenTelemetry Collector (optional — start with: compose.sh --otel) ──────
+  # Receives OTLP from fogwall and prints spans + metrics to its logs; also feeds traces to Jaeger.
+  otel-collector:
+    image: docker.io/otel/opentelemetry-collector-contrib:0.109.0
+    profiles: [otel]
+    command: ["--config=/etc/otel-collector-config.yml"]
+    volumes:
+      # :z so Podman relabels the file for SELinux (a plain :ro bind is unreadable to the container on
+      # Podman+SELinux hosts). Harmless on Docker / non-SELinux, where the label option is ignored.
+      - ./otel-collector-config.yml:/etc/otel-collector-config.yml:z
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    depends_on:
+      - jaeger
+
+  # ── Jaeger (optional — trace UI for the --otel stack) ──────────────────────
+  # All-in-one accepts OTLP directly; the collector forwards traces here. UI at http://localhost:16686.
+  jaeger:
+    image: docker.io/jaegertracing/all-in-one:1.60
+    profiles: [otel]
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"   # Jaeger UI
+
+  # ── Prometheus (optional — metrics store for the --otel stack) ─────────────
+  # Scrapes the metrics the collector re-exposes on :8889. Query/graph UI at http://localhost:9090.
+  prometheus:
+    image: docker.io/prom/prometheus:v3.1.0
+    profiles: [otel]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:z
+    ports:
+      - "9090:9090"   # Prometheus UI
+    depends_on:
+      - otel-collector
+
+  # ── Grafana (optional — metrics dashboards for the --otel stack) ───────────
+  # Anonymous admin access (no login), Prometheus datasource and the fogwall dashboard auto-provisioned.
+  # UI at http://localhost:3001 (3000 is taken by Gitea).
+  grafana:
+    image: docker.io/grafana/grafana:11.4.0
+    profiles: [otel]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_USERS_DEFAULT_THEME: dark
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:z
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:z
+    ports:
+      - "3001:3000"   # Grafana UI
+    depends_on:
+      - prometheus
+
 volumes:
   gitea-data:
   postgres-data:

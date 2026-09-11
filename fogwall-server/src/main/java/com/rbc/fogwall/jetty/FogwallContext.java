@@ -10,6 +10,7 @@ import com.rbc.fogwall.db.ScmApiActionStore;
 import com.rbc.fogwall.db.ScmApiProposalStore;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.git.LocalRepositoryCache;
+import com.rbc.fogwall.observability.FogwallTelemetry;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.ProviderRegistry;
 import com.rbc.fogwall.scmapi.GitHubNodeIdCache;
@@ -52,4 +53,5 @@ public record FogwallContext(
         GitHubNodeIdCache gitHubNodeIdCache,
         GitLabProjectIdCache gitLabProjectIdCache,
         ScmApiActionStore scmApiActionStore,
-        ScmApiProposalStore scmApiProposalStore) {}
+        ScmApiProposalStore scmApiProposalStore,
+        FogwallTelemetry telemetry) {}
