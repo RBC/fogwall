@@ -205,6 +205,8 @@ class ApprovalPreReceiveHookTest {
 
         assertEquals(ReceiveCommand.Result.REJECTED_OTHER_REASON, cmd.getResult());
         verify(perms).isBypassReviewAllowed("alice", "github", "/owner/repo");
+        // The invalid self-approval must not linger as APPROVED — it is demoted to ERROR (never forwards).
+        verify(pushStore).updateForwardStatus(eq(recordId), eq(PushStatus.ERROR), anyString());
     }
 
     @Test
@@ -316,6 +318,8 @@ class ApprovalPreReceiveHookTest {
 
         assertEquals(ReceiveCommand.Result.REJECTED_OTHER_REASON, cmd.getResult());
         verify(perms).isBypassReviewAllowed("alice", "github", "/owner/repo");
+        // The invalid self-approval must not linger as APPROVED — it is demoted to ERROR (never forwards).
+        verify(pushStore).updateForwardStatus(eq(recordId), eq(PushStatus.ERROR), anyString());
     }
 
     @Test

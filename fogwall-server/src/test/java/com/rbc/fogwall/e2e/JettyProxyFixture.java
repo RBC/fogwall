@@ -267,7 +267,7 @@ class JettyProxyFixture implements AutoCloseable {
         List<FogwallFilter> filters = new ArrayList<>();
         filters.add(new ForceGitClientFilter());
         filters.add(new ParseGitRequestFilter(provider));
-        filters.add(new AllowApprovedPushFilter(pushStore, serviceUrl));
+        filters.add(new AllowApprovedPushFilter(pushStore, serviceUrl, permissionService));
         filters.add(new EnrichPushCommitsFilter(provider, proxyCache));
         filters.add(new UrlRuleAggregateFilter(100, provider, urlRuleRegistry));
         if (identityResolver != null && permissionService != null) {

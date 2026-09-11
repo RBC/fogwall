@@ -351,7 +351,7 @@ public class PushController {
                             .reviewerUsername(resolveReviewerFromApproveBody(body, auth))
                             .reviewerEmail(body.reviewerEmail())
                             .reason(body.reason())
-                            .selfApproval(isSelfApproval(record, auth, adminOverride))
+                            .selfApproval(isAdminOverride(record, auth, adminOverride))
                             .answers(body.attestations())
                             .build();
                     var updated = pushStore.approve(id, attestation);
@@ -408,16 +408,17 @@ public class PushController {
                         return ResponseEntity.badRequest()
                                 .body(Map.of("error", "Push is not in PENDING status: " + record.getStatus()));
                     }
+                    // Rejecting another's push is the safe direction, so an admin may always reject via break-glass
+                    // (adminOverride=true). A self-reject — admin or not — still goes through the self-certify gate
+                    // like any self-review; the pusher withdraws their own push with cancel, not reject.
                     ResponseEntity<?> identityError = checkReviewerIdentity(record, true);
                     if (identityError != null) return identityError;
-                    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
                     var attestation = Attestation.builder()
                             .pushId(id)
                             .type(Attestation.Type.REJECTION)
                             .reviewerUsername(resolveReviewer(body))
                             .reviewerEmail(body.get("reviewerEmail"))
                             .reason(reason)
-                            .selfApproval(isSelfApproval(record, auth, true))
                             .build();
                     var updated = pushStore.reject(id, attestation);
                     return ResponseEntity.ok(updated);
@@ -429,21 +430,22 @@ public class PushController {
      * Validates that the current session user may review the given push record:
      *
      * <ol>
-     *   <li>ROLE_ADMIN reviewing someone else's push: always permitted.
-     *   <li>ROLE_ADMIN self-review with {@code adminOverride=true}: permitted; recorded as an admin override in the
-     *       audit log.
-     *   <li>Self-review (admin or otherwise) without override: allowed only when the reviewer has both
-     *       {@code ROLE_SELF_CERTIFY} (the capability, attested by the org's IdP/IAM via {@code auth.role-mappings} or
-     *       the local {@code users[].roles} block) and a {@link RepoPermission.Operation#SELF_CERTIFY} repo permission
-     *       entry for this specific repository. Both must be present.
-     *   <li>The pusher must have been resolved to a proxy user — if not, we cannot guarantee identity.
-     *   <li>Non-self reviewer: by default any authenticated user may review. When
-     *       {@code server.require-review-permission: true}, the user must have a REVIEW (or PUSH_AND_REVIEW) permission
-     *       for the repo.
+     *   <li>Self-review (admin or otherwise): allowed only when the reviewer has both {@code ROLE_SELF_CERTIFY} (the
+     *       capability, attested by the org's IdP/IAM via {@code auth.role-mappings} or the local {@code users[].roles}
+     *       block) and a {@link RepoPermission.Operation#SELF_CERTIFY} repo permission entry for this specific
+     *       repository. Both must be present. Holding ROLE_ADMIN does not bypass this — an admin approving their own
+     *       push is treated exactly like any other user, and {@code adminOverride} does not apply to one's own push.
+     *   <li>Reviewing someone else's push: the pusher must have been resolved to a proxy user, or we cannot guarantee
+     *       identity.
+     *   <li>ROLE_ADMIN reviewing someone else's push with {@code adminOverride=true}: break-glass — permitted on admin
+     *       authority, bypassing the review-permission check (for when the designated reviewer is unavailable).
+     *   <li>Any other reviewer of someone else's push (including an admin <em>without</em> override): by default any
+     *       authenticated user may review. When {@code server.require-review-permission: true}, the user must have a
+     *       REVIEW (or PUSH_AND_REVIEW) permission for the repo.
      * </ol>
      *
-     * @param adminOverride {@code true} when the caller has explicitly activated the admin override on the approve
-     *     endpoint; ignored for non-admin users and for admins reviewing someone else's push
+     * @param adminOverride {@code true} when an admin has explicitly activated the break-glass override; only applies
+     *     to another user's push (never one's own), and ignored for non-admins
      * @return a 403 response if the check fails, {@code null} if the reviewer is permitted to proceed
      */
     private ResponseEntity<?> checkReviewerIdentity(PushRecord record, boolean adminOverride) {
@@ -452,24 +454,8 @@ public class PushController {
         String pusherProxyUser = record.getResolvedUser();
         boolean isSelfReview = pusherProxyUser != null && pusherProxyUser.equals(reviewer);
 
-        // Admins reviewing someone else's push always bypass identity checks.
-        if (isAdmin(auth) && !isSelfReview) return null;
-
-        // Admins reviewing their own push: permitted only when the override flag is explicit.
-        // Without it they fall through to the same self-certify check as a regular user, so
-        // having ROLE_ADMIN alone does not bypass the two-gate self-approval requirement.
-        if (isAdmin(auth) && adminOverride) return null;
-
-        if (pusherProxyUser == null) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(
-                            Map.of(
-                                    "error",
-                                    "Pusher identity has not been resolved to a proxy user; approval requires verified identity"));
-        }
-
         if (isSelfReview) {
-            // Self-review requires two independent checks:
+            // Self-review requires two independent checks — no admin or override bypass:
             // 1. ROLE_SELF_CERTIFY — the capability, granted via auth.role-mappings or users[].roles in config.
             // 2. A SELF_CERTIFY repo permission entry for this specific repo — the per-repo entitlement.
             boolean hasSelfCertifyRole = auth != null
@@ -489,8 +475,21 @@ public class PushController {
                             "error", "Self-approval is not permitted: no SELF_CERTIFY permission for this repository"));
         }
 
-        // Non-self reviewer: check REVIEW permission only when require-review-permission is enabled.
-        // Default (false) allows any authenticated user to review any push they did not push themselves.
+        // Break-glass: an admin approving someone else's push on admin authority, bypassing the review-permission
+        // check. Deliberately checked before the identity gate below so it works even for an unresolved pusher.
+        if (isAdmin(auth) && adminOverride) return null;
+
+        if (pusherProxyUser == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(
+                            Map.of(
+                                    "error",
+                                    "Pusher identity has not been resolved to a proxy user; approval requires verified identity"));
+        }
+
+        // Everyone else (including an admin not using override): check REVIEW permission only when
+        // require-review-permission is enabled. Default (false) allows any authenticated user to review any push they
+        // did not push themselves.
         boolean requirePerm =
                 fogwallConfig.getServer() != null && fogwallConfig.getServer().isRequireReviewPermission();
         if (requirePerm && record.getProvider() != null && record.getUrl() != null) {
@@ -539,12 +538,16 @@ public class PushController {
         return auth != null && auth.getAuthorities().stream().anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
     }
 
-    private static boolean isSelfApproval(PushRecord record, Authentication auth, boolean adminOverride) {
-        // Only flag as an admin override when the admin explicitly activated it.
-        // Admin self-reviews via SELF_CERTIFY and all non-admin self-reviews are expected behaviour, not overrides.
+    /**
+     * Flags an approval made via the admin break-glass override. Only ever true for an admin approving <em>another</em>
+     * user's push on admin authority — an own-push override is refused by {@link #checkReviewerIdentity} before an
+     * attestation is built, so this never marks a self-approval. Recorded on the attestation for the audit trail (the
+     * attestation's {@code selfApproval} field predates the rename and carries this bit).
+     */
+    private static boolean isAdminOverride(PushRecord record, Authentication auth, boolean adminOverride) {
         if (!isAdmin(auth) || !adminOverride) return false;
         String pusher = record.getResolvedUser();
         String reviewer = auth != null ? auth.getName() : null;
-        return pusher != null && pusher.equals(reviewer);
+        return pusher == null || !pusher.equals(reviewer);
     }
 }

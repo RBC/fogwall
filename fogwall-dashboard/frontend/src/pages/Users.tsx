@@ -72,6 +72,7 @@ function AddUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   const [password, setPassword] = useState('')
   const [email, setEmail] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
+  const [selfCertify, setSelfCertify] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const toast = useToast()
 
@@ -79,7 +80,9 @@ function AddUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
     e.preventDefault()
     setSubmitting(true)
     try {
-      const roles = isAdmin ? ['USER', 'ADMIN'] : ['USER']
+      const roles = ['USER']
+      if (isAdmin) roles.push('ADMIN')
+      if (selfCertify) roles.push('SELF_CERTIFY')
       await createUser(username.trim(), password, email.trim() || undefined, roles)
       onCreated()
       onClose()
@@ -137,6 +140,15 @@ function AddUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
               className="rounded"
             />
             Grant admin role
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer dark:text-gray-300">
+            <input
+              type="checkbox"
+              checked={selfCertify}
+              onChange={(e) => setSelfCertify(e.target.checked)}
+              className="rounded"
+            />
+            Grant self-certify role
           </label>
           <div className="flex justify-end gap-2 pt-2">
             <button

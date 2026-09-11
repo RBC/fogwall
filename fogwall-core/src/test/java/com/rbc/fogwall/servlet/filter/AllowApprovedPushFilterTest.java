@@ -16,6 +16,7 @@ import com.rbc.fogwall.db.model.PushStatus;
 import com.rbc.fogwall.git.Commit;
 import com.rbc.fogwall.git.Contributor;
 import com.rbc.fogwall.git.GitRequestDetails;
+import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.GitHubProvider;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -67,7 +68,7 @@ class AllowApprovedPushFilterTest {
     @Test
     void noApprovedRecord_doesNotSetPreApproved() throws Exception {
         PushStore store = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
-        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080");
+        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080", null);
         GitRequestDetails details = pushDetailsFor("abc123", "refs/heads/main", "my-repo");
         HttpServletRequest req = mockPushRequest(details);
         HttpServletResponse resp = mock(HttpServletResponse.class);
@@ -97,7 +98,82 @@ class AllowApprovedPushFilterTest {
                         .reviewerUsername("admin")
                         .build());
 
-        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080");
+        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080", null);
+        GitRequestDetails details = pushDetailsFor("deadbeef", "refs/heads/main", "my-repo");
+        HttpServletRequest req = mockPushRequest(details);
+        HttpServletResponse resp = mock(HttpServletResponse.class);
+
+        filter.doHttpFilter(req, resp);
+
+        verify(req).setAttribute(PRE_APPROVED_ATTR, Boolean.TRUE);
+    }
+
+    @Test
+    void selfApprovedWithoutSelfCertify_doesNotSetPreApproved() throws Exception {
+        PushStore store = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
+        PushRecord approved = PushRecord.builder()
+                .commitTo("deadbeef")
+                .branch("refs/heads/main")
+                .provider("github")
+                .project("owner")
+                .repoName("my-repo")
+                .url("github.com/owner/my-repo.git")
+                .resolvedUser("alice")
+                .build();
+        store.save(approved);
+        // alice approved her own push — a self-approval.
+        store.approve(
+                approved.getId(),
+                Attestation.builder()
+                        .pushId(approved.getId())
+                        .type(Attestation.Type.APPROVAL)
+                        .reviewerUsername("alice")
+                        .build());
+
+        RepoPermissionService permissionService = mock(RepoPermissionService.class);
+        when(permissionService.isBypassReviewAllowed("alice", "github", "github.com/owner/my-repo.git"))
+                .thenReturn(false);
+
+        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080", permissionService);
+        GitRequestDetails details = pushDetailsFor("deadbeef", "refs/heads/main", "my-repo");
+        HttpServletRequest req = mockPushRequest(details);
+        HttpServletResponse resp = mock(HttpServletResponse.class);
+
+        filter.doHttpFilter(req, resp);
+
+        // The prior self-approval carries no SELF_CERTIFY permission — it must not be honored on re-push.
+        verify(req, never()).setAttribute(eq(PRE_APPROVED_ATTR), any());
+        // And it must not linger as APPROVED: the stale record is demoted to ERROR so it can never forward.
+        assertEquals(
+                PushStatus.ERROR, store.findById(approved.getId()).orElseThrow().getStatus());
+    }
+
+    @Test
+    void selfApprovedWithSelfCertify_setsPreApproved() throws Exception {
+        PushStore store = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
+        PushRecord approved = PushRecord.builder()
+                .commitTo("deadbeef")
+                .branch("refs/heads/main")
+                .provider("github")
+                .project("owner")
+                .repoName("my-repo")
+                .url("github.com/owner/my-repo.git")
+                .resolvedUser("alice")
+                .build();
+        store.save(approved);
+        store.approve(
+                approved.getId(),
+                Attestation.builder()
+                        .pushId(approved.getId())
+                        .type(Attestation.Type.APPROVAL)
+                        .reviewerUsername("alice")
+                        .build());
+
+        RepoPermissionService permissionService = mock(RepoPermissionService.class);
+        when(permissionService.isBypassReviewAllowed("alice", "github", "github.com/owner/my-repo.git"))
+                .thenReturn(true);
+
+        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080", permissionService);
         GitRequestDetails details = pushDetailsFor("deadbeef", "refs/heads/main", "my-repo");
         HttpServletRequest req = mockPushRequest(details);
         HttpServletResponse resp = mock(HttpServletResponse.class);
@@ -110,7 +186,7 @@ class AllowApprovedPushFilterTest {
     @Test
     void alwaysSetsServiceUrlAttribute() throws Exception {
         PushStore store = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
-        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://my-dashboard:8080");
+        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://my-dashboard:8080", null);
         GitRequestDetails details = pushDetailsFor("abc", "refs/heads/main", "repo");
         HttpServletRequest req = mockPushRequest(details);
         HttpServletResponse resp = mock(HttpServletResponse.class);
@@ -139,7 +215,7 @@ class AllowApprovedPushFilterTest {
                         .reviewerUsername("admin")
                         .build());
 
-        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080");
+        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080", null);
         // Different commitTo
         GitRequestDetails details = pushDetailsFor("bbbbbb", "refs/heads/main", "repo");
         HttpServletRequest req = mockPushRequest(details);
@@ -170,7 +246,7 @@ class AllowApprovedPushFilterTest {
                         .reviewerUsername("admin")
                         .build());
 
-        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080");
+        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080", null);
 
         // No commit set — mirrors what ParseGitRequestFilter produces for a tag push
         GitRequestDetails details = new GitRequestDetails();
@@ -214,7 +290,7 @@ class AllowApprovedPushFilterTest {
                         .reviewerUsername("admin")
                         .build());
 
-        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080");
+        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080", null);
         GitRequestDetails details = pushDetailsFor("deadbeef", "refs/heads/main", "app", "evil-org", "github");
         HttpServletRequest req = mockPushRequest(details);
 
@@ -243,7 +319,7 @@ class AllowApprovedPushFilterTest {
                         .reviewerUsername("admin")
                         .build());
 
-        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080");
+        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080", null);
         GitRequestDetails details = pushDetailsFor("deadbeef", "refs/heads/main", "app", "acme", "internal-gitea");
         HttpServletRequest req = mockPushRequest(details);
 
@@ -256,7 +332,7 @@ class AllowApprovedPushFilterTest {
     @Test
     void missingProvider_skipsLookup() throws Exception {
         PushStore store = mock(PushStore.class);
-        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080");
+        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080", null);
         GitRequestDetails details = pushDetailsFor("deadbeef", "refs/heads/main", "app");
         details.setProvider(null);
         HttpServletRequest req = mockPushRequest(details);
@@ -269,7 +345,7 @@ class AllowApprovedPushFilterTest {
     @Test
     void blankCommitTo_skipsLookup() throws Exception {
         PushStore store = mock(PushStore.class);
-        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080");
+        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080", null);
         GitRequestDetails details = pushDetailsFor("", "refs/heads/main", "repo");
         HttpServletRequest req = mockPushRequest(details);
         HttpServletResponse resp = mock(HttpServletResponse.class);
@@ -294,7 +370,7 @@ class AllowApprovedPushFilterTest {
                 .build();
         store.save(pending);
 
-        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080");
+        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080", null);
         GitRequestDetails details = pushDetailsFor("newsha", "refs/heads/main", "my-repo");
         HttpServletRequest req = mockPushRequest(details);
 
@@ -319,7 +395,7 @@ class AllowApprovedPushFilterTest {
                 .build();
         store.save(pending);
 
-        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080");
+        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080", null);
         GitRequestDetails details = pushDetailsFor("newsha", "refs/heads/main", "my-repo");
         HttpServletRequest req = mockPushRequest(details);
 
@@ -348,7 +424,7 @@ class AllowApprovedPushFilterTest {
                         .reviewerUsername("admin")
                         .build());
 
-        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080");
+        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080", null);
         GitRequestDetails details = pushDetailsFor("newsha", "refs/heads/main", "my-repo");
         HttpServletRequest req = mockPushRequest(details);
 
@@ -362,7 +438,7 @@ class AllowApprovedPushFilterTest {
     void noPendingRecordForBranch_findIsStillScoped() throws Exception {
         PushStore store = mock(PushStore.class);
         when(store.find(any())).thenReturn(java.util.List.of());
-        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080");
+        AllowApprovedPushFilter filter = new AllowApprovedPushFilter(store, "http://localhost:8080", null);
         GitRequestDetails details = pushDetailsFor("newsha", "refs/heads/main", "my-repo");
         HttpServletRequest req = mockPushRequest(details);
 

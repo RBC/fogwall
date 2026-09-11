@@ -184,8 +184,13 @@ function PushTimeline({ record }: { record: PushRecord }) {
     const att = record.attestation
     const typeLabel =
       att.type === 'APPROVAL' ? 'Approved' : att.type === 'REJECTION' ? 'Rejected' : 'Canceled'
+    // `selfApproval` records that an admin override was applied. New code only ever sets it for a break-glass
+    // approval of someone else's push; historical records set it for the (now-removed) admin self-approval override,
+    // where reviewer === pusher. Distinguish the two by that comparison so neither is misdescribed.
     const overrideNote = att.selfApproval
-      ? ' [admin self-approval override]'
+      ? att.reviewerUsername === record.resolvedUser
+        ? ' [admin self-approval override]'
+        : ' [admin override]'
       : att.type === 'APPROVAL' && att.reviewerUsername === record.resolvedUser
         ? ' [self certified]'
         : ''
@@ -1029,7 +1034,7 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
                       </span>
                     )}
                   </div>
-                  {isSelfReview && !adminOverrideEnabled && (
+                  {isSelfReview && (
                     <div className="flex gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-3 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-300">
                       <span>⚠</span>
                       <span>
@@ -1047,23 +1052,20 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
                       </span>
                     </div>
                   )}
-                  {isAdmin && isPusher && !canSelfCertify && !adminOverrideEnabled && (
-                    <button
-                      onClick={() => setAdminOverrideEnabled(true)}
-                      className="w-full text-left text-xs text-gray-500 hover:text-gray-700 underline mb-3 dark:text-gray-400 dark:hover:text-gray-300"
-                    >
-                      Enable admin override
-                    </button>
-                  )}
-                  {isAdmin && isPusher && adminOverrideEnabled && (
-                    <div className="flex gap-2 text-sm text-red-800 bg-red-50 border border-red-200 rounded px-3 py-2 mb-3 dark:bg-red-900/20 dark:border-red-700 dark:text-red-300">
-                      <span>⚠</span>
+                  {isAdmin && !isPusher && (
+                    <label className="flex items-start gap-2 text-xs text-gray-500 cursor-pointer mb-3 dark:text-gray-400">
+                      <input
+                        type="checkbox"
+                        checked={adminOverrideEnabled}
+                        onChange={(e) => setAdminOverrideEnabled(e.target.checked)}
+                        className="mt-0.5 rounded"
+                      />
                       <span>
-                        <strong>WARNING:</strong> You are about to approve your own push as an admin
-                        override. Only do this if you have a very good reason to — this action will
-                        be permanently recorded in the audit log.
+                        Admin override — approve on admin authority, bypassing the review-permission
+                        check (break-glass for when the assigned reviewer is unavailable). Recorded
+                        in the audit log.
                       </span>
-                    </div>
+                    </label>
                   )}
                   {attestationQuestions.length > 0 && (
                     <div className="mb-4 space-y-3">
@@ -1075,7 +1077,7 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
                           key={q.id}
                           question={q}
                           value={attestationAnswers[q.id] ?? ''}
-                          disabled={isSelfReview && !adminOverrideEnabled}
+                          disabled={isSelfReview}
                           onChange={(val) =>
                             setAttestationAnswers((prev) => ({ ...prev, [q.id]: val }))
                           }
@@ -1090,14 +1092,14 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
                     placeholder={
                       'Reason (required for both approve and reject)\nDescribe the basis for your decision...'
                     }
-                    disabled={isSelfReview && !adminOverrideEnabled}
+                    disabled={isSelfReview}
                     className="w-full border border-gray-300 rounded px-3 py-2 text-sm mb-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-gray-50 disabled:text-gray-400 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400 dark:disabled:bg-gray-800 dark:disabled:text-gray-500"
                   />
                   <div className="flex gap-3">
                     <button
                       onClick={handleApprove}
                       disabled={
-                        (isSelfReview && !adminOverrideEnabled) ||
+                        isSelfReview ||
                         saving ||
                         canceling ||
                         !reviewReason.trim() ||
@@ -1109,12 +1111,7 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
                     </button>
                     <button
                       onClick={handleReject}
-                      disabled={
-                        (isSelfReview && !adminOverrideEnabled) ||
-                        saving ||
-                        canceling ||
-                        !reviewReason.trim()
-                      }
+                      disabled={isSelfReview || saving || canceling || !reviewReason.trim()}
                       className="px-4 py-2 text-sm font-medium rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-gray-400"
                     >
                       ✗ Reject

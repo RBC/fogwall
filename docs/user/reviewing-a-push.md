@@ -37,3 +37,8 @@ questions still apply.
 By default any authenticated user can review any push they did not push themselves. If your administrator has set
 `server.require-review-permission: true`, you need an explicit `REVIEW` permission entry for the repository to approve
 or reject. Contact your administrator if you receive a 403 trying to approve a push.
+
+An admin reviewing another user's push may tick **admin override** to approve on admin authority when the assigned
+reviewer is unavailable, bypassing the review-permission check. This is a break-glass action, recorded in the audit log.
+It never applies to an admin's own push — approving your own push always requires self-certification, whether or not you
+are an admin.
