@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchScmApiActions } from '../api'
 import { StatusBadge } from '../components/StatusBadge'
-import type { ScmApiActionRecord, ScmApiActionStatus, ScmApiProposal, CurrentUser } from '../types'
+import type { ScmApiActionRecord, ScmApiActionStatus, ScmApiEntity, CurrentUser } from '../types'
 
 const PAGE_SIZE = 25
 const STATUSES: ScmApiActionStatus[] = ['FORWARDED', 'DENIED', 'REJECTED', 'ERROR']
@@ -15,20 +15,20 @@ function formatTime(ts: string | number | undefined) {
   }
 }
 
-const PROPOSAL_KIND: Record<ScmApiProposal['kind'], string> = {
+const ENTITY_KIND: Record<ScmApiEntity['kind'], string> = {
   PULL_REQUEST: 'PR',
   ISSUE: 'Issue',
 }
 
 /**
  * What the mutation created or touched: kind, number and link. Only the identity — a record describes one past event,
- * and the proposal's current state and title belong to the registry, not to every row that ever touched it.
+ * and the entity's current state and title belong to the registry, not to every row that ever touched it.
  */
-function ProposalRef({ proposal }: { proposal: ScmApiProposal }) {
-  const label = `${PROPOSAL_KIND[proposal.kind]} #${proposal.number}`
-  return proposal.url ? (
+function EntityRef({ entity }: { entity: ScmApiEntity }) {
+  const label = `${ENTITY_KIND[entity.kind]} #${entity.number}`
+  return entity.url ? (
     <a
-      href={proposal.url}
+      href={entity.url}
       target="_blank"
       rel="noopener noreferrer"
       onClick={(e) => e.stopPropagation()}
@@ -98,7 +98,7 @@ export function ScmApiActionList({ currentUser }: ScmApiActionListProps) {
   return (
     <div>
       <div className="max-w-6xl px-6 pt-6">
-        <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-200">Proposals</h1>
+        <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-200">Contributions</h1>
       </div>
 
       {/* Status filter chips */}
@@ -210,9 +210,9 @@ export function ScmApiActionList({ currentUser }: ScmApiActionListProps) {
                     ? `${action.repoOwner}/${action.repoName}`
                     : '—'}
                 </div>
-                {action.proposal && (
+                {action.entity && (
                   <div className="truncate">
-                    <ProposalRef proposal={action.proposal} />
+                    <EntityRef entity={action.entity} />
                   </div>
                 )}
                 {action.reason && (
@@ -239,10 +239,10 @@ export function ScmApiActionList({ currentUser }: ScmApiActionListProps) {
                 {/* GitHub addresses a mutation's target by GraphQL node ID; the REST dialects have none. */}
                 {action.nodeId && <div>nodeId: {action.nodeId}</div>}
                 {action.nodeType && <div>nodeType: {action.nodeType}</div>}
-                {action.proposal && (
+                {action.entity && (
                   <div>
-                    proposal: {action.proposal.id}
-                    {action.proposal.nodeId && ` · node ${action.proposal.nodeId}`}
+                    entity: {action.entity.id}
+                    {action.entity.nodeId && ` · node ${action.entity.nodeId}`}
                   </div>
                 )}
                 {action.reason && (

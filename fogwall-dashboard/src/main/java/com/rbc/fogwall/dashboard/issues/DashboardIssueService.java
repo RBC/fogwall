@@ -5,18 +5,18 @@ import com.rbc.fogwall.config.ProviderConfig;
 import com.rbc.fogwall.crypto.TokenCipher;
 import com.rbc.fogwall.crypto.TokenCipherProvider;
 import com.rbc.fogwall.db.ScmApiActionStore;
-import com.rbc.fogwall.db.ScmApiProposalStore;
+import com.rbc.fogwall.db.ScmApiEntityStore;
 import com.rbc.fogwall.db.model.ScmApiActionRecord;
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
-import com.rbc.fogwall.db.model.ScmApiProposalRecord;
+import com.rbc.fogwall.db.model.ScmApiEntityRecord;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.ForgejoProvider;
 import com.rbc.fogwall.provider.GitHubProvider;
 import com.rbc.fogwall.provider.GitLabProvider;
 import com.rbc.fogwall.provider.ProviderRegistry;
-import com.rbc.fogwall.scmapi.ProposalContent;
-import com.rbc.fogwall.scmapi.ProposalPayload;
+import com.rbc.fogwall.scmapi.EntityContent;
+import com.rbc.fogwall.scmapi.EntityPayload;
 import com.rbc.fogwall.scmapi.ScmContentInspector;
 import com.rbc.fogwall.user.ScmOAuthTokenStore;
 import java.nio.charset.StandardCharsets;
@@ -45,7 +45,7 @@ public class DashboardIssueService {
     private final Optional<ScmOAuthTokenStore> tokenStore;
     private final TokenCipherProvider cipherProvider;
     private final ScmApiActionStore auditStore;
-    private final ScmApiProposalStore proposalStore;
+    private final ScmApiEntityStore entityStore;
     private final FogwallConfig fogwallConfig;
     private final DashboardIssueClient client;
 
@@ -56,7 +56,7 @@ public class DashboardIssueService {
             Optional<ScmOAuthTokenStore> tokenStore,
             TokenCipherProvider cipherProvider,
             ScmApiActionStore auditStore,
-            ScmApiProposalStore proposalStore,
+            ScmApiEntityStore entityStore,
             FogwallConfig fogwallConfig,
             DashboardIssueClient client) {
         this.providers = providers;
@@ -65,7 +65,7 @@ public class DashboardIssueService {
         this.tokenStore = tokenStore;
         this.cipherProvider = cipherProvider;
         this.auditStore = auditStore;
-        this.proposalStore = proposalStore;
+        this.entityStore = entityStore;
         this.fogwallConfig = fogwallConfig;
         this.client = client;
     }
@@ -258,9 +258,9 @@ public class DashboardIssueService {
             ScmApiActionRecord action = actionBuilder(
                             op, provider, username, owner, repo, ScmApiActionStatus.FORWARDED, null, status)
                     .build();
-            String proposalId = registerProposal(op, provider, username, owner, repo, result, title, action.getId());
-            if (proposalId != null) {
-                action.setProposalId(proposalId);
+            String entityId = registerEntity(op, provider, username, owner, repo, result, title, action.getId());
+            if (entityId != null) {
+                action.setEntityId(entityId);
             }
             auditStore.save(action);
             return new IssueOutcome(status, result, null, List.of());
@@ -281,12 +281,12 @@ public class DashboardIssueService {
     }
 
     private List<String> inspect(Op op, String title, String body) {
-        List<ProposalContent> fields = new ArrayList<>();
+        List<EntityContent> fields = new ArrayList<>();
         if (op != Op.COMMENT && title != null) {
-            fields.add(new ProposalContent("title", title));
+            fields.add(new EntityContent("title", title));
         }
         if (body != null) {
-            fields.add(new ProposalContent("body", body));
+            fields.add(new EntityContent("body", body));
         }
         StringBuilder combined = new StringBuilder();
         if (op != Op.COMMENT && title != null) {
@@ -295,7 +295,7 @@ public class DashboardIssueService {
         if (body != null) {
             combined.append(body);
         }
-        ProposalPayload payload = ProposalPayload.of(combined.toString().getBytes(StandardCharsets.UTF_8), null);
+        EntityPayload payload = EntityPayload.of(combined.toString().getBytes(StandardCharsets.UTF_8), null);
         return contentInspector.inspect(fields, payload);
     }
 
@@ -370,14 +370,14 @@ public class DashboardIssueService {
     }
 
     /**
-     * Records the created or touched issue in the proposal registry — the current-state index the Proposals view reads
-     * — and returns the registry row's id to link the action record to it. Create saves a new row; edit refreshes an
-     * existing row's title and URL; close/reopen flip its state; comment only bumps an existing row's last-touched
-     * marker. Anything but comment registers the issue if fogwall hasn't seen it before. A comment on an issue fogwall
-     * never saw isn't registered — a comment response carries no issue title and its URL points at the comment, not the
-     * issue. Returns null when nothing was recorded.
+     * Records the created or touched issue in the SCM API entity registry — the current-state index the Contributions
+     * view reads — and returns the registry row's id to link the action record to it. Create saves a new row; edit
+     * refreshes an existing row's title and URL; close/reopen flip its state; comment only bumps an existing row's
+     * last-touched marker. Anything but comment registers the issue if fogwall hasn't seen it before. A comment on an
+     * issue fogwall never saw isn't registered — a comment response carries no issue title and its URL points at the
+     * comment, not the issue. Returns null when nothing was recorded.
      */
-    private String registerProposal(
+    private String registerEntity(
             Op op,
             FogwallProvider provider,
             String username,
@@ -387,12 +387,12 @@ public class DashboardIssueService {
             String title,
             String actionId) {
         int number = result.number();
-        Optional<ScmApiProposalRecord> existing =
-                proposalStore.findByTarget(provider.getName(), owner, repo, ScmApiProposalRecord.Kind.ISSUE, number);
-        ScmApiProposalRecord.State stateChange =
+        Optional<ScmApiEntityRecord> existing =
+                entityStore.findByTarget(provider.getName(), owner, repo, ScmApiEntityRecord.Kind.ISSUE, number);
+        ScmApiEntityRecord.State stateChange =
                 switch (op) {
-                    case CLOSE -> ScmApiProposalRecord.State.CLOSED;
-                    case REOPEN -> ScmApiProposalRecord.State.OPEN;
+                    case CLOSE -> ScmApiEntityRecord.State.CLOSED;
+                    case REOPEN -> ScmApiEntityRecord.State.OPEN;
                     default -> null; // create/edit/comment don't move state
                 };
 
@@ -400,15 +400,15 @@ public class DashboardIssueService {
             if (existing.isEmpty()) {
                 return null;
             }
-            ScmApiProposalRecord row = existing.get();
+            ScmApiEntityRecord row = existing.get();
             row.setLastActionId(actionId);
             row.setUpdatedAt(Instant.now());
-            proposalStore.update(row);
+            entityStore.update(row);
             return row.getId();
         }
 
         if (existing.isPresent()) {
-            ScmApiProposalRecord row = existing.get();
+            ScmApiEntityRecord row = existing.get();
             if (title != null) {
                 row.setTitle(title);
             }
@@ -420,24 +420,24 @@ public class DashboardIssueService {
             }
             row.setLastActionId(actionId);
             row.setUpdatedAt(Instant.now());
-            proposalStore.update(row);
+            entityStore.update(row);
             return row.getId();
         }
 
-        ScmApiProposalRecord row = ScmApiProposalRecord.builder()
+        ScmApiEntityRecord row = ScmApiEntityRecord.builder()
                 .provider(provider.getName())
                 .repoOwner(owner)
                 .repoName(repo)
-                .kind(ScmApiProposalRecord.Kind.ISSUE)
+                .kind(ScmApiEntityRecord.Kind.ISSUE)
                 .number(number)
                 .url(result.url())
                 .title(title)
-                .state(stateChange != null ? stateChange : ScmApiProposalRecord.State.OPEN)
+                .state(stateChange != null ? stateChange : ScmApiEntityRecord.State.OPEN)
                 .createdBy(username)
                 .createdActionId(actionId)
                 .lastActionId(actionId)
                 .build();
-        proposalStore.save(row);
+        entityStore.save(row);
         return row.getId();
     }
 }

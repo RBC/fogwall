@@ -8,7 +8,7 @@ interface Crumb {
 // First-segment → label for the flat pages. Dynamic trails (push/:id, users/:username) are built below.
 const LABELS: Record<string, string> = {
   pushes: 'Pushes',
-  proposals: 'Proposals',
+  contributions: 'Contributions',
   issues: 'Issues',
   repos: 'Repos',
   providers: 'Providers',
@@ -21,7 +21,7 @@ const LABELS: Record<string, string> = {
   legal: 'Legal',
 }
 
-// Push/proposal record ids are long UUIDs — show a legible prefix in the trail, not the whole thing.
+// Push/SCM API record ids are long UUIDs — show a legible prefix in the trail, not the whole thing.
 function shortId(id: string): string {
   return id.length > 10 ? id.slice(0, 8) + '…' : id
 }

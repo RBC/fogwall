@@ -12,7 +12,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Resolves a pull request's head commit SHA, for {@code providers.github.proposals.require-validated-head} (see
+ * Resolves a pull request's head commit SHA, for {@code providers.github.scm-api.require-validated-head} (see
  * {@link HeadCommitValidator}) — either a {@code createPullRequest} mutation's {@code input.headRefName}, or (via
  * {@link #resolvePullRequestHeadSha}) a {@code mergePullRequest} mutation's target node directly, since that mutation's
  * input carries no head ref or SHA of its own.

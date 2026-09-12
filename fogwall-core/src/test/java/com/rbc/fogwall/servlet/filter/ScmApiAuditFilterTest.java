@@ -47,7 +47,7 @@ class ScmApiAuditFilterTest {
     }
 
     @Test
-    void forwardedMutation_carriesTheUpstreamStatusAndProposalLink() throws Exception {
+    void forwardedMutation_carriesTheUpstreamStatusAndEntityLink() throws Exception {
         ScmApiActionStore store = mock(ScmApiActionStore.class);
         ScmApiRequestContext context = new ScmApiRequestContext();
         context.setProvider("gitea");
@@ -55,14 +55,14 @@ class ScmApiAuditFilterTest {
         context.setMutationField("pulls.create");
         context.setStatus(ScmApiActionStatus.FORWARDED);
         context.setUpstreamStatus(201);
-        context.setProposalId("p-7");
+        context.setEntityId("p-7");
         HttpServletRequest req = mock(HttpServletRequest.class);
         when(req.getAttribute(SCM_API_REQUEST_ATTR)).thenReturn(context);
         new ScmApiAuditFilter(store).doFilter(req, mock(HttpServletResponse.class), mock(FilterChain.class));
         ArgumentCaptor<ScmApiActionRecord> captor = ArgumentCaptor.forClass(ScmApiActionRecord.class);
         verify(store).save(captor.capture());
         assertEquals(201, captor.getValue().getUpstreamStatus());
-        assertEquals("p-7", captor.getValue().getProposalId());
+        assertEquals("p-7", captor.getValue().getEntityId());
     }
 
     @Test

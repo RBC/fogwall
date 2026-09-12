@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
  *
  * <p>Separate from {@link BlockedContentDiffCheck} because the rules are about content, not about diffs: the same
  * blocked term is equally unwelcome in a pushed line and in the body of a pull request opened through the SCM API
- * proxy. The diff check supplies added lines and their file; the proposal path supplies a title or description. Only
+ * proxy. The diff check supplies added lines and their file; the SCM API path supplies a title or description. Only
  * what is fed in differs.
  */
 public final class BlockedContentScanner {
@@ -35,7 +35,7 @@ public final class BlockedContentScanner {
 
     /**
      * Scans one piece of text, reporting at most one match per rule. {@code location} names where the text came from —
-     * a file path for a diff line, a field name such as {@code title} for a proposal — and may be {@code null}.
+     * a file path for a diff line, a field name such as {@code title} for an SCM API entity — and may be {@code null}.
      */
     public static List<Match> scan(String text, String location, BlockConfig block) {
         if (text == null || text.isEmpty() || !isConfigured(block)) {

@@ -7,7 +7,7 @@ import java.util.List;
 import tools.jackson.databind.JsonNode;
 
 /**
- * The two readings of a proposal request body that content inspection needs.
+ * The two readings of an SCM API entity request body that content inspection needs.
  *
  * <p>Scanning either one alone leaves a gap. The <b>raw</b> bytes cover every field, including ones no extractor knows
  * to look for — a dialect gaining a new prose field would otherwise go silently uninspected. The <b>decoded</b>
@@ -17,10 +17,10 @@ import tools.jackson.databind.JsonNode;
  * <p>Both are handed to the scanner together, as one document, so this costs a single gitleaks invocation for the whole
  * request rather than one per field.
  */
-public record ProposalPayload(String raw, String decoded) {
+public record EntityPayload(String raw, String decoded) {
 
     /** Reads both forms from the request body; {@code parsed} may be {@code null} when the body would not parse. */
-    public static ProposalPayload of(byte[] body, JsonNode parsed) {
+    public static EntityPayload of(byte[] body, JsonNode parsed) {
         return of(body, parsed, null, List.of());
     }
 
@@ -29,19 +29,18 @@ public record ProposalPayload(String raw, String decoded) {
      * its query is a JSON string, so decoding the transport leaves GraphQL's own literal escaping untouched, and
      * arguments inlined in the query text never appear as JSON values at all.
      */
-    public static ProposalPayload of(byte[] body, JsonNode parsed, List<String> additionalReadings) {
+    public static EntityPayload of(byte[] body, JsonNode parsed, List<String> additionalReadings) {
         return of(body, parsed, null, additionalReadings);
     }
 
     /**
      * As above, including the request's query string.
      *
-     * <p>Not an edge case: GitLab and Forgejo accept the same parameters in the query string as in the body, so a
-     * proposal can carry its entire description there and leave the body empty. Inspecting only the body would let that
+     * <p>Not an edge case: GitLab and Forgejo accept the same parameters in the query string as in the body, so an
+     * entity can carry its entire description there and leave the body empty. Inspecting only the body would let that
      * through untouched while the forwarder relayed it verbatim.
      */
-    public static ProposalPayload of(
-            byte[] body, JsonNode parsed, String queryString, List<String> additionalReadings) {
+    public static EntityPayload of(byte[] body, JsonNode parsed, String queryString, List<String> additionalReadings) {
         var raw = new StringBuilder(body == null ? "" : new String(body, StandardCharsets.UTF_8));
         if (queryString != null && !queryString.isEmpty()) {
             raw.append('\n').append(queryString);
@@ -50,7 +49,7 @@ public record ProposalPayload(String raw, String decoded) {
         collectValues(parsed, values);
         values.addAll(decodeQueryString(queryString));
         values.addAll(additionalReadings);
-        return new ProposalPayload(raw.toString(), String.join("\n", values));
+        return new EntityPayload(raw.toString(), String.join("\n", values));
     }
 
     /** Percent-decoded names and values, so an encoded secret is as visible here as it is in a decoded JSON body. */

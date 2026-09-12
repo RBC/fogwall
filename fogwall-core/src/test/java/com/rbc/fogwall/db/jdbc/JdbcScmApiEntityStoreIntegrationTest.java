@@ -3,29 +3,29 @@ package com.rbc.fogwall.db.jdbc;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.rbc.fogwall.db.model.ScmApiProposalRecord;
-import com.rbc.fogwall.db.model.ScmApiProposalRecord.Kind;
-import com.rbc.fogwall.db.model.ScmApiProposalRecord.State;
+import com.rbc.fogwall.db.model.ScmApiEntityRecord;
+import com.rbc.fogwall.db.model.ScmApiEntityRecord.Kind;
+import com.rbc.fogwall.db.model.ScmApiEntityRecord.State;
 import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** Integration tests for {@link JdbcScmApiProposalStore} backed by an H2 in-memory database. */
-class JdbcScmApiProposalStoreIntegrationTest {
+/** Integration tests for {@link JdbcScmApiEntityStore} backed by an H2 in-memory database. */
+class JdbcScmApiEntityStoreIntegrationTest {
 
-    JdbcScmApiProposalStore store;
+    JdbcScmApiEntityStore store;
 
     @BeforeEach
     void setUp() {
-        DataSource ds = DataSourceFactory.h2InMemory("scm-api-proposal-test-" + UUID.randomUUID());
-        store = new JdbcScmApiProposalStore(ds);
+        DataSource ds = DataSourceFactory.h2InMemory("scm-api-entity-test-" + UUID.randomUUID());
+        store = new JdbcScmApiEntityStore(ds);
         store.initialize();
     }
 
-    private static ScmApiProposalRecord row(String provider, Kind kind, int number, String nodeId) {
-        return ScmApiProposalRecord.builder()
+    private static ScmApiEntityRecord row(String provider, Kind kind, int number, String nodeId) {
+        return ScmApiEntityRecord.builder()
                 .provider(provider)
                 .repoOwner("acme")
                 .repoName("widgets")
@@ -44,9 +44,9 @@ class JdbcScmApiProposalStoreIntegrationTest {
 
     @Test
     void save_thenFindByTargetAndNodeId_roundTrips() {
-        ScmApiProposalRecord r = row("github", Kind.PULL_REQUEST, 7, "PR_1");
+        ScmApiEntityRecord r = row("github", Kind.PULL_REQUEST, 7, "PR_1");
         store.save(r);
-        ScmApiProposalRecord found = store.findByTarget("github", "acme", "widgets", Kind.PULL_REQUEST, 7)
+        ScmApiEntityRecord found = store.findByTarget("github", "acme", "widgets", Kind.PULL_REQUEST, 7)
                 .orElseThrow();
         assertEquals(r.getId(), found.getId());
         assertEquals("alice-scm", found.getCreatedByScmUsername());
@@ -59,13 +59,13 @@ class JdbcScmApiProposalStoreIntegrationTest {
 
     @Test
     void update_replacesTheMutableFields() {
-        ScmApiProposalRecord r = row("gitea", Kind.ISSUE, 2, null);
+        ScmApiEntityRecord r = row("gitea", Kind.ISSUE, 2, null);
         store.save(r);
         r.setState(State.CLOSED);
         r.setTitle("edited");
         r.setLastActionId("a2");
         store.update(r);
-        ScmApiProposalRecord found = store.findById(r.getId()).orElseThrow();
+        ScmApiEntityRecord found = store.findById(r.getId()).orElseThrow();
         assertEquals(State.CLOSED, found.getState());
         assertEquals("edited", found.getTitle());
         assertEquals("a2", found.getLastActionId());
@@ -74,11 +74,11 @@ class JdbcScmApiProposalStoreIntegrationTest {
 
     @Test
     void findByIds_returnsOnlyWhatExists() {
-        ScmApiProposalRecord a = row("gitlab", Kind.ISSUE, 1, null);
-        ScmApiProposalRecord b = row("gitlab", Kind.PULL_REQUEST, 1, null);
+        ScmApiEntityRecord a = row("gitlab", Kind.ISSUE, 1, null);
+        ScmApiEntityRecord b = row("gitlab", Kind.PULL_REQUEST, 1, null);
         store.save(a);
         store.save(b);
-        List<ScmApiProposalRecord> found = store.findByIds(List.of(a.getId(), b.getId(), "missing"));
+        List<ScmApiEntityRecord> found = store.findByIds(List.of(a.getId(), b.getId(), "missing"));
         assertEquals(2, found.size());
         assertTrue(store.findByIds(List.of()).isEmpty());
     }

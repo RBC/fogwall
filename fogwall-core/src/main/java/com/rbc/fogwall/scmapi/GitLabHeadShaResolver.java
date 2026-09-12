@@ -13,7 +13,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Resolves an {@code mr create} request's {@code source_branch} to the tip commit SHA it currently names, for
- * {@code providers.gitlab.proposals.require-validated-head} (see {@link HeadCommitValidator}).
+ * {@code providers.gitlab.scm-api.require-validated-head} (see {@link HeadCommitValidator}).
  *
  * <p>Unlike GitHub and Forgejo, GitLab's fork is not named in the body at all — {@code mr create} always POSTs to the
  * <b>source</b> project's own URL (see the "Fork MRs address the source project" section of the SCM API proxy notes),

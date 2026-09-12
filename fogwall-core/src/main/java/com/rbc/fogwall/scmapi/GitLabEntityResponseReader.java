@@ -1,12 +1,12 @@
 package com.rbc.fogwall.scmapi;
 
-import static com.rbc.fogwall.scmapi.ProposalResponseJson.integer;
-import static com.rbc.fogwall.scmapi.ProposalResponseJson.numberInPath;
-import static com.rbc.fogwall.scmapi.ProposalResponseJson.parse;
-import static com.rbc.fogwall.scmapi.ProposalResponseJson.text;
+import static com.rbc.fogwall.scmapi.EntityResponseJson.integer;
+import static com.rbc.fogwall.scmapi.EntityResponseJson.numberInPath;
+import static com.rbc.fogwall.scmapi.EntityResponseJson.parse;
+import static com.rbc.fogwall.scmapi.EntityResponseJson.text;
 
-import com.rbc.fogwall.db.model.ScmApiProposalRecord.Kind;
-import com.rbc.fogwall.db.model.ScmApiProposalRecord.State;
+import com.rbc.fogwall.db.model.ScmApiEntityRecord.Kind;
+import com.rbc.fogwall.db.model.ScmApiEntityRecord.State;
 import com.rbc.fogwall.servlet.ScmApiRequestContext;
 import java.util.Locale;
 import java.util.Optional;
@@ -17,10 +17,10 @@ import tools.jackson.databind.JsonNode;
  * {@code state} and {@code title}; a note with {@code noteable_iid}. Issues and merge requests have separate number
  * spaces, so the kind comes from the operation.
  */
-public class GitLabProposalResponseReader implements ProposalResponseReader {
+public class GitLabEntityResponseReader implements EntityResponseReader {
 
     @Override
-    public Optional<ProposalOutcome> read(ScmApiRequestContext context, String requestPath, String body) {
+    public Optional<EntityOutcome> read(ScmApiRequestContext context, String requestPath, String body) {
         String operation = context.getMutationField();
         if (operation == null) {
             return Optional.empty();
@@ -34,7 +34,7 @@ public class GitLabProposalResponseReader implements ProposalResponseReader {
             }
             return number == null
                     ? Optional.empty()
-                    : Optional.of(new ProposalOutcome(kind, number, null, null, null, null));
+                    : Optional.of(new EntityOutcome(kind, number, null, null, null, null));
         }
         Integer number = integer(json, "iid");
         if (number == null) {
@@ -46,7 +46,7 @@ public class GitLabProposalResponseReader implements ProposalResponseReader {
         State state = json != null && json.hasNonNull("state")
                 ? state(json.get("state").asText())
                 : null;
-        return Optional.of(new ProposalOutcome(
+        return Optional.of(new EntityOutcome(
                 kind, number, text(json, "web_url"), null, text(json, "title"), state, text(json, "merge_commit_sha")));
     }
 

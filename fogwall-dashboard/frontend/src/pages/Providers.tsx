@@ -7,16 +7,16 @@ import type { Provider } from '../types'
  * Shows which transports a provider serves: HTTP is always available; SSH appears when the provider has SSH
  * enabled (the listener is on and the entry opts in). Both badges together = the entry serves both (#442/#531).
  *
- * The SCM API badge is presence-only: it states the CLI proposals proxy is enabled for the provider, not how to
+ * The SCM API badge is presence-only: it states the CLI SCM API proxy is enabled for the provider, not how to
  * reach it — the connect address is deployment-determined (dedicated per-provider listener, separate TLS termination).
  */
 function TransportBadges({
   sshEnabled,
-  proposalsEnabled,
+  scmApiEnabled,
   issuesEnabled,
 }: {
   sshEnabled: boolean
-  proposalsEnabled: boolean
+  scmApiEnabled: boolean
   issuesEnabled: boolean
 }) {
   return (
@@ -29,7 +29,7 @@ function TransportBadges({
           SSH
         </span>
       )}
-      {proposalsEnabled && (
+      {scmApiEnabled && (
         <span
           title="SCM API proxy enabled for this provider. Connection details are deployment-specific — see the admin and configuration docs."
           className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"
@@ -90,7 +90,7 @@ export function Providers() {
             <span className="font-semibold text-gray-900 dark:text-gray-100">{p.name}</span>
             <TransportBadges
               sshEnabled={p.sshEnabled}
-              proposalsEnabled={p.proposalsEnabled}
+              scmApiEnabled={p.scmApiEnabled}
               issuesEnabled={p.issuesEnabled}
             />
             <a

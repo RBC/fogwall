@@ -22,7 +22,7 @@ public final class GitHubMutationAllowlist {
             // Attribute changes gh sends as follow-ups rather than as fields on the create or update. A label named
             // on `issue create` rides along in createIssue's input, but the same label added by `issue edit` is a
             // separate mutation, as are assignees in every command and reviewers even on create. Denying these
-            // leaves the proposal created and the attribute unset, which is worse than refusing the command.
+            // leaves the pull/merge request created and the attribute unset, which is worse than refusing the command.
             "replaceActorsForAssignable",
             "addLabelsToLabelable",
             "removeLabelsFromLabelable",

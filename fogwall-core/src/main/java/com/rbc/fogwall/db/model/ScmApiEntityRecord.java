@@ -9,11 +9,11 @@ import lombok.Data;
  * One pull/merge request or issue that exists upstream because a mutation fogwall forwarded created it, or that a
  * forwarded mutation later touched. Mutable current state, keyed on what the upstream calls the thing —
  * {@code (provider, owner, repo, kind, number)} — as opposed to {@link ScmApiActionRecord}, which is the append-only
- * decision log; action records point here through {@link ScmApiActionRecord#getProposalId()}.
+ * decision log; action records point here through {@link ScmApiActionRecord#getEntityId()}.
  */
 @Data
 @Builder
-public class ScmApiProposalRecord {
+public class ScmApiEntityRecord {
 
     /**
      * What the upstream created. Issues and pull requests share a number space on GitHub and Forgejo, not on GitLab.

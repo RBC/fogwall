@@ -47,7 +47,7 @@ class JdbcScmApiActionStoreIntegrationTest {
                 .clientType("GH_CLI")
                 .clientVersion("2.98.0")
                 .upstreamStatus(200)
-                .proposalId("p-1")
+                .entityId("p-1")
                 .build();
 
         store.save(record);
@@ -57,7 +57,7 @@ class JdbcScmApiActionStoreIntegrationTest {
         ScmApiActionRecord r = found.get();
         assertEquals(record.getId(), r.getId());
         assertEquals(200, r.getUpstreamStatus());
-        assertEquals("p-1", r.getProposalId());
+        assertEquals("p-1", r.getEntityId());
         assertEquals("github", r.getProvider());
         assertEquals("octocat", r.getScmUsername());
         assertEquals("alice", r.getResolvedUser());

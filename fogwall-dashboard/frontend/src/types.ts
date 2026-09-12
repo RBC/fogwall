@@ -22,12 +22,12 @@ export interface ScmApiActionRecord {
   variablesJson?: string
   /** The upstream's HTTP status for a forwarded mutation. */
   upstreamStatus?: number
-  proposalId?: string
-  /** The proposal the mutation created or touched, when the upstream response named one (#578). */
-  proposal?: ScmApiProposal
+  entityId?: string
+  /** The pull/merge request or issue the mutation created or touched, when the upstream response named one. */
+  entity?: ScmApiEntity
 }
 
-export interface ScmApiProposal {
+export interface ScmApiEntity {
   id: string
   provider: string
   repoOwner: string
@@ -164,8 +164,8 @@ export interface Provider {
   sshPort: number
   /** SSH route path (leading slash), keyed on the provider's host, e.g. `/github.com`. */
   sshPath: string
-  /** True when the SCM API (CLI proposals) proxy is enabled for this provider. Presence-only; no connect address. */
-  proposalsEnabled: boolean
+  /** True when the SCM API (CLI) proxy is enabled for this provider. Presence-only; no connect address. */
+  scmApiEnabled: boolean
   /** True when the dashboard issue form is enabled for this provider. */
   issuesEnabled: boolean
   attestationQuestions: AttestationQuestion[]

@@ -38,9 +38,9 @@ What happens, in order:
    over SSH that is held open for review.
 6. Second pause: a checklist of pushes to approve, reject, or cancel in the dashboard as `reviewer` or `dev`. The script
    watches their status, continues once none is pending, and re-pushes the approved ones so they end up FORWARDED.
-7. Proposals: `gh` (GitHub), `glab` (GitLab), `fj` (Codeberg) and `tea` (gitea.com) each open, edit and close a
-   pull/merge request and an issue through the provider's proposals listener (ports 8481–8484, TLS from a throwaway CA
-   the script generates), so the dump carries SCM API audit records for every client and every mutation fogwall proxies.
+7. Contributions: `gh` (GitHub), `glab` (GitLab), `fj` (Codeberg) and `tea` (gitea.com) each open, edit and close a
+   pull/merge request and an issue through the provider's SCM API listener (ports 8481–8484, TLS from a throwaway CA the
+   script generates), so the dump carries SCM API audit records for every client and every mutation fogwall proxies.
    dev's codeberg identity is added here, after the unmapped-identity push has been rejected.
 8. The app stops; `scrub.sql` removes secret/session/cache rows; the database is dumped to SQL; every real value is
    replaced by its placeholder and any email outside the fixture domains becomes `fixture-extra-N@example.com`; the dump
@@ -49,7 +49,8 @@ What happens, in order:
 
 Knobs: `KEEP_WORK=1` keeps the temp directory (logs, clones, unscrubbed dump) for inspection; `SKIP_OAUTH=1` skips the
 OAuth pause (dev's github/gitlab identities are seeded unverified instead — never commit that dump); `SKIP_PUSHES=1`
-runs only the proposals step, for iterating on it; `PUSH_TIMEOUT=<s>` caps how long a server-mode push may be held open.
+runs only the contributions scenarios, for iterating on it; `PUSH_TIMEOUT=<s>` caps how long a server-mode push may be
+held open.
 
 ## Replay (what CI does)
 
@@ -65,8 +66,7 @@ them.
 
 ## When to re-capture
 
-- A hook or filter changes what it records (step names, content JSON, messages) — on the push path or the proposals
-  path.
+- A hook or filter changes what it records (step names, content JSON, messages) — on the push path or the SCM API path.
 - A scenario is added or changed in `capture.py`.
 - The profile changes in a way that affects push outcomes (policy, users, permissions).
 

@@ -57,7 +57,7 @@ server:
   # Whether the dashboard trusts Forwarded / X-Forwarded-* headers to resolve the external scheme, host and port.
   # These drive OIDC login redirects, other absolute URLs, and the session cookie's Secure flag.
   # Default true: existing deployments run behind a TLS-terminating ingress and depend on this. Only the dashboard
-  # reads these headers — the git and proposals listeners read none.
+  # reads these headers — the git and SCM API listeners read none.
   # Precondition when true: the dashboard listener must be reachable ONLY through the ingress that sets the headers,
   # or a client reaching the port directly could spoof them. Set false when TLS terminates at fogwall, or whenever
   # the listener is directly reachable — then also set service-url so generated links use the external address.
@@ -279,13 +279,13 @@ content-patterns:
     - national-id-all-geos
     - generic-iban
     - generic-crypto-wallet
-  # scan-diff / scan-commit-messages / scan-proposals independently gate the three content sources - all default
+  # scan-diff / scan-commit-messages / scan-scm-api independently gate the three content sources - all default
   # true. Set any to false to skip that surface without touching the others (e.g. skip commit-message scanning if
-  # it's noisy). A match warns on the push path, where a reviewer sees it, and blocks on the proposal path, which
+  # it's noisy). A match warns on the push path, where a reviewer sees it, and blocks on the SCM API path, which
   # has no reviewer and nothing held for one to look at.
   scan-diff: true
   scan-commit-messages: true
-  scan-proposals: true
+  scan-scm-api: true
 
 # User accounts for authentication and push authorization.
 # When this list is non-empty, only listed users may authenticate to the dashboard

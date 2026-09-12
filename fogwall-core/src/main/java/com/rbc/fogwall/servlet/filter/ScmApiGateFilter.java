@@ -37,9 +37,7 @@ public interface ScmApiGateFilter extends Filter {
      */
     String mergeOperation();
 
-    /**
-     * Whether merging is enabled for this provider ({@code proposals.merge-enabled}); the merge op is refused if not.
-     */
+    /** Whether merging is enabled for this provider ({@code scm-api.merge-enabled}); the merge op is refused if not. */
     boolean mergeEnabled();
 
     /**

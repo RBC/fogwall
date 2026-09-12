@@ -51,7 +51,7 @@ export function Groups() {
   const [ruleValue, setRuleValue] = useState('')
   const [ruleMatchType, setRuleMatchType] = useState('GLOB')
   const [ruleGrant, setRuleGrant] = useState('PUSH')
-  const [proposalsEnabled, setProposalsEnabled] = useState(false)
+  const [scmApiEnabled, setScmApiEnabled] = useState(false)
   const [issuesEnabled, setIssuesEnabled] = useState(false)
   const [ruleError, setRuleError] = useState<string | null>(null)
 
@@ -84,7 +84,7 @@ export function Groups() {
       .catch(() => {})
     fetchConfig()
       .then((c) => {
-        setProposalsEnabled(c.proposalsEnabled)
+        setScmApiEnabled(c.scmApiEnabled)
         setIssuesEnabled(c.issuesEnabled)
       })
       .catch(() => {})
@@ -473,9 +473,16 @@ export function Groups() {
                       <option value="PUSH_AND_REVIEW">Push and review</option>
                       <option value="SELF_CERTIFY">Self-certify</option>
                       {issuesEnabled && <option value="ISSUE">Issue only</option>}
-                      {proposalsEnabled && <option value="PROPOSE">Propose</option>}
-                      {proposalsEnabled && <option value="MERGE">Merge</option>}
-                      {proposalsEnabled && <option value="MAINTAIN">Maintain</option>}
+                      {scmApiEnabled && (
+                        <option
+                          value="PROPOSE"
+                          title="Open pull or merge requests, create issues, or comment"
+                        >
+                          Propose
+                        </option>
+                      )}
+                      {scmApiEnabled && <option value="MERGE">Merge</option>}
+                      {scmApiEnabled && <option value="MAINTAIN">Maintain</option>}
                     </select>
                     <button
                       onClick={handleAddRule}

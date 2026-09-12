@@ -130,7 +130,7 @@ export async function fetchConfig(): Promise<{
   scmOAuthLinkAvailable: boolean
   scmIdentityMode: string
   /** Whether any provider has proposals enabled; the PROPOSE grant is offered only when one does. */
-  proposalsEnabled: boolean
+  scmApiEnabled: boolean
   /** Whether any provider has dashboard issue filing enabled; the ISSUE grant is offered only when one does. */
   issuesEnabled: boolean
 }> {

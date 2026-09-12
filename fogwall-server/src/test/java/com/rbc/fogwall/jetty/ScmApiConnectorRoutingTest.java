@@ -121,18 +121,18 @@ class ScmApiConnectorRoutingTest {
 
     /**
      * The direction that was never asserted: a context with no virtual host matches every connector, which would have
-     * put the git servlets on each proposals port. An operator exposing 9443 for {@code gh} would have been exposing
+     * put the git servlets on each SCM API port. An operator exposing 9443 for {@code gh} would have been exposing
      * {@code /proxy} and {@code /server} with it — on connectors that also relax URI compliance.
      */
     @Test
-    void gitServletsAreNotReachableOnAProposalsPort() throws Exception {
+    void gitServletsAreNotReachableOnAnScmApiPort() throws Exception {
         assertEquals(
                 200,
                 get(mainPort, "/proxy/github.com/acme/widgets.git/info/refs").statusCode());
         assertEquals(
                 404,
                 get(gitlabPort, "/proxy/github.com/acme/widgets.git/info/refs").statusCode(),
-                "the git surface must not answer on the GitLab proposals port");
+                "the git surface must not answer on the GitLab SCM API port");
         assertEquals(
                 404,
                 get(giteaPort, "/proxy/github.com/acme/widgets.git/info/refs").statusCode(),

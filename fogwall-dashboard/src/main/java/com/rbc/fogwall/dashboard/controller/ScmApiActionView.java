@@ -2,17 +2,17 @@ package com.rbc.fogwall.dashboard.controller;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.rbc.fogwall.db.model.ScmApiActionRecord;
-import com.rbc.fogwall.db.model.ScmApiProposalRecord;
+import com.rbc.fogwall.db.model.ScmApiEntityRecord;
 
-/** An audit record with the proposal it created or touched, when the upstream response named one. */
+/** An audit record with the pull/merge request or issue it created or touched, when the upstream response named one. */
 public final class ScmApiActionView {
 
     private final ScmApiActionRecord action;
-    private final ScmApiProposalRecord proposal;
+    private final ScmApiEntityRecord entity;
 
-    public ScmApiActionView(ScmApiActionRecord action, ScmApiProposalRecord proposal) {
+    public ScmApiActionView(ScmApiActionRecord action, ScmApiEntityRecord entity) {
         this.action = action;
-        this.proposal = proposal;
+        this.entity = entity;
     }
 
     @JsonUnwrapped
@@ -20,7 +20,7 @@ public final class ScmApiActionView {
         return action;
     }
 
-    public ScmApiProposalRecord getProposal() {
-        return proposal;
+    public ScmApiEntityRecord getEntity() {
+        return entity;
     }
 }

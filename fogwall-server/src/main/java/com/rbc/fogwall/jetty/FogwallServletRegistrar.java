@@ -31,21 +31,21 @@ import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.ForgejoProvider;
 import com.rbc.fogwall.provider.GitHubProvider;
 import com.rbc.fogwall.provider.GitLabProvider;
+import com.rbc.fogwall.scmapi.EntityContent;
+import com.rbc.fogwall.scmapi.EntityRegistrar;
+import com.rbc.fogwall.scmapi.ForgejoEntityResponseReader;
 import com.rbc.fogwall.scmapi.ForgejoHeadShaResolver;
-import com.rbc.fogwall.scmapi.ForgejoProposalResponseReader;
+import com.rbc.fogwall.scmapi.GitHubEntityResponseReader;
 import com.rbc.fogwall.scmapi.GitHubHeadShaResolver;
 import com.rbc.fogwall.scmapi.GitHubNodeIdResolver;
-import com.rbc.fogwall.scmapi.GitHubProposalResponseReader;
+import com.rbc.fogwall.scmapi.GitLabEntityResponseReader;
 import com.rbc.fogwall.scmapi.GitLabHeadShaResolver;
 import com.rbc.fogwall.scmapi.GitLabProjectIdResolver;
-import com.rbc.fogwall.scmapi.GitLabProposalResponseReader;
 import com.rbc.fogwall.scmapi.GitLabRestAllowlist;
 import com.rbc.fogwall.scmapi.GraphQlLiterals;
 import com.rbc.fogwall.scmapi.HeadCommitValidator;
 import com.rbc.fogwall.scmapi.JsonBodyField;
 import com.rbc.fogwall.scmapi.OwnerRepo;
-import com.rbc.fogwall.scmapi.ProposalContent;
-import com.rbc.fogwall.scmapi.ProposalRegistrar;
 import com.rbc.fogwall.scmapi.ScmContentInspector;
 import com.rbc.fogwall.service.PushIdentityResolver;
 import com.rbc.fogwall.servlet.FogwallServlet;
@@ -118,7 +118,7 @@ public final class FogwallServletRegistrar {
     private static final Pattern GITLAB_MERGE_IID = Pattern.compile("^/projects/[^/]+/merge_requests/(\\d+)/merge$");
 
     /**
-     * Name prefix for the per-provider proposals listeners: {@code scm-api-<provider>}, where {@code <provider>} is the
+     * Name prefix for the per-provider SCM API listeners: {@code scm-api-<provider>}, where {@code <provider>} is the
      * configured instance name rather than its type — {@code gitea} and {@code codeberg} are separate listeners of the
      * one Forgejo type. Names both the connector and the forward servlet holder on it, so the two cannot drift apart.
      */
@@ -128,10 +128,10 @@ public final class FogwallServletRegistrar {
      * Connector names for the two listeners that serve git and the dashboard.
      *
      * <p>The main context is bound to these, so it answers on them and nowhere else. A context with no virtual host
-     * matches every connector, which would put the git servlets — and the dashboard — on each proposals port too: an
+     * matches every connector, which would put the git servlets — and the dashboard — on each SCM API port too: an
      * operator exposing one of those ports for {@code gh} would be exposing {@code /server} and {@code /proxy} through
-     * it. Two of the proposals connectors also relax URI compliance, so the git servlets would receive encoded
-     * separators the main port rejects at the parser.
+     * it. Two of the SCM API connectors also relax URI compliance, so the git servlets would receive encoded separators
+     * the main port rejects at the parser.
      */
     public static final String MAIN_HTTP_CONNECTOR = "fogwall-http";
 
@@ -502,11 +502,11 @@ public final class FogwallServletRegistrar {
                 context,
                 mapping,
                 new ScmApiContentInspectionFilter(
-                        contentInspector, ProposalContent::fromGraphQlBody, FogwallServletRegistrar::graphQlLiterals));
+                        contentInspector, EntityContent::fromGraphQlBody, FogwallServletRegistrar::graphQlLiterals));
 
         var forwardHolder = new ServletHolder(new ScmApiGraphQlForwardServlet(
                 provider.getGraphqlUrl(),
-                new ProposalRegistrar(fogwallContext.scmApiProposalStore(), new GitHubProposalResponseReader()),
+                new EntityRegistrar(fogwallContext.scmApiEntityStore(), new GitHubEntityResponseReader()),
                 fogwallContext.telemetry()));
         forwardHolder.setName(SCM_API_CONNECTOR_PREFIX + provider.getName());
         context.addServlet(forwardHolder, mapping);
@@ -596,13 +596,12 @@ public final class FogwallServletRegistrar {
         addFilter(
                 context,
                 mapping,
-                new ScmApiContentInspectionFilter(
-                        contentInspector, ProposalContent::fromGitLabBody, body -> List.of()));
+                new ScmApiContentInspectionFilter(contentInspector, EntityContent::fromGitLabBody, body -> List.of()));
 
         var forwardHolder = new ServletHolder(new ScmApiRestForwardServlet(
                 provider.getApiUrl(),
                 ScmApiRestPathPolicy.EncodedSeparators.GITLAB_PROJECT_SEGMENT,
-                new ProposalRegistrar(fogwallContext.scmApiProposalStore(), new GitLabProposalResponseReader()),
+                new EntityRegistrar(fogwallContext.scmApiEntityStore(), new GitLabEntityResponseReader()),
                 fogwallContext.telemetry()));
         forwardHolder.setName(SCM_API_CONNECTOR_PREFIX + provider.getName());
         context.addServlet(forwardHolder, mapping);
@@ -669,13 +668,12 @@ public final class FogwallServletRegistrar {
         addFilter(
                 context,
                 mapping,
-                new ScmApiContentInspectionFilter(
-                        contentInspector, ProposalContent::fromForgejoBody, body -> List.of()));
+                new ScmApiContentInspectionFilter(contentInspector, EntityContent::fromForgejoBody, body -> List.of()));
 
         var forwardHolder = new ServletHolder(new ScmApiRestForwardServlet(
                 provider.getApiUrl(),
                 ScmApiRestPathPolicy.EncodedSeparators.FORGEJO_FILE_PATH,
-                new ProposalRegistrar(fogwallContext.scmApiProposalStore(), new ForgejoProposalResponseReader()),
+                new EntityRegistrar(fogwallContext.scmApiEntityStore(), new ForgejoEntityResponseReader()),
                 fogwallContext.telemetry()));
         forwardHolder.setName(SCM_API_CONNECTOR_PREFIX + provider.getName());
         context.addServlet(forwardHolder, mapping);
@@ -705,19 +703,19 @@ public final class FogwallServletRegistrar {
             throws Exception {
         TlsConfig tls = configBuilder.getTlsConfig();
         boolean serveTls = tls.isServerTlsConfigured();
-        // The same content rules that guard a push, applied to the prose a proposal publishes upstream.
+        // The same content rules that guard a push, applied to the prose an SCM API entity publishes upstream.
         ConfigHolder scmApiConfigHolder = configBuilder.buildConfigHolder();
-        var proposalsBlock = configBuilder.buildProposalsBlockConfig();
-        var proposalsContentPatterns = configBuilder.buildContentPatternConfig();
+        var scmApiBlock = configBuilder.buildScmApiBlockConfig();
+        var scmApiContentPatterns = configBuilder.buildContentPatternConfig();
         var contentInspector = new ScmContentInspector(
-                () -> proposalsBlock,
+                () -> scmApiBlock,
                 scmApiConfigHolder::getSecretScanConfig,
                 new SecretScanCheck(scmApiConfigHolder.getSecretScanConfig()),
-                () -> proposalsContentPatterns);
+                () -> scmApiContentPatterns);
         var plaintextListeners = new ArrayList<String>();
 
         for (FogwallProvider provider : providers) {
-            if (!isHttpProvider(provider) || !configBuilder.isProposalsEnabled(provider)) continue;
+            if (!isHttpProvider(provider) || !configBuilder.isScmApiEnabled(provider)) continue;
             if (!(provider instanceof GitHubProvider
                     || provider instanceof GitLabProvider
                     || provider instanceof ForgejoProvider)) {
@@ -728,9 +726,9 @@ public final class FogwallServletRegistrar {
                 continue;
             }
 
-            int port = configBuilder.getProposalsPort(provider);
-            boolean requireValidatedHead = configBuilder.isProposalsRequireValidatedHead(provider);
-            boolean mergeEnabled = configBuilder.isProposalsMergeEnabled(provider);
+            int port = configBuilder.getScmApiPort(provider);
+            boolean requireValidatedHead = configBuilder.isScmApiRequireValidatedHead(provider);
+            boolean mergeEnabled = configBuilder.isScmApiMergeEnabled(provider);
             String connectorName = SCM_API_CONNECTOR_PREFIX + provider.getName();
             // GitLab and Gitea/Forgejo both address something through an encoded separator, so both relax Jetty's
             // URI compliance; GitHub keeps the strict default and rejects one at the parser. The relaxation is only
@@ -785,7 +783,7 @@ public final class FogwallServletRegistrar {
         // or load balancer is doing that, so it says what it knows rather than assuming either way.
         if (!plaintextListeners.isEmpty()) {
             log.warn(
-                    "Proposals listeners are serving plain HTTP ({}) because server.tls is not configured. gh, glab,"
+                    "SCM API listeners are serving plain HTTP ({}) because server.tls is not configured. gh, glab,"
                             + " tea and fj all address a custom host over HTTPS, so TLS must terminate somewhere in"
                             + " front of these ports — an ingress, route, or load balancer. Configure server.tls to"
                             + " have fogwall terminate it instead.",

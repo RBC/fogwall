@@ -69,7 +69,10 @@ export default function App() {
                 <Route path="/issues" element={<Issues />} />
                 <Route path="/setup" element={<Setup />} />
                 <Route path="/repos" element={<Repos currentUser={currentUser} />} />
-                <Route path="/proposals" element={<ScmApiActionList currentUser={currentUser} />} />
+                <Route
+                  path="/contributions"
+                  element={<ScmApiActionList currentUser={currentUser} />}
+                />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/users" element={<Users authProvider={authProvider} />} />
                 <Route

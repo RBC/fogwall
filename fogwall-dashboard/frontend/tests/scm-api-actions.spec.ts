@@ -1,8 +1,8 @@
 import { test, expect } from './fixtures'
 import type { Page } from '@playwright/test'
 
-// The SCM API audit list, over the proposals scenarios in capture.py: gh, glab, fj and tea each created, edited and
-// closed a PR/MR and an issue through their provider's listener, and each had one proposal refused.
+// The SCM API audit list, over the contributions scenarios in capture.py: gh, glab, fj and tea each created, edited and
+// closed a PR/MR and an issue through their provider's listener, and each had one contribution refused.
 const card = (page: Page, text: string | RegExp) =>
   page.locator('div.rounded-lg.shadow').filter({ hasText: text })
 
@@ -18,11 +18,11 @@ async function findCard(page: Page, text: string | RegExp) {
 
 test.describe('SCM API actions', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/dashboard/proposals')
+    await page.goto('/dashboard/contributions')
     await expect(page.getByText('No SCM API action records found.')).toHaveCount(0)
   })
 
-  test('every forwarded mutation links the proposal it created or touched', async ({ page }) => {
+  test('every forwarded mutation links the entity it created or touched', async ({ page }) => {
     // A create, an edit and a close on both a PR and an issue, per client: the link is the same on all of them.
     await expect(page.getByRole('link', { name: 'PR #1' }).first()).toBeVisible()
     for (const provider of ['gitea', 'codeberg', 'gitlab']) {
@@ -42,7 +42,7 @@ test.describe('SCM API actions', () => {
       .toBeGreaterThanOrEqual(3)
   })
 
-  test('the proposal link carries no state or title — a record is one past event', async ({
+  test('the entity link carries no state or title — a record is one past event', async ({
     page,
   }) => {
     const row = await findCard(page, /github · closePullRequest/)
@@ -52,7 +52,7 @@ test.describe('SCM API actions', () => {
     await expect(row).toContainText('upstream 200')
   })
 
-  test('rejected proposals carry the reason in full and no payload', async ({ page }) => {
+  test('rejected contributions carry the reason in full and no payload', async ({ page }) => {
     await page.getByRole('button', { name: 'Rejected' }).click()
     await expect.poll(() => card(page, /Content rejected/).count()).toBe(4)
     // Two github · createIssue records exist (a forwarded issue and this rejected one); scope to the rejected

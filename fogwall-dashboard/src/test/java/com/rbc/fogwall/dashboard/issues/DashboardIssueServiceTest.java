@@ -16,10 +16,10 @@ import com.rbc.fogwall.config.ProviderConfig;
 import com.rbc.fogwall.crypto.TokenCipher;
 import com.rbc.fogwall.crypto.TokenCipherProvider;
 import com.rbc.fogwall.db.ScmApiActionStore;
-import com.rbc.fogwall.db.ScmApiProposalStore;
+import com.rbc.fogwall.db.ScmApiEntityStore;
 import com.rbc.fogwall.db.model.ScmApiActionRecord;
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
-import com.rbc.fogwall.db.model.ScmApiProposalRecord;
+import com.rbc.fogwall.db.model.ScmApiEntityRecord;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.GitHubProvider;
 import com.rbc.fogwall.provider.ProviderRegistry;
@@ -61,7 +61,7 @@ class DashboardIssueServiceTest {
     ScmApiActionStore auditStore;
 
     @Mock
-    ScmApiProposalStore proposalStore;
+    ScmApiEntityStore entityStore;
 
     @Mock
     FogwallConfig fogwallConfig;
@@ -82,7 +82,7 @@ class DashboardIssueServiceTest {
                 Optional.of(tokenStore),
                 cipherProvider,
                 auditStore,
-                proposalStore,
+                entityStore,
                 fogwallConfig,
                 client);
     }
@@ -122,8 +122,9 @@ class DashboardIssueServiceTest {
         assertEquals(201, outcome.httpStatus());
         assertEquals(42, outcome.result().number());
         assertEquals(ScmApiActionStatus.FORWARDED, savedStatus());
-        // A created issue is recorded in the proposal registry (the current-state index the Proposals view reads).
-        verify(proposalStore).save(any());
+        // A created issue is recorded in the SCM API entity registry (the current-state index the Contributions view
+        // reads).
+        verify(entityStore).save(any());
     }
 
     @Test
@@ -135,15 +136,15 @@ class DashboardIssueServiceTest {
         tokenAvailable();
         when(client.setState(github, "octocat", "hello", 42, true, "gho_token"))
                 .thenReturn(new DashboardIssueClient.IssueResult(42, "https://github.com/octocat/hello/issues/42"));
-        ScmApiProposalRecord existing = ScmApiProposalRecord.builder()
+        ScmApiEntityRecord existing = ScmApiEntityRecord.builder()
                 .provider("github")
                 .repoOwner("octocat")
                 .repoName("hello")
-                .kind(ScmApiProposalRecord.Kind.ISSUE)
+                .kind(ScmApiEntityRecord.Kind.ISSUE)
                 .number(42)
-                .state(ScmApiProposalRecord.State.OPEN)
+                .state(ScmApiEntityRecord.State.OPEN)
                 .build();
-        when(proposalStore.findByTarget("github", "octocat", "hello", ScmApiProposalRecord.Kind.ISSUE, 42))
+        when(entityStore.findByTarget("github", "octocat", "hello", ScmApiEntityRecord.Kind.ISSUE, 42))
                 .thenReturn(Optional.of(existing));
 
         var outcome = service.setState("alice", "github", "octocat", "hello", 42, true);
@@ -151,9 +152,9 @@ class DashboardIssueServiceTest {
         assertTrue(outcome.ok());
         assertEquals(200, outcome.httpStatus());
         assertEquals(ScmApiActionStatus.FORWARDED, savedStatus());
-        ArgumentCaptor<ScmApiProposalRecord> captor = ArgumentCaptor.forClass(ScmApiProposalRecord.class);
-        verify(proposalStore).update(captor.capture());
-        assertEquals(ScmApiProposalRecord.State.CLOSED, captor.getValue().getState());
+        ArgumentCaptor<ScmApiEntityRecord> captor = ArgumentCaptor.forClass(ScmApiEntityRecord.class);
+        verify(entityStore).update(captor.capture());
+        assertEquals(ScmApiEntityRecord.State.CLOSED, captor.getValue().getState());
     }
 
     @Test
@@ -175,13 +176,13 @@ class DashboardIssueServiceTest {
         providerEnabled();
         when(permissions.isAllowedToFileIssue("alice", "github", "/octocat/hello"))
                 .thenReturn(true);
-        when(contentInspector.inspect(anyList(), any())).thenReturn(List.of("secret detected in proposal content"));
+        when(contentInspector.inspect(anyList(), any())).thenReturn(List.of("secret detected in submitted content"));
 
         var outcome = service.createIssue("alice", "github", "octocat", "hello", "Bug", "token=abcd");
 
         assertFalse(outcome.ok());
         assertEquals(422, outcome.httpStatus());
-        assertEquals(List.of("secret detected in proposal content"), outcome.violations());
+        assertEquals(List.of("secret detected in submitted content"), outcome.violations());
         verify(client, never()).createIssue(any(), anyString(), anyString(), anyString(), anyString(), anyString());
         assertEquals(ScmApiActionStatus.REJECTED, savedStatus());
     }

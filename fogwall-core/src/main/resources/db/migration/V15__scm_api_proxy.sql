@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS scm_api_action_records (
     node_type       VARCHAR(30),
     status          VARCHAR(20)  NOT NULL,
     reason          TEXT,
-    -- On MySQL/MariaDB this is widened to MEDIUMTEXT by V15.1: their TEXT caps at 64 KB and a proposal body may
+    -- On MySQL/MariaDB this is widened to MEDIUMTEXT by V15.1: their TEXT caps at 64 KB and an SCM API entity body may
     -- run to the 4 MiB request bound.
     variables_json  TEXT,
     user_agent      VARCHAR(512),
@@ -69,29 +69,29 @@ CREATE TABLE IF NOT EXISTS scm_api_action_records (
     -- read. Its own column because a CLI wire-format break is version-specific, and "which releases"
     -- is a query rather than a scan of the raw header, which is kept regardless.
     client_version  VARCHAR(64),
-    -- What the upstream answered: its HTTP status, and the scm_api_proposals row the mutation created or touched.
+    -- What the upstream answered: its HTTP status, and the scm_api_entities row the mutation created or touched.
     upstream_status INT,
-    proposal_id     VARCHAR(36)
+    entity_id     VARCHAR(36)
 );
 
 CREATE INDEX idx_scm_api_action_records_resolved_user ON scm_api_action_records (resolved_user);
 CREATE INDEX idx_scm_api_action_records_timestamp ON scm_api_action_records (timestamp);
 
--- Proposal registry: the pull/merge requests and issues that exist upstream because the SCM API proxy forwarded the
+-- SCM API entity registry: the pull/merge requests and issues that exist upstream because the SCM API proxy forwarded the
 -- mutation that created them, plus those a forwarded mutation later touched. Mutable current state ("PR 7 is
 -- closed"), keyed on what the upstream calls the thing, as opposed to scm_api_action_records above, which is the
--- append-only decision log ("at 14:02 alice was allowed to close PR 7") and points here via proposal_id.
+-- append-only decision log ("at 14:02 alice was allowed to close PR 7") and points here via entity_id.
 --
--- proposal_number rather than number: NUMBER is a data type in H2 (Oracle compatibility) and a reserved word
+-- entity_number rather than number: NUMBER is a data type in H2 (Oracle compatibility) and a reserved word
 -- elsewhere. Issues and pull requests share one number space on GitHub and Forgejo but not on GitLab, so kind is
 -- part of the key.
-CREATE TABLE IF NOT EXISTS scm_api_proposals (
+CREATE TABLE IF NOT EXISTS scm_api_entities (
     id                      VARCHAR(36)   PRIMARY KEY,
     provider                VARCHAR(100)  NOT NULL,
     repo_owner              VARCHAR(255)  NOT NULL,
     repo_name               VARCHAR(255)  NOT NULL,
     kind                    VARCHAR(20)   NOT NULL,
-    proposal_number         INT           NOT NULL,
+    entity_number         INT           NOT NULL,
     url                     VARCHAR(1024),
     -- GitHub's opaque GraphQL node ID; null on the REST dialects. A later GitHub mutation names its target by
     -- node ID alone, so this is how the row is found again.
@@ -104,7 +104,7 @@ CREATE TABLE IF NOT EXISTS scm_api_proposals (
     updated_at              TIMESTAMP     NOT NULL,
     created_action_id       VARCHAR(36),
     last_action_id          VARCHAR(36),
-    CONSTRAINT uq_scm_api_proposals_target UNIQUE (provider, repo_owner, repo_name, kind, proposal_number)
+    CONSTRAINT uq_scm_api_entities_target UNIQUE (provider, repo_owner, repo_name, kind, entity_number)
 );
 
-CREATE INDEX idx_scm_api_proposals_node_id ON scm_api_proposals (provider, node_id);
+CREATE INDEX idx_scm_api_entities_node_id ON scm_api_entities (provider, node_id);

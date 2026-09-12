@@ -77,8 +77,8 @@ public class ScmApiActionRecord {
     /** The upstream's HTTP status for a forwarded mutation; null when nothing was forwarded. */
     private Integer upstreamStatus;
 
-    /** {@link ScmApiProposalRecord} the mutation created or touched, when the upstream response named one. */
-    private String proposalId;
+    /** {@link ScmApiEntityRecord} the mutation created or touched, when the upstream response named one. */
+    private String entityId;
 
     /** The SHA a merge produced, when the upstream's own response named one. Null for every non-merge mutation. */
     private String mergeCommitSha;

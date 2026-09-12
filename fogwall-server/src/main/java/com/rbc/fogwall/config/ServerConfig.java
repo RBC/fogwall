@@ -173,7 +173,7 @@ public class ServerConfig {
      *
      * <p>Defaults to {@code true}: existing deployments run the dashboard behind a TLS-terminating ingress and depend
      * on this resolution for login redirects and cookie security, so turning it off silently on upgrade would break
-     * them. Only the dashboard consults forwarded headers — the git and proposals listeners read none.
+     * them. Only the dashboard consults forwarded headers — the git and SCM API listeners read none.
      *
      * <p>Set via YAML ({@code server.trust-forwarded-headers:}) or env var
      * ({@code fogwall_SERVER_TRUSTFORWARDEDHEADERS}).

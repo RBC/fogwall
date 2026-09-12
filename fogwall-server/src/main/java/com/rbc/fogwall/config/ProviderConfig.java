@@ -70,12 +70,12 @@ public class ProviderConfig {
     /** OAuth account-linking settings for this provider instance (#40). See the configuration reference. */
     private OAuthProviderSettings oauth = new OAuthProviderSettings();
 
-    /** Proposal settings for this provider instance. See the configuration reference. */
-    private ProposalsProviderSettings proposals = new ProposalsProviderSettings();
+    /** SCM API proxy settings for this provider instance. See the configuration reference. */
+    private ScmApiProviderSettings scmApi = new ScmApiProviderSettings();
 
     /**
      * Whether fogwall's dashboard issue form may create, edit and comment on issues on this provider on a user's
-     * behalf. Off by default; opt-in per provider. Distinct from {@link #proposals}: this feature makes outbound calls
+     * behalf. Off by default; opt-in per provider. Distinct from {@link #scmApi}: this feature makes outbound calls
      * with the user's linked OAuth token and needs no listener or port, so it is a plain provider-level toggle rather
      * than part of the SCM API (CLI) proxy settings. Also requires the user to have linked their account for this
      * provider via OAuth — fogwall acts as them.

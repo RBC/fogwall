@@ -15,10 +15,10 @@ disambiguated from unrelated numbers), and there's currently no override path fo
 push already requires a human reviewer to look at it, WARN gets the finding in front of them without the downside of
 blocking on a false positive.
 
-**Blocking on the proposal path** — that reasoning depends on the reviewer, and a proposal has none: it is forwarded to
-the upstream or refused, with no held state to annotate. A warning recorded against a merge request description that is
-already published is not a control, so a match there refuses the proposal (`REJECTED`) the same way a blocked term or a
-detected secret does. See [Content inspection](../admin/proposals.md#content-inspection).
+**Blocking on the SCM API path** — that reasoning depends on the reviewer, and an SCM API entity has none: it is
+forwarded to the upstream or refused, with no held state to annotate. A warning recorded against a merge request
+description that is already published is not a control, so a match there refuses the request (`REJECTED`) the same way a
+blocked term or a detected secret does. See [Content inspection](../admin/scm-api.md#content-inspection).
 
 Bundle content (regexes, context keywords, structural validators like Luhn/IBAN/Base58Check checksums) is hand-ported
 from [data-privacy-stack/presidio](https://github.com/data-privacy-stack/presidio) (MIT licensed) where noted below —
@@ -38,13 +38,13 @@ content-patterns:
     # bundles at once.
   scan-diff: true # set false to skip scanning the push diff
   scan-commit-messages: true # set false to skip scanning commit messages
-  scan-proposals: true # set false to skip scanning proposal titles, descriptions and comments
+  scan-scm-api: true # set false to skip scanning SCM API titles, descriptions and comments
 ```
 
-`scan-diff`/`scan-commit-messages`/`scan-proposals` independently gate the three content sources - all default `true`,
-so selecting a bundle covers every surface it can appear on. An operator who considers commit messages low-risk (or
-wants to reduce push-summary noise) can disable that half without affecting diff scanning, and vice versa. This is
-distinct from disabling a bundle: the bundle selection still applies to whichever source(s) remain enabled.
+`scan-diff`/`scan-commit-messages`/`scan-scm-api` independently gate the three content sources - all default `true`, so
+selecting a bundle covers every surface it can appear on. An operator who considers commit messages low-risk (or wants
+to reduce push-summary noise) can disable that half without affecting diff scanning, and vice versa. This is distinct
+from disabling a bundle: the bundle selection still applies to whichever source(s) remain enabled.
 
 ## Available bundles
 

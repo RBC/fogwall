@@ -12,7 +12,7 @@ distinct proxy modes with different tradeoffs.
 ## Contents
 
 - [Project structure](project-structure.md) — the Gradle modules and how they depend on each other
-- [Two proxy modes](proxy-modes.md) — server mode, transparent proxy, and the proposals listeners
+- [Two proxy modes](proxy-modes.md) — server mode, transparent proxy, and the SCM API listeners
 - [Request flow](request-flow.md) — what happens to a push, step by step, in each mode
 - [Validation pipeline](validation-pipeline.md) — the ordered chain of checks a push runs through
 - [Core abstractions](core-abstractions.md) — provider, push store, approval gateway, user store

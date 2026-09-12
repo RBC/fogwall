@@ -39,10 +39,10 @@ public class JdbcScmApiActionStore implements ScmApiActionStore {
         jdbc.update("""
                 INSERT INTO scm_api_action_records (id, timestamp, provider, scm_username, resolved_user, repo_owner,
                     repo_name, mutation_field, node_id, node_type, status, reason, variables_json,
-                    user_agent, client_type, client_version, upstream_status, proposal_id, merge_commit_sha)
+                    user_agent, client_type, client_version, upstream_status, entity_id, merge_commit_sha)
                 VALUES (:id, :timestamp, :provider, :scmUsername, :resolvedUser, :repoOwner, :repoName, :mutationField,
                     :nodeId, :nodeType, :status, :reason, :variablesJson,
-                    :userAgent, :clientType, :clientVersion, :upstreamStatus, :proposalId, :mergeCommitSha)
+                    :userAgent, :clientType, :clientVersion, :upstreamStatus, :entityId, :mergeCommitSha)
                 """, toParams(record));
     }
 
@@ -114,7 +114,7 @@ public class JdbcScmApiActionStore implements ScmApiActionStore {
             .clientType(rs.getString("client_type"))
             .clientVersion(rs.getString("client_version"))
             .upstreamStatus(rs.getObject("upstream_status", Integer.class))
-            .proposalId(rs.getString("proposal_id"))
+            .entityId(rs.getString("entity_id"))
             .mergeCommitSha(rs.getString("merge_commit_sha"))
             .build();
 
@@ -137,7 +137,7 @@ public class JdbcScmApiActionStore implements ScmApiActionStore {
                 .addValue("clientType", r.getClientType())
                 .addValue("clientVersion", r.getClientVersion())
                 .addValue("upstreamStatus", r.getUpstreamStatus())
-                .addValue("proposalId", r.getProposalId())
+                .addValue("entityId", r.getEntityId())
                 .addValue("mergeCommitSha", r.getMergeCommitSha());
     }
 }

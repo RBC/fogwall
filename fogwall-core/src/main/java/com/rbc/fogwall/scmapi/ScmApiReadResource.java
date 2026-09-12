@@ -4,8 +4,8 @@ import java.util.Map;
 
 /**
  * Classifies a read (a non-mutating SCM API request) to a coarse {@code <resource>.read} operation for telemetry, so an
- * operator can tell an issue read from a proposal or comment read rather than an opaque {@code read}. Best-effort and
- * low-cardinality.
+ * operator can tell an issue read from a pull/merge request or comment read rather than an opaque {@code read}.
+ * Best-effort and low-cardinality.
  *
  * <p>Shaped by the fixed set of requests the CLIs actually send — like the mutation allowlists, not a provider's whole
  * schema (see the SCM API proxy notes). A REST read names its resource in the path; a GitHub GraphQL read is one of a
@@ -27,7 +27,7 @@ public final class ScmApiReadResource {
             return "comment.read";
         }
         if (path.contains("/merge_requests") || path.contains("/pulls")) {
-            return "proposal.read";
+            return "pull_request.read";
         }
         if (path.contains("/issues")) {
             return "issue.read";
@@ -44,9 +44,9 @@ public final class ScmApiReadResource {
             "IssueRepositoryInfo", "repository.read",
             "RepositoryInfo", "repository.read",
             "IssueByNumber", "issue.read",
-            "PullRequestByNumber", "proposal.read",
-            "PullRequestForBranch", "proposal.read",
-            "PullRequestProjectItems", "proposal.read");
+            "PullRequestByNumber", "pull_request.read",
+            "PullRequestForBranch", "pull_request.read",
+            "PullRequestProjectItems", "pull_request.read");
 
     /**
      * A GitHub GraphQL read keyed by its {@code operationName} (already parsed by the gate — no re-parse).

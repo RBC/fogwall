@@ -11,8 +11,8 @@ class ScmApiReadResourceTest {
         // Forgejo/Gitea and GitLab share the vocabulary; the resource is read off the path.
         assertEquals("issue.read", ScmApiReadResource.fromRestPath("/repos/acme/widgets/issues/5"));
         assertEquals("comment.read", ScmApiReadResource.fromRestPath("/repos/acme/widgets/issues/5/comments"));
-        assertEquals("proposal.read", ScmApiReadResource.fromRestPath("/repos/acme/widgets/pulls/3"));
-        assertEquals("proposal.read", ScmApiReadResource.fromRestPath("/projects/acme%2Fwidgets/merge_requests/2"));
+        assertEquals("pull_request.read", ScmApiReadResource.fromRestPath("/repos/acme/widgets/pulls/3"));
+        assertEquals("pull_request.read", ScmApiReadResource.fromRestPath("/projects/acme%2Fwidgets/merge_requests/2"));
         assertEquals(
                 "comment.read", ScmApiReadResource.fromRestPath("/projects/acme%2Fwidgets/merge_requests/2/notes"));
     }
@@ -28,8 +28,8 @@ class ScmApiReadResourceTest {
         assertEquals("issue.read", ScmApiReadResource.fromGraphQl("IssueByNumber"));
         assertEquals("repository.read", ScmApiReadResource.fromGraphQl("RepositoryInfo"));
         assertEquals("repository.read", ScmApiReadResource.fromGraphQl("IssueRepositoryInfo"));
-        assertEquals("proposal.read", ScmApiReadResource.fromGraphQl("PullRequestByNumber"));
-        assertEquals("proposal.read", ScmApiReadResource.fromGraphQl("PullRequestForBranch"));
+        assertEquals("pull_request.read", ScmApiReadResource.fromGraphQl("PullRequestByNumber"));
+        assertEquals("pull_request.read", ScmApiReadResource.fromGraphQl("PullRequestForBranch"));
     }
 
     @Test

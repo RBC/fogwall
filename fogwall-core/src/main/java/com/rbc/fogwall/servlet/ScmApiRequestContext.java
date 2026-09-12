@@ -17,7 +17,7 @@ import lombok.Data;
 public class ScmApiRequestContext {
 
     /**
-     * How much of a proposal request body fogwall will read.
+     * How much of an SCM API entity request body fogwall will read.
      *
      * <p>Generous for the traffic it serves — GitHub caps an issue body at 65,536 characters and GitLab a description
      * at 1 MB — and it bounds what content inspection costs, since the scanner runs over the whole payload and a
@@ -29,8 +29,8 @@ public class ScmApiRequestContext {
     public static final String SCM_API_REQUEST_ATTR = "com.rbc.fogwall.scmapi.context";
 
     /**
-     * Id of the audit record this request will produce, fixed up front so the proposal registry can point at it before
-     * the record is written.
+     * Id of the audit record this request will produce, fixed up front so the SCM API entity registry can point at it
+     * before the record is written.
      */
     private String actionId = UUID.randomUUID().toString();
 
@@ -71,8 +71,8 @@ public class ScmApiRequestContext {
     private ScmApiActionStatus status;
     /** The upstream's HTTP status, once a mutation has been forwarded. */
     private Integer upstreamStatus;
-    /** The proposal registry row the mutation created or touched, when the response named one. */
-    private String proposalId;
+    /** The SCM API entity registry row the mutation created or touched, when the response named one. */
+    private String entityId;
 
     /** The SHA a merge produced, when the upstream's own response named one. Null for every non-merge mutation. */
     private String mergeCommitSha;
@@ -80,9 +80,9 @@ public class ScmApiRequestContext {
     private String reason;
 
     /**
-     * Coarse resource of a read (a non-mutating request), e.g. {@code issue.read} or {@code proposal.read}, set by the
-     * gate filter's read branch. Telemetry only — never audited (reads produce no audit record) — so a read span/metric
-     * names what was read rather than a bare {@code read}. Null for a mutation.
+     * Coarse resource of a read (a non-mutating request), e.g. {@code issue.read} or {@code pull_request.read}, set by
+     * the gate filter's read branch. Telemetry only — never audited (reads produce no audit record) — so a read
+     * span/metric names what was read rather than a bare {@code read}. Null for a mutation.
      */
     private String readResource;
 }

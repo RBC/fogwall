@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
  * Emits one structured log line per administrative mutation, regardless of which controller made it, so a log pipeline
  * can filter on {@code action}/{@code outcome} without per-endpoint parsing.
  *
- * <p>Not a database sink — push and proposal records are evidence about proxy traffic and belong in the store; operator
+ * <p>Not a database sink — push and SCM API records are evidence about proxy traffic and belong in the store; operator
  * actions are operational history and belong with the rest of the application's structured logs.
  */
 @Slf4j

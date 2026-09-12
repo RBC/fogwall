@@ -24,7 +24,7 @@ import lombok.Data;
  * attestations:    → List&lt;{@link AttestationQuestion}&gt; (global reviewer prompts)
  * rules:           → {@link RulesConfig}
  * scm-oauth:       → {@link ScmOAuthSettings} (OAuth account linking + verified-identity enforcement mode, #40)
- * proposals:       → {@link ProposalsSettings} (proposing changes through fogwall)
+ * scm-api:         → {@link ScmApiSettings} (SCM API proxy: pull/merge requests, issues, comments)
  * </pre>
  */
 @Data
@@ -41,7 +41,7 @@ public class FogwallConfig {
     private ContentPatternSettings contentPatterns = new ContentPatternSettings();
     private RulesConfig rules = new RulesConfig();
     private ScmOAuthSettings scmOauth = new ScmOAuthSettings();
-    private ProposalsSettings proposals = new ProposalsSettings();
+    private ScmApiSettings scmApi = new ScmApiSettings();
     private OtelConfig otel = new OtelConfig();
 
     /**

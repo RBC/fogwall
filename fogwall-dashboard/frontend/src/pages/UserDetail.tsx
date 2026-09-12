@@ -590,7 +590,7 @@ function AddPermissionModal({
   const [regexError, setRegexError] = useState<string | null>(null)
   const toast = useToast()
 
-  const [proposalsEnabled, setProposalsEnabled] = useState(false)
+  const [scmApiEnabled, setScmApiEnabled] = useState(false)
   const [issuesEnabled, setIssuesEnabled] = useState(false)
 
   const requireReviewPermission = providers.length > 0 && providers[0].requireReviewPermission
@@ -598,7 +598,7 @@ function AddPermissionModal({
   useEffect(() => {
     fetchConfig()
       .then((c) => {
-        setProposalsEnabled(c.proposalsEnabled)
+        setScmApiEnabled(c.scmApiEnabled)
         setIssuesEnabled(c.issuesEnabled)
       })
       .catch(console.error)
@@ -723,9 +723,16 @@ function AddPermissionModal({
               {requireReviewPermission && <option value="REVIEW">Review only</option>}
               <option value="SELF_CERTIFY">Self-certify</option>
               {issuesEnabled && <option value="ISSUE">Issue only</option>}
-              {proposalsEnabled && <option value="PROPOSE">Propose</option>}
-              {proposalsEnabled && <option value="MERGE">Merge</option>}
-              {proposalsEnabled && <option value="MAINTAIN">Maintain</option>}
+              {scmApiEnabled && (
+                <option
+                  value="PROPOSE"
+                  title="Open pull or merge requests, create issues, or comment"
+                >
+                  Propose
+                </option>
+              )}
+              {scmApiEnabled && <option value="MERGE">Merge</option>}
+              {scmApiEnabled && <option value="MAINTAIN">Maintain</option>}
             </select>
           </div>
           <div className="flex justify-end gap-2">
@@ -750,7 +757,7 @@ function TestPermissionModal({ username, onClose }: { username: string; onClose:
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<PermissionTestResponse | null>(null)
-  const [proposalsEnabled, setProposalsEnabled] = useState(false)
+  const [scmApiEnabled, setScmApiEnabled] = useState(false)
   const [issuesEnabled, setIssuesEnabled] = useState(false)
   const toast = useToast()
 
@@ -763,7 +770,7 @@ function TestPermissionModal({ username, onClose }: { username: string; onClose:
       .catch(console.error)
     fetchConfig()
       .then((c) => {
-        setProposalsEnabled(c.proposalsEnabled)
+        setScmApiEnabled(c.scmApiEnabled)
         setIssuesEnabled(c.issuesEnabled)
       })
       .catch(console.error)
@@ -838,9 +845,16 @@ function TestPermissionModal({ username, onClose }: { username: string; onClose:
               <option value="PUSH">Push</option>
               <option value="REVIEW">Review</option>
               {issuesEnabled && <option value="ISSUE">Issue only</option>}
-              {proposalsEnabled && <option value="PROPOSE">Propose</option>}
-              {proposalsEnabled && <option value="MERGE">Merge</option>}
-              {proposalsEnabled && <option value="MAINTAIN">Maintain</option>}
+              {scmApiEnabled && (
+                <option
+                  value="PROPOSE"
+                  title="Open pull or merge requests, create issues, or comment"
+                >
+                  Propose
+                </option>
+              )}
+              {scmApiEnabled && <option value="MERGE">Merge</option>}
+              {scmApiEnabled && <option value="MAINTAIN">Maintain</option>}
             </select>
           </div>
         </div>

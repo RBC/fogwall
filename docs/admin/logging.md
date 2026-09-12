@@ -83,9 +83,9 @@ admin_action actor=<login> action=<user.create|group.delete|permission.grant|...
 
 `outcome=DENIED` covers refusals such as an admin trying to delete the last remaining admin account or modify a
 config-defined group. Password resets log that a reset happened, never the new value. Read endpoints are not logged.
-This is the operational history of who changed what through the dashboard; push and SCM API proposal records remain
-separately in the database as evidence about proxy traffic. Grep the application log for `admin_action` to filter this
-stream from everything else.
+This is the operational history of who changed what through the dashboard; push and SCM API records remain separately in
+the database as evidence about proxy traffic. Grep the application log for `admin_action` to filter this stream from
+everything else.
 
 ## Reading logs for a failed push
 

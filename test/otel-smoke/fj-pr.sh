@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Forgejo PR mutations through the fogwall proposals listener (:8483) → REST /api/v1 against codeberg.org.
+# Forgejo PR mutations through the fogwall SCM API listener (:8483) → REST /api/v1 against codeberg.org.
 # Needs: CODEBERG_PAT = a codeberg token with write:issue + write:repository. Opens/edits REAL PRs on $OWNER/$REPO.
 set -uo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_common.sh"

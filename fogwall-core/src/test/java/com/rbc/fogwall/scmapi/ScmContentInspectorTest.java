@@ -48,16 +48,16 @@ class ScmContentInspectorTest {
         return SecretScanConfig.builder().enabled(enabled).build();
     }
 
-    private static List<ProposalContent> fields(String... pairs) {
-        var content = new ArrayList<ProposalContent>();
+    private static List<EntityContent> fields(String... pairs) {
+        var content = new ArrayList<EntityContent>();
         for (int i = 0; i < pairs.length; i += 2) {
-            content.add(new ProposalContent(pairs[i], pairs[i + 1]));
+            content.add(new EntityContent(pairs[i], pairs[i + 1]));
         }
         return content;
     }
 
-    private static ProposalPayload payload(String json) {
-        return ProposalPayload.of(json.getBytes(StandardCharsets.UTF_8), MAPPER.readTree(json));
+    private static EntityPayload payload(String json) {
+        return EntityPayload.of(json.getBytes(StandardCharsets.UTF_8), MAPPER.readTree(json));
     }
 
     private static String body(String token) {
@@ -112,11 +112,11 @@ class ScmContentInspectorTest {
      * pull request description instead.
      */
     @Test
-    void catchesASecretInAProposalBody() {
+    void catchesASecretInAnScmApiBody() {
         String token = realisticToken();
         var result = inspector(blocking(List.of(), List.of()), secretScanning(true))
                 .inspect(fields("description", "here is my token " + token + " ok"), payload(body(token)));
-        assertFalse(result.isEmpty(), "a secret in a proposal body must be caught");
+        assertFalse(result.isEmpty(), "a secret in an SCM API entity body must be caught");
         assertTrue(result.get(0).toLowerCase().contains("secret"), result.get(0));
     }
 
@@ -160,9 +160,9 @@ class ScmContentInspectorTest {
         String body = "{\"query\":\"mutation{createIssue(input:{repositoryId:\\\"R_1\\\",title:\\\"t\\\"," + "body:\\\""
                 + token + "\\\"}){clientMutationId}}\"}";
         var result = inspector(blocking(List.of(), List.of()), secretScanning(true))
-                .inspect(ProposalContent.fromGraphQlBody(MAPPER.readTree(body)), payload(body));
+                .inspect(EntityContent.fromGraphQlBody(MAPPER.readTree(body)), payload(body));
         assertTrue(
-                ProposalContent.fromGraphQlBody(MAPPER.readTree(body)).isEmpty(),
+                EntityContent.fromGraphQlBody(MAPPER.readTree(body)).isEmpty(),
                 "no variables to attribute — coverage must come from the payload walk");
         assertFalse(result.isEmpty(), "a secret inlined in the query text must still be caught");
     }
@@ -184,7 +184,7 @@ class ScmContentInspectorTest {
         var jsonOnly = payload(body);
         assertFalse(jsonOnly.combined().contains(token), "neither raw nor JSON-decoded reading reveals it");
 
-        var withLiterals = ProposalPayload.of(
+        var withLiterals = EntityPayload.of(
                 body.getBytes(StandardCharsets.UTF_8),
                 MAPPER.readTree(body),
                 GraphQlLiterals.from(MAPPER.readTree(body).get("query").asString()));
@@ -199,7 +199,7 @@ class ScmContentInspectorTest {
     @Test
     void catchesABlockedTermCarriedOnlyInTheQueryString() {
         var payload =
-                ProposalPayload.of(new byte[0], null, "title=t&description=see%20internal.corp.example.com", List.of());
+                EntityPayload.of(new byte[0], null, "title=t&description=see%20internal.corp.example.com", List.of());
         var result = inspector(blocking(List.of("internal.corp.example.com"), List.of()), secretScanning(false))
                 .inspect(List.of(), payload);
         assertEquals(1, result.size(), result::toString);
@@ -209,7 +209,7 @@ class ScmContentInspectorTest {
     private static final String SIN_IN_PROSE = "employee sin: 123 456 782";
 
     @Test
-    void blocksAContentPatternMatchInProposalProse() {
+    void blocksAContentPatternMatchInScmApiProse() {
         var payload = payload("{\"description\":\"" + SIN_IN_PROSE + "\"}");
         var result = inspector(blocking(List.of(), List.of()), secretScanning(false), bundles("national-id-ca"))
                 .inspect(List.of(), payload);
@@ -227,7 +227,7 @@ class ScmContentInspectorTest {
     }
 
     @Test
-    void scansProposalsOnlyWhenBundlesAreSelected() {
+    void scansScmApiOnlyWhenBundlesAreSelected() {
         var payload = payload("{\"description\":\"" + SIN_IN_PROSE + "\"}");
         assertTrue(
                 inspector(blocking(List.of(), List.of()), secretScanning(false), ContentPatternConfig.defaultConfig())
@@ -244,11 +244,11 @@ class ScmContentInspectorTest {
     }
 
     @Test
-    void honoursScanProposalsOptOut() {
+    void honoursScanScmApiOptOut() {
         var optedOut = ContentPatternConfig.builder()
                 .enabled(true)
                 .bundles(List.of("national-id-ca"))
-                .scanProposals(false)
+                .scanScmApi(false)
                 .build();
         var payload = payload("{\"description\":\"" + SIN_IN_PROSE + "\"}");
         assertTrue(inspector(blocking(List.of(), List.of()), secretScanning(false), optedOut)
@@ -256,11 +256,10 @@ class ScmContentInspectorTest {
                 .isEmpty());
     }
 
-    /** Same coverage the other rules get: the query string is prose a proposal can be carried entirely in. */
+    /** Same coverage the other rules get: the query string is prose an SCM API entity can be carried entirely in. */
     @Test
     void catchesAContentPatternCarriedOnlyInTheQueryString() {
-        var payload =
-                ProposalPayload.of(new byte[0], null, "description=employee%20sin%3A%20123%20456%20782", List.of());
+        var payload = EntityPayload.of(new byte[0], null, "description=employee%20sin%3A%20123%20456%20782", List.of());
         var result = inspector(blocking(List.of(), List.of()), secretScanning(false), bundles("national-id-ca"))
                 .inspect(List.of(), payload);
         assertEquals(1, result.size(), result::toString);

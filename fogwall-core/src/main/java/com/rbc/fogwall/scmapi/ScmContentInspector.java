@@ -25,13 +25,13 @@ import lombok.extern.slf4j.Slf4j;
  * it through a pull request description or an issue body when the same text would be blocked in a push. Used by both
  * the SCM API (CLI) proxy and the dashboard issue path — it is not tied to either channel's enablement.
  *
- * <p>Blocked literals and patterns come from {@code proposals.block}. Secret scanning reuses {@link SecretScanCheck}:
+ * <p>Blocked literals and patterns come from {@code scm-api.block}. Secret scanning reuses {@link SecretScanCheck}:
  * gitleaks reads stdin, and scans prose as readily as a diff. Content-pattern bundles reuse
  * {@link PatternBundleScanner}, the same structured PII/identifier detection the push path runs, so a national ID
  * number is caught in a merge request description as well as in a pushed line.
  *
  * <p><b>Fails closed</b> when secret scanning is enabled but the scanner cannot run, and a content-pattern match blocks
- * rather than warns: a forwarded proposal has already published its text upstream, and there is no reviewer to show a
+ * rather than warns: a forwarded request has already published its text upstream, and there is no reviewer to show a
  * warning to.
  */
 @Slf4j
@@ -44,18 +44,18 @@ public class ScmContentInspector {
     private final Supplier<ContentPatternConfig> contentPatternConfig;
 
     /**
-     * Everything wrong with this proposal's content; empty means it may be forwarded.
+     * Everything wrong with this content; empty means it may be forwarded.
      *
      * <p>{@code fields} drives attribution — naming which field carried a match — while {@code payload} drives
      * coverage: the whole body, in both its raw and JSON-decoded readings, so neither an unenumerated field nor an
      * escaped one slips past. Findings are deduplicated by rule, since the same secret is present in both readings.
      */
-    public List<String> inspect(List<ProposalContent> fields, ProposalPayload payload) {
+    public List<String> inspect(List<EntityContent> fields, EntityPayload payload) {
         // Keyed by rule, not by summary: the field pass and the payload pass find the same match, and only the
         // first names a field. Running fields first means the attributed wording is the one kept.
         Map<String, String> byRule = new LinkedHashMap<>();
         var block = blockConfig.get();
-        for (ProposalContent field : fields) {
+        for (EntityContent field : fields) {
             for (BlockedContentScanner.Match match : BlockedContentScanner.scan(field.text(), field.field(), block)) {
                 byRule.putIfAbsent(match.rule(), match.summary());
             }
@@ -78,9 +78,9 @@ public class ScmContentInspector {
      * upstream, and this violation is written to the audit record — repeating it there would move the number fogwall
      * just refused into fogwall's own database.
      */
-    private List<String> scanForContentPatterns(ProposalPayload payload) {
+    private List<String> scanForContentPatterns(EntityPayload payload) {
         var config = contentPatternConfig.get();
-        if (!config.isEnabled() || !config.isScanProposals()) {
+        if (!config.isEnabled() || !config.isScanScmApi()) {
             return List.of();
         }
         var bundles = ContentPatternBundleResolver.resolve(config);
@@ -91,24 +91,24 @@ public class ScmContentInspector {
         Set<String> violations = new LinkedHashSet<>();
         for (ContentPatternFinding finding : scanner.scan(payload.combined())) {
             violations.add("possible " + finding.dataType() + " (" + finding.jurisdiction()
-                    + ") detected in proposal content");
+                    + ") detected in submitted content");
         }
         return List.copyOf(violations);
     }
 
     /** One scanner invocation for the whole request — both readings together, not one call per field. */
-    private List<String> scanForSecrets(ProposalPayload payload) {
+    private List<String> scanForSecrets(EntityPayload payload) {
         if (!secretScanConfig.get().isEnabled()) {
             return List.of();
         }
         Optional<List<Violation>> result = secretScanCheck.check(payload.combined());
         if (result.isEmpty()) {
-            log.warn("Secret scanner unavailable — refusing proposal rather than forwarding it unscanned");
+            log.warn("Secret scanner unavailable — refusing the request rather than forwarding it unscanned");
             return List.of("secret scanning is enabled but the scanner could not run");
         }
         Set<String> violations = new LinkedHashSet<>();
         for (Violation violation : result.get()) {
-            violations.add("secret detected in proposal content: " + violation.reason());
+            violations.add("secret detected in submitted content: " + violation.reason());
         }
         return List.copyOf(violations);
     }

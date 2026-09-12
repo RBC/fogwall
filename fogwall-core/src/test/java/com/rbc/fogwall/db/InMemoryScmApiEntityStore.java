@@ -1,35 +1,35 @@
 package com.rbc.fogwall.db;
 
-import com.rbc.fogwall.db.model.ScmApiProposalRecord;
+import com.rbc.fogwall.db.model.ScmApiEntityRecord;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Map-backed {@link ScmApiProposalStore} for tests that exercise the registrar or a forwarder without a database. */
-public class InMemoryScmApiProposalStore implements ScmApiProposalStore {
+/** Map-backed {@link ScmApiEntityStore} for tests that exercise the registrar or a forwarder without a database. */
+public class InMemoryScmApiEntityStore implements ScmApiEntityStore {
 
-    private final Map<String, ScmApiProposalRecord> rows = new ConcurrentHashMap<>();
+    private final Map<String, ScmApiEntityRecord> rows = new ConcurrentHashMap<>();
 
     @Override
-    public void save(ScmApiProposalRecord record) {
+    public void save(ScmApiEntityRecord record) {
         rows.put(record.getId(), record);
     }
 
     @Override
-    public void update(ScmApiProposalRecord record) {
+    public void update(ScmApiEntityRecord record) {
         rows.put(record.getId(), record);
     }
 
     @Override
-    public Optional<ScmApiProposalRecord> findById(String id) {
+    public Optional<ScmApiEntityRecord> findById(String id) {
         return Optional.ofNullable(rows.get(id));
     }
 
     @Override
-    public Optional<ScmApiProposalRecord> findByTarget(
-            String provider, String repoOwner, String repoName, ScmApiProposalRecord.Kind kind, int number) {
+    public Optional<ScmApiEntityRecord> findByTarget(
+            String provider, String repoOwner, String repoName, ScmApiEntityRecord.Kind kind, int number) {
         return rows.values().stream()
                 .filter(r -> r.getProvider().equals(provider)
                         && r.getRepoOwner().equals(repoOwner)
@@ -40,18 +40,18 @@ public class InMemoryScmApiProposalStore implements ScmApiProposalStore {
     }
 
     @Override
-    public Optional<ScmApiProposalRecord> findByNodeId(String provider, String nodeId) {
+    public Optional<ScmApiEntityRecord> findByNodeId(String provider, String nodeId) {
         return rows.values().stream()
                 .filter(r -> r.getProvider().equals(provider) && nodeId.equals(r.getNodeId()))
                 .findFirst();
     }
 
     @Override
-    public List<ScmApiProposalRecord> findByIds(Collection<String> ids) {
+    public List<ScmApiEntityRecord> findByIds(Collection<String> ids) {
         return ids.stream().map(rows::get).filter(r -> r != null).toList();
     }
 
-    public List<ScmApiProposalRecord> all() {
+    public List<ScmApiEntityRecord> all() {
         return List.copyOf(rows.values());
     }
 

@@ -21,7 +21,7 @@ order.
 Each step records a `PushStep` in the push record with a `StepStatus` of `PASS`, `WARN`, `FAIL`, `BLOCKED`, or
 `SKIPPED`. `WARN` is a first-class outcome, not a lesser form of `FAIL` — a WARN step never blocks the push, it only
 surfaces a finding on the push record for the reviewer's attention. The content-pattern (PII/national-ID) filters are
-WARN-only by design on this pipeline, where a reviewer sees the finding; the proposals surface runs the same bundles as
-a blocking check, having no reviewer to show a warning to. `CommitAttributionPolicyFilter` (order 160, commit-email
+WARN-only by design on this pipeline, where a reviewer sees the finding; the SCM API surface runs the same bundles as a
+blocking check, having no reviewer to show a warning to. `CommitAttributionPolicyFilter` (order 160, commit-email
 attribution) can also run in `warn` mode via `commit.attribution-policy`. All steps always run (fail-fast is
 configurable); issues accumulate and are reported together.

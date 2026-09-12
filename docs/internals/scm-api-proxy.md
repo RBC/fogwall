@@ -5,7 +5,7 @@ reverse-engineering record: request shapes, endpoint maps, where each dialect hi
 per-CLI quirks that constrain the implementation.
 
 For how the proxy is built — listeners, filter chains, where each decision is made — see
-[Architecture](../architecture/proxy-modes.md#proposals-a-dedicated-listener-per-provider).
+[Architecture](../architecture/proxy-modes.md#scm-api-a-dedicated-listener-per-provider).
 
 Everything below is from live traffic unless marked otherwise. Versions captured: `gh` 2.98.0 (`GH_DEBUG=api`), `glab`
 v1.116.0 (`GLAB_DEBUG_HTTP=true`), `tea` 0.15.1 (`tea --debug`, `gitea.dev/sdk` v1.2.0). `fj` v0.6.0 emits no HTTP debug
@@ -183,7 +183,7 @@ it looks:
   rows in the second table above.
 - **REST.** `pr close --delete-branch` sends `DELETE /repos/{o}/{r}/git/refs/heads%2F{branch}`. The dialect carries
   GraphQL only, so this has nowhere to go. Ref deletion is a git operation with a git path through fogwall; it is not
-  proposal content, and it stays out.
+  SCM API content, and it stays out.
 
 The follow-ups run **after** the create or update has already succeeded, so denying one leaves the issue or PR created
 and the attribute unset — half-applied rather than refused. That asymmetry is the reason they are allowlisted rather
@@ -437,8 +437,8 @@ path-based matcher has to tolerate paths carrying no `owner/repo`.
 
 ## What the upstream answers
 
-Read by the dialect's `ProposalResponseReader` after the response has gone to the client, so the registry can name what
-a mutation created. Captured from the same CLI runs as the request shapes above.
+Read by the dialect's `EntityResponseReader` after the response has gone to the client, so the registry can name what a
+mutation created. Captured from the same CLI runs as the request shapes above.
 
 | dialect | create returns                                                       | edit / close return                                              | comment returns                                    |
 | ------- | -------------------------------------------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------- |
@@ -449,8 +449,8 @@ a mutation created. Captured from the same CLI runs as the request shapes above.
 Consequences:
 
 - GitHub's number comes off the trailing segment of `url`; state on a create is `OPEN`, on a close it is implied by the
-  mutation. An edit or close of a proposal fogwall did not see created cannot be registered — nothing in the response
-  names it beyond the node ID.
+  mutation. An edit or close of a pull/merge request or issue fogwall did not see created cannot be registered — nothing
+  in the response names it beyond the node ID.
 - `tea pr close` and `tea pr edit` go through `PATCH /issues/{n}`, so the response, not the path, decides whether the
   target is a pull request.
 - GitLab reports `opened` / `closed` / `merged` / `locked`; Forgejo `open` / `closed` plus a `merged` boolean.

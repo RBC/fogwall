@@ -107,7 +107,7 @@ server:
 
   # Whether the dashboard trusts Forwarded / X-Forwarded-* headers to resolve the external
   # scheme, host and port. These drive OIDC login redirects, other absolute URLs, and the
-  # session cookie's Secure flag. Only the dashboard reads them; the git and proposals
+  # session cookie's Secure flag. Only the dashboard reads them; the git and SCM API
   # listeners read none. Default true — existing ingress deployments depend on it.
   # Precondition when true: the dashboard listener must be reachable only through the ingress
   # that sets the headers. Set false when TLS terminates at fogwall, or whenever the listener

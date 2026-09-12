@@ -99,10 +99,10 @@ class ProviderControllerTest {
     }
 
     @Test
-    void proposalsEnabled_reflectsPerProviderProposalsFlag() {
+    void scmApiEnabled_reflectsPerProviderScmApiFlag() {
         ProviderConfig giteaCfg = new ProviderConfig();
-        giteaCfg.getProposals().setEnabled(true);
-        ProviderConfig gitlabCfg = new ProviderConfig(); // proposals disabled by default
+        giteaCfg.getScmApi().setEnabled(true);
+        ProviderConfig gitlabCfg = new ProviderConfig(); // SCM API disabled by default
         when(fogwallConfig.getProviders()).thenReturn(Map.of("gitea", giteaCfg, "gitlab-http", gitlabCfg));
 
         var infos = controller.list();
@@ -113,8 +113,8 @@ class ProviderControllerTest {
                 .findFirst()
                 .orElseThrow();
 
-        assertTrue(gitea.proposalsEnabled(), "provider with proposals.enabled must advertise the SCM API proxy");
-        assertFalse(gitlab.proposalsEnabled(), "provider without proposals enabled must not");
+        assertTrue(gitea.scmApiEnabled(), "provider with scm-api.enabled must advertise the SCM API proxy");
+        assertFalse(gitlab.scmApiEnabled(), "provider without the SCM API proxy enabled must not");
     }
 
     @Test

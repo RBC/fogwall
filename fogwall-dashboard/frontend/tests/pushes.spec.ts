@@ -93,7 +93,7 @@ test.describe('pending pushes', () => {
     await expect(page.getByText('Pending review')).toBeVisible()
     for (const name of [
       'URL allow rules',
-      'Check User Permission', // proxy-mode step name has no display mapping (server mode: 'Push permissions')
+      'Push permissions',
       'Author emails',
       'Commit messages',
       'Commit trailers',

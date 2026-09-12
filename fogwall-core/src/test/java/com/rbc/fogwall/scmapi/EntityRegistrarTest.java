@@ -5,20 +5,20 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.rbc.fogwall.db.InMemoryScmApiProposalStore;
-import com.rbc.fogwall.db.model.ScmApiProposalRecord;
-import com.rbc.fogwall.db.model.ScmApiProposalRecord.Kind;
-import com.rbc.fogwall.db.model.ScmApiProposalRecord.State;
+import com.rbc.fogwall.db.InMemoryScmApiEntityStore;
+import com.rbc.fogwall.db.model.ScmApiEntityRecord;
+import com.rbc.fogwall.db.model.ScmApiEntityRecord.Kind;
+import com.rbc.fogwall.db.model.ScmApiEntityRecord.State;
 import com.rbc.fogwall.servlet.ScmApiRequestContext;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 
-class ProposalRegistrarTest {
+class EntityRegistrarTest {
 
-    private final InMemoryScmApiProposalStore store = new InMemoryScmApiProposalStore();
-    private final ProposalRegistrar github = new ProposalRegistrar(store, new GitHubProposalResponseReader());
-    private final ProposalRegistrar gitlab = new ProposalRegistrar(store, new GitLabProposalResponseReader());
-    private final ProposalRegistrar forgejo = new ProposalRegistrar(store, new ForgejoProposalResponseReader());
+    private final InMemoryScmApiEntityStore store = new InMemoryScmApiEntityStore();
+    private final EntityRegistrar github = new EntityRegistrar(store, new GitHubEntityResponseReader());
+    private final EntityRegistrar gitlab = new EntityRegistrar(store, new GitLabEntityResponseReader());
+    private final EntityRegistrar forgejo = new EntityRegistrar(store, new ForgejoEntityResponseReader());
 
     private static ScmApiRequestContext context(String provider, String field, String nodeId) {
         var c = new ScmApiRequestContext();
@@ -47,8 +47,8 @@ class ProposalRegistrarTest {
                 bytes(
                         "{\"data\":{\"createPullRequest\":{\"pullRequest\":{\"id\":\"PR_9\",\"url\":\"https://github.com/acme/widgets/pull/7\"}}}}"));
         assertEquals(200, create.getUpstreamStatus());
-        assertNotNull(create.getProposalId());
-        ScmApiProposalRecord row = store.findById(create.getProposalId()).orElseThrow();
+        assertNotNull(create.getEntityId());
+        ScmApiEntityRecord row = store.findById(create.getEntityId()).orElseThrow();
         assertEquals(7, row.getNumber());
         assertEquals(State.OPEN, row.getState());
         assertEquals("alice", row.getCreatedBy());
@@ -57,9 +57,9 @@ class ProposalRegistrarTest {
         var close = context("github", "closePullRequest", "PR_9");
         github.recordUpstreamResponse(
                 close, null, 200, bytes("{\"data\":{\"closePullRequest\":{\"clientMutationId\":null}}}"));
-        assertEquals(row.getId(), close.getProposalId());
+        assertEquals(row.getId(), close.getEntityId());
         assertEquals(1, store.all().size());
-        ScmApiProposalRecord after = store.findById(row.getId()).orElseThrow();
+        ScmApiEntityRecord after = store.findById(row.getId()).orElseThrow();
         assertEquals(State.CLOSED, after.getState());
         assertEquals(close.getActionId(), after.getLastActionId());
         assertEquals(create.getActionId(), after.getCreatedActionId(), "the create is still the create");
@@ -70,12 +70,12 @@ class ProposalRegistrarTest {
         var close = context("github", "closeIssue", "I_unknown");
         github.recordUpstreamResponse(close, null, 200, bytes("{\"data\":{}}"));
         assertEquals(200, close.getUpstreamStatus());
-        assertNull(close.getProposalId());
+        assertNull(close.getEntityId());
         assertTrue(store.all().isEmpty());
     }
 
     @Test
-    void restUpdateOnAProposalOpenedOutsideFogwall_registersItFromTheResponse() {
+    void restUpdateOnAnEntityOpenedOutsideFogwall_registersItFromTheResponse() {
         var update = context("gitlab", "merge_requests.update", null);
         gitlab.recordUpstreamResponse(
                 update,
@@ -83,7 +83,7 @@ class ProposalRegistrarTest {
                 200,
                 bytes(
                         "{\"iid\":12,\"state\":\"closed\",\"title\":\"old\",\"web_url\":\"https://gitlab.com/acme/widgets/-/merge_requests/12\"}"));
-        ScmApiProposalRecord row = store.findById(update.getProposalId()).orElseThrow();
+        ScmApiEntityRecord row = store.findById(update.getEntityId()).orElseThrow();
         assertEquals(Kind.PULL_REQUEST, row.getKind());
         assertEquals(12, row.getNumber());
         assertEquals(State.CLOSED, row.getState());
@@ -95,7 +95,7 @@ class ProposalRegistrarTest {
         var create = context("gitea", "pulls.create", null);
         forgejo.recordUpstreamResponse(create, "/repos/acme/widgets/pulls", 422, bytes("{\"message\":\"exists\"}"));
         assertEquals(422, create.getUpstreamStatus());
-        assertNull(create.getProposalId());
+        assertNull(create.getEntityId());
         assertTrue(store.all().isEmpty());
     }
 
@@ -114,8 +114,8 @@ class ProposalRegistrarTest {
                 "/repos/acme/widgets/issues/2/comments",
                 201,
                 bytes("{\"id\":5,\"issue_url\":\"https://gitea.com/api/v1/repos/acme/widgets/issues/2\"}"));
-        ScmApiProposalRecord row = store.findById(create.getProposalId()).orElseThrow();
-        assertEquals(comment.getProposalId(), row.getId());
+        ScmApiEntityRecord row = store.findById(create.getEntityId()).orElseThrow();
+        assertEquals(comment.getEntityId(), row.getId());
         assertEquals("Reported", row.getTitle());
         assertEquals("https://gitea.com/acme/widgets/issues/2", row.getUrl(), "a comment's own URL never replaces it");
         assertEquals(comment.getActionId(), row.getLastActionId());

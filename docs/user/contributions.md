@@ -1,4 +1,4 @@
-# Proposals (PR/MRs through fogwall)
+# Contributions (PRs, MRs & issues through fogwall)
 
 _Available since v1.4.0, if your administrator has enabled it per-provider._
 

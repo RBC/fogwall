@@ -175,15 +175,15 @@ class GiteaContainer extends GenericContainer<GiteaContainer> {
      * {@code REQUIRE_SIGNIN_VIEW=true}.
      */
     /**
-     * Generates a token for {@value #TEST_USER} with the scopes the proposals surface needs. Wider than
+     * Generates a token for {@value #TEST_USER} with the scopes the SCM API surface needs. Wider than
      * {@link #generateTestUserToken()}: opening and closing a pull request reads and writes issues, because Gitea
      * models a pull request as one.
      */
-    String generateProposalsToken() throws IOException, InterruptedException {
+    String generateScmApiToken() throws IOException, InterruptedException {
         return generateToken(
                 TEST_USER,
                 TEST_USER_PASSWORD,
-                "e2e-proposals-token",
+                "e2e-scm-api-token",
                 List.of("read:user", "read:repository", "write:repository", "read:issue", "write:issue"));
     }
 

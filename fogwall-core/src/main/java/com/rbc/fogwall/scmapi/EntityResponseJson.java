@@ -6,13 +6,13 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /** Null-tolerant field access over an upstream response, shared by the dialect readers. */
-final class ProposalResponseJson {
+final class EntityResponseJson {
 
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
     private static final Pattern NUMBER_IN_PATH = Pattern.compile("/(?:issues|merge_requests|pulls)/(\\d+)(?:/|$)");
     private static final Pattern NUMBER_AT_END = Pattern.compile("/(\\d+)/?$");
 
-    private ProposalResponseJson() {}
+    private EntityResponseJson() {}
 
     /** The body as an object, or null when it is absent, malformed, or not an object. */
     static JsonNode parse(String json) {

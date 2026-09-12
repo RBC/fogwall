@@ -1,11 +1,11 @@
 package com.rbc.fogwall.dashboard.controller;
 
 import com.rbc.fogwall.db.ScmApiActionStore;
-import com.rbc.fogwall.db.ScmApiProposalStore;
+import com.rbc.fogwall.db.ScmApiEntityStore;
 import com.rbc.fogwall.db.model.ScmApiActionQuery;
 import com.rbc.fogwall.db.model.ScmApiActionRecord;
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
-import com.rbc.fogwall.db.model.ScmApiProposalRecord;
+import com.rbc.fogwall.db.model.ScmApiEntityRecord;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
@@ -29,13 +29,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class ScmApiActionController {
 
     private final ScmApiActionStore scmApiActionStore;
-    private final ScmApiProposalStore scmApiProposalStore;
+    private final ScmApiEntityStore scmApiEntityStore;
 
     @Operation(
             operationId = "listScmApiActions",
             summary = "List SCM API proxy audit records",
             description =
-                    "Returns SCM API proxy mutation records ordered by most recent first, each with the proposal it created or touched when the upstream response named one. Filter by status (FORWARDED, DENIED, REJECTED, ERROR), provider, resolved user, repo owner/name, or free-text search. Paginate with limit/offset.")
+                    "Returns SCM API proxy mutation records ordered by most recent first, each with the pull/merge request or issue it created or touched when the upstream response named one. Filter by status (FORWARDED, DENIED, REJECTED, ERROR), provider, resolved user, repo owner/name, or free-text search. Paginate with limit/offset.")
     @GetMapping
     public List<ScmApiActionView> list(
             @RequestParam(required = false) String status,
@@ -67,15 +67,15 @@ public class ScmApiActionController {
         }
 
         List<ScmApiActionRecord> records = scmApiActionStore.find(query.build());
-        Map<String, ScmApiProposalRecord> proposals = scmApiProposalStore
+        Map<String, ScmApiEntityRecord> entities = scmApiEntityStore
                 .findByIds(records.stream()
-                        .map(ScmApiActionRecord::getProposalId)
+                        .map(ScmApiActionRecord::getEntityId)
                         .filter(Objects::nonNull)
                         .collect(Collectors.toSet()))
                 .stream()
-                .collect(Collectors.toMap(ScmApiProposalRecord::getId, Function.identity()));
+                .collect(Collectors.toMap(ScmApiEntityRecord::getId, Function.identity()));
         return records.stream()
-                .map(r -> new ScmApiActionView(r, r.getProposalId() == null ? null : proposals.get(r.getProposalId())))
+                .map(r -> new ScmApiActionView(r, r.getEntityId() == null ? null : entities.get(r.getEntityId())))
                 .toList();
     }
 
@@ -86,11 +86,9 @@ public class ScmApiActionController {
                 .findById(id)
                 .map(r -> new ScmApiActionView(
                         r,
-                        r.getProposalId() == null
+                        r.getEntityId() == null
                                 ? null
-                                : scmApiProposalStore
-                                        .findById(r.getProposalId())
-                                        .orElse(null)))
+                                : scmApiEntityStore.findById(r.getEntityId()).orElse(null)))
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }

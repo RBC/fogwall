@@ -25,12 +25,12 @@ providers:
   gitea:
     enabled: true
     uri: http://localhost:3000          # HTTP/API endpoint
-    # Proposals: open and iterate on PRs through fogwall with tea/fj.
+    # SCM API: open and iterate on PRs, MRs and issues through fogwall with tea/fj.
     # Its own listener on 9445 — the dialect is mounted at that port's root because gh and fj
     # address the API from the host root and discard any path prefix. Point a CLI at it with:
     #   tea login add --name fogwall --url http://localhost:9445 --token <your-gitea-token>
     #   fj -H http://localhost:9445 pr create "title" --body "body"
-    proposals:
+    scm-api:
       enabled: true
       port: 9445
     ssh:
@@ -48,16 +48,16 @@ providers:
   github:
     enabled: true
     # Dashboard issue filing (create/edit/comment) on your behalf — link your github account under Profile first,
-    # then use the dashboard's Issues page. Needs no listener or port, unlike proposals below.
+    # then use the dashboard's Issues page. Needs no listener or port, unlike the SCM API proxy below.
     issues-enabled: true
     ssh:
       enabled: true
-    # Proposals on their own listener — this is the common case: open a PR against a real
+    # SCM API on its own listener — this is the common case: open a PR against a real
     # github.com repo through fogwall, inspected and audited, with your own token.
     #   GH_HOST=localhost:9443 GH_TOKEN=<classic PAT> \
     #     gh pr create -R localhost:9443/<owner>/<repo> --base main --head <branch> --title ...
     # GH_HOST takes a host[:port] and never a path, which is why this needs a port of its own.
-    proposals:
+    scm-api:
       enabled: true
       port: 9443
   # gitlab.com, on its own listener. glab is pointed at a host with `glab auth login --hostname`,
@@ -66,7 +66,7 @@ providers:
   #     glab mr create -R coopernetes/test-repo --source-branch <branch> --target-branch main --title ...
   gitlab:
     enabled: true
-    proposals:
+    scm-api:
       enabled: true
       port: 9444
 # Three users for local development:
@@ -99,7 +99,7 @@ users:
       # Uncomment and set to your real GitHub username to use the github provider above (HTTPS or SSH):
       # - provider: github
       #   username: your-gh-handle
-      # Proposals resolve the caller from their token: fogwall asks the provider who the token belongs to,
+      # SCM API resolves the caller from their token: fogwall asks the provider who the token belongs to,
       # then matches that login here. Without an entry the CLI gets a 401 from fogwall, not from the SCM.
       # - provider: gitlab
       #   username: your-gitlab-handle
@@ -144,9 +144,9 @@ diff-scan:
 secret-scan:
   enabled: true
 
-# Proposals — proposing changes (open/edit/comment on a PR) through fogwall.
-proposals:
-  # Content rules for the prose a proposal carries — PR/MR title and description, comment bodies. Separate from
+# SCM API proxy — open/edit/comment on PRs, MRs and issues through fogwall.
+scm-api:
+  # Content rules for the prose an SCM API entity carries — PR/MR title and description, comment bodies. Separate from
   # diff-scan.block, which applies to pushed diffs. Secret scanning is governed by secret-scan below.
   block:
     literals:

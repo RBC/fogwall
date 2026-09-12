@@ -55,7 +55,7 @@ public class MongoScmApiActionStore implements ScmApiActionStore {
                 .append("client_type", r.getClientType())
                 .append("client_version", r.getClientVersion())
                 .append("upstream_status", r.getUpstreamStatus())
-                .append("proposal_id", r.getProposalId())
+                .append("entity_id", r.getEntityId())
                 .append("merge_commit_sha", r.getMergeCommitSha());
         getCollection().insertOne(doc);
     }
@@ -122,7 +122,7 @@ public class MongoScmApiActionStore implements ScmApiActionStore {
                 .clientType(doc.getString("client_type"))
                 .clientVersion(doc.getString("client_version"))
                 .upstreamStatus(doc.getInteger("upstream_status"))
-                .proposalId(doc.getString("proposal_id"))
+                .entityId(doc.getString("entity_id"))
                 .mergeCommitSha(doc.getString("merge_commit_sha"))
                 .build();
     }

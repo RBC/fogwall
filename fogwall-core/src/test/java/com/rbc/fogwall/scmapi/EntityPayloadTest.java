@@ -7,12 +7,12 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
-class ProposalPayloadTest {
+class EntityPayloadTest {
 
     private static final JsonMapper MAPPER = new JsonMapper();
 
-    private static ProposalPayload of(String json) {
-        return ProposalPayload.of(json.getBytes(StandardCharsets.UTF_8), MAPPER.readTree(json));
+    private static EntityPayload of(String json) {
+        return EntityPayload.of(json.getBytes(StandardCharsets.UTF_8), MAPPER.readTree(json));
     }
 
     /** Nothing about a JSON document says which members carry prose, so the walk takes all of them, at any depth. */
@@ -36,20 +36,20 @@ class ProposalPayloadTest {
 
     @Test
     void survivesAnUnparseableBody() {
-        var payload = ProposalPayload.of("{not json".getBytes(StandardCharsets.UTF_8), null);
+        var payload = EntityPayload.of("{not json".getBytes(StandardCharsets.UTF_8), null);
         assertEquals("{not json", payload.raw());
         assertEquals("", payload.decoded());
         assertEquals("{not json", payload.combined());
     }
 
     /**
-     * GitLab and Gitea accept the same parameters in the query string as in the body, so a proposal can carry its whole
-     * description there and leave the body empty — inspecting only the body would forward it untouched.
+     * GitLab and Gitea accept the same parameters in the query string as in the body, so an SCM API entity can carry
+     * its whole description there and leave the body empty — inspecting only the body would forward it untouched.
      */
     @Test
     void includesTheQueryStringInBothReadings() {
         var payload =
-                ProposalPayload.of(new byte[0], null, "title=t&description=see%20internal.corp.example.com", List.of());
+                EntityPayload.of(new byte[0], null, "title=t&description=see%20internal.corp.example.com", List.of());
         assertTrue(payload.raw().contains("description=see%20internal.corp.example.com"));
         assertTrue(
                 payload.decoded().contains("see internal.corp.example.com"),

@@ -47,7 +47,7 @@ public final class FogwallTelemetry {
     public static final AttributeKey<String> REPO = AttributeKey.stringKey("fogwall.repo");
 
     /**
-     * SCM API operation, normalized to a provider-agnostic name where it flattens ({@code proposal.create},
+     * SCM API operation, normalized to a provider-agnostic name where it flattens ({@code pull_request.create},
      * {@code issue.update}, …) and the raw per-dialect op otherwise — see {@link ScmApiOperations}; a pure read is
      * {@code read}. Low cardinality (bounded by the dialect allowlists).
      */

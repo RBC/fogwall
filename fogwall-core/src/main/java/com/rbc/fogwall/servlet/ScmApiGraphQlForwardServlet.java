@@ -3,7 +3,7 @@ package com.rbc.fogwall.servlet;
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
 import com.rbc.fogwall.net.FogwallHttpExecutor;
 import com.rbc.fogwall.observability.FogwallTelemetry;
-import com.rbc.fogwall.scmapi.ProposalRegistrar;
+import com.rbc.fogwall.scmapi.EntityRegistrar;
 import com.rbc.fogwall.scmapi.ScmApiUserAgent;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
@@ -27,14 +27,14 @@ public class ScmApiGraphQlForwardServlet extends HttpServlet {
 
     private final String upstreamGraphqlUrl;
 
-    private final ProposalRegistrar proposalRegistrar;
+    private final EntityRegistrar entityRegistrar;
 
     private final FogwallTelemetry telemetry;
 
     public ScmApiGraphQlForwardServlet(
-            String upstreamGraphqlUrl, ProposalRegistrar proposalRegistrar, FogwallTelemetry telemetry) {
+            String upstreamGraphqlUrl, EntityRegistrar entityRegistrar, FogwallTelemetry telemetry) {
         this.upstreamGraphqlUrl = upstreamGraphqlUrl;
-        this.proposalRegistrar = proposalRegistrar;
+        this.entityRegistrar = entityRegistrar;
         this.telemetry = telemetry;
     }
 
@@ -63,7 +63,7 @@ public class ScmApiGraphQlForwardServlet extends HttpServlet {
         try {
             // A read is streamed, with the upstream's content type relayed: nothing here assumes it is JSON. A
             // mutation's response is also kept (bounded) — it is the upstream's own statement of what it created,
-            // and the proposal registry reads it once the client has it.
+            // and the SCM API entity registry reads it once the client has it.
             var captured = new byte[1][];
             int upstreamStatus = upstreamRequest
                     .bodyByteArray(body, ContentType.APPLICATION_JSON)
@@ -92,7 +92,7 @@ public class ScmApiGraphQlForwardServlet extends HttpServlet {
             forwardSpan.setAttribute("http.response.status_code", upstreamStatus);
             if (mutation) {
                 context.setStatus(ScmApiActionStatus.FORWARDED);
-                proposalRegistrar.recordUpstreamResponse(context, null, upstreamStatus, captured[0]);
+                entityRegistrar.recordUpstreamResponse(context, null, upstreamStatus, captured[0]);
             }
         } catch (IOException e) {
             forwardSpan.recordException(e);

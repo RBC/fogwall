@@ -34,7 +34,7 @@ const icons: Record<string, ReactNode> = {
     />
   ),
   pushes: <path d="M12 19V5M12 5l-6 6M12 5l6 6" strokeLinecap="round" strokeLinejoin="round" />,
-  proposals: (
+  contributions: (
     <>
       <circle cx="6" cy="6" r="2.4" />
       <circle cx="6" cy="18" r="2.4" />
@@ -103,7 +103,7 @@ interface Dest {
 const PRIMARY: Dest[] = [
   { to: '/', label: 'Overview', icon: 'overview', end: true },
   { to: '/pushes', label: 'Pushes', icon: 'pushes' },
-  { to: '/proposals', label: 'Proposals', icon: 'proposals' },
+  { to: '/contributions', label: 'Contributions', icon: 'contributions' },
   { to: '/issues', label: 'Issues', icon: 'issues' },
   { to: '/repos', label: 'Repos', icon: 'repos' },
   { to: '/providers', label: 'Providers', icon: 'providers' },

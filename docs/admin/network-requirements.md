@@ -77,7 +77,7 @@ proxy host's egress IP should bypass SSL inspection, not just be allowlisted at 
 
 ## TLS termination and forwarded headers
 
-The git and proposals listeners need nothing special behind a TLS-terminating proxy: the git protocol does not consult
+The git and SCM API listeners need nothing special behind a TLS-terminating proxy: the git protocol does not consult
 forwarded headers, and fogwall reads none and emits none on those paths. The **dashboard** is the exception — it
 resolves the external scheme, host and port so that OIDC login redirects, other absolute URLs, and the session cookie's
 `Secure` flag reflect the address the browser used. `server.trust-forwarded-headers` (default `true`) controls where it
