@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-12T00:00:00Z",
+  "title": "Design System: fogwall Dashboard",
+  "extensions": {
+    "colorMeta": {
+      "rail": {
+        "role": "neutral",
+        "displayName": "Rail",
+        "canonical": "oklch(27.9% 0.041 260.031)",
+        "tonalRamp": ["oklch(20.8% 0.042 265.755)", "oklch(27.9% 0.041 260.031)", "oklch(37.2% 0.044 257.287)", "oklch(44.6% 0.043 257.281)", "oklch(55.4% 0.046 257.417)", "oklch(70.4% 0.04 256.788)", "oklch(86.9% 0.022 252.894)", "oklch(96.8% 0.007 247.896)"]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Gate Blue",
+        "canonical": "oklch(54.6% 0.245 262.881)",
+        "tonalRamp": ["oklch(37.9% 0.146 265.522)", "oklch(42.4% 0.199 265.638)", "oklch(48.8% 0.243 264.376)", "oklch(54.6% 0.245 262.881)", "oklch(62.3% 0.214 259.815)", "oklch(70.7% 0.165 254.624)", "oklch(88.2% 0.059 254.128)", "oklch(97% 0.014 254.604)"]
+      },
+      "affirm": {
+        "role": "secondary",
+        "displayName": "Consequence Green",
+        "canonical": "oklch(62.7% 0.194 149.214)",
+        "tonalRamp": ["oklch(39.3% 0.095 152.535)", "oklch(44.8% 0.119 151.328)", "oklch(52.7% 0.154 150.069)", "oklch(62.7% 0.194 149.214)", "oklch(72.3% 0.219 149.579)", "oklch(87.1% 0.15 154.449)", "oklch(96.2% 0.044 156.743)", "oklch(98.2% 0.018 155.826)"]
+      },
+      "refuse": {
+        "role": "secondary",
+        "displayName": "Consequence Red",
+        "canonical": "oklch(57.7% 0.245 27.325)",
+        "tonalRamp": ["oklch(39.6% 0.141 25.723)", "oklch(44.4% 0.177 26.899)", "oklch(50.5% 0.213 27.518)", "oklch(57.7% 0.245 27.325)", "oklch(70.4% 0.191 22.216)", "oklch(88.5% 0.062 18.334)", "oklch(93.6% 0.032 17.717)", "oklch(97.1% 0.013 17.38)"]
+      },
+      "held-bg": {
+        "role": "tertiary",
+        "displayName": "Held (PENDING)",
+        "canonical": "oklch(96.2% 0.059 95.617)",
+        "tonalRamp": ["oklch(41.4% 0.112 45.904)", "oklch(47.3% 0.137 46.201)", "oklch(55.5% 0.163 48.998)", "oklch(66.6% 0.179 58.318)", "oklch(82.8% 0.189 84.429)", "oklch(92.4% 0.12 95.746)", "oklch(96.2% 0.059 95.617)", "oklch(98.7% 0.022 95.277)"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(27.8% 0.033 256.848)",
+        "tonalRamp": ["oklch(21% 0.034 264.665)", "oklch(27.8% 0.033 256.848)", "oklch(37.3% 0.034 259.733)", "oklch(44.6% 0.03 256.802)", "oklch(55.1% 0.027 264.364)", "oklch(70.7% 0.022 261.325)", "oklch(92.8% 0.006 264.531)", "oklch(98.5% 0.002 247.839)"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Page titles only, one per page. 1.5rem renders at 27px on this project's 18px root." },
+      "headline": { "displayName": "Headline", "purpose": "Section headings inside a page." },
+      "title": { "displayName": "Title", "purpose": "Group labels above a set of rows or fields; often uppercase with 0.025em tracking." },
+      "body": { "displayName": "Body", "purpose": "The default. Table cells, descriptions, form values. Renders at 15.75px." },
+      "label": { "displayName": "Label", "purpose": "Badges, table headers, metadata, timestamps. Renders at 13.5px." },
+      "evidence": { "displayName": "Evidence", "purpose": "Monospace for machine-produced strings a human may copy: SHAs, refs, paths, patterns, record IDs, error output." }
+    },
+    "shadows": [
+      { "name": "resting", "value": "0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)", "purpose": "Base shadow on a small number of summary cards. The bordered flat card is the default; use sparingly." },
+      { "name": "hover-lift", "value": "0 1px 2px 0 rgb(0 0 0 / 0.05)", "purpose": "Actionable rows and cards on hover, paired with the background shift." },
+      { "name": "floating", "value": "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)", "purpose": "Toasts." },
+      { "name": "modal", "value": "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)", "purpose": "Dialogs only." }
+    ],
+    "motion": [
+      { "name": "color-shift", "value": "color 150ms, background-color 150ms, border-color 150ms", "purpose": "The system's only resting-state transition. Hover and active feedback on every interactive element." },
+      { "name": "toast-in", "value": "fadeIn 150ms ease-out", "purpose": "Toast entrance, translateY(-0.25rem) to 0. Gated behind motion-safe. The only keyframe animation in the product." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "40rem" },
+      { "name": "lg", "value": "64rem" },
+      { "name": "root", "value": "18px — html font-size override; every rem value renders 12.5% larger than Tailwind's nominal scale" },
+      { "name": "measure", "value": "72rem (1296px) — the single page measure, max-w-6xl" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Gate Blue fill. The default affirmative action on a form or panel.",
+      "html": "<button class=\"ds-btn-primary\">Save changes</button>",
+      "css": ".ds-btn-primary { background: oklch(54.6% 0.245 262.881); color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 15.75px; line-height: 22.5px; padding: 4.5px 13.5px; border: none; border-radius: 4.5px; cursor: pointer; transition: background-color 150ms; } .ds-btn-primary:hover { background: oklch(48.8% 0.243 264.376); } .ds-btn-primary:focus-visible { outline: 2px solid oklch(54.6% 0.245 262.881); outline-offset: 2px; }"
+    },
+    {
+      "name": "Approve Button",
+      "kind": "button",
+      "refersTo": "button-approve",
+      "description": "One of the two consequential decisions. Full-saturation green appears nowhere else.",
+      "html": "<button class=\"ds-btn-approve\">Approve</button>",
+      "css": ".ds-btn-approve { background: oklch(62.7% 0.194 149.214); color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 15.75px; font-weight: 500; line-height: 22.5px; padding: 9px 18px; border: none; border-radius: 4.5px; cursor: pointer; transition: background-color 150ms; } .ds-btn-approve:hover { background: oklch(52.7% 0.154 150.069); } .ds-btn-approve:focus-visible { outline: 2px solid oklch(62.7% 0.194 149.214); outline-offset: 2px; } .ds-btn-approve:disabled { background: oklch(70.7% 0.022 261.325); opacity: 0.4; cursor: not-allowed; }"
+    },
+    {
+      "name": "Reject Button",
+      "kind": "button",
+      "refersTo": "button-reject",
+      "description": "The other consequential decision. Paired with Approve, never used alone as a generic destructive action.",
+      "html": "<button class=\"ds-btn-reject\">Reject</button>",
+      "css": ".ds-btn-reject { background: oklch(57.7% 0.245 27.325); color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 15.75px; font-weight: 500; line-height: 22.5px; padding: 9px 18px; border: none; border-radius: 4.5px; cursor: pointer; transition: background-color 150ms; } .ds-btn-reject:hover { background: oklch(50.5% 0.213 27.518); } .ds-btn-reject:focus-visible { outline: 2px solid oklch(57.7% 0.245 27.325); outline-offset: 2px; } .ds-btn-reject:disabled { background: oklch(70.7% 0.022 261.325); opacity: 0.4; cursor: not-allowed; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Bordered, white-surfaced. Cancel, back, and every non-committal action.",
+      "html": "<button class=\"ds-btn-secondary\">Cancel</button>",
+      "css": ".ds-btn-secondary { background: #fff; color: oklch(44.6% 0.03 256.802); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 15.75px; line-height: 22.5px; padding: 9px 18px; border: 1px solid oklch(87.2% 0.01 258.338); border-radius: 4.5px; cursor: pointer; transition: background-color 150ms; } .ds-btn-secondary:hover { background: oklch(98.5% 0.002 247.839); } .ds-btn-secondary:focus-visible { outline: 2px solid oklch(54.6% 0.245 262.881); outline-offset: 2px; }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge-status",
+      "description": "The system's loudest element and its whole point: a push's state. Eight variants, one per status; tint background, same-hue dark ink, mid-tone border.",
+      "html": "<span class=\"ds-badge-status ds-badge-held\">PENDING</span> <span class=\"ds-badge-status ds-badge-cleared\">APPROVED</span> <span class=\"ds-badge-status ds-badge-turned-back\">REJECTED</span>",
+      "css": ".ds-badge-status { display: inline-block; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13.5px; font-weight: 600; line-height: 18px; padding: 2.25px 9px; border-radius: 9999px; white-space: nowrap; border: 1px solid transparent; } .ds-badge-held { background: oklch(96.2% 0.059 95.617); color: oklch(47.3% 0.137 46.201); border-color: oklch(87.9% 0.169 91.605); } .ds-badge-cleared { background: oklch(96.2% 0.044 156.743); color: oklch(44.8% 0.119 151.328); border-color: oklch(87.1% 0.15 154.449); } .ds-badge-turned-back { background: oklch(93.6% 0.032 17.717); color: oklch(44.4% 0.177 26.899); border-color: oklch(80.8% 0.114 19.571); }"
+    },
+    {
+      "name": "Permission Badge",
+      "kind": "chip",
+      "refersTo": "badge-status",
+      "description": "Categorical grant label. Same geometry as a status badge but borderless and lower-saturation — the missing border is what separates a category from a state.",
+      "html": "<span class=\"ds-badge-grant ds-grant-push\">push</span> <span class=\"ds-badge-grant ds-grant-review\">review</span> <span class=\"ds-badge-grant ds-grant-self-certify\">self_certify</span>",
+      "css": ".ds-badge-grant { display: inline-flex; align-items: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13.5px; font-weight: 500; line-height: 18px; padding: 2.25px 9px; border-radius: 9999px; } .ds-grant-push { background: oklch(97.7% 0.013 236.62); color: oklch(44.3% 0.11 240.79); } .ds-grant-review { background: oklch(97.9% 0.021 166.113); color: oklch(43.2% 0.095 166.913); } .ds-grant-self-certify { background: oklch(98.7% 0.022 95.277); color: oklch(55.5% 0.163 48.998); }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "The default region container. Flat, hairline-bordered, 9px radius. No shadow at rest.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-label\">Pending review</div><div class=\"ds-card-value\">12</div></div>",
+      "css": ".ds-card { background: #fff; border: 1px solid oklch(92.8% 0.006 264.531); border-radius: 9px; padding: 18px 27px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; transition: box-shadow 150ms, background-color 150ms; } .ds-card:hover { box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); } .ds-card-label { font-size: 13.5px; font-weight: 600; color: oklch(55.1% 0.027 264.364); text-transform: uppercase; letter-spacing: 0.025em; } .ds-card-value { font-size: 33.75px; font-weight: 700; letter-spacing: -0.025em; color: oklch(27.8% 0.033 256.848); margin-top: 4.5px; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "White surface, hairline border, 4.5px radius. Focus shifts the border and adds the Gate Blue ring the system requires.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"Filter by repository…\" />",
+      "css": ".ds-input { width: 100%; background: #fff; color: oklch(27.8% 0.033 256.848); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 15.75px; line-height: 22.5px; padding: 6.75px 13.5px; border: 1px solid oklch(87.2% 0.01 258.338); border-radius: 4.5px; transition: border-color 150ms, box-shadow 150ms; } .ds-input::placeholder { color: oklch(70.7% 0.022 261.325); } .ds-input:focus { outline: none; border-color: oklch(54.6% 0.245 262.881); box-shadow: 0 0 0 2px oklch(88.2% 0.059 254.128); } .ds-input:disabled { background: oklch(98.5% 0.002 247.839); color: oklch(70.7% 0.022 261.325); }"
+    },
+    {
+      "name": "Rail Navigation Item",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "A destination in the dark rail. Gate Blue fill marks the active destination — the one place the accent reads as location rather than action.",
+      "html": "<nav class=\"ds-rail\"><a class=\"ds-nav-item ds-nav-item-active\" href=\"#\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" aria-hidden=\"true\"><path d=\"M12 19V5M12 5l-6 6M12 5l6 6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg><span>Pushes</span></a><a class=\"ds-nav-item\" href=\"#\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M12 8v4M12 16h.01\" stroke-linecap=\"round\"/></svg><span>Issues</span></a></nav>",
+      "css": ".ds-rail { background: oklch(27.9% 0.041 260.031); border-right: 1px solid oklch(20.8% 0.042 265.755); padding: 9px 11.25px; width: 252px; display: flex; flex-direction: column; gap: 2.25px; } .ds-nav-item { display: flex; align-items: center; gap: 5.625px; padding: 6.75px 11.25px; border-radius: 9px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 15.75px; font-weight: 500; color: oklch(92.9% 0.013 255.508); text-decoration: none; transition: background-color 150ms, color 150ms; } .ds-nav-item svg { width: 18px; height: 18px; flex-shrink: 0; } .ds-nav-item:hover { background: oklch(37.2% 0.044 257.287); } .ds-nav-item:focus-visible { outline: 2px solid #fff; outline-offset: -2px; } .ds-nav-item-active, .ds-nav-item-active:hover { background: oklch(54.6% 0.245 262.881); color: #fff; }"
+    },
+    {
+      "name": "Table Header",
+      "kind": "custom",
+      "refersTo": "table-header",
+      "description": "Sunken, uppercase, Label-sized. Rows below are separated by hairlines rather than cell borders.",
+      "html": "<table class=\"ds-table\"><thead><tr><th>Repository</th><th>Author</th><th>Status</th></tr></thead><tbody><tr><td>acme/payments</td><td>t.cooper</td><td><span class=\"ds-badge-status ds-badge-held\">PENDING</span></td></tr><tr><td>acme/ledger</td><td>a.singh</td><td><span class=\"ds-badge-status ds-badge-cleared\">APPROVED</span></td></tr></tbody></table>",
+      "css": ".ds-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid oklch(92.8% 0.006 264.531); border-radius: 9px; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; } .ds-table th { background: oklch(98.5% 0.002 247.839); color: oklch(55.1% 0.027 264.364); font-size: 13.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.025em; text-align: left; padding: 9px 18px; border-bottom: 1px solid oklch(96.7% 0.003 264.542); } .ds-table td { font-size: 15.75px; color: oklch(44.6% 0.03 256.802); padding: 9px 18px; border-top: 1px solid oklch(96.7% 0.003 264.542); } .ds-table tbody tr { transition: background-color 150ms; } .ds-table tbody tr:hover { background: oklch(98.5% 0.002 247.839); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Checkpoint",
+    "overview": "A push arrives, is held, inspected, stamped, and released. Everything in this interface serves that sequence. The chrome is deliberately quiet — a dark rail on the left, white cards on a pale field, hairline borders — so that the one thing carrying saturated color is the thing carrying state: the status of a held push. Color is not decoration here; it is the stamp.\n\nThe system is function-over-fashion by explicit intent, because the decisions made through it have consequences. An approver is reading a diff to decide whether code leaves the building; an auditor is reconstructing why that decision was made. Both need density, exact values, and labels that mean what they say. Neither needs personality. The craft in this system shows in alignment, consistency of the status vocabulary, and the discipline of a two-size type scale — not in effects, gradients, or motion.\n\nDensity is high and intentional. 474 of 503 type usages in the application are the two smallest sizes, and the root font size is set to 18px rather than the browser's 16px — so the whole rem scale renders 12.5% larger than Tailwind's defaults suggest, buying legibility back at high information density. A reader scans this interface; they do not read it.",
+    "keyCharacteristics": [
+      "Neutral chrome, saturated status — color appears where state is",
+      "Two type sizes carry almost everything; a third size means \"this is a page\" or \"this is a number\"",
+      "Flat surfaces separated by 1px hairlines; shadow means \"floating above the page\"",
+      "Monospace is reserved for machine-produced strings a human may need to copy",
+      "Single measure: every page is the same width with the same gutter",
+      "No token layer — the system lives in repeated utility strings and this document"
+    ],
+    "rules": [
+      { "name": "The Stamp Rule", "body": "Saturated color belongs to state and consequence. If a color is not reporting a status, marking a grant, or offering a decision, it should be a neutral.", "section": "colors" },
+      { "name": "The Rail Is Constant Rule", "body": "The navigation rail is dark in both themes. Never theme it to match the content area.", "section": "colors" },
+      { "name": "The Two Sizes Rule", "body": "Body and Label carry the interface — 474 of 503 type usages. A larger size is a claim that something is a page title or a number worth stopping at. Reach past the two sizes only for those.", "section": "typography" },
+      { "name": "The Mono Means Machine Rule", "body": "Monospace marks a string the machine produced and a human may need to copy or compare exactly. It is never used for emphasis, and prose is never set in it.", "section": "typography" },
+      { "name": "The Single Measure Rule", "body": "Every page is max-w-6xl with a px-6 gutter. There is no wide page, no narrow page, and no full-bleed page. A reader moving between Pushes and Users should not feel the column shift under them.", "section": "layout" },
+      { "name": "The Float-Only Rule", "body": "Shadow at rest on an in-page surface is wrong. If it is not floating above the page or responding to a hover, it is bordered and flat.", "section": "elevation" },
+      { "name": "The Three Radii Rule", "body": "4.5px for things in the text flow, 9px for regions, full for stamps. A fourth radius is a mistake.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do let status carry the color. A new record type gets a badge in the existing vocabulary before it gets a new hue.",
+      "Do set machine-produced strings — SHAs, refs, paths, patterns, IDs — in the Evidence mono face at Label size.",
+      "Do keep every page at max-w-6xl with a px-6 gutter.",
+      "Do separate surfaces with 1px hairlines and keep them flat at rest.",
+      "Do state exact values in the interface where a reader may need to act on them: full timestamps, full refs, real counts.",
+      "Do give every interactive element a visible focus indicator — a Gate Blue ring is the system's answer. WCAG 2.2 AA is a binding product requirement.",
+      "Do match the neutral family already in use in the component you are editing, until the gray/slate question is settled."
+    ],
+    "donts": [
+      "Don't let a 1px border-colour change be the whole focus indicator. Replacing the native outline is fine; replacing it with something thinner and fainter than the outline is not.",
+      "Don't introduce a saturated color that isn't reporting state, marking a grant, or offering a decision.",
+      "Don't reach past Body and Label type sizes unless the element is a page title or a number worth stopping at.",
+      "Don't put a shadow on an in-page surface at rest.",
+      "Don't add motion beyond color transitions and the toast fade. There is no entrance animation, no skeleton shimmer, and no scroll-triggered effect in this product, and that is a decision rather than an omission.",
+      "Don't load a web font. The system UI stack is the intended voice.",
+      "Don't theme the navigation rail. It is dark in both modes.",
+      "Don't add decorative illustration, gradient, or glassmorphism. This interface is used to make consequential decisions under scrutiny; visual ambition that doesn't serve the decision is a cost, not a feature."
+    ]
+  }
+}

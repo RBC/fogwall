@@ -100,3 +100,18 @@ book/
 
 # Local TLS certs for the compose proposals listeners (test/otel-smoke/make-certs.sh)
 docker/tls/
+
+# impeccable design tooling — installed payload, ~36MB of platform binary per copy.
+# Reinstall with `npx impeccable install`; update with `npx impeccable update`.
+.claude/skills/impeccable/
+.claude/agents/impeccable-*
+.github/skills/impeccable/
+.github/agents/impeccable-*
+.github/hooks/impeccable.json
+
+# impeccable working state. PRODUCT.md, DESIGN.md, .impeccable/design.json,
+# .impeccable/live/config.json and the critique history are tracked; these are not.
+.impeccable/live/roots.json
+.impeccable/live/sessions/
+.impeccable/hook.cache.json
+.impeccable/config.local.json
