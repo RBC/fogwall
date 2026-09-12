@@ -14,6 +14,7 @@ import com.rbc.fogwall.scmapi.MutationNodeIdRef;
 import com.rbc.fogwall.scmapi.OwnerRepo;
 import com.rbc.fogwall.scmapi.ScmApiGraphQlRequest;
 import com.rbc.fogwall.scmapi.ScmApiGraphQlRequestParser;
+import com.rbc.fogwall.scmapi.ScmApiReadResource;
 import com.rbc.fogwall.servlet.RequestBodyWrapper;
 import com.rbc.fogwall.servlet.ScmApiRequestContext;
 import com.rbc.fogwall.servlet.ScmApiTokenExtractor;
@@ -78,6 +79,7 @@ public class ScmApiGitHubGateFilter implements ScmApiGateFilter {
         }
 
         if (mutation.isEmpty()) {
+            context.setReadResource(ScmApiReadResource.fromGraphQl(graphQlRequest.operationName()));
             return GateOutcome.FORWARD;
         }
 

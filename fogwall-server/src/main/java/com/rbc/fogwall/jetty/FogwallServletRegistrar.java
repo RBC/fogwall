@@ -24,6 +24,7 @@ import com.rbc.fogwall.git.UpstreamAuthProbe;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.net.ResolvedOutboundProxy;
 import com.rbc.fogwall.observability.ObservabilityFilter;
+import com.rbc.fogwall.observability.ScmApiObservabilityFilter;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.BitbucketProvider;
 import com.rbc.fogwall.provider.FogwallProvider;
@@ -454,6 +455,11 @@ public final class FogwallServletRegistrar {
         var nodeIdResolver = new GitHubNodeIdResolver(fogwallContext.gitHubNodeIdCache());
         var headShaResolver = new GitHubHeadShaResolver();
 
+        // Observability filter first (outermost), when enabled, so the per-request span wraps the whole chain and the
+        // audit filter's finally block still runs inside it. Not registered when telemetry is off.
+        if (fogwallContext.telemetry().isEnabled()) {
+            addFilter(context, mapping, new ScmApiObservabilityFilter(fogwallContext.telemetry(), provider.getName()));
+        }
         addFilter(context, mapping, new ScmApiAuditFilter(fogwallContext.scmApiActionStore()));
         addFilter(context, mapping, new ScmApiAuthenticateFilter(provider, fogwallContext.pushIdentityResolver()));
         addFilter(context, mapping, new ScmApiUserAgentFilter());
@@ -500,7 +506,8 @@ public final class FogwallServletRegistrar {
 
         var forwardHolder = new ServletHolder(new ScmApiGraphQlForwardServlet(
                 provider.getGraphqlUrl(),
-                new ProposalRegistrar(fogwallContext.scmApiProposalStore(), new GitHubProposalResponseReader())));
+                new ProposalRegistrar(fogwallContext.scmApiProposalStore(), new GitHubProposalResponseReader()),
+                fogwallContext.telemetry()));
         forwardHolder.setName(SCM_API_CONNECTOR_PREFIX + provider.getName());
         context.addServlet(forwardHolder, mapping);
 
@@ -524,6 +531,11 @@ public final class FogwallServletRegistrar {
 
         var headShaResolver = new GitLabHeadShaResolver();
 
+        // Observability filter first (outermost), when enabled, so the per-request span wraps the whole chain and the
+        // audit filter's finally block still runs inside it. Not registered when telemetry is off.
+        if (fogwallContext.telemetry().isEnabled()) {
+            addFilter(context, mapping, new ScmApiObservabilityFilter(fogwallContext.telemetry(), provider.getName()));
+        }
         addFilter(context, mapping, new ScmApiAuditFilter(fogwallContext.scmApiActionStore()));
         addFilter(context, mapping, new ScmApiAuthenticateFilter(provider, fogwallContext.pushIdentityResolver()));
         addFilter(context, mapping, new ScmApiUserAgentFilter());
@@ -590,7 +602,8 @@ public final class FogwallServletRegistrar {
         var forwardHolder = new ServletHolder(new ScmApiRestForwardServlet(
                 provider.getApiUrl(),
                 ScmApiRestPathPolicy.EncodedSeparators.GITLAB_PROJECT_SEGMENT,
-                new ProposalRegistrar(fogwallContext.scmApiProposalStore(), new GitLabProposalResponseReader())));
+                new ProposalRegistrar(fogwallContext.scmApiProposalStore(), new GitLabProposalResponseReader()),
+                fogwallContext.telemetry()));
         forwardHolder.setName(SCM_API_CONNECTOR_PREFIX + provider.getName());
         context.addServlet(forwardHolder, mapping);
 
@@ -614,6 +627,11 @@ public final class FogwallServletRegistrar {
 
         var headShaResolver = new ForgejoHeadShaResolver();
 
+        // Observability filter first (outermost), when enabled, so the per-request span wraps the whole chain and the
+        // audit filter's finally block still runs inside it. Not registered when telemetry is off.
+        if (fogwallContext.telemetry().isEnabled()) {
+            addFilter(context, mapping, new ScmApiObservabilityFilter(fogwallContext.telemetry(), provider.getName()));
+        }
         addFilter(context, mapping, new ScmApiAuditFilter(fogwallContext.scmApiActionStore()));
         addFilter(context, mapping, new ScmApiAuthenticateFilter(provider, fogwallContext.pushIdentityResolver()));
         addFilter(context, mapping, new ScmApiUserAgentFilter());
@@ -657,7 +675,8 @@ public final class FogwallServletRegistrar {
         var forwardHolder = new ServletHolder(new ScmApiRestForwardServlet(
                 provider.getApiUrl(),
                 ScmApiRestPathPolicy.EncodedSeparators.FORGEJO_FILE_PATH,
-                new ProposalRegistrar(fogwallContext.scmApiProposalStore(), new ForgejoProposalResponseReader())));
+                new ProposalRegistrar(fogwallContext.scmApiProposalStore(), new ForgejoProposalResponseReader()),
+                fogwallContext.telemetry()));
         forwardHolder.setName(SCM_API_CONNECTOR_PREFIX + provider.getName());
         context.addServlet(forwardHolder, mapping);
 

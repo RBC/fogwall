@@ -14,6 +14,7 @@ import com.rbc.fogwall.db.model.ScmApiActionRecord;
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
 import com.rbc.fogwall.db.model.ScmApiProposalRecord;
 import com.rbc.fogwall.jetty.FogwallServletRegistrar;
+import com.rbc.fogwall.observability.FogwallTelemetry;
 import com.rbc.fogwall.permission.InMemoryRepoPermissionStore;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.permission.RepoPermissionService;
@@ -235,7 +236,8 @@ class ScmApiProposalsE2ETest {
                 new ServletHolder(new ScmApiRestForwardServlet(
                         gitea.getBaseUrl() + "/api/v1",
                         ScmApiRestPathPolicy.EncodedSeparators.FORGEJO_FILE_PATH,
-                        new ProposalRegistrar(proposalStore, new ForgejoProposalResponseReader()))),
+                        new ProposalRegistrar(proposalStore, new ForgejoProposalResponseReader()),
+                        FogwallTelemetry.disabled())),
                 "/api/v1/*");
 
         var contexts = new ContextHandlerCollection();

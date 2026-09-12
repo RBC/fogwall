@@ -30,6 +30,7 @@ import com.rbc.fogwall.net.OutboundProxySystemProperties;
 import com.rbc.fogwall.net.ResolvedOutboundProxy;
 import com.rbc.fogwall.observability.FogwallTelemetry;
 import com.rbc.fogwall.observability.MeteringPushStore;
+import com.rbc.fogwall.observability.MeteringScmApiActionStore;
 import com.rbc.fogwall.permission.GroupPermissionRule;
 import com.rbc.fogwall.permission.GroupPermissionStore;
 import com.rbc.fogwall.permission.JdbcGroupPermissionStore;
@@ -1115,9 +1116,11 @@ public class JettyConfigurationBuilder {
     /** Builds the {@link ScmApiActionStore} (the SCM API proxy audit trail) based on the database configuration. */
     public ScmApiActionStore buildScmApiActionStore() {
         if (cachedScmApiActionStore != null) return cachedScmApiActionStore;
-        cachedScmApiActionStore = "mongo".equals(config.getDatabase().getType())
+        ScmApiActionStore store = "mongo".equals(config.getDatabase().getType())
                 ? requireMongoStoreFactory().scmApiActionStore()
                 : ScmApiActionStoreFactory.fromDataSource(requireJdbcDataSource());
+        // Wrap for the SCM API action counter only when observability is on, so the default proxy path is unchanged.
+        cachedScmApiActionStore = telemetry.isEnabled() ? new MeteringScmApiActionStore(store, telemetry) : store;
         return cachedScmApiActionStore;
     }
 
