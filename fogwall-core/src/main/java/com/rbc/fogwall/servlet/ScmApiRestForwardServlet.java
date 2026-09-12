@@ -3,7 +3,7 @@ package com.rbc.fogwall.servlet;
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
 import com.rbc.fogwall.net.FogwallHttpExecutor;
 import com.rbc.fogwall.observability.FogwallTelemetry;
-import com.rbc.fogwall.scmapi.ProposalRegistrar;
+import com.rbc.fogwall.scmapi.EntityRegistrar;
 import com.rbc.fogwall.scmapi.ScmApiUserAgent;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
@@ -31,17 +31,17 @@ public class ScmApiRestForwardServlet extends HttpServlet {
 
     private final URI upstreamApiBaseUri;
     private final ScmApiRestPathPolicy.EncodedSeparators encodedSeparators;
-    private final ProposalRegistrar proposalRegistrar;
+    private final EntityRegistrar entityRegistrar;
     private final FogwallTelemetry telemetry;
 
     public ScmApiRestForwardServlet(
             String upstreamApiBaseUrl,
             ScmApiRestPathPolicy.EncodedSeparators encodedSeparators,
-            ProposalRegistrar proposalRegistrar,
+            EntityRegistrar entityRegistrar,
             FogwallTelemetry telemetry) {
         this.upstreamApiBaseUri = URI.create(upstreamApiBaseUrl);
         this.encodedSeparators = encodedSeparators;
-        this.proposalRegistrar = proposalRegistrar;
+        this.entityRegistrar = entityRegistrar;
         this.telemetry = telemetry;
     }
 
@@ -199,7 +199,8 @@ public class ScmApiRestForwardServlet extends HttpServlet {
             // encoded-separator policy deliberately admits Forgejo's raw/contents/media endpoints — fj fetches a pull
             // request template from one before every create — so a response here is not always JSON either. The
             // upstream's own content type is relayed instead of a guess. A mutation's response is also kept
-            // (bounded): it is the upstream's own statement of what it wrote, which the proposal registry reads once
+            // (bounded): it is the upstream's own statement of what it wrote, which the SCM API entity registry reads
+            // once
             // the client has it.
             var captured = new byte[1][];
             int upstreamStatus = upstreamRequest
@@ -228,7 +229,7 @@ public class ScmApiRestForwardServlet extends HttpServlet {
             forwardSpan.setAttribute("http.response.status_code", upstreamStatus);
             if (mutation) {
                 context.setStatus(ScmApiActionStatus.FORWARDED);
-                proposalRegistrar.recordUpstreamResponse(
+                entityRegistrar.recordUpstreamResponse(
                         context, ScmApiRestPath.rawSubPath(request), upstreamStatus, captured[0]);
             }
         } catch (IOException e) {

@@ -1,19 +1,19 @@
 package com.rbc.fogwall.scmapi;
 
-import com.rbc.fogwall.db.model.ScmApiProposalRecord;
+import com.rbc.fogwall.db.model.ScmApiEntityRecord;
 
 /**
- * What one forwarded mutation's upstream response says about the proposal it created or touched. Every field but
+ * What one forwarded mutation's upstream response says about the entity it created or touched. Every field but
  * {@code kind} may be null: a comment response names its issue by number and nothing else, and GitHub's close and
  * update mutations return no object at all, in which case the target is known only by {@code nodeId}.
  */
-public record ProposalOutcome(
-        ScmApiProposalRecord.Kind kind,
+public record EntityOutcome(
+        ScmApiEntityRecord.Kind kind,
         Integer number,
         String url,
         String nodeId,
         String title,
-        ScmApiProposalRecord.State state,
+        ScmApiEntityRecord.State state,
         /**
          * The SHA the merge produced, when the upstream's own response names one. Null on a non-merge outcome, and also
          * null for a merge the upstream reports as successful but whose response carries no such field — GitHub's
@@ -22,13 +22,13 @@ public record ProposalOutcome(
          */
         String mergeCommitSha) {
 
-    public ProposalOutcome(
-            ScmApiProposalRecord.Kind kind,
+    public EntityOutcome(
+            ScmApiEntityRecord.Kind kind,
             Integer number,
             String url,
             String nodeId,
             String title,
-            ScmApiProposalRecord.State state) {
+            ScmApiEntityRecord.State state) {
         this(kind, number, url, nodeId, title, state, null);
     }
 }

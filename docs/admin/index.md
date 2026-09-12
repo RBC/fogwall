@@ -22,5 +22,5 @@ through the proxy, see [User Guide](../user/index.md).
 - [Production checklist](production-checklist.md) — what to settle before the first real push
 - [SSH transport](ssh-transport.md) — exposing SSH, host keys, identity verification and agent forwarding
 - [SCM OAuth account linking](scm-oauth.md) — registering OAuth apps and operating strict identity mode
-- [Proposals](proposals.md) — enabling the PR/MR path, its token model and authorization
+- [SCM API](scm-api.md) — enabling the PR/MR path, its token model and authorization
 - [Common operational problems](troubleshooting.md) — symptoms an operator sees, and what causes them

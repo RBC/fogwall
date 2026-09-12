@@ -9,7 +9,7 @@ interface OverviewProps {
 // endpoints; until those exist the shape is shown but marked unavailable rather than faked.
 const ACTIVITY = [
   { label: 'Pushes', hint: 'submitted · approved · forwarded' },
-  { label: 'Proposals', hint: 'PRs & MRs opened' },
+  { label: 'Contributions', hint: 'PRs, issues & comments' },
   { label: 'Merged', hint: 'outcome known through fogwall' },
   { label: 'Issues', hint: 'filed · commented · closed' },
 ] as const
@@ -21,9 +21,9 @@ const QUICK_LINKS = [
     body: 'Every push fogwall validated — filter by status, repo, or just yours.',
   },
   {
-    to: '/proposals',
-    title: 'Proposals',
-    body: 'Pull and merge requests opened, merged, or refused through the proxy.',
+    to: '/contributions',
+    title: 'Contributions',
+    body: 'Pull/merge requests, issues and comments opened through the proxy.',
   },
   { to: '/repos', title: 'Repos', body: 'Proxied repositories and their access rules.' },
   { to: '/setup', title: 'Setup & quick start', body: 'Remotes, tokens, and your first push.' },

@@ -1,0 +1,22 @@
+# Enables the SCM API listeners, one port per provider. Selected with FOGWALL_CONFIG_PROFILES and
+# mounted by docker/docker-compose.contributions.yml; provisioning an SCM API identity + grant is in
+# test/otel-smoke/README.md.
+providers:
+  github:
+    enabled: true
+    scm-api: { enabled: true, port: 8481, require-validated-head: false, merge-enabled: true }
+  gitlab:
+    enabled: true
+    scm-api: { enabled: true, port: 8482, require-validated-head: false, merge-enabled: true }
+  codeberg:
+    enabled: true
+    scm-api: { enabled: true, port: 8483, require-validated-head: false, merge-enabled: true }
+  gitea:
+    enabled: true
+    uri: http://gitea:3000 # local container; set to https://gitea.com for a real repo
+    scm-api: { enabled: true, port: 8484, require-validated-head: false, merge-enabled: true }
+
+scm-api:
+  block:
+    literals:
+      - "internal.corp.example.com"

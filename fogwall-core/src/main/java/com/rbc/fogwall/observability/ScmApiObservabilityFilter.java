@@ -24,7 +24,7 @@ import java.util.Collections;
  * wraps the whole chain — authentication, the dialect gate, content inspection, and the upstream forward.
  *
  * <p>The span is a {@link SpanKind#SERVER} span whose parent is extracted from the inbound request's W3C
- * {@code traceparent} header, so a proposal call that arrives from an already-traced CLI invocation continues that
+ * {@code traceparent} header, so an SCM API call that arrives from an already-traced CLI invocation continues that
  * trace. It is made current for the request, and the Log4j2 context-data bridge reads the current span to stamp
  * {@code trace_id}/{@code span_id} onto the request's log lines — the same correlation the git push path gets.
  *

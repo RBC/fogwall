@@ -7,8 +7,8 @@ import java.io.OutputStream;
 
 /**
  * Relays an upstream response body to the client while keeping a copy of it, up to a bound. A mutation response is a
- * small JSON document naming what the upstream did, which the proposal registry reads; a body past the bound is relayed
- * in full but not kept, so a large or unexpected response costs nothing beyond the relay itself.
+ * small JSON document naming what the upstream did, which the SCM API entity registry reads; a body past the bound is
+ * relayed in full but not kept, so a large or unexpected response costs nothing beyond the relay itself.
  */
 final class UpstreamResponseRelay {
 

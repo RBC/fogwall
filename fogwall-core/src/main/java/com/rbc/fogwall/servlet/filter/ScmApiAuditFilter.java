@@ -83,7 +83,7 @@ public class ScmApiAuditFilter implements Filter {
                                             : context.getClientType().name())
                             .clientVersion(abbreviate(context.getClientVersion(), MAX_CLIENT_VERSION))
                             .upstreamStatus(context.getUpstreamStatus())
-                            .proposalId(context.getProposalId())
+                            .entityId(context.getEntityId())
                             .mergeCommitSha(context.getMergeCommitSha())
                             .build());
                 } catch (RuntimeException e) {

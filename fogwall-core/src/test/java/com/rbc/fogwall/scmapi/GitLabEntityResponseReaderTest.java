@@ -4,15 +4,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.rbc.fogwall.db.model.ScmApiProposalRecord.Kind;
-import com.rbc.fogwall.db.model.ScmApiProposalRecord.State;
+import com.rbc.fogwall.db.model.ScmApiEntityRecord.Kind;
+import com.rbc.fogwall.db.model.ScmApiEntityRecord.State;
 import com.rbc.fogwall.servlet.ScmApiRequestContext;
 import org.junit.jupiter.api.Test;
 
 /** Response shapes as GitLab returns them to {@code glab}, captured from real traffic. */
-class GitLabProposalResponseReaderTest {
+class GitLabEntityResponseReaderTest {
 
-    private final GitLabProposalResponseReader reader = new GitLabProposalResponseReader();
+    private final GitLabEntityResponseReader reader = new GitLabEntityResponseReader();
 
     private static ScmApiRequestContext op(String operation) {
         var c = new ScmApiRequestContext();
@@ -22,7 +22,7 @@ class GitLabProposalResponseReaderTest {
 
     @Test
     void createMergeRequest_readsIidWebUrlAndState() {
-        ProposalOutcome o = reader.read(
+        EntityOutcome o = reader.read(
                         op("merge_requests.create"),
                         "/projects/acme%2Fwidgets/merge_requests",
                         "{\"id\":9001,\"iid\":3,\"title\":\"Proposed via glab\",\"state\":\"opened\",\"web_url\":\"https://gitlab.com/acme/widgets/-/merge_requests/3\"}")
@@ -38,7 +38,7 @@ class GitLabProposalResponseReaderTest {
     // merge response actually names what the merge produced.
     @Test
     void mergeMergeRequest_readsMergedStateAndCommitSha() {
-        ProposalOutcome o = reader.read(
+        EntityOutcome o = reader.read(
                         op("merge_requests.merge"),
                         "/projects/acme%2Fwidgets/merge_requests/11/merge",
                         "{\"iid\":11,\"state\":\"merged\",\"web_url\":\"https://gitlab.com/acme/widgets/-/merge_requests/11\",\"merge_commit_sha\":\"3a0bc7f011690f05b3baf5821b10d17b3be247d5\"}")
@@ -50,7 +50,7 @@ class GitLabProposalResponseReaderTest {
 
     @Test
     void updateWithStateEvent_reportsTheNewState() {
-        ProposalOutcome o = reader.read(
+        EntityOutcome o = reader.read(
                         op("issues.update"),
                         "/projects/acme%2Fwidgets/issues/1",
                         "{\"iid\":1,\"state\":\"closed\",\"web_url\":\"https://gitlab.com/acme/widgets/-/issues/1\"}")
@@ -61,7 +61,7 @@ class GitLabProposalResponseReaderTest {
 
     @Test
     void note_namesItsIssueAndNothingElse() {
-        ProposalOutcome o = reader.read(
+        EntityOutcome o = reader.read(
                         op("issues.note"),
                         "/projects/acme%2Fwidgets/issues/1/notes",
                         "{\"id\":55,\"noteable_iid\":1,\"body\":\"hi\"}")

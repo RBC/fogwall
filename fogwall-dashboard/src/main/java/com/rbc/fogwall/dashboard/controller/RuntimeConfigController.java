@@ -63,8 +63,8 @@ public class RuntimeConfigController {
                 .toList();
         boolean scmOAuthLinkAvailable = tokenCipherProvider.isAvailable();
         String scmIdentityMode = fogwallConfig.getScmOauth().getIdentityMode();
-        boolean proposalsEnabled = fogwallConfig.getProviders().values().stream()
-                .anyMatch(p -> p.getProposals().isEnabled());
+        boolean scmApiEnabled = fogwallConfig.getProviders().values().stream()
+                .anyMatch(p -> p.getScmApi().isEnabled());
         boolean issuesEnabled =
                 fogwallConfig.getProviders().values().stream().anyMatch(ProviderConfig::isIssuesEnabled);
 
@@ -75,7 +75,7 @@ public class RuntimeConfigController {
                 "scmOAuthProviders", scmOAuthProviders,
                 "scmOAuthLinkAvailable", scmOAuthLinkAvailable,
                 "scmIdentityMode", scmIdentityMode,
-                "proposalsEnabled", proposalsEnabled,
+                "scmApiEnabled", scmApiEnabled,
                 "issuesEnabled", issuesEnabled);
     }
 }

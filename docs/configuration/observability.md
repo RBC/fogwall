@@ -40,7 +40,7 @@ The endpoint can also be set with the `FOGWALL_OTEL_ENDPOINT` environment variab
 ## What is exported
 
 **Trace** — a per-request parent span for each push that arrives over HTTP (server mode and transparent proxy) and for
-each SCM API proxy request (the `gh`/`glab`/`fj`/`tea` proposal flows). If the client sends a W3C `traceparent` header,
+each SCM API proxy request (the `gh`/`glab`/`fj`/`tea` SCM API flows). If the client sends a W3C `traceparent` header,
 the span continues that trace. SSH server-mode pushes do not pass through the servlet container and so have no parent
 span. An SCM API request also gets a child `CLIENT` span for fogwall's outbound forward to the provider, carrying the
 upstream `http.response.status_code` and that leg's own timing — fogwall cannot propagate the trace into the provider,
@@ -59,14 +59,14 @@ but it measures the call from its own side.
 
 `mode` is `server` or `proxy`. Decision and forward counts are transport-agnostic and so cover SSH pushes too; the push
 duration and in-flight gauge are HTTP-only. `operation` is a provider-agnostic name where the operation flattens cleanly
-— `proposal.create`, `proposal.update`, `proposal.merge`, `issue.create`, `comment.create`, … (`proposal` covers a
-GitHub/Forgejo pull request and a GitLab merge request) — and the dialect's own operation name where it does not, such
-as a label or assignee edit whose subject the raw op does not name. A read is classified by resource too — `issue.read`,
-`proposal.read`, `comment.read`, or the GraphQL query's root field (`repository.read`), with `other.read` for anything
-unrecognized — so a read names what was read, not a bare `read`; an action with no operation is `unknown`. `outcome` is
-the action's result (`FORWARDED`, `DENIED`, `REJECTED`, `ERROR`). Reads are traced and timed but not counted in
-`fogwall.scmapi.actions`, which tracks mutations and refusals to match the audit trail. Repository slug is recorded on
-spans only, never on a metric, to keep metric cardinality bounded.
+— `pull_request.create`, `pull_request.update`, `pull_request.merge`, `issue.create`, `comment.create`, …
+(`pull_request` covers a GitHub/Forgejo pull request and a GitLab merge request) — and the dialect's own operation name
+where it does not, such as a label or assignee edit whose subject the raw op does not name. A read is classified by
+resource too — `issue.read`, `pull_request.read`, `comment.read`, or the GraphQL query's root field (`repository.read`),
+with `other.read` for anything unrecognized — so a read names what was read, not a bare `read`; an action with no
+operation is `unknown`. `outcome` is the action's result (`FORWARDED`, `DENIED`, `REJECTED`, `ERROR`). Reads are traced
+and timed but not counted in `fogwall.scmapi.actions`, which tracks mutations and refusals to match the audit trail.
+Repository slug is recorded on spans only, never on a metric, to keep metric cardinality bounded.
 
 ## Logs
 

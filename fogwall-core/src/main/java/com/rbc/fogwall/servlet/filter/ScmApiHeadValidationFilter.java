@@ -23,7 +23,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Enforces {@code providers.<name>.proposals.require-validated-head}: refuses a proposal-create request whose head
+ * Enforces {@code providers.<name>.scm-api.require-validated-head}: refuses a pull/merge request create whose head
  * commit fogwall has no push record for. See {@link HeadCommitValidator}.
  *
  * <p>Runs after the dialect's gate filter, keyed off {@link ScmApiRequestContext#getMutationField()} — set by that
@@ -128,7 +128,7 @@ public class ScmApiHeadValidationFilter implements Filter {
         try {
             return MAPPER.readTree(body);
         } catch (Exception e) {
-            log.warn("Could not parse proposal body to check its head commit: {}", e.getMessage());
+            log.warn("Could not parse SCM API request body to check its head commit: {}", e.getMessage());
             return null;
         }
     }

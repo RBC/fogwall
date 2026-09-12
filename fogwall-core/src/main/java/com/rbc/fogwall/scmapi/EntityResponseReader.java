@@ -9,13 +9,13 @@ import java.util.Optional;
  * statement of what now exists, which is what the git path can never say about a push. One implementation per dialect,
  * chosen where the dialect's gate filter is.
  */
-public interface ProposalResponseReader {
+public interface EntityResponseReader {
 
     /**
      * @param context the request as the gate filter left it: mutation field, node ID and type, variables
      * @param requestPath the still-encoded sub-path of a REST request, or null for GraphQL
      * @param body the upstream's response body, or null when it was not captured
-     * @return what the response says about the proposal, or empty when it names nothing the registry can use
+     * @return what the response says about the entity, or empty when it names nothing the registry can use
      */
-    Optional<ProposalOutcome> read(ScmApiRequestContext context, String requestPath, String body);
+    Optional<EntityOutcome> read(ScmApiRequestContext context, String requestPath, String body);
 }

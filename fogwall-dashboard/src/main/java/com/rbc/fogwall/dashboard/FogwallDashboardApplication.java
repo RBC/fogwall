@@ -152,14 +152,14 @@ public class FogwallDashboardApplication {
         var mongoFactory = configBuilder.getMongoStoreFactoryOrNull();
         ScmOAuthConfig scmOAuthConfig = configBuilder.buildScmOAuthConfig();
         // Content inspector for the dashboard issue path, built the same way the SCM API proxy builds its own:
-        // proposals block + content-pattern config, and secret scanning off the reloadable config holder.
-        var proposalsBlock = configBuilder.buildProposalsBlockConfig();
-        var proposalsContentPatterns = configBuilder.buildContentPatternConfig();
+        // SCM API block + content-pattern config, and secret scanning off the reloadable config holder.
+        var scmApiBlock = configBuilder.buildScmApiBlockConfig();
+        var scmApiContentPatterns = configBuilder.buildContentPatternConfig();
         var scmContentInspector = new ScmContentInspector(
-                () -> proposalsBlock,
+                () -> scmApiBlock,
                 configHolder::getSecretScanConfig,
                 new SecretScanCheck(configHolder.getSecretScanConfig()),
-                () -> proposalsContentPatterns);
+                () -> scmApiContentPatterns);
         registerSpringServlet(
                 context,
                 ctx,
@@ -215,7 +215,7 @@ public class FogwallDashboardApplication {
             bf.registerSingleton("repoRegistry", urlRuleRegistry);
             bf.registerSingleton("fetchStore", ctx.fetchStore());
             bf.registerSingleton("scmApiActionStore", ctx.scmApiActionStore());
-            bf.registerSingleton("scmApiProposalStore", ctx.scmApiProposalStore());
+            bf.registerSingleton("scmApiEntityStore", ctx.scmApiEntityStore());
             bf.registerSingleton("sshScmIdentityEnricher", ctx.sshScmIdentityEnricher());
             bf.registerSingleton("scmOAuthConfig", scmOAuthConfig);
             // #340: expose both local-mirror caches so AdminCacheController can inspect/invalidate them. Both are
@@ -262,7 +262,7 @@ public class FogwallDashboardApplication {
                             Optional.ofNullable(oauthTokenStore),
                             tokenCipherProvider,
                             ctx.scmApiActionStore(),
-                            ctx.scmApiProposalStore(),
+                            ctx.scmApiEntityStore(),
                             fogwallConfig,
                             new DashboardIssueClient()));
             // Expose the shared MongoClient + database name for session-store=mongo. Null for JDBC deployments.

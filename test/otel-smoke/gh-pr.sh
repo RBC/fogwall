@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# GitHub PR mutations through the fogwall proposals listener (:8481) → GraphQL against github.com.
+# GitHub PR mutations through the fogwall SCM API listener (:8481) → GraphQL against github.com.
 # Needs: GH_PAT = a github classic PAT with 'repo' scope. Opens/edits/merges REAL PRs on $OWNER/$REPO.
 set -uo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_common.sh"

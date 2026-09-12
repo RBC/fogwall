@@ -1,7 +1,7 @@
 # SCM API OTel smoke scripts
 
-Drive real proposal traffic through the compose stack's SCM API listeners to exercise the OpenTelemetry instrumentation
-— per-request `scmapi <provider>` spans, the `fogwall.scmapi.*` metrics, and `trace_id`/ `span_id` log correlation.
+Drive real SCM API traffic through the compose stack's SCM API listeners to exercise the OpenTelemetry instrumentation —
+per-request `scmapi <provider>` spans, the `fogwall.scmapi.*` metrics, and `trace_id`/ `span_id` log correlation.
 
 One script per CLI, each walking a PR/MR through its dialect's mutations:
 
@@ -12,14 +12,14 @@ One script per CLI, each walking a PR/MR through its dialect's mutations:
 | `fj-pr.sh`   | `fj`   | codeberg.org  | `localhost:8483` | `CODEBERG_PAT` |
 | `tea-pr.sh`  | `tea`  | gitea (local) | `localhost:8484` | `GITEA_PAT`    |
 
-## 1. Bring up the stack with the proposals + otel overlays
+## 1. Bring up the stack with the contributions + otel overlays
 
 The listeners serve TLS (the `gh`/`glab` CLIs require HTTPS to a custom host), so generate the cert first:
 
 ```
 ./test/make-certs.sh    # writes docker/tls/ (gitignored)
 docker compose -f docker/docker-compose.yml -f docker/docker-compose.otel.yml \
-               -f docker/docker-compose.proposals.yml --profile otel up -d --build
+               -f docker/docker-compose.contributions.yml --profile otel up -d --build
 ```
 
 The driver scripts trust the generated CA via `SSL_CERT_FILE=docker/tls/ca.crt`. A cert swap after startup needs
@@ -27,7 +27,7 @@ The driver scripts trust the generated CA via `SSL_CERT_FILE=docker/tls/ca.crt`.
 
 ## 2. Provision yourself — the operator step
 
-The committed config declares **no** proposal identities or grants: you add them to the DB at runtime through the API,
+The committed config declares **no** SCM API identities or grants: you add them to the DB at runtime through the API,
 exactly as an operator onboards a user in an org. Using the stack's admin API key (`FOGWALL_API_KEY`, default
 `change-me-in-production`), for your SCM login:
 
@@ -60,7 +60,7 @@ GITEA_PAT=…                           ./test/otel-smoke/tea-pr.sh
 
 `OWNER`/`REPO` default to `coopernetes`/`test-repo`; override per run since repo names differ across hosts. Each script
 pushes two throwaway head branches straight to the SCM (not through fogwall — `require-validated-head` is off), then
-opens/edits/closes/merges through the proposals listener.
+opens/edits/closes/merges through the SCM API listener.
 
 Watch results: `docker compose logs -f otel-collector`, Jaeger <http://localhost:16686>, Prometheus
 <http://localhost:9090> (`fogwall_scmapi_actions`, `fogwall_scmapi_duration`).

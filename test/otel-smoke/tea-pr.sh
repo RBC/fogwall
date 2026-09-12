@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gitea PR mutations through the fogwall proposals listener (:8484) → REST /api/v1 against gitea.com.
+# Gitea PR mutations through the fogwall SCM API listener (:8484) → REST /api/v1 against gitea.com.
 # Needs: GITEA_PAT = a gitea.com token with write:issue + write:repository. Opens/edits REAL PRs on $OWNER/$REPO.
 set -uo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_common.sh"

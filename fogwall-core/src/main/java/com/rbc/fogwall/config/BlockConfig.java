@@ -9,7 +9,7 @@ import lombok.Data;
 /**
  * A block list: literal strings matched case-insensitively, and compiled regex patterns.
  *
- * <p>Independent of what is being matched. Commit messages, pushed diffs, and proposal content each configure their own
+ * <p>Independent of what is being matched. Commit messages, pushed diffs, and SCM API content each configure their own
  * list; the shape is the same in every case, and the runtime type carries compiled {@link Pattern}s rather than the
  * strings its YAML counterpart {@code BlockSettings} binds.
  */

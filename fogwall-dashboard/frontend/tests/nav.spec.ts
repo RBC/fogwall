@@ -9,7 +9,7 @@ test.describe('navigation', () => {
     await page.goto('/dashboard/')
     const side = page.locator('aside')
 
-    for (const label of ['Overview', 'Pushes', 'Proposals', 'Issues', 'Repos', 'Providers']) {
+    for (const label of ['Overview', 'Pushes', 'Contributions', 'Issues', 'Repos', 'Providers']) {
       await expect(side.getByRole('link', { name: label, exact: true })).toBeVisible()
     }
 

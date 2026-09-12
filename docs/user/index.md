@@ -52,7 +52,8 @@ identity is registered.
 - [Reviewing a push](reviewing-a-push.md) — push record states, approving, rejecting, self-certifying
 - [When a push is blocked](blocked-pushes.md) — what each block message means and what to do about it
 - [Identity verification](identity-verification.md) — how fogwall works out who you are, over HTTP and SSH
-- [Proposals (PR/MRs through fogwall)](proposals.md) — opening PRs and MRs with `gh`, `glab`, `tea` and `fj`
+- [Contributions (PRs, MRs & issues through fogwall)](contributions.md) — opening PRs, MRs and issues with `gh`, `glab`,
+  `tea` and `fj`
 - [User permissions vs access rules](permissions-vs-access-rules.md) — why a repo can be blocked even when you have push
   rights
 - [Common problems](troubleshooting.md) — credential prompts, TLS errors, rejected pushes

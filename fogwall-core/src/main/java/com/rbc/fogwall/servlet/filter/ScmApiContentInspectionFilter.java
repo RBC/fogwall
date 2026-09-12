@@ -3,8 +3,8 @@ package com.rbc.fogwall.servlet.filter;
 import static com.rbc.fogwall.servlet.ScmApiRequestContext.SCM_API_REQUEST_ATTR;
 
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
-import com.rbc.fogwall.scmapi.ProposalContent;
-import com.rbc.fogwall.scmapi.ProposalPayload;
+import com.rbc.fogwall.scmapi.EntityContent;
+import com.rbc.fogwall.scmapi.EntityPayload;
 import com.rbc.fogwall.scmapi.ScmContentInspector;
 import com.rbc.fogwall.servlet.RequestBodyWrapper;
 import com.rbc.fogwall.servlet.ScmApiErrorResponse;
@@ -25,8 +25,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Inspects the prose a proposal carries before it is forwarded, applying the same blocked-content and secret-scanning
- * rules that already guard a push.
+ * Inspects the prose an SCM API entity carries before it is forwarded, applying the same blocked-content and
+ * secret-scanning rules that already guard a push.
  *
  * <p>Without this a contributor blocked from pushing a secret could paste it into a pull request description and
  * fogwall would relay it verbatim — the request is a permitted operation on a repository they hold {@code PROPOSE} on,
@@ -44,7 +44,7 @@ public class ScmApiContentInspectionFilter implements Filter {
 
     private final ScmContentInspector inspector;
     /** Pulls the dialect's prose fields out of the parsed request body, for attribution. */
-    private final Function<JsonNode, List<ProposalContent>> extractor;
+    private final Function<JsonNode, List<EntityContent>> extractor;
     /**
      * Values a dialect can only surface by parsing beyond the JSON — GraphQL's own string literals. Empty for the REST
      * dialects, whose bodies are JSON all the way down.
@@ -67,7 +67,7 @@ public class ScmApiContentInspectionFilter implements Filter {
         JsonNode parsed = parse(body);
         List<String> violations = inspector.inspect(
                 parsed == null ? List.of() : extractor.apply(parsed),
-                ProposalPayload.of(
+                EntityPayload.of(
                         body,
                         parsed,
                         httpRequest.getQueryString(),
@@ -101,7 +101,7 @@ public class ScmApiContentInspectionFilter implements Filter {
         try {
             return MAPPER.readTree(body);
         } catch (Exception e) {
-            log.warn("Could not parse proposal body for field attribution: {}", e.getMessage());
+            log.warn("Could not parse SCM API request body for field attribution: {}", e.getMessage());
             return null;
         }
     }

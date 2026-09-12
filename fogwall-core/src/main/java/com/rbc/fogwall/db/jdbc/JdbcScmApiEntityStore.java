@@ -1,7 +1,7 @@
 package com.rbc.fogwall.db.jdbc;
 
-import com.rbc.fogwall.db.ScmApiProposalStore;
-import com.rbc.fogwall.db.model.ScmApiProposalRecord;
+import com.rbc.fogwall.db.ScmApiEntityStore;
+import com.rbc.fogwall.db.model.ScmApiEntityRecord;
 import java.sql.Timestamp;
 import java.util.Collection;
 import java.util.List;
@@ -12,13 +12,13 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
-/** JDBC-backed {@link ScmApiProposalStore} over the {@code scm_api_proposals} table. */
-public class JdbcScmApiProposalStore implements ScmApiProposalStore {
+/** JDBC-backed {@link ScmApiEntityStore} over the {@code scm_api_entities} table. */
+public class JdbcScmApiEntityStore implements ScmApiEntityStore {
 
     private final DataSource dataSource;
     private final NamedParameterJdbcTemplate jdbc;
 
-    public JdbcScmApiProposalStore(DataSource dataSource) {
+    public JdbcScmApiEntityStore(DataSource dataSource) {
         this.dataSource = dataSource;
         this.jdbc = new NamedParameterJdbcTemplate(dataSource);
     }
@@ -29,9 +29,9 @@ public class JdbcScmApiProposalStore implements ScmApiProposalStore {
     }
 
     @Override
-    public void save(ScmApiProposalRecord record) {
+    public void save(ScmApiEntityRecord record) {
         jdbc.update("""
-                INSERT INTO scm_api_proposals (id, provider, repo_owner, repo_name, kind, proposal_number, url, node_id,
+                INSERT INTO scm_api_entities (id, provider, repo_owner, repo_name, kind, entity_number, url, node_id,
                     title, state, created_by, created_by_scm_username, created_at, updated_at, created_action_id,
                     last_action_id)
                 VALUES (:id, :provider, :repoOwner, :repoName, :kind, :number, :url, :nodeId, :title, :state,
@@ -40,28 +40,28 @@ public class JdbcScmApiProposalStore implements ScmApiProposalStore {
     }
 
     @Override
-    public void update(ScmApiProposalRecord record) {
+    public void update(ScmApiEntityRecord record) {
         jdbc.update("""
-                UPDATE scm_api_proposals SET url = :url, node_id = :nodeId, title = :title, state = :state,
+                UPDATE scm_api_entities SET url = :url, node_id = :nodeId, title = :title, state = :state,
                     updated_at = :updatedAt, last_action_id = :lastActionId
                 WHERE id = :id
                 """, toParams(record));
     }
 
     @Override
-    public Optional<ScmApiProposalRecord> findById(String id) {
-        return jdbc.query("SELECT * FROM scm_api_proposals WHERE id = :id", Map.of("id", id), ROW_MAPPER).stream()
+    public Optional<ScmApiEntityRecord> findById(String id) {
+        return jdbc.query("SELECT * FROM scm_api_entities WHERE id = :id", Map.of("id", id), ROW_MAPPER).stream()
                 .findFirst();
     }
 
     @Override
-    public Optional<ScmApiProposalRecord> findByTarget(
-            String provider, String repoOwner, String repoName, ScmApiProposalRecord.Kind kind, int number) {
+    public Optional<ScmApiEntityRecord> findByTarget(
+            String provider, String repoOwner, String repoName, ScmApiEntityRecord.Kind kind, int number) {
         return jdbc
                 .query(
                         """
-                        SELECT * FROM scm_api_proposals WHERE provider = :provider AND repo_owner = :repoOwner
-                            AND repo_name = :repoName AND kind = :kind AND proposal_number = :number
+                        SELECT * FROM scm_api_entities WHERE provider = :provider AND repo_owner = :repoOwner
+                            AND repo_name = :repoName AND kind = :kind AND entity_number = :number
                         """,
                         new MapSqlParameterSource()
                                 .addValue("provider", provider)
@@ -75,10 +75,10 @@ public class JdbcScmApiProposalStore implements ScmApiProposalStore {
     }
 
     @Override
-    public Optional<ScmApiProposalRecord> findByNodeId(String provider, String nodeId) {
+    public Optional<ScmApiEntityRecord> findByNodeId(String provider, String nodeId) {
         return jdbc
                 .query(
-                        "SELECT * FROM scm_api_proposals WHERE provider = :provider AND node_id = :nodeId",
+                        "SELECT * FROM scm_api_entities WHERE provider = :provider AND node_id = :nodeId",
                         Map.of("provider", provider, "nodeId", nodeId),
                         ROW_MAPPER)
                 .stream()
@@ -86,24 +86,24 @@ public class JdbcScmApiProposalStore implements ScmApiProposalStore {
     }
 
     @Override
-    public List<ScmApiProposalRecord> findByIds(Collection<String> ids) {
+    public List<ScmApiEntityRecord> findByIds(Collection<String> ids) {
         if (ids.isEmpty()) {
             return List.of();
         }
-        return jdbc.query("SELECT * FROM scm_api_proposals WHERE id IN (:ids)", Map.of("ids", ids), ROW_MAPPER);
+        return jdbc.query("SELECT * FROM scm_api_entities WHERE id IN (:ids)", Map.of("ids", ids), ROW_MAPPER);
     }
 
-    private static final RowMapper<ScmApiProposalRecord> ROW_MAPPER = (rs, rowNum) -> ScmApiProposalRecord.builder()
+    private static final RowMapper<ScmApiEntityRecord> ROW_MAPPER = (rs, rowNum) -> ScmApiEntityRecord.builder()
             .id(rs.getString("id"))
             .provider(rs.getString("provider"))
             .repoOwner(rs.getString("repo_owner"))
             .repoName(rs.getString("repo_name"))
-            .kind(ScmApiProposalRecord.Kind.valueOf(rs.getString("kind")))
-            .number(rs.getInt("proposal_number"))
+            .kind(ScmApiEntityRecord.Kind.valueOf(rs.getString("kind")))
+            .number(rs.getInt("entity_number"))
             .url(rs.getString("url"))
             .nodeId(rs.getString("node_id"))
             .title(rs.getString("title"))
-            .state(ScmApiProposalRecord.State.valueOf(rs.getString("state")))
+            .state(ScmApiEntityRecord.State.valueOf(rs.getString("state")))
             .createdBy(rs.getString("created_by"))
             .createdByScmUsername(rs.getString("created_by_scm_username"))
             .createdAt(rs.getTimestamp("created_at").toInstant())
@@ -112,7 +112,7 @@ public class JdbcScmApiProposalStore implements ScmApiProposalStore {
             .lastActionId(rs.getString("last_action_id"))
             .build();
 
-    private static MapSqlParameterSource toParams(ScmApiProposalRecord r) {
+    private static MapSqlParameterSource toParams(ScmApiEntityRecord r) {
         return new MapSqlParameterSource()
                 .addValue("id", r.getId())
                 .addValue("provider", r.getProvider())

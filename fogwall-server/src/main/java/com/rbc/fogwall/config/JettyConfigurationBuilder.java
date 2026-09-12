@@ -10,8 +10,8 @@ import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.PushStoreFactory;
 import com.rbc.fogwall.db.ScmApiActionStore;
 import com.rbc.fogwall.db.ScmApiActionStoreFactory;
-import com.rbc.fogwall.db.ScmApiProposalStore;
-import com.rbc.fogwall.db.ScmApiProposalStoreFactory;
+import com.rbc.fogwall.db.ScmApiEntityStore;
+import com.rbc.fogwall.db.ScmApiEntityStoreFactory;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.db.jdbc.DataSourceFactory;
 import com.rbc.fogwall.db.jdbc.JdbcFetchStore;
@@ -122,7 +122,7 @@ public class JettyConfigurationBuilder {
     private GitHubNodeIdCache cachedGitHubNodeIdCache;
     private GitLabProjectIdCache cachedGitLabProjectIdCache;
     private ScmApiActionStore cachedScmApiActionStore;
-    private ScmApiProposalStore cachedScmApiProposalStore;
+    private ScmApiEntityStore cachedScmApiEntityStore;
 
     public JettyConfigurationBuilder(FogwallConfig config) {
         this.config = config;
@@ -528,15 +528,15 @@ public class JettyConfigurationBuilder {
                 .bundles(new ArrayList<>(cp.getBundles()))
                 .scanDiff(cp.isScanDiff())
                 .scanCommitMessages(cp.isScanCommitMessages())
-                .scanProposals(cp.isScanProposals())
+                .scanScmApi(cp.isScanScmApi())
                 .build();
         log.info(
-                "Loaded content-patterns config: enabled={}, bundles={}, scanDiff={}, scanCommitMessages={}, scanProposals={}",
+                "Loaded content-patterns config: enabled={}, bundles={}, scanDiff={}, scanCommitMessages={}, scanScmApi={}",
                 cfg.isEnabled(),
                 cfg.getBundles(),
                 cfg.isScanDiff(),
                 cfg.isScanCommitMessages(),
-                cfg.isScanProposals());
+                cfg.isScanScmApi());
         return cfg;
     }
 
@@ -661,7 +661,7 @@ public class JettyConfigurationBuilder {
                 buildNodeIdCache(),
                 buildGitLabProjectIdCache(),
                 buildScmApiActionStore(),
-                buildScmApiProposalStore(),
+                buildScmApiEntityStore(),
                 telemetry);
     }
 
@@ -1085,13 +1085,13 @@ public class JettyConfigurationBuilder {
 
     /**
      * Builds the {@link GitHubNodeIdCache} for the SCM API proxy — resolves an opaque GraphQL node ID to
-     * {@code owner/repo}. The TTL is a security parameter (see {@link ProposalsSettings#getNodeIdCacheTtl()}), not just
-     * a perf knob, so unlike the pack-window cache it is deliberately operator-configurable.
+     * {@code owner/repo}. The TTL is a security parameter (see {@link ScmApiSettings#getNodeIdCacheTtl()}), not just a
+     * perf knob, so unlike the pack-window cache it is deliberately operator-configurable.
      */
     public GitHubNodeIdCache buildNodeIdCache() {
         if (cachedGitHubNodeIdCache != null) return cachedGitHubNodeIdCache;
-        Duration ttl = Duration.parse(config.getProposals().getNodeIdCacheTtl());
-        log.info("Proposal node-ID cache enabled (TTL {})", ttl);
+        Duration ttl = Duration.parse(config.getScmApi().getNodeIdCacheTtl());
+        log.info("SCM API node-ID cache enabled (TTL {})", ttl);
         cachedGitHubNodeIdCache = "mongo".equals(config.getDatabase().getType())
                 ? requireMongoStoreFactory().nodeIdCache(ttl)
                 : new JdbcGitHubNodeIdCache(requireJdbcDataSource(), ttl);
@@ -1101,12 +1101,12 @@ public class JettyConfigurationBuilder {
     /**
      * Builds the {@link GitLabProjectIdCache} — resolves a GitLab numeric project ID to {@code owner/repo}, which is
      * what lets a fork merge request be authorized against the upstream it targets rather than the fork in its URL.
-     * Shares {@code proposals.node-id-cache-ttl}: both caches map a provider-scoped opaque ID to a repository, and the
+     * Shares {@code scm-api.node-id-cache-ttl}: both caches map a provider-scoped opaque ID to a repository, and the
      * TTL is a security parameter for the same reason in each.
      */
     public GitLabProjectIdCache buildGitLabProjectIdCache() {
         if (cachedGitLabProjectIdCache != null) return cachedGitLabProjectIdCache;
-        Duration ttl = Duration.parse(config.getProposals().getNodeIdCacheTtl());
+        Duration ttl = Duration.parse(config.getScmApi().getNodeIdCacheTtl());
         cachedGitLabProjectIdCache = "mongo".equals(config.getDatabase().getType())
                 ? requireMongoStoreFactory().gitLabProjectIdCache(ttl)
                 : new JdbcGitLabProjectIdCache(requireJdbcDataSource(), ttl);
@@ -1124,61 +1124,61 @@ public class JettyConfigurationBuilder {
         return cachedScmApiActionStore;
     }
 
-    /** Builds the {@link ScmApiProposalStore} (the proposal registry) based on the database configuration. */
-    public ScmApiProposalStore buildScmApiProposalStore() {
-        if (cachedScmApiProposalStore != null) return cachedScmApiProposalStore;
-        cachedScmApiProposalStore = "mongo".equals(config.getDatabase().getType())
-                ? requireMongoStoreFactory().scmApiProposalStore()
-                : ScmApiProposalStoreFactory.fromDataSource(requireJdbcDataSource());
-        return cachedScmApiProposalStore;
+    /** Builds the {@link ScmApiEntityStore} (the SCM API entity registry) based on the database configuration. */
+    public ScmApiEntityStore buildScmApiEntityStore() {
+        if (cachedScmApiEntityStore != null) return cachedScmApiEntityStore;
+        cachedScmApiEntityStore = "mongo".equals(config.getDatabase().getType())
+                ? requireMongoStoreFactory().scmApiEntityStore()
+                : ScmApiEntityStoreFactory.fromDataSource(requireJdbcDataSource());
+        return cachedScmApiEntityStore;
     }
 
     /**
-     * Whether proposals are enabled for {@code provider} — {@code providers.<name>.proposals.enabled}. Opt-in per
+     * Whether the SCM API proxy is enabled for {@code provider} — {@code providers.<name>.scm-api.enabled}. Opt-in per
      * provider, default {@code false}.
      */
-    public boolean isProposalsEnabled(FogwallProvider provider) {
+    public boolean isScmApiEnabled(FogwallProvider provider) {
         ProviderConfig providerConfig = config.getProviders().get(provider.getName());
-        return providerConfig != null && providerConfig.getProposals().isEnabled();
+        return providerConfig != null && providerConfig.getScmApi().isEnabled();
     }
 
     /**
-     * The dedicated listener port for {@code provider}'s proposal dialect — {@code providers.<name>.proposals.port}.
-     * Required whenever proposals are enabled for that provider, since the dialect is mounted at the root of its own
-     * listener rather than under a shared path prefix (see {@link ProposalsProviderSettings#getPort()}).
+     * The dedicated listener port for {@code provider}'s SCM API dialect — {@code providers.<name>.scm-api.port}.
+     * Required whenever the SCM API proxy is enabled for that provider, since the dialect is mounted at the root of its
+     * own listener rather than under a shared path prefix (see {@link ScmApiProviderSettings#getPort()}).
      *
-     * @throws IllegalStateException if proposals are enabled for this provider without a port, rather than silently
-     *     starting a listener the CLIs can never reach.
+     * @throws IllegalStateException if the SCM API proxy is enabled for this provider without a port, rather than
+     *     silently starting a listener the CLIs can never reach.
      */
-    public int getProposalsPort(FogwallProvider provider) {
+    public int getScmApiPort(FogwallProvider provider) {
         ProviderConfig providerConfig = config.getProviders().get(provider.getName());
-        int port = providerConfig == null ? 0 : providerConfig.getProposals().getPort();
+        int port = providerConfig == null ? 0 : providerConfig.getScmApi().getPort();
         if (port <= 0) {
             throw new IllegalStateException("providers." + provider.getName()
-                    + ".proposals.enabled is true but proposals.port is not set — proposals need a dedicated port"
+                    + ".scm-api.enabled is true but scm-api.port is not set — the SCM API proxy needs a dedicated port"
                     + " because gh and fj address the API from the host root");
         }
         return port;
     }
 
     /**
-     * Whether this provider refuses a proposal whose head commit has no push record —
-     * {@code providers.<name>.proposals.require-validated-head}, default {@code true}. See
-     * {@link ProposalsProviderSettings#isRequireValidatedHead()}.
+     * Whether this provider refuses a pull/merge request whose head commit has no push record —
+     * {@code providers.<name>.scm-api.require-validated-head}, default {@code true}. See
+     * {@link ScmApiProviderSettings#isRequireValidatedHead()}.
      */
-    public boolean isProposalsRequireValidatedHead(FogwallProvider provider) {
+    public boolean isScmApiRequireValidatedHead(FogwallProvider provider) {
         ProviderConfig providerConfig = config.getProviders().get(provider.getName());
-        return providerConfig != null && providerConfig.getProposals().isRequireValidatedHead();
+        return providerConfig != null && providerConfig.getScmApi().isRequireValidatedHead();
     }
 
     /**
      * Whether this provider allows merging a pull/merge request through its SCM API proxy —
-     * {@code providers.<name>.proposals.merge-enabled}, default {@code false}. See
-     * {@link ProposalsProviderSettings#isMergeEnabled()}.
+     * {@code providers.<name>.scm-api.merge-enabled}, default {@code false}. See
+     * {@link ScmApiProviderSettings#isMergeEnabled()}.
      */
-    public boolean isProposalsMergeEnabled(FogwallProvider provider) {
+    public boolean isScmApiMergeEnabled(FogwallProvider provider) {
         ProviderConfig providerConfig = config.getProviders().get(provider.getName());
-        return providerConfig != null && providerConfig.getProposals().isMergeEnabled();
+        return providerConfig != null && providerConfig.getScmApi().isMergeEnabled();
     }
 
     private MongoStoreFactory requireMongoStoreFactory() {
@@ -1498,9 +1498,9 @@ public class JettyConfigurationBuilder {
         return null;
     }
 
-    /** Blocked literals and patterns for proposal content ({@code proposals.block}). */
-    public BlockConfig buildProposalsBlockConfig() {
-        return buildBlockConfig(config.getProposals().getBlock());
+    /** Blocked literals and patterns for SCM API content ({@code scm-api.block}). */
+    public BlockConfig buildScmApiBlockConfig() {
+        return buildBlockConfig(config.getScmApi().getBlock());
     }
 
     private static BlockConfig buildBlockConfig(BlockSettings block) {

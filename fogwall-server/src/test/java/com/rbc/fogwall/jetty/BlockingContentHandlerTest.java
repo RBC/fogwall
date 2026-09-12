@@ -117,7 +117,7 @@ class BlockingContentHandlerTest {
     }
 
     /**
-     * This handler runs before any context, so what it buffers is read before authentication. The proposals ports do
+     * This handler runs before any context, so what it buffers is read before authentication. The SCM API ports do
      * their own bounded read in the gate filter, and nothing on them needs the chunked-push workaround the handler
      * exists for, so a request arriving on one is passed straight through.
      *
@@ -133,7 +133,7 @@ class BlockingContentHandlerTest {
             assertEquals(8192, bytesRead.get(), "the buffered path delivers the whole body");
 
             bytesRead.set(-1);
-            assertTrue(postRaw(scmApiPort, 8192).startsWith("HTTP/1.1 200"), "proposals ports pass through");
+            assertTrue(postRaw(scmApiPort, 8192).startsWith("HTTP/1.1 200"), "SCM API ports pass through");
             assertEquals(8192, bytesRead.get(), "and the unbuffered path delivers it too");
         } finally {
             namedServer.stop();

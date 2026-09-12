@@ -1,13 +1,13 @@
 package com.rbc.fogwall.scmapi;
 
-import static com.rbc.fogwall.scmapi.ProposalResponseJson.integer;
-import static com.rbc.fogwall.scmapi.ProposalResponseJson.numberInPath;
-import static com.rbc.fogwall.scmapi.ProposalResponseJson.parse;
-import static com.rbc.fogwall.scmapi.ProposalResponseJson.text;
-import static com.rbc.fogwall.scmapi.ProposalResponseJson.trailingNumber;
+import static com.rbc.fogwall.scmapi.EntityResponseJson.integer;
+import static com.rbc.fogwall.scmapi.EntityResponseJson.numberInPath;
+import static com.rbc.fogwall.scmapi.EntityResponseJson.parse;
+import static com.rbc.fogwall.scmapi.EntityResponseJson.text;
+import static com.rbc.fogwall.scmapi.EntityResponseJson.trailingNumber;
 
-import com.rbc.fogwall.db.model.ScmApiProposalRecord.Kind;
-import com.rbc.fogwall.db.model.ScmApiProposalRecord.State;
+import com.rbc.fogwall.db.model.ScmApiEntityRecord.Kind;
+import com.rbc.fogwall.db.model.ScmApiEntityRecord.State;
 import com.rbc.fogwall.servlet.ScmApiRequestContext;
 import java.util.Optional;
 import tools.jackson.databind.JsonNode;
@@ -20,10 +20,10 @@ import tools.jackson.databind.JsonNode;
  * PullRequest carrying {@code head} — rather than from the path. A label or assignee write returns the labels or the
  * issue, so the number falls back to the request path.
  */
-public class ForgejoProposalResponseReader implements ProposalResponseReader {
+public class ForgejoEntityResponseReader implements EntityResponseReader {
 
     @Override
-    public Optional<ProposalOutcome> read(ScmApiRequestContext context, String requestPath, String body) {
+    public Optional<EntityOutcome> read(ScmApiRequestContext context, String requestPath, String body) {
         String operation = context.getMutationField();
         if (operation == null) {
             return Optional.empty();
@@ -35,7 +35,7 @@ public class ForgejoProposalResponseReader implements ProposalResponseReader {
             Kind kind = json != null && json.hasNonNull("pull_request_url") ? Kind.PULL_REQUEST : null;
             return number == null
                     ? Optional.empty()
-                    : Optional.of(new ProposalOutcome(kind, number, null, null, null, null));
+                    : Optional.of(new EntityOutcome(kind, number, null, null, null, null));
         }
         // The merge endpoint returns no body at all on success, so the target is known only from the request path,
         // and the state is MERGED by construction — the mutation succeeded, and merging is all it does.
@@ -43,7 +43,7 @@ public class ForgejoProposalResponseReader implements ProposalResponseReader {
             Integer mergedNumber = numberInPath(requestPath);
             return mergedNumber == null
                     ? Optional.empty()
-                    : Optional.of(new ProposalOutcome(Kind.PULL_REQUEST, mergedNumber, null, null, null, State.MERGED));
+                    : Optional.of(new EntityOutcome(Kind.PULL_REQUEST, mergedNumber, null, null, null, State.MERGED));
         }
         boolean isPullObject = json != null && json.has("number") && json.has("head");
         boolean isIssueObject = json != null && json.has("number") && !json.has("head");
@@ -68,7 +68,7 @@ public class ForgejoProposalResponseReader implements ProposalResponseReader {
         }
         String url = isObject ? text(json, "html_url") : null;
         String title = isObject ? text(json, "title") : null;
-        return Optional.of(new ProposalOutcome(kind, number, url, null, title, state));
+        return Optional.of(new EntityOutcome(kind, number, url, null, title, state));
     }
 
     private static State state(String state) {

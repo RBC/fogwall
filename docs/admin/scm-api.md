@@ -1,10 +1,10 @@
-# Proposals
+# SCM API
 
 _Available since v1.4.0, opt-in per provider._
 
 Extends fogwall past `git push` into the rest of the contribution lifecycle — proxying the `gh` CLI's issue/PR
 create-edit-comment-review traffic through the same identity resolution, permission engine, and audit trail as the
-git-push path. See [SCM API proxy](../configuration/proposals.md) for the full config reference and
+git-push path. See [SCM API proxy](../configuration/scm-api.md) for the full config reference and
 [docs/internals/scm-api-proxy.md](../internals/scm-api-proxy.md) for the design rationale; this section covers what an
 operator needs to understand before turning it on.
 
@@ -31,7 +31,7 @@ One switch, off by default, per provider — plus the port that listener will bi
 ```yaml
 providers:
   github:
-    proposals:
+    scm-api:
       enabled: true
       port: 9443 # required — see "Each provider needs its own port" below
 ```
@@ -41,8 +41,8 @@ git traffic, and does not sit under a URL path: the dialect is mounted at the ro
 (`/api/graphql` for GitHub, `/api/v4/*` for GitLab, `/api/v1/*` for Gitea/Forgejo). That is forced by the clients — `gh`
 and `fj` address the API from the host root and silently discard any path prefix — and a single shared listener would
 collide between two instances of the same platform, since every GitLab claims `/api/v4`. fogwall refuses to start if a
-provider has `proposals.enabled: true` with no port, rather than opening a listener no CLI could reach. Developers are
-then given a host and port; see [the user guide](../user/proposals.md).
+provider has `scm-api.enabled: true` with no port, rather than opening a listener no CLI could reach. Developers are
+then given a host and port; see [the user guide](../user/contributions.md).
 
 The dashboard's **Providers** page shows an **SCM API** badge on each provider that has the proxy enabled, alongside the
 HTTP/SSH transport badges. It is presence-only — it confirms the capability is on, not how to connect, since the connect
@@ -52,23 +52,23 @@ The caller's `User-Agent` and the CLI version it advertises are recorded on ever
 upgrade changing its wire format. fogwall does not gate on it: `User-Agent` is client-set and forgeable, so nothing
 branches on it.
 
-## TLS on the proposals listeners
+## TLS on the SCM API listeners
 
 **Every one of these ports has to be reachable over HTTPS.** `gh`, `glab`, `tea` and `fj` all address a custom host over
 HTTPS and give you no way to ask for plain HTTP, so a plaintext listener is unreachable by the tools it exists to serve.
 TLS must terminate somewhere in front of it — you have two shapes:
 
 - **Terminate at the edge.** An ingress, route, or load balancer per provider port, with fogwall's listeners left on
-  plain HTTP behind it. This is the usual Kubernetes/OpenShift shape: one Service exposing the proposals ports, one
+  plain HTTP behind it. This is the usual Kubernetes/OpenShift shape: one Service exposing the SCM API ports, one
   Ingress per provider, each with its own hostname and certificate.
-- **Terminate at fogwall.** Configure [`server.tls`](../configuration/tls.md) and every proposals listener inherits it
+- **Terminate at fogwall.** Configure [`server.tls`](../configuration/tls.md) and every SCM API listener inherits it
   automatically — same certificate, its own port. There is no per-provider TLS block to configure: the certificate is
   issued per hostname and these listeners differ only by port. If you give each provider its own hostname _and_
   terminate at fogwall, the certificate's SANs must cover all of them.
 
 fogwall can't tell whether something upstream is terminating TLS for it, so it doesn't guess: with `server.tls` unset it
 logs a warning at startup naming each plaintext listener. That warning is expected and harmless in the edge-termination
-shape. Treat a CLI reporting a connection or handshake error against a proposals port as this, until ruled out.
+shape. Treat a CLI reporting a connection or handshake error against an SCM API port as this, until ruled out.
 
 If you terminate at fogwall with a certificate from an internal CA, the CLIs are Go binaries and will need that CA in
 their trust store (or `SSL_CERT_FILE` pointing at it) — worth saying in whatever you hand developers.
@@ -100,8 +100,8 @@ permitted; **submitting** one is not, and they are different endpoints. Merge is
 table — see [Merging](#merging).
 
 Anything the allowlist does not recognise is denied, so a CLI reaching a new endpoint after an upgrade is refused rather
-than forwarded. Per-CLI command names are in [User Guide](../user/proposals.md); the endpoint and mutation tables behind
-them are in [docs/internals/scm-api-proxy.md](../internals/scm-api-proxy.md).
+than forwarded. Per-CLI command names are in [User Guide](../user/contributions.md); the endpoint and mutation tables
+behind them are in [docs/internals/scm-api-proxy.md](../internals/scm-api-proxy.md).
 
 ## Authorization
 
@@ -118,7 +118,7 @@ are behind one of the CLIs' own flags (`glab mr update --target-branch`, `gh pr 
 consequences:
 
 - A pull/merge request's **base branch** can be retargeted, always within the same repository — no allowlisted edit
-  endpoint takes a repository-valued field, so a proposal cannot be moved elsewhere.
+  endpoint takes a repository-valued field, so a pull/merge request cannot be moved elsewhere.
 - A few associations reach **beyond the repo**: GitHub projects are org-level, and on GitLab a milestone or epic can be
   group-level. (GitHub and Gitea milestones are repo-scoped.) This is the only effect not confined to the matched repo.
 - One command is often **several audited operations**. `gh pr create --label --assignee --reviewer` is a create plus
@@ -132,9 +132,9 @@ permitted — a different operation from giving the verdict.
 
 Merging a pull/merge request through fogwall is off by default and gated twice — both are required:
 
-- **`merge-enabled`, per provider** (under `proposals`, default off) turns the capability on. Merge is the
+- **`merge-enabled`, per provider** (under `scm-api`, default off) turns the capability on. Merge is the
   highest-consequence operation on this path, so exposing it is a deliberate choice rather than a side effect of
-  enabling proposals.
+  enabling the SCM API proxy.
 - **The `MERGE` grant**, standalone from `PROPOSE`: a contributor who can open a pull/merge request cannot merge one
   with the same grant, and a maintainer given only `MERGE` cannot open one. Grant it the same way as `PROPOSE` (see
   [Permissions](../configuration/permissions.md)).
@@ -143,9 +143,9 @@ With the capability off, a merge is refused even for a caller who holds `MERGE`.
 merge commands (`gh pr merge`, `glab mr merge`, `tea`/`fj pr merge`); the `MERGE` grant is assignable in the dashboard,
 but a dashboard-driven merge action is not built yet.
 
-When `require-validated-head` (see [SCM API proxy](../configuration/proposals.md)) is on, it is enforced at merge as
-well, and conclusively so — a create that passed can be undone by a later push, but the branch about to merge is final.
-Enforcement stays opt-in; the check is the same one the proposals docs describe.
+When `require-validated-head` (see [SCM API proxy](../configuration/scm-api.md)) is on, it is enforced at merge as well,
+and conclusively so — a create that passed can be undone by a later push, but the branch about to merge is final.
+Enforcement stays opt-in; the check is the same one the SCM API config docs describe.
 
 Two per-dialect limits come from CLI behaviour rather than fogwall (the
 [SCM API proxy notes](../internals/scm-api-proxy.md) have the detail):
@@ -160,11 +160,11 @@ nothing upstream would otherwise allow, except on provenance.
 
 ## Content inspection
 
-The prose a proposal carries — a pull/merge request title and description, a comment body — is inspected before it is
-forwarded, against three sets of rules: the blocked literals and patterns in `proposals.block`; gitleaks, when
+The prose an SCM API entity carries — a pull/merge request title and description, a comment body — is inspected before
+it is forwarded, against three sets of rules: the blocked literals and patterns in `scm-api.block`; gitleaks, when
 `secret-scan.enabled` is on; and the built-in PII/identifier bundles, when `content-patterns.enabled` is on with at
-least one bundle selected. `proposals.block` is separate from `diff-scan.block`: one governs pushed diffs, the other
-proposal content. Secret scanning and the pattern bundles are shared with the push path — neither is diff-specific.
+least one bundle selected. `scm-api.block` is separate from `diff-scan.block`: one governs pushed diffs, the other SCM
+API content. Secret scanning and the pattern bundles are shared with the push path — neither is diff-specific.
 
 This is not optional hardening. Without it, a contributor blocked from _pushing_ a secret can paste the same secret into
 a pull request description and fogwall relays it verbatim.
@@ -180,7 +180,7 @@ A content violation is recorded as `REJECTED`. `DENIED` is for operations that a
 holds no `PROPOSE` grant for.
 
 ```yaml
-proposals:
+scm-api:
   block:
     literals:
       - "internal.corp.example.com"
@@ -188,23 +188,23 @@ proposals:
       - '(?i)https?://[a-z0-9.-]*\.corp\.example\.com\b'
 ```
 
-With no `proposals.block` entries configured, only secret scanning applies.
+With no `scm-api.block` entries configured, only secret scanning applies.
 
 Secret scanning **fails closed here**, unlike the push path: if scanning is enabled but the scanner cannot run, the
-proposal is refused. A push that slips through is still recorded and reviewable afterwards, whereas a forwarded proposal
+request is refused. A push that slips through is still recorded and reviewable afterwards, whereas a forwarded request
 has already published its text upstream where fogwall cannot reach it.
 
 ### PII bundles block here, rather than warning
 
 Content-pattern bundles (`content-patterns.bundles` — SIN, SSN, NINO and the rest) are
 [WARN-only on the push path](../configuration/content-pattern-scanning.md): a match is surfaced to the human reviewer
-every push already requires, and never blocks. A proposal has no such reviewer — it is forwarded or refused — so a
-warning recorded against a description that is already upstream is not a control. A match therefore refuses the
-proposal, recorded as `REJECTED` alongside the data type and jurisdiction. The matched value itself is never written to
+every push already requires, and never blocks. An SCM API entity has no such reviewer — it is forwarded or refused — so
+a warning recorded against a description that is already upstream is not a control. A match therefore refuses the
+request, recorded as `REJECTED` alongside the data type and jurisdiction. The matched value itself is never written to
 the audit record; it is the thing the rule exists to withhold.
 
-Set `content-patterns.scan-proposals: false` to keep bundle scanning on pushes while leaving proposals to
-`proposals.block` and secret scanning alone.
+Set `content-patterns.scan-scm-api: false` to keep bundle scanning on pushes while leaving SCM API content to
+`scm-api.block` and secret scanning alone.
 
 When content inspection is what refused a request, the request variables are deliberately **not** stored on the audit
 record. The offending text is the payload, so keeping it would put the secret fogwall just blocked into fogwall's own
@@ -225,17 +225,18 @@ Every proxied **mutation** produces one audit record — who, the resolved repo,
 payload (GitHub's GraphQL variables, or the REST body on the other dialects), and the allow/deny outcome — following the
 same auditability bar as the push path. The payload is dropped from a record whose content inspection refused the
 request, so a secret fogwall blocked is not kept by fogwall; the reason names the rule and field instead. These are
-viewable in the dashboard under **SCM API** (a plain list, no approval workflow — these are already-decided audit
+viewable in the dashboard under **Contributions** (a plain list, no approval workflow — these are already-decided audit
 records), or queryable directly from the `scm_api_action_records` table/collection.
 
 A forwarded mutation's record also carries **what the upstream answered**: its HTTP status, and — read from the
 upstream's own response — the pull/merge request or issue the mutation created or touched. Those live in a second
-table/collection, `scm_api_proposals`, keyed on what the upstream calls the thing (provider, repository, kind, number),
+table/collection, `scm_api_entities`, keyed on what the upstream calls the thing (provider, repository, kind, number),
 holding its URL, title and current state as last reported through fogwall, and pointing back at the action records that
-created and last touched it. The audit log stays append-only; the registry is what changes when a proposal opened
-through fogwall is later closed through it. A proposal opened elsewhere and then edited or closed through fogwall is
-registered from that response too. The one gap is GitHub: `gh`'s edit, close and merge mutations return nothing but an
-acknowledgement, so a GitHub proposal fogwall never saw created stays unregistered until a response names it.
+created and last touched it. The audit log stays append-only; the registry is what changes when a pull/merge request or
+issue opened through fogwall is later closed through it. One opened elsewhere and then edited or closed through fogwall
+is registered from that response too. The one gap is GitHub: `gh`'s edit, close and merge mutations return nothing but
+an acknowledgement, so a GitHub pull/merge request fogwall never saw created stays unregistered until a response names
+it.
 
 A **refused** request is recorded too, once the caller has been authenticated — including one fogwall turned away
 because the endpoint matched no allowlist rule, where there is no operation to name and `mutation_field` is null (the
@@ -267,7 +268,7 @@ providers:
     issues-enabled: true
 ```
 
-`issues-enabled` sits directly on the provider, not under `proposals`: unlike the proxy, this feature makes the calls
+`issues-enabled` sits directly on the provider, not under `scm-api`: unlike the proxy, this feature makes the calls
 itself on the user's behalf, so it needs no dedicated listener or port. It does need the user to have linked their
 account for that provider via OAuth (see [SCM OAuth account linking](scm-oauth.md)) — fogwall acts as them — and it uses
 each provider's plain issue REST API, covering the same providers as the proxy (GitHub, GitLab, Forgejo/Gitea). A
@@ -275,6 +276,7 @@ provider is offered in the form only when it is both `issues-enabled` and linked
 
 Two grants permit it: the narrow `ISSUE` grant (issues only) or `PROPOSE`, which is a superset — so someone can be
 permitted to file bugs while holding no ability to push code or open a pull request. The issue title and body pass
-through the same content inspection as a proposal (secret scanning, blocked literals and patterns, content-pattern
-bundles) before they leave, and every attempt writes one record to the audit trail above, marked with the `dashboard`
-client type. Fail-closed throughout: no grant, no linked account, or a content match, and the operation is refused.
+through the same content inspection as any SCM API entity (secret scanning, blocked literals and patterns,
+content-pattern bundles) before they leave, and every attempt writes one record to the audit trail above, marked with
+the `dashboard` client type. Fail-closed throughout: no grant, no linked account, or a content match, and the operation
+is refused.

@@ -20,7 +20,7 @@ import org.eclipse.jetty.util.Callback;
  * level using the {@link Content.Source#read()} / {@link Content.Source#demand} cycle, then wraps the request with a
  * pre-buffered {@link Content.Source} so both servlet filters and JGit's {@code ReceivePack} read from memory.
  *
- * <p>GET requests pass through without buffering, as do the proposals listeners — their gate filters buffer for
+ * <p>GET requests pass through without buffering, as do the SCM API listeners — their gate filters buffer for
  * themselves against a bound, and a JSON request from a CLI declares its length.
  *
  * <p>The read is <b>not</b> bounded. This handler runs before any context, so before authentication and before
@@ -48,7 +48,7 @@ public class BlockingContentHandler extends Handler.Wrapper {
             return super.handle(request, response, callback);
         }
 
-        // The proposals listeners buffer for themselves, bounded, in their gate filters. Pre-buffering here would
+        // The SCM API listeners buffer for themselves, bounded, in their gate filters. Pre-buffering here would
         // read the body before authentication and hold up to this handler's limit for a caller who turns out not to
         // be anyone. Nothing on those ports needs the chunked-encoding workaround either: this handler exists for
         // reverse proxies that mangle a chunked git push, and a JSON request from a CLI declares its length.

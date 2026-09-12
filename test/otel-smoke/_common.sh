@@ -1,8 +1,8 @@
 # Shared helpers for the SCM API OTel smoke scripts. Sourced by the per-CLI drivers, not run directly.
 #
-# The drivers push real proposal traffic against real repos (github.com / gitlab.com / codeberg.org /
-# gitea.com) through the compose stack's proposals listeners, to exercise the OpenTelemetry instrumentation.
-# Prereqs: the stack is up with the proposals + otel overlays and TLS, the certs exist (test/make-certs.sh),
+# The drivers push real SCM API traffic against real repos (github.com / gitlab.com / codeberg.org /
+# gitea.com) through the compose stack's SCM API listeners, to exercise the OpenTelemetry instrumentation.
+# Prereqs: the stack is up with the contributions + otel overlays and TLS, the certs exist (test/make-certs.sh),
 # and the per-CLI PAT env var is set to a token whose login is provisioned in the DB (see README).
 
 OWNER="${OWNER:-coopernetes}"
@@ -14,7 +14,7 @@ STAMP="$(date +%s)"
 
 require_cert() {
   [ -f "$CERT" ] || {
-    echo "missing $CERT — run test/make-certs.sh and enable TLS in docker/docker-compose.proposals.yml" >&2
+    echo "missing $CERT — run test/make-certs.sh and enable TLS in docker/docker-compose.contributions.yml" >&2
     exit 1
   }
 }

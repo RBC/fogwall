@@ -13,7 +13,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Resolves a {@code pulls.create} request's {@code head} field to the tip commit SHA it currently names, for
- * {@code providers.<name>.proposals.require-validated-head} (see {@link HeadCommitValidator}).
+ * {@code providers.<name>.scm-api.require-validated-head} (see {@link HeadCommitValidator}).
  *
  * <p>{@code head} carries the fork as an {@code owner:branch} prefix, the same shape GitHub uses; the base repository
  * named in the URL path is otherwise assumed (see the "Fork PRs address the upstream" section of the SCM API proxy

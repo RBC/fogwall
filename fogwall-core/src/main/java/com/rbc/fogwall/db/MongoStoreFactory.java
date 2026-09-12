@@ -7,7 +7,7 @@ import com.rbc.fogwall.db.mongo.MongoGitHubNodeIdCache;
 import com.rbc.fogwall.db.mongo.MongoGitLabProjectIdCache;
 import com.rbc.fogwall.db.mongo.MongoPushStore;
 import com.rbc.fogwall.db.mongo.MongoScmApiActionStore;
-import com.rbc.fogwall.db.mongo.MongoScmApiProposalStore;
+import com.rbc.fogwall.db.mongo.MongoScmApiEntityStore;
 import com.rbc.fogwall.db.mongo.MongoScmOAuthTokenStore;
 import com.rbc.fogwall.db.mongo.MongoScmTokenCache;
 import com.rbc.fogwall.db.mongo.MongoSshFingerprintCache;
@@ -142,9 +142,11 @@ public final class MongoStoreFactory implements AutoCloseable {
         return store;
     }
 
-    /** Create and initialize a {@link ScmApiProposalStore} (the proposal registry), backed by this factory's client. */
-    public ScmApiProposalStore scmApiProposalStore() {
-        MongoScmApiProposalStore store = new MongoScmApiProposalStore(client, databaseName);
+    /**
+     * Create and initialize a {@link ScmApiEntityStore} (the SCM API entity registry), backed by this factory's client.
+     */
+    public ScmApiEntityStore scmApiEntityStore() {
+        MongoScmApiEntityStore store = new MongoScmApiEntityStore(client, databaseName);
         store.initialize();
         return store;
     }

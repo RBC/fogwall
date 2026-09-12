@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# GitLab MR mutations through the fogwall proposals listener (:8482) → REST /api/v4 against gitlab.com.
+# GitLab MR mutations through the fogwall SCM API listener (:8482) → REST /api/v4 against gitlab.com.
 # Needs: GLAB_PAT = a gitlab PAT with 'api' scope. Opens/edits/merges REAL MRs on $OWNER/$REPO.
 set -uo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_common.sh"

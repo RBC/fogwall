@@ -11,8 +11,8 @@ public enum ScmApiActionStatus {
     /** The mutation cleared the allowlist and permission check and was relayed upstream. */
     FORWARDED,
     /**
-     * fogwall evaluated a policy and the answer was no: the operation is not allowlisted, proposals are not enabled for
-     * the provider, or the caller lacks the {@code PROPOSE} grant on the target repository.
+     * fogwall evaluated a policy and the answer was no: the operation is not allowlisted, the SCM API proxy is not
+     * enabled for the provider, or the caller lacks the {@code PROPOSE} grant on the target repository.
      */
     DENIED,
     /**

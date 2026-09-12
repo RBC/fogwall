@@ -10,8 +10,8 @@ import org.eclipse.jetty.util.ssl.SslContextFactory;
  * one configuration rather than each growing its own copy.
  *
  * <p>The certificate is per-hostname while listeners differ only by port, so the same material covers the main HTTPS
- * listener and every proposals listener. A deployment that fronts each provider with its own hostname and terminates
- * TLS at fogwall rather than at an ingress needs a SAN certificate covering those names.
+ * listener and every SCM API listener. A deployment that fronts each provider with its own hostname and terminates TLS
+ * at fogwall rather than at an ingress needs a SAN certificate covering those names.
  */
 public final class JettyTls {
 

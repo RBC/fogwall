@@ -5,8 +5,8 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * Reads a plain string field out of an already-parsed JSON tree — shared by the dialect-specific extractors that
- * {@link HeadCommitValidator}'s callers use to find the head ref a proposal-create body names ({@code source_branch},
- * {@code head}, or GitHub's nested {@code variables.input.headRefName}).
+ * {@link HeadCommitValidator}'s callers use to find the head ref a pull/merge request create body names
+ * ({@code source_branch}, {@code head}, or GitHub's nested {@code variables.input.headRefName}).
  */
 public final class JsonBodyField {
 

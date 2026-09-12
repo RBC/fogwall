@@ -103,6 +103,6 @@ class ScmApiObservabilityFilterTest {
         }
 
         // Duration is recorded even when the chain fails.
-        verify(telemetry).recordScmApiDuration(anyDouble(), eq("github"), eq("proposal.merge"));
+        verify(telemetry).recordScmApiDuration(anyDouble(), eq("github"), eq("pull_request.merge"));
     }
 }

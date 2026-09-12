@@ -110,10 +110,10 @@ permissions:
 
 See [docs/configuration/index.md](docs/configuration/index.md) for the full reference.
 
-### Testing the proposals listeners locally (TLS)
+### Testing the SCM API listeners locally (TLS)
 
-The proposals listeners (`gh`, `glab`, `tea`, `fj`) can't be exercised over plain HTTP: every one of those CLIs
-addresses a custom host over HTTPS with no way to ask otherwise. So fogwall has to terminate TLS, which locally means a
+The SCM API listeners (`gh`, `glab`, `tea`, `fj`) can't be exercised over plain HTTP: every one of those CLIs addresses
+a custom host over HTTPS with no way to ask otherwise. So fogwall has to terminate TLS, which locally means a
 self-signed certificate the CLIs will trust.
 
 Generate a small CA and a leaf signed by it. A bare `openssl req -x509` self-signed certificate is **not** enough: it is
@@ -132,7 +132,7 @@ cat leaf.pem ca.pem > fogwall-cert.pem
 ```
 
 The SAN matters too — Go rejects a certificate carrying only a CN. `-nodes` already emits a PKCS8 key, so there is no
-conversion step. Run with `server.tls` pointed at the chain; every enabled proposals listener inherits it and logs
+conversion step. Run with `server.tls` pointed at the chain; every enabled SCM API listener inherits it and logs
 `(https, inherited from server.tls)`:
 
 ```shell

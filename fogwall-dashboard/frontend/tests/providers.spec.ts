@@ -29,7 +29,7 @@ test.describe('providers page', () => {
     await expect(card('gitlab').getByText(/ssh:\/\//)).toHaveCount(0)
   })
 
-  test('shows the SCM API badge only for providers with proposals enabled', async ({ page }) => {
+  test('shows the SCM API badge only for providers with the SCM API proxy enabled', async ({ page }) => {
     await page.goto('/dashboard/providers')
     const card = (name: string) =>
       page
@@ -37,7 +37,7 @@ test.describe('providers page', () => {
         .filter({ has: page.getByText(name, { exact: true }) })
         .first()
 
-    // github has proposals.enabled in the fixture profile; corp-forge does not.
+    // github has scm-api.enabled in the fixture profile; corp-forge does not.
     await expect(card('github').getByText('SCM API', { exact: true })).toBeVisible()
     await expect(card('corp-forge').getByText('SCM API', { exact: true })).toHaveCount(0)
   })

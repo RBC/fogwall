@@ -13,8 +13,8 @@ specification of what the fixture database contains. Standard library only; no t
   5. Runs the scenarios: real pushes through real providers, transparent proxy over HTTP plus one server-mode
      push over SSH. Pauses once more so you can approve / reject / cancel the reviewable ones in the dashboard as
      the right user (reviewer or dev), then re-pushes the approved ones.
-  6. Runs the proposals scenarios: gh (GitHub), glab (GitLab), fj (Codeberg) and tea (gitea.com) each open, edit
-     and close a pull/merge request and an issue through the provider's proposals listener, over TLS from a
+  6. Runs the contributions scenarios: gh (GitHub), glab (GitLab), fj (Codeberg) and tea (gitea.com) each open, edit
+     and close a pull/merge request and an issue through the provider's SCM API listener, over TLS from a
      throwaway CA generated for the run.
   7. Stops the app, deletes secret/session/cache rows, dumps the database to SQL, scrubs every real value back
      to its placeholder, verifies nothing personal is left, deletes the repos, and writes:
@@ -23,14 +23,14 @@ specification of what the fixture database contains. Standard library only; no t
 
 Prereqs: test/capture/mapping.env (+ optional secrets.env), the PAT files it names, ssh-agent holding the key that
 is registered on github.com, git, ssh-keygen, openssl, the four SCM CLIs (gh, glab, tea, fj), and nothing else
-listening on :8080 / :2222 / :8443 or the proposals ports (8481-8484). The PATs must be able to create AND delete
+listening on :8080 / :2222 / :8443 or the SCM API ports (8481-8484). The PATs must be able to create AND delete
 repositories: GitHub `repo` + `delete_repo`; GitLab `api`; Codeberg/Gitea `write:user` + `write:repository` +
-`read:user` — and, for the proposals scenarios, open issues and pull requests: GitHub `repo` plus `read:org`
+`read:user` — and, for the contributions scenarios, open issues and pull requests: GitHub `repo` plus `read:org`
 (`gh pr edit` queries the org's teams); Gitea `write:issue`. The CLIs are run against throwaway config directories; your real logins are untouched.
 
 Env knobs: KEEP_WORK=1 keeps the temp dir on exit; SKIP_OAUTH=1 skips the manual pause (dev's github/gitlab
 identities are then seeded unverified so the run still resolves — never commit such a dump); SKIP_PUSHES=1 runs only
-the proposals scenarios; PUSH_TIMEOUT=<s> caps how long a server-mode push may be held open (default 90).
+the contributions scenarios; PUSH_TIMEOUT=<s> caps how long a server-mode push may be held open (default 90).
 """
 
 from __future__ import annotations
@@ -61,8 +61,8 @@ KEEP_WORK = os.environ.get("KEEP_WORK") == "1"
 SKIP_OAUTH = os.environ.get("SKIP_OAUTH") == "1"
 SKIP_PUSHES = os.environ.get("SKIP_PUSHES") == "1"
 PUSH_TIMEOUT = int(os.environ.get("PUSH_TIMEOUT", "90"))
-# providers.<name>.proposals.port in fogwall-playwright.yml — the listeners the CLIs are pointed at.
-PROPOSAL_PORTS = {"github": 8481, "gitlab": 8482, "codeberg": 8483, "gitea": 8484}
+# providers.<name>.scm-api.port in fogwall-playwright.yml — the listeners the CLIs are pointed at.
+SCM_API_PORTS = {"github": 8481, "gitlab": 8482, "codeberg": 8483, "gitea": 8484}
 
 
 def log(msg: str) -> None:
@@ -399,7 +399,7 @@ def wait_for_review(expect: dict[str, str], timeout: int = 1800) -> None:
 
 
 def make_tls(work: Path) -> tuple[Path, Path, Path]:
-    """A throwaway CA and a localhost leaf signed by it, for the proposals listeners. The CLIs only ever speak HTTPS
+    """A throwaway CA and a localhost leaf signed by it, for the SCM API listeners. The CLIs only ever speak HTTPS
     to a custom host, and fj (rustls) refuses a bare self-signed certificate presented as a server certificate, so a
     real (if tiny) chain it is. Returns (certificate chain, key, CA) — the CA is what the CLIs trust via SSL_CERT_FILE."""
     tls = work / "tls"; tls.mkdir()
@@ -778,7 +778,7 @@ def run_scenarios(s: Session) -> None:
 
 
 # ═════════════════════════════════════════════════════════════════════════════════════════════════════════════════
-# 5b. Proposals — each CLI opens, edits and closes a PR/MR and an issue through its provider's proposals listener
+# 5b. Contributions — each CLI opens, edits and closes a PR/MR and an issue through its provider's SCM API listener
 # ═════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 # gh/glab/tea print a URL; fj prints "#1" wrapped in Unicode bidi-isolate characters (U+2068/U+2069).
 NUMBER_RE = re.compile(r"/(?:pull|pulls|merge_requests|issues|work_items)/(\d+)\b|#\u2068?(\d+)\u2069?")
@@ -806,7 +806,7 @@ def number_in(out: str, what: str) -> str:
 def head_branch(s: Session, direct_url: str, prefix: str) -> Repo:
     """A branch pushed straight to the real repo (not through fogwall) for a PR to be opened from."""
     r = s.clone(direct_url, prefix)
-    r.commit(f"proposals/{prefix}.txt", f"feat: change proposed via {prefix}")
+    r.commit(f"contributions/{prefix}.txt", f"feat: change proposed via {prefix}")
     rc, out = git("push", "-q", "origin", r.branch, cwd=r.dir, env=r.env, timeout=120)
     if rc != 0:
         indent(out)
@@ -814,10 +814,10 @@ def head_branch(s: Session, direct_url: str, prefix: str) -> Repo:
     return r
 
 
-def run_proposal_scenarios(s: Session, ca: Path) -> None:
+def run_contribution_scenarios(s: Session, ca: Path) -> None:
     for tool in ("gh", "glab", "tea", "fj"):
         if not shutil.which(tool):
-            raise Fatal(f"{tool} is required for the proposals scenarios")
+            raise Fatal(f"{tool} is required for the contributions scenarios")
     slug = s.slug
     base = {**os.environ, "SSL_CERT_FILE": str(ca), "NO_COLOR": "1", "TERM": "dumb", "GIT_TERMINAL_PROMPT": "0"}
 
@@ -826,7 +826,7 @@ def run_proposal_scenarios(s: Session, ca: Path) -> None:
         s.manifest[scenario] = {**numbers, "actions": new}
         note(f"recorded {scenario} → {len(new)} audit records {numbers}")
 
-    # One refused proposal per client, each tripping a different check: nothing reaches the upstream, and the
+    # One refused contribution per client, each tripping a different check: nothing reaches the upstream, and the
     # record carries the rule that matched. The AWS key and IBAN are shaped like real ones and are not.
     REJECT = {
         "gh": ("secret scan", "aws_access_key_id = AKIAQ3EGTX6PVZ2NW7HB / aws_secret_access_key = 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"),
@@ -836,8 +836,8 @@ def run_proposal_scenarios(s: Session, ca: Path) -> None:
     }
 
     # ── gh: GraphQL against the github listener ──────────────────────────────────────────────────────────────
-    log("proposals-gh — pull request and issue via gh (create, edit, close)")
-    host = f"localhost:{PROPOSAL_PORTS['github']}"
+    log("contributions-gh — pull request and issue via gh (create, edit, close)")
+    host = f"localhost:{SCM_API_PORTS['github']}"
     r = head_branch(s, s.gh_direct, "gh")
     env = {**base, "GH_HOST": host, "GH_ENTERPRISE_TOKEN": s.pats["github"], "GH_CONFIG_DIR": str(s.work / "gh"),
            "GH_PROMPT_DISABLED": "1", "GH_NO_UPDATE_NOTIFIER": "1"}
@@ -851,16 +851,16 @@ def run_proposal_scenarios(s: Session, ca: Path) -> None:
                            "--body", "Opened through fogwall with gh."], cwd=r.dir, env=env), "issue")
     cli(["gh", "issue", "edit", issue, "-R", repo, "--body", "Edited through fogwall with gh."], cwd=r.dir, env=env)
     cli(["gh", "issue", "close", issue, "-R", repo], cwd=r.dir, env=env)
-    done("proposals-gh", "github", before, pr=pr, issue=issue)
-    log(f"proposals-gh-rejected — issue body refused by {REJECT['gh'][0]}")
+    done("contributions-gh", "github", before, pr=pr, issue=issue)
+    log(f"contributions-gh-rejected — issue body refused by {REJECT['gh'][0]}")
     before = action_ids("github")
     cli(["gh", "issue", "create", "-R", repo, "--title", "Credentials for the deploy job", "--body", REJECT["gh"][1]], cwd=r.dir, env=env)
-    done("proposals-gh-rejected", "github", before)
+    done("contributions-gh-rejected", "github", before)
 
     # ── glab: REST /api/v4 against the gitlab listener ───────────────────────────────────────────────────────
     # `glab mr create` insists on a git remote that points at GITLAB_HOST; it is never used for git.
-    log("proposals-glab — merge request and issue via glab (create, update, close)")
-    host = f"localhost:{PROPOSAL_PORTS['gitlab']}"
+    log("contributions-glab — merge request and issue via glab (create, update, close)")
+    host = f"localhost:{SCM_API_PORTS['gitlab']}"
     r = head_branch(s, s.gl_direct, "glab")
     git("remote", "add", "glab-proxy-do-not-use", f"https://{host}/{slug}.git", cwd=r.dir)
     env = {**base, "GLAB_CONFIG_DIR": str(s.work / "glab"), "GITLAB_HOST": host}
@@ -877,22 +877,22 @@ def run_proposal_scenarios(s: Session, ca: Path) -> None:
                           cwd=r.dir, env=env), "issue")
     cli(["glab", "issue", "update", issue, "-R", slug, "--description", "Edited through fogwall with glab."], cwd=r.dir, env=env)
     cli(["glab", "issue", "close", issue, "-R", slug], cwd=r.dir, env=env)
-    done("proposals-glab", "gitlab", before, mr=mr, issue=issue)
-    log(f"proposals-glab-rejected — issue description refused by {REJECT['glab'][0]}")
+    done("contributions-glab", "gitlab", before, mr=mr, issue=issue)
+    log(f"contributions-glab-rejected — issue description refused by {REJECT['glab'][0]}")
     before = action_ids("gitlab")
     cli(["glab", "issue", "create", "-R", slug, "--title", "Runbook link", "--description", REJECT["glab"][1],
          "--no-editor", "--yes"], cwd=r.dir, env=env)
-    done("proposals-glab-rejected", "gitlab", before)
+    done("contributions-glab-rejected", "gitlab", before)
 
     # ── fj: REST /api/v1 against the codeberg listener ───────────────────────────────────────────────────────
     # codeberg stays unmapped through the push scenarios (the unmapped-identity rejection needs it), so dev's
     # identity there is added now, hand-typed. fj works from the clone's remote, so origin is repointed at the
     # listener once the head branch is upstream.
-    log("proposals-fj — pull request and issue via fj on codeberg (create, edit, close)")
+    log("contributions-fj — pull request and issue via fj on codeberg (create, edit, close)")
     code, j = api("POST", "/api/users/dev/identities", {"provider": "codeberg", "scmUsername": s.ident.handle})
     if code >= 300:
         warn(f"could not add dev's codeberg identity → HTTP {code}: {j}")
-    host = f"https://localhost:{PROPOSAL_PORTS['codeberg']}"
+    host = f"https://localhost:{SCM_API_PORTS['codeberg']}"
     r = head_branch(s, s.cb_direct, "fj")
     git("remote", "set-url", "origin", f"{host}/{slug}.git", cwd=r.dir)
     env = {**base, "XDG_CONFIG_HOME": str(s.work / "fj"), "XDG_DATA_HOME": str(s.work / "fj")}  # fj keeps logins in DATA
@@ -906,15 +906,15 @@ def run_proposal_scenarios(s: Session, ca: Path) -> None:
                           cwd=r.dir, env=env), "issue")
     cli(["fj", "-H", host, "issue", "edit", issue, "body", "Edited through fogwall with fj."], cwd=r.dir, env=env)
     cli(["fj", "-H", host, "issue", "close", issue], cwd=r.dir, env=env)
-    done("proposals-fj", "codeberg", before, pr=pr, issue=issue)
-    log(f"proposals-fj-rejected — issue body refused by {REJECT['fj'][0]}")
+    done("contributions-fj", "codeberg", before, pr=pr, issue=issue)
+    log(f"contributions-fj-rejected — issue body refused by {REJECT['fj'][0]}")
     before = action_ids("codeberg")
     cli(["fj", "-H", host, "issue", "create", "Refund details", "--body", REJECT["fj"][1]], cwd=r.dir, env=env)
-    done("proposals-fj-rejected", "codeberg", before)
+    done("contributions-fj-rejected", "codeberg", before)
 
     # ── tea: REST /api/v1 against the gitea listener ─────────────────────────────────────────────────────────
-    log("proposals-tea — pull request and issue via tea on gitea.com (create, edit, close)")
-    host = f"https://localhost:{PROPOSAL_PORTS['gitea']}"
+    log("contributions-tea — pull request and issue via tea on gitea.com (create, edit, close)")
+    host = f"https://localhost:{SCM_API_PORTS['gitea']}"
     r = head_branch(s, s.gt_direct, "tea")
     env = {**base, "XDG_CONFIG_HOME": str(s.work / "tea")}
     # The token goes in through tea's own env var so the echoed command line never carries it.
@@ -930,11 +930,11 @@ def run_proposal_scenarios(s: Session, ca: Path) -> None:
                            "--description", "Opened through fogwall with tea."], cwd=r.dir, env=env), "issue")
     cli(["tea", "issue", "edit", issue, *at, "--description", "Edited through fogwall with tea."], cwd=r.dir, env=env)
     cli(["tea", "issue", "close", issue, *at], cwd=r.dir, env=env)
-    done("proposals-tea", "gitea", before, pr=pr, issue=issue)
-    log(f"proposals-tea-rejected — issue description refused by {REJECT['tea'][0]}")
+    done("contributions-tea", "gitea", before, pr=pr, issue=issue)
+    log(f"contributions-tea-rejected — issue description refused by {REJECT['tea'][0]}")
     before = action_ids("gitea")
     cli(["tea", "issue", "create", *at, "--title", "Deploy hook", "--description", REJECT["tea"][1]], cwd=r.dir, env=env)
-    done("proposals-tea-rejected", "gitea", before)
+    done("contributions-tea-rejected", "gitea", before)
 
 
 # ═════════════════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -1027,10 +1027,10 @@ def main() -> int:
         seed_second_github_identity()
         session = Session(work, ident, pats)
         if SKIP_PUSHES:
-            warn("SKIP_PUSHES: no push scenarios — for iterating on the proposals block only")
+            warn("SKIP_PUSHES: no push scenarios — for iterating on the contributions scenarios only")
         else:
             run_scenarios(session)
-        run_proposal_scenarios(session, ca)
+        run_contribution_scenarios(session, ca)
         (work / "manifest.json").write_text(json.dumps(session.manifest, indent=2))
 
         log("Stopping fogwall")

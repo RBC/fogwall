@@ -46,22 +46,22 @@ public class ProviderController {
                         sshServerEnabled && p.getSshUri().isPresent(),
                         sshPort,
                         p.servletPath(),
-                        proposalsEnabled(p.getName()),
+                        scmApiEnabled(p.getName()),
                         issuesEnabled(p.getName()),
                         attestations,
                         requireReviewPermission))
                 .toList();
     }
 
-    // Whether the SCM API (CLI proposals) proxy is enabled for this provider. Static config, keyed on the provider's
+    // Whether the SCM API (CLI) proxy is enabled for this provider. Static config, keyed on the provider's
     // name (the same key the registry builds providers under); read directly like the SSH toggle, not hot-reloaded.
-    private boolean proposalsEnabled(String providerName) {
+    private boolean scmApiEnabled(String providerName) {
         ProviderConfig config = fogwallConfig.getProviders().get(providerName);
-        return config != null && config.getProposals().isEnabled();
+        return config != null && config.getScmApi().isEnabled();
     }
 
     // Whether the dashboard issue form is enabled for this provider. Same static, per-provider config shape as the
-    // proposals toggle above.
+    // SCM API toggle above.
     private boolean issuesEnabled(String providerName) {
         ProviderConfig config = fogwallConfig.getProviders().get(providerName);
         return config != null && config.isIssuesEnabled();
@@ -77,7 +77,7 @@ public class ProviderController {
             boolean sshEnabled,
             int sshPort,
             String sshPath,
-            boolean proposalsEnabled,
+            boolean scmApiEnabled,
             boolean issuesEnabled,
             List<AttestationQuestion> attestationQuestions,
             boolean requireReviewPermission) {}

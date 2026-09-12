@@ -4,15 +4,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.rbc.fogwall.db.model.ScmApiProposalRecord.Kind;
-import com.rbc.fogwall.db.model.ScmApiProposalRecord.State;
+import com.rbc.fogwall.db.model.ScmApiEntityRecord.Kind;
+import com.rbc.fogwall.db.model.ScmApiEntityRecord.State;
 import com.rbc.fogwall.servlet.ScmApiRequestContext;
 import org.junit.jupiter.api.Test;
 
 /** Response shapes as {@code gh}'s GraphQL mutations actually return them, captured from real traffic. */
-class GitHubProposalResponseReaderTest {
+class GitHubEntityResponseReaderTest {
 
-    private final GitHubProposalResponseReader reader = new GitHubProposalResponseReader();
+    private final GitHubEntityResponseReader reader = new GitHubEntityResponseReader();
 
     private static ScmApiRequestContext context(String field, String nodeId, String nodeType, String variablesJson) {
         var c = new ScmApiRequestContext();
@@ -26,7 +26,7 @@ class GitHubProposalResponseReaderTest {
     // gh selects only id and url on a create, and only clientMutationId on everything else.
     @Test
     void createPullRequest_readsIdUrlAndNumberFromUrl() {
-        ProposalOutcome o = reader.read(
+        EntityOutcome o = reader.read(
                         context(
                                 "createPullRequest",
                                 "R_repo",
@@ -56,7 +56,7 @@ class GitHubProposalResponseReaderTest {
     // anywhere in the response to read.
     @Test
     void mergePullRequest_marksMerged_noCommitShaAvailable() {
-        ProposalOutcome o = reader.read(
+        EntityOutcome o = reader.read(
                         context(
                                 "mergePullRequest",
                                 "PR_kwDO1",
@@ -73,7 +73,7 @@ class GitHubProposalResponseReaderTest {
 
     @Test
     void closeAndUpdate_areKeyedOnTheAddressedNode() {
-        ProposalOutcome close = reader.read(
+        EntityOutcome close = reader.read(
                         context("closePullRequest", "PR_kwDO1", "PULL_REQUEST", null),
                         null,
                         "{\"data\":{\"closePullRequest\":{\"clientMutationId\":null}}}")
@@ -82,7 +82,7 @@ class GitHubProposalResponseReaderTest {
         assertEquals(State.CLOSED, close.state());
         assertNull(close.number());
 
-        ProposalOutcome edit = reader.read(
+        EntityOutcome edit = reader.read(
                         context(
                                 "updateIssue",
                                 "I_kwDO2",
@@ -98,7 +98,7 @@ class GitHubProposalResponseReaderTest {
 
     @Test
     void addComment_hasNoKindWhenTheNodeCouldBeEither() {
-        ProposalOutcome o = reader.read(context("addComment", "I_kwDO2", "ISSUE_OR_PULL_REQUEST", null), null, "{}")
+        EntityOutcome o = reader.read(context("addComment", "I_kwDO2", "ISSUE_OR_PULL_REQUEST", null), null, "{}")
                 .orElseThrow();
         assertNull(o.kind());
         assertEquals("I_kwDO2", o.nodeId());

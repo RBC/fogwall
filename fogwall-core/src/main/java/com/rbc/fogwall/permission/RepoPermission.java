@@ -68,15 +68,16 @@ public class RepoPermission {
          *
          * <p>Scope is the whole request surface of the allowlisted endpoints, not just title, body and comment: every
          * field the supported CLIs send has one of their own flags behind it, and {@code tea} PATCHes the full object
-         * on every edit. So this also permits retargeting a proposal's base branch — within the same repository, since
-         * no allowlisted edit endpoint takes a repository-valued field. The only effect reaching past the repo is
-         * association with an object that is not repo-scoped: a GitHub project, or a GitLab group milestone or epic.
+         * on every edit. So this also permits retargeting a pull/merge request's base branch — within the same
+         * repository, since no allowlisted edit endpoint takes a repository-valued field. The only effect reaching past
+         * the repo is association with an object that is not repo-scoped: a GitHub project, or a GitLab group milestone
+         * or epic.
          *
-         * <p>Named for what it permits rather than what it achieves: whether a proposal becomes a contribution is the
-         * upstream maintainer's call, outside fogwall. Kept distinct from {@link #PUSH} so an operator can permission
-         * git-push and change proposals independently — pushing to a fork proposes nothing — and does not imply
-         * {@link #PUSH} or {@link #REVIEW}. Reads are not gated by this grant at all; they go through the existing
-         * URL-rule mechanism, the same as git fetches.
+         * <p>Named for what it permits rather than what it achieves: whether a proposed change becomes a contribution
+         * is the upstream maintainer's call, outside fogwall. Kept distinct from {@link #PUSH} so an operator can
+         * permission git-push and change proposals independently — pushing to a fork proposes nothing — and does not
+         * imply {@link #PUSH} or {@link #REVIEW}. Reads are not gated by this grant at all; they go through the
+         * existing URL-rule mechanism, the same as git fetches.
          *
          * <p>Issue create/edit/comment are deliberately included: filing an issue that a pull request then closes is
          * part of one contribution, and comments cannot be split by subject anyway — GitHub's {@code addComment} takes

@@ -40,17 +40,17 @@ each hook completes.
 Both modes share the same validation logic and push store. Both are always active for every configured provider — there
 is currently no per-provider toggle to disable one mode.
 
-## Proposals (a dedicated listener per provider)
+## SCM API (a dedicated listener per provider)
 
 _Available since v1.4.0, opt-in per provider — see [docs/internals/scm-api-proxy.md](../internals/scm-api-proxy.md)._
 
-A third HTTP surface, opt-in per provider (`providers.<name>.proposals.enabled`), for SCM CLI tools rather than git
-itself — proxying `gh`'s issue/PR, `glab`'s issue/MR, and `tea`/`fj`'s issue/PR create-edit-comment-review traffic
-instead of a git push. Unlike the two modes above, it does not touch a local repository clone; it inspects and relays a
-small request/response pair.
+A third HTTP surface, opt-in per provider (`providers.<name>.scm-api.enabled`), for SCM CLI tools rather than git itself
+— proxying `gh`'s issue/PR, `glab`'s issue/MR, and `tea`/`fj`'s issue/PR create-edit-comment-review traffic instead of a
+git push. Unlike the two modes above, it does not touch a local repository clone; it inspects and relays a small
+request/response pair.
 
 Unlike server mode and the transparent proxy, which share the main port under path prefixes, **each enabled provider
-gets its own listener** (`providers.<name>.proposals.port`) with its dialect mounted at that listener's root —
+gets its own listener** (`providers.<name>.scm-api.port`) with its dialect mounted at that listener's root —
 `/api/graphql`, `/api/v4/*`, `/api/v1/*`. This is forced by the clients: `gh` and `fj` address the API from the host
 root and discard any path prefix, and a single shared root listener would collide between two instances of the same
 platform. `registerScmApiListeners` binds each context to its connector using Jetty's `"@connectorName"` virtual-host
@@ -114,17 +114,17 @@ Mechanics that carry the actual security decisions:
   an encoded slash shift which repository is authorized. `ScmApiRestPath` reads `getRequestURI()` instead.
 - **The upstream response is read, not just relayed.** A push response is an acknowledgement; a client-server API's
   response is the authoritative statement of what now exists, and fogwall already holds it. The forwarders relay a
-  mutation's response to the client while keeping a bounded copy, and `ProposalRegistrar` then reads it through the
-  dialect's `ProposalResponseReader` — number, URL, node ID and state — into the `scm_api_proposals` registry, a mutable
-  current-state table that the append-only `scm_api_action_records` point at via `proposal_id`. A read is still streamed
+  mutation's response to the client while keeping a bounded copy, and `EntityRegistrar` then reads it through the
+  dialect's `EntityResponseReader` — number, URL, node ID and state — into the `scm_api_entities` registry, a mutable
+  current-state table that the append-only `scm_api_action_records` point at via `entity_id`. A read is still streamed
   and never kept. The registry write happens after the client has its response and never throws into the request, so a
   registry failure costs the link, not the mutation.
-- **Content inspection covers the payload, not a field list.** `ProposalContentInspector` runs `proposals.block`,
-  gitleaks and the content-pattern bundles over the raw bytes, every JSON key and scalar at any depth, the query string
-  in both forms, and — for GitHub — the GraphQL query's own literals. It **fails closed**: unlike the push path, a
-  proposal that cannot be scanned is refused, because a forwarded one has already published its text upstream. For the
-  same reason the PII bundles block here rather than warning as they do on a push — a warning needs a reviewer, and this
-  path holds nothing for one to look at.
+- **Content inspection covers the payload, not a field list.** `ScmContentInspector` runs `scm-api.block`, gitleaks and
+  the content-pattern bundles over the raw bytes, every JSON key and scalar at any depth, the query string in both
+  forms, and — for GitHub — the GraphQL query's own literals. It **fails closed**: unlike the push path, a pull/merge
+  request or issue that cannot be scanned is refused, because a forwarded one has already published its text upstream.
+  For the same reason the PII bundles block here rather than warning as they do on a push — a warning needs a reviewer,
+  and this path holds nothing for one to look at.
 - **Reads stay cheap in all dialects.** No dialect resolves or permission-checks reads individually — an authenticated
   caller's reads are forwarded, keeping the default read cost near pass-through.
 - **No URL rule layer.** `UrlRuleRegistry` gates the git path because a fetch of a public repository arrives with no

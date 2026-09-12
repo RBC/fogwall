@@ -7,7 +7,7 @@ import com.rbc.fogwall.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.db.FetchStore;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.ScmApiActionStore;
-import com.rbc.fogwall.db.ScmApiProposalStore;
+import com.rbc.fogwall.db.ScmApiEntityStore;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.observability.FogwallTelemetry;
@@ -53,5 +53,5 @@ public record FogwallContext(
         GitHubNodeIdCache gitHubNodeIdCache,
         GitLabProjectIdCache gitLabProjectIdCache,
         ScmApiActionStore scmApiActionStore,
-        ScmApiProposalStore scmApiProposalStore,
+        ScmApiEntityStore scmApiEntityStore,
         FogwallTelemetry telemetry) {}

@@ -4,13 +4,13 @@ import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.model.PushQuery;
 
 /**
- * Checks whether a commit SHA is one fogwall has a push record for — the {@code providers.<name>.proposals
- * .require-validated-head} enforcement point, run against a proposal's head commit at create time.
+ * Checks whether a commit SHA is one fogwall has a push record for — the {@code providers.<name>.scm-api
+ * .require-validated-head} enforcement point, run against a pull/merge request's head commit at create time.
  *
- * <p>The lookup is keyed on the commit SHA alone, never the repository: a fork proposal pushes to the fork and targets
- * the upstream, so a repo-scoped lookup would never match, while a SHA is content-addressed and matches wherever it was
- * pushed. {@code push_records.commit_to} already carries an index with this column leading, so the lookup costs no new
- * schema on the JDBC side.
+ * <p>The lookup is keyed on the commit SHA alone, never the repository: a fork pull/merge request pushes to the fork
+ * and targets the upstream, so a repo-scoped lookup would never match, while a SHA is content-addressed and matches
+ * wherever it was pushed. {@code push_records.commit_to} already carries an index with this column leading, so the
+ * lookup costs no new schema on the JDBC side.
  */
 public class HeadCommitValidator {
 

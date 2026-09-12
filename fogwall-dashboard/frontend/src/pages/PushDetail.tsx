@@ -28,6 +28,12 @@ const NON_VALIDATION_STEPS = new Set([
   'PushStoreAuditFilter',
   'AuditLogFilter',
   'ValidationSummaryFilter',
+  // Unified kebab-case step names — server and proxy modes share one set.
+  'allow-approved-push',
+  'enrich-commits',
+  'prior-push-enrichment',
+  'commit-inspection',
+  'validation-summary',
 ])
 
 const STEP_DISPLAY_NAMES: Record<string, string> = {
@@ -65,12 +71,30 @@ const STEP_DISPLAY_NAMES: Record<string, string> = {
   checkUrlRules: 'URL allow rules',
   UrlRuleAggregateFilter: 'URL allow rules',
   RepositoryUrlRuleHook: 'URL allow rules',
+  // Unified kebab-case step names — server and proxy modes share one set.
+  'url-rule': 'URL allow rules',
+  'push-permission': 'Push permissions',
+  'commit-attribution': 'Commit attribution policy',
+  'author-email': 'Author emails',
+  'commit-message': 'Commit messages',
+  trailers: 'Commit trailers',
+  'empty-branch': 'Empty branch',
+  'hidden-commits': 'Hidden commits',
+  'diff-scan': 'Diff scan',
+  'secret-scan': 'Secret scanning',
+  'content-pattern-diff': 'PII/identifier scan (diff)',
+  'content-pattern-message': 'PII/identifier scan (commit messages)',
+  'gpg-signature': 'GPG signatures',
+  'binary-blob': 'Binary blobs',
 }
 
 function IdentityBadge({ record }: { record: PushRecord }) {
   if (record.resolvedUser) {
     const idStep = (record.steps ?? []).find(
-      (s) => s.stepName === 'commitAttributionPolicy' || s.stepName === 'identityVerification',
+      (s) =>
+        s.stepName === 'commit-attribution' ||
+        s.stepName === 'commitAttributionPolicy' ||
+        s.stepName === 'identityVerification',
     )
     const hasEmailWarning = idStep?.status === 'WARN'
     if (hasEmailWarning) {

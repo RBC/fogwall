@@ -6,22 +6,22 @@ import com.rbc.fogwall.config.BlockConfig;
 import com.rbc.fogwall.config.ContentPatternConfig;
 import com.rbc.fogwall.config.SecretScanConfig;
 import com.rbc.fogwall.db.ScmApiActionStore;
-import com.rbc.fogwall.db.ScmApiProposalStore;
+import com.rbc.fogwall.db.ScmApiEntityStore;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
 import com.rbc.fogwall.db.model.ScmApiActionQuery;
 import com.rbc.fogwall.db.model.ScmApiActionRecord;
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
-import com.rbc.fogwall.db.model.ScmApiProposalRecord;
+import com.rbc.fogwall.db.model.ScmApiEntityRecord;
 import com.rbc.fogwall.jetty.FogwallServletRegistrar;
 import com.rbc.fogwall.observability.FogwallTelemetry;
 import com.rbc.fogwall.permission.InMemoryRepoPermissionStore;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.ForgejoProvider;
-import com.rbc.fogwall.scmapi.ForgejoProposalResponseReader;
-import com.rbc.fogwall.scmapi.ProposalContent;
-import com.rbc.fogwall.scmapi.ProposalRegistrar;
+import com.rbc.fogwall.scmapi.EntityContent;
+import com.rbc.fogwall.scmapi.EntityRegistrar;
+import com.rbc.fogwall.scmapi.ForgejoEntityResponseReader;
 import com.rbc.fogwall.scmapi.ScmContentInspector;
 import com.rbc.fogwall.service.TokenPushIdentityResolver;
 import com.rbc.fogwall.servlet.ScmApiRestForwardServlet;
@@ -61,8 +61,8 @@ import org.eclipse.jetty.server.handler.ContextHandlerCollection;
 import org.junit.jupiter.api.*;
 
 /**
- * End-to-end tests for the proposals surface against a real Gitea, exercising the assembled filter chain rather than
- * each filter alone.
+ * End-to-end tests for the SCM API surface against a real Gitea, exercising the assembled filter chain rather than each
+ * filter alone.
  *
  * <p>The bugs this surface produces are chain-assembly bugs, and unit tests pass straight through them: the allowlist
  * admitted a PATCH the forwarder then refused with 405, because {@code HttpServlet} has no {@code doPatch}; the
@@ -74,7 +74,7 @@ import org.junit.jupiter.api.*;
  */
 @Tag("e2e")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class ScmApiProposalsE2ETest {
+class ScmApiEntitiesE2ETest {
 
     private static final String PROVIDER = "gitea";
     private static final String CONNECTOR = "scm-api-gitea";
@@ -88,44 +88,44 @@ class ScmApiProposalsE2ETest {
     private static String token;
     private static int port;
     private static RecordingActionStore actionStore;
-    private static RecordingProposalStore proposalStore;
+    private static RecordingEntityStore entityStore;
     private static HttpClient client;
 
     /** Captures what the audit filter wrote, so the assertions can read fogwall's own account of each request. */
     /** Map-backed registry, so the tests can assert on what the upstream response was read as. */
-    private static final class RecordingProposalStore implements ScmApiProposalStore {
-        private final Map<String, ScmApiProposalRecord> rows = new ConcurrentHashMap<>();
+    private static final class RecordingEntityStore implements ScmApiEntityStore {
+        private final Map<String, ScmApiEntityRecord> rows = new ConcurrentHashMap<>();
 
         @Override
-        public void save(ScmApiProposalRecord record) {
+        public void save(ScmApiEntityRecord record) {
             rows.put(record.getId(), record);
         }
 
         @Override
-        public void update(ScmApiProposalRecord record) {
+        public void update(ScmApiEntityRecord record) {
             rows.put(record.getId(), record);
         }
 
         @Override
-        public Optional<ScmApiProposalRecord> findById(String id) {
+        public Optional<ScmApiEntityRecord> findById(String id) {
             return Optional.ofNullable(rows.get(id));
         }
 
         @Override
-        public Optional<ScmApiProposalRecord> findByTarget(
-                String provider, String owner, String repo, ScmApiProposalRecord.Kind kind, int number) {
+        public Optional<ScmApiEntityRecord> findByTarget(
+                String provider, String owner, String repo, ScmApiEntityRecord.Kind kind, int number) {
             return rows.values().stream()
                     .filter(r -> r.getKind() == kind && r.getNumber() == number)
                     .findFirst();
         }
 
         @Override
-        public Optional<ScmApiProposalRecord> findByNodeId(String provider, String nodeId) {
+        public Optional<ScmApiEntityRecord> findByNodeId(String provider, String nodeId) {
             return Optional.empty();
         }
 
         @Override
-        public List<ScmApiProposalRecord> findByIds(Collection<String> ids) {
+        public List<ScmApiEntityRecord> findByIds(Collection<String> ids) {
             return ids.stream().map(rows::get).filter(Objects::nonNull).toList();
         }
 
@@ -173,7 +173,7 @@ class ScmApiProposalsE2ETest {
         gitea.createTestRepo();
         gitea.createTestUser();
         gitea.addTestUserAsCollaborator();
-        token = gitea.generateProposalsToken();
+        token = gitea.generateScmApiToken();
 
         var provider = ForgejoProvider.builder()
                 .name(PROVIDER)
@@ -214,7 +214,7 @@ class ScmApiProposalsE2ETest {
                 () -> block, () -> secretScan, new SecretScanCheck(secretScan), () -> contentPatterns);
 
         actionStore = new RecordingActionStore();
-        proposalStore = new RecordingProposalStore();
+        entityStore = new RecordingEntityStore();
 
         server = new Server();
         var connector = new ServerConnector(
@@ -231,12 +231,12 @@ class ScmApiProposalsE2ETest {
         addFilter(context, new ScmApiForgejoGateFilter(provider, permissionService, false));
         addFilter(
                 context,
-                new ScmApiContentInspectionFilter(inspector, ProposalContent::fromForgejoBody, body -> List.of()));
+                new ScmApiContentInspectionFilter(inspector, EntityContent::fromForgejoBody, body -> List.of()));
         context.addServlet(
                 new ServletHolder(new ScmApiRestForwardServlet(
                         gitea.getBaseUrl() + "/api/v1",
                         ScmApiRestPathPolicy.EncodedSeparators.FORGEJO_FILE_PATH,
-                        new ProposalRegistrar(proposalStore, new ForgejoProposalResponseReader()),
+                        new EntityRegistrar(entityStore, new ForgejoEntityResponseReader()),
                         FogwallTelemetry.disabled())),
                 "/api/v1/*");
 
@@ -308,13 +308,13 @@ class ScmApiProposalsE2ETest {
 
         // What the upstream created, read from its own response and pointed at from the audit record.
         assertEquals(201, record.getUpstreamStatus());
-        var proposal = proposalStore.findById(record.getProposalId()).orElseThrow();
-        assertEquals(ScmApiProposalRecord.Kind.PULL_REQUEST, proposal.getKind());
-        assertEquals(1, proposal.getNumber());
-        assertEquals(ScmApiProposalRecord.State.OPEN, proposal.getState());
-        assertEquals("e2e create", proposal.getTitle());
-        assertTrue(proposal.getUrl().endsWith("/pulls/1"), proposal.getUrl());
-        assertEquals(record.getId(), proposal.getCreatedActionId());
+        var entity = entityStore.findById(record.getEntityId()).orElseThrow();
+        assertEquals(ScmApiEntityRecord.Kind.PULL_REQUEST, entity.getKind());
+        assertEquals(1, entity.getNumber());
+        assertEquals(ScmApiEntityRecord.State.OPEN, entity.getState());
+        assertEquals("e2e create", entity.getTitle());
+        assertTrue(entity.getUrl().endsWith("/pulls/1"), entity.getUrl());
+        assertEquals(record.getId(), entity.getCreatedActionId());
     }
 
     /**
@@ -336,11 +336,11 @@ class ScmApiProposalsE2ETest {
         assertEquals(ScmApiActionStatus.FORWARDED, record.getStatus());
 
         // The same registry row the create made, now closed and pointing at this record as its latest action.
-        var proposal = proposalStore.findById(record.getProposalId()).orElseThrow();
-        assertEquals(1, proposal.getNumber());
-        assertEquals(ScmApiProposalRecord.State.CLOSED, proposal.getState());
-        assertEquals(record.getId(), proposal.getLastActionId());
-        assertNotEquals(record.getId(), proposal.getCreatedActionId());
+        var entity = entityStore.findById(record.getEntityId()).orElseThrow();
+        assertEquals(1, entity.getNumber());
+        assertEquals(ScmApiEntityRecord.State.CLOSED, entity.getState());
+        assertEquals(record.getId(), entity.getLastActionId());
+        assertNotEquals(record.getId(), entity.getCreatedActionId());
     }
 
     /**
@@ -385,7 +385,7 @@ class ScmApiProposalsE2ETest {
 
     @Test
     @Order(5)
-    void refusesABlockedTermInAProposalBody() throws Exception {
+    void refusesABlockedTermInAnScmApiBody() throws Exception {
         actionStore.clear();
         createBranch("e2e-blocked");
         var body = "{\"title\":\"e2e blocked\",\"body\":\"See " + BLOCKED_TERM + " for details.\","
@@ -403,7 +403,7 @@ class ScmApiProposalsE2ETest {
     /** PII blocks here rather than warning: there is no reviewer, and the text would already be published upstream. */
     @Test
     @Order(6)
-    void refusesAContentPatternMatchInAProposalBody() throws Exception {
+    void refusesAContentPatternMatchInAnScmApiBody() throws Exception {
         actionStore.clear();
         createBranch("e2e-pii");
         var body = "{\"title\":\"e2e pii\",\"body\":\"Reporter left their " + PII_TEXT + " in the dump.\","
