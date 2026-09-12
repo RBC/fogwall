@@ -1,0 +1,24 @@
+# Overlay: expose the SCM API proposal listeners and load the proposals profile. Compose it with the base
+# stack (and usually the otel overlay) to see spans + fogwall.scmapi.* metrics:
+#
+#   docker compose -f docker/docker-compose.yml -f docker/docker-compose.otel.yml \
+#                  -f docker/docker-compose.proposals.yml --profile otel up -d --build
+#
+# The listeners serve TLS (the gh/glab CLIs require HTTPS to a custom host) from docker/tls/ — run
+# test/make-certs.sh before `up`. A cert swap after startup needs `docker compose ... restart fogwall`.
+services:
+  fogwall:
+    environment:
+      FOGWALL_CONFIG_PROFILES: proposals
+      FOGWALL_SERVER_TLS_CERTIFICATE: /app/conf/tls/localhost.crt
+      FOGWALL_SERVER_TLS_KEY: /app/conf/tls/localhost.key
+    ports:
+      - "8481:8481"
+      - "8482:8482"
+      - "8483:8483"
+      - "8484:8484"
+    volumes:
+      # :z relabels for SELinux (Podman on Fedora/RHEL); a plain :ro mount is silently unreadable and the
+      # profile is skipped. Harmless on Docker/non-SELinux hosts.
+      - ./fogwall-proposals.yml:/app/conf/fogwall-proposals.yml:z
+      - ./tls:/app/conf/tls:z

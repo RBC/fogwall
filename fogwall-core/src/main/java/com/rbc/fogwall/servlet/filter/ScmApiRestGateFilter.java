@@ -4,6 +4,7 @@ import static com.rbc.fogwall.servlet.ScmApiGateResponse.deny;
 import static com.rbc.fogwall.servlet.ScmApiGateResponse.fail;
 
 import com.rbc.fogwall.scmapi.OwnerRepo;
+import com.rbc.fogwall.scmapi.ScmApiReadResource;
 import com.rbc.fogwall.scmapi.ScmApiRestMatch;
 import com.rbc.fogwall.servlet.RequestBodyWrapper;
 import com.rbc.fogwall.servlet.ScmApiQueryPolicy;
@@ -70,6 +71,7 @@ public interface ScmApiRestGateFilter extends ScmApiGateFilter {
         }
 
         if ("GET".equalsIgnoreCase(method)) {
+            context.setReadResource(ScmApiReadResource.fromRestPath(path));
             return GateOutcome.FORWARD;
         }
 

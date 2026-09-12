@@ -15,6 +15,8 @@ services:
     image: fogwall:local
     ports:
       - "8080:8080"
+      # Uncomment below to enable TLS termination
+#      - "8443:8443"
     volumes:
       - ./fogwall-docker-default.yml:/app/conf/fogwall-docker-default.yml:ro
       # On hosts with Podman+SELinux the mount above is unreadable by the container and the config profile is
@@ -22,6 +24,8 @@ services:
 #      - ./fogwall-docker-default.yml:/app/conf/fogwall-docker-default.yml:z
       # Uncomment to enable debug logging (see docker/log4j2-debug.xml):
 #      - ./log4j2-debug.xml:/app/conf/log4j2-debug.xml:ro
+      # Uncomment to enable TLS, presumes self-signed localhost certs (see test/make-certs.sh):
+#      - ./tls:/app/conf/tls:z
     depends_on:
       gitea:
         condition: service_healthy
@@ -30,6 +34,9 @@ services:
       FOGWALL_CONFIG_PROFILES: docker-default
       # Uncomment together with the volume mount above to activate debug logging:
 #      JAVA_TOOL_OPTIONS: -Dlog4j2.configurationFile=/app/conf/log4j2-debug.xml
+      # Uncomment the tls volume + 8443 port above and these two to terminate TLS (see test/make-certs.sh):
+#      FOGWALL_SERVER_TLS_CERTIFICATE: /app/conf/tls/localhost.crt
+#      FOGWALL_SERVER_TLS_KEY: /app/conf/tls/localhost.key
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/api/health || exit 1"]
       interval: 10s

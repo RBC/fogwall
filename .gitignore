@@ -94,3 +94,6 @@ __pycache__/
 
 # mdbook build output
 book/
+
+# Local TLS certs for the compose proposals listeners (test/otel-smoke/make-certs.sh)
+docker/tls/

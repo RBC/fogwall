@@ -7,6 +7,8 @@ import io.opentelemetry.api.metrics.DoubleHistogram;
 import io.opentelemetry.api.metrics.LongCounter;
 import io.opentelemetry.api.metrics.LongUpDownCounter;
 import io.opentelemetry.api.metrics.Meter;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.Tracer;
 
 /**
@@ -20,7 +22,8 @@ import io.opentelemetry.api.trace.Tracer;
  * the default push path free of instrumentation cost.
  *
  * <p><b>Cardinality.</b> Metric attributes are deliberately limited to low-cardinality dimensions — provider, proxy
- * mode, push status, forward outcome. The repository slug is high-cardinality and is attached to spans only, never to a
+ * mode, push status, forward outcome, and for the SCM API proxy the mutation/operation name (bounded by the dialect
+ * allowlists) and its outcome. The repository slug is high-cardinality and is attached to spans only, never to a
  * metric, to avoid a time-series explosion at enterprise scale.
  */
 public final class FogwallTelemetry {
@@ -43,6 +46,16 @@ public final class FogwallTelemetry {
     /** Repository slug — SPAN attribute only; never a metric attribute (high cardinality). */
     public static final AttributeKey<String> REPO = AttributeKey.stringKey("fogwall.repo");
 
+    /**
+     * SCM API operation, normalized to a provider-agnostic name where it flattens ({@code proposal.create},
+     * {@code issue.update}, …) and the raw per-dialect op otherwise — see {@link ScmApiOperations}; a pure read is
+     * {@code read}. Low cardinality (bounded by the dialect allowlists).
+     */
+    public static final AttributeKey<String> SCM_API_OPERATION = AttributeKey.stringKey("fogwall.scmapi.operation");
+
+    /** SCM API action outcome: {@code FORWARDED}, {@code DENIED}, {@code REJECTED}, {@code ERROR}. Low cardinality. */
+    public static final AttributeKey<String> SCM_API_OUTCOME = AttributeKey.stringKey("fogwall.scmapi.outcome");
+
     private final boolean enabled;
     private final OpenTelemetry openTelemetry;
     private final Tracer tracer;
@@ -50,6 +63,8 @@ public final class FogwallTelemetry {
     private final DoubleHistogram pushDuration;
     private final LongCounter pushDecisions;
     private final LongCounter forwards;
+    private final DoubleHistogram scmApiDuration;
+    private final LongCounter scmApiActions;
 
     private FogwallTelemetry(OpenTelemetry openTelemetry, boolean enabled) {
         this.enabled = enabled;
@@ -71,6 +86,14 @@ public final class FogwallTelemetry {
         this.forwards = meter.counterBuilder("fogwall.push.forward")
                 .setUnit("{push}")
                 .setDescription("Upstream forward attempts by outcome")
+                .build();
+        this.scmApiDuration = meter.histogramBuilder("fogwall.scmapi.duration")
+                .setUnit("s")
+                .setDescription("Wall-clock duration of an SCM API proxy request")
+                .build();
+        this.scmApiActions = meter.counterBuilder("fogwall.scmapi.actions")
+                .setUnit("{action}")
+                .setDescription("SCM API proxy mutations and refusals by operation and outcome")
                 .build();
     }
 
@@ -122,5 +145,31 @@ public final class FogwallTelemetry {
     /** Record the outcome of a single upstream-forward attempt. Transport-agnostic, like {@link #recordDecision}. */
     public void recordForward(String provider, boolean success) {
         forwards.add(1, Attributes.of(PROVIDER, provider, OUTCOME, success ? "success" : "failure"));
+    }
+
+    /**
+     * Start a {@link SpanKind#CLIENT} span around fogwall's outbound forward of an SCM API call to the upstream
+     * provider — a child of the current per-request server span. The upstream status and this leg's own timing hang off
+     * it, isolating upstream latency from fogwall's own overhead. fogwall cannot propagate the trace into the provider,
+     * so this measures the call from fogwall's side. Returns a no-op span when telemetry is disabled.
+     */
+    public Span startScmApiForwardSpan(String provider) {
+        return tracer.spanBuilder("scmapi.forward")
+                .setSpanKind(SpanKind.CLIENT)
+                .setAttribute(PROVIDER.getKey(), provider)
+                .startSpan();
+    }
+
+    /** Record the wall-clock duration of a completed SCM API proxy request, by provider and operation. */
+    public void recordScmApiDuration(double seconds, String provider, String operation) {
+        scmApiDuration.record(seconds, Attributes.of(PROVIDER, provider, SCM_API_OPERATION, operation));
+    }
+
+    /**
+     * Record one audited SCM API action — a proxied mutation or a refusal — by operation and outcome. Recorded from the
+     * store decorator at the single write seam, so a read that produces no audit record produces no count either.
+     */
+    public void recordScmApiAction(String provider, String operation, String outcome) {
+        scmApiActions.add(1, Attributes.of(PROVIDER, provider, SCM_API_OPERATION, operation, SCM_API_OUTCOME, outcome));
     }
 }

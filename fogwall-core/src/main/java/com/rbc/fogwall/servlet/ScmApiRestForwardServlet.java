@@ -2,8 +2,11 @@ package com.rbc.fogwall.servlet;
 
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
 import com.rbc.fogwall.net.FogwallHttpExecutor;
+import com.rbc.fogwall.observability.FogwallTelemetry;
 import com.rbc.fogwall.scmapi.ProposalRegistrar;
 import com.rbc.fogwall.scmapi.ScmApiUserAgent;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
@@ -29,14 +32,17 @@ public class ScmApiRestForwardServlet extends HttpServlet {
     private final URI upstreamApiBaseUri;
     private final ScmApiRestPathPolicy.EncodedSeparators encodedSeparators;
     private final ProposalRegistrar proposalRegistrar;
+    private final FogwallTelemetry telemetry;
 
     public ScmApiRestForwardServlet(
             String upstreamApiBaseUrl,
             ScmApiRestPathPolicy.EncodedSeparators encodedSeparators,
-            ProposalRegistrar proposalRegistrar) {
+            ProposalRegistrar proposalRegistrar,
+            FogwallTelemetry telemetry) {
         this.upstreamApiBaseUri = URI.create(upstreamApiBaseUrl);
         this.encodedSeparators = encodedSeparators;
         this.proposalRegistrar = proposalRegistrar;
+        this.telemetry = telemetry;
     }
 
     @Override
@@ -186,6 +192,8 @@ public class ScmApiRestForwardServlet extends HttpServlet {
         ScmApiUserAgent.relay(upstreamRequest, ScmApiUserAgent.of(request));
 
         boolean mutation = context != null && context.getMutationField() != null;
+        String provider = context != null && context.getProvider() != null ? context.getProvider() : "unknown";
+        Span forwardSpan = telemetry.startScmApiForwardSpan(provider);
         try {
             // A read is streamed rather than buffered: nothing inspects it, and a blob read can be large. The
             // encoded-separator policy deliberately admits Forgejo's raw/contents/media endpoints — fj fetches a pull
@@ -217,18 +225,23 @@ public class ScmApiRestForwardServlet extends HttpServlet {
                         return upstream.getCode();
                     });
 
+            forwardSpan.setAttribute("http.response.status_code", upstreamStatus);
             if (mutation) {
                 context.setStatus(ScmApiActionStatus.FORWARDED);
                 proposalRegistrar.recordUpstreamResponse(
                         context, ScmApiRestPath.rawSubPath(request), upstreamStatus, captured[0]);
             }
         } catch (IOException e) {
+            forwardSpan.recordException(e);
+            forwardSpan.setStatus(StatusCode.ERROR, "upstream forward failed");
             log.warn("SCM API proxy forward failed: {}", e.getMessage());
             if (context != null && context.getMutationField() != null) {
                 context.setStatus(ScmApiActionStatus.ERROR);
                 context.setReason("Failed to forward to upstream: " + e.getMessage());
             }
             ScmApiErrorResponse.write(response, HttpServletResponse.SC_BAD_GATEWAY, "upstream forward failed");
+        } finally {
+            forwardSpan.end();
         }
     }
 }

@@ -78,4 +78,11 @@ public class ScmApiRequestContext {
     private String mergeCommitSha;
 
     private String reason;
+
+    /**
+     * Coarse resource of a read (a non-mutating request), e.g. {@code issue.read} or {@code proposal.read}, set by the
+     * gate filter's read branch. Telemetry only — never audited (reads produce no audit record) — so a read span/metric
+     * names what was read rather than a bare {@code read}. Null for a mutation.
+     */
+    private String readResource;
 }
