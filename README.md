@@ -64,7 +64,7 @@ Both proxy modes enforce the same rules:
 
 ### Dashboard
 
-![Push detail — timeline, diff, and attestation](demos/demo-ui-stack.png)
+![Push detail and review — timeline, attestation, and approval](demos/demo-ui-stack.png)
 
 Push management and approval, URL rules and per-user permissions, a lifecycle timeline with an inline diff viewer,
 provider connectivity diagnostics, and live config reload.
