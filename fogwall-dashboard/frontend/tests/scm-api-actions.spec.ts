@@ -55,7 +55,9 @@ test.describe('SCM API actions', () => {
   test('rejected proposals carry the reason in full and no payload', async ({ page }) => {
     await page.getByRole('button', { name: 'Rejected' }).click()
     await expect.poll(() => card(page, /Content rejected/).count()).toBe(4)
-    const secret = card(page, /github · createIssue/)
+    // Two github · createIssue records exist (a forwarded issue and this rejected one); scope to the rejected
+    // card so the locator can't match both mid-refilter, as the forwarded-mutation test does with FORWARDED.
+    const secret = card(page, /github · createIssue/).filter({ hasText: 'REJECTED' })
     await expect(secret).toContainText(/secret detected/)
     await secret.click()
     // the row truncates; the expanded view wraps the whole reason
