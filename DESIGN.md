@@ -335,6 +335,35 @@ mistake.
   to satisfy WCAG 2.2 Focus Appearance. The 2px ring is the system's answer; the border-only fields have not caught up
   to it.
 
+### Confirmation, undo, and consequence
+
+The audience is impatient developers doing repetitive work (see PRODUCT.md). A dialog in front of every action costs
+each of them a click to guard against the rare mistake, and teaches everyone to dismiss dialogs without reading — which
+removes the protection exactly where it was needed. Reversibility decides the treatment:
+
+- **Reversible** (grant or revoke a role, add or remove an identity, delete a group or rule): apply immediately, then
+  offer the reversal in the success toast. No dialog. Zero cost on the common path, full recovery on the mistaken one.
+- **Reversible but invisible in effect** (removing an SCM identity silently breaks a push tomorrow): apply immediately,
+  and state the consequence in the toast rather than the prompt — "Removed github:fixture-dev — dev can no longer push
+  to 3 repos. Undo."
+- **Irreversible** (approve, which forwards upstream; reject, which notifies the developer): interrupt. There is no undo
+  to offer, so this is where ceremony is spent. Spending it here is only affordable because it is not spent everywhere
+  else.
+
+Every mutation gets feedback naming what changed, whichever branch it took. Silence after an action is never correct.
+
+### Named Rules
+
+**The Undo Beats Confirm Rule.** If the action can be reversed, reverse it on request instead of asking permission for
+it. A confirmation dialog is reserved for what cannot be taken back.
+
+**The Keyboard Is Not An Enhancement Rule.** The primary users live in a terminal and work this interface repetitively.
+Every repeated loop — the approval decision above all — is fully operable from the keyboard, with visible focus at each
+step and a submit shortcut on the form that ends it.
+
+**The Read-Only Is A Mode Rule.** A viewer without authority to act is never shown a disabled version of the acting
+interface. Render what they can do and state what they cannot; a greyed-out form reads as breakage, not as permission.
+
 ### Badges
 
 - **Status:** full-radius pill, Label typography, `0.125rem 0.5rem` padding, tint background with same-hue dark ink and
@@ -404,3 +433,9 @@ and a 150ms fade-in gated behind `motion-safe`. The only animation in the system
 - **Don't** theme the navigation rail. It is dark in both modes.
 - **Don't** add decorative illustration, gradient, or glassmorphism. This interface is used to make consequential
   decisions under scrutiny; visual ambition that doesn't serve the decision is a cost, not a feature.
+- **Don't** put a confirmation dialog in front of a reversible action. Apply it and offer Undo in the toast. A prompt
+  everyone dismisses by reflex protects nothing and costs every user a click.
+- **Don't** ship a control that only works with a pointer. The approval loop in particular is operable end to end from
+  the keyboard.
+- **Don't** grey out an interface for someone who will never be allowed to use it. State the absence of authority
+  instead.

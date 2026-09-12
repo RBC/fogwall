@@ -8,16 +8,27 @@ web
 
 ## Users
 
-Four audiences share one dashboard, and all four confirmed as real:
+Four audiences share one dashboard, and all four confirmed as real. They are not four different kinds of person: the
+same individual is often a developer, an admin and the auditor of their own system, so the audiences describe what
+someone is doing at a moment, not who they are.
 
+- **Developers whose push was blocked** — arrive from a terminal error to see why, and to unblock themselves. Their loop
+  is otherwise entirely git CLI; the dashboard is a destination they are sent to, not one they live in. **They are
+  impatient, and correctly so** — they are interrupted mid-task and want the answer and the fix, not a tour. Time spent
+  in the UI is time taken from the work the push was for.
 - **Approvers / reviewers** — open a blocked push, read its diff and per-step results, approve or reject. The approval
-  queue is the daily job.
+  queue is the daily job, and it is repetitive: the same loop many times in a sitting.
 - **Platform operators / admins** — run fogwall itself: providers, users, groups, permissions, mirror cache, operations.
-  Configuration and fleet health, not individual pushes.
-- **Developers whose push was blocked** — arrive from a terminal error to see why, and to request review. Their loop is
-  otherwise entirely git CLI; the dashboard is a destination they are sent to, not one they live in.
+  Configuration and fleet health, not individual pushes. **Frequently developers themselves**, with the same
+  expectations of speed and keyboard operability; an admin surface here is not a place where slowness is excused.
 - **Auditors / compliance reviewers** — read the record after the fact: who approved what, on what evidence. Read-only
-  and periodic.
+  and periodic. Their constraint is absolute: they must be able to see everything and perturb nothing.
+
+The navigation answers three questions, and a new surface belongs to whichever one it serves:
+
+- **What is happening** — Pushes, Contributions, Issues.
+- **Who can do what** — Users, Groups, Repos and their permission rules.
+- **Is it healthy** — Operations, Mirror cache, Providers.
 
 ## Product Purpose
 
@@ -100,6 +111,11 @@ fabricate them.
    behave the same way, or the gap is documented and deliberate.
 5. **Optional and composable over interdependent.** An organization runs only the pieces it needs; a new capability must
    not raise the baseline for someone not using it.
+6. **This audience's time is the scarce resource.** The users are impatient developers, and a control that costs a click
+   on the common path will be routed around or dismissed reflexively — which buys no safety and spends real time. Guard
+   rails are earned by irreversibility, not applied by category: what can be undone is applied immediately and offered
+   back, and only what genuinely cannot be undone interrupts. Safety and speed are not opposed here; treating every
+   action as dangerous is what makes the dangerous ones invisible.
 
 ## Accessibility & Inclusion
 
