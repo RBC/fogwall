@@ -25,7 +25,9 @@ class DatabaseMigratorTest {
         DatabaseMigrator.migrate(dataSource);
 
         assertEquals(
-                Set.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17"),
+                Set.of(
+                        "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17",
+                        "18"),
                 appliedVersions(dataSource),
                 "H2 must never select MYSQL_ONLY entries, and the 2.1 postgres-only widening migration must not "
                         + "apply to H2 either");

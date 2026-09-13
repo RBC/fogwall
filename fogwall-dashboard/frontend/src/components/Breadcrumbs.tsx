@@ -9,7 +9,6 @@ interface Crumb {
 const LABELS: Record<string, string> = {
   pushes: 'Pushes',
   contributions: 'Contributions',
-  issues: 'Issues',
   repos: 'Repos',
   providers: 'Providers',
   users: 'Users',
@@ -19,6 +18,11 @@ const LABELS: Record<string, string> = {
   profile: 'Profile',
   setup: 'Setup',
   legal: 'Legal',
+}
+
+// Second segment → label for the contribution surfaces, which share the Contributions crumb above them.
+const CONTRIBUTION_LABELS: Record<string, string> = {
+  issues: 'Report an issue',
 }
 
 // Push/SCM API record ids are long UUIDs — show a legible prefix in the trail, not the whole thing.
@@ -45,6 +49,12 @@ function buildTrail(pathname: string): Crumb[] {
   if (first === 'users' && second) {
     trail.push({ label: 'Users', to: '/users' })
     trail.push({ label: second })
+    return trail
+  }
+
+  if (first === 'contributions') {
+    trail.push({ label: 'Contributions', to: second ? '/contributions' : undefined })
+    if (second) trail.push({ label: CONTRIBUTION_LABELS[second] ?? second })
     return trail
   }
 

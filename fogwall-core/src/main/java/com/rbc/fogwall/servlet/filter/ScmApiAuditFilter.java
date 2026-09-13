@@ -3,6 +3,7 @@ package com.rbc.fogwall.servlet.filter;
 import static com.rbc.fogwall.servlet.ScmApiRequestContext.SCM_API_REQUEST_ATTR;
 
 import com.rbc.fogwall.db.ScmApiActionStore;
+import com.rbc.fogwall.db.model.ScmApiActionOrigin;
 import com.rbc.fogwall.db.model.ScmApiActionRecord;
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
 import com.rbc.fogwall.servlet.ScmApiRequestContext;
@@ -66,6 +67,7 @@ public class ScmApiAuditFilter implements Filter {
                     scmApiActionStore.save(ScmApiActionRecord.builder()
                             .id(context.getActionId())
                             .status(statusOf(context))
+                            .origin(ScmApiActionOrigin.SCM_API)
                             .provider(context.getProvider())
                             .scmUsername(context.getScmLogin())
                             .resolvedUser(context.getResolvedUser())

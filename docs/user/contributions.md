@@ -8,9 +8,13 @@ Point your SCM CLI at fogwall and open and iterate on a pull or merge request as
 and forwards the traffic instead of you talking to the SCM's API directly. Issue commands work the same way.
 
 If all you need is to **file or comment on an issue**, you don't need a CLI or a token at all: the dashboard's
-**Issues** page does it for you, using the account you linked under **Profile**. That path needs only the narrow `ISSUE`
-grant (or `PROPOSE`), and your administrator must have enabled it for the provider. The rest of this guide is the CLI
-path.
+**Contributions → Report an issue** page does it for you, using the account you linked under **Profile**. That path
+needs only the narrow `ISSUE` grant (or `PROPOSE`), and your administrator must have enabled it for the provider. The
+rest of this guide is the CLI path.
+
+Either way the result lands in the same place: **Contributions → Activity** lists what fogwall ran or forwarded, and its
+**surface** filter separates what you did in the dashboard from what a CLI did through the proxy. Combine it with **My
+actions** to see only your own.
 
 Two permissions gate what you can do, and they're separate: `PROPOSE` lets you open and iterate on issues and pull/merge
 requests; `MERGE` lets you merge one. Ask your administrator which grants you hold on a given repository.

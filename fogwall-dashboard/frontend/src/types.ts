@@ -3,7 +3,13 @@ export type PushStatus =
 
 export type ScmApiActionStatus = 'FORWARDED' | 'DENIED' | 'REJECTED' | 'ERROR'
 
-/** SCM API proxy (#264) audit record — one per proxied mutation, never per read. */
+/**
+ * Which fogwall surface ran the action: the dashboard acting for a signed-in user, or the SCM API proxy forwarding a
+ * CLI's mutation. Unset on records written before fogwall told the two apart.
+ */
+export type ScmApiActionOrigin = 'DASHBOARD' | 'SCM_API'
+
+/** SCM API audit record — one per mutation fogwall ran or forwarded, never per read. */
 export interface ScmApiActionRecord {
   id: string
   timestamp?: string | number
@@ -18,6 +24,7 @@ export interface ScmApiActionRecord {
   nodeId?: string
   nodeType?: string
   status: ScmApiActionStatus
+  origin?: ScmApiActionOrigin
   reason?: string
   variablesJson?: string
   /** The upstream's HTTP status for a forwarded mutation. */

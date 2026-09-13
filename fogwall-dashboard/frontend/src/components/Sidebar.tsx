@@ -95,16 +95,28 @@ const icons: Record<string, ReactNode> = {
 interface Dest {
   to: string
   label: string
-  icon: string
+  /** Omitted on a sub-destination, where the indent carries the hierarchy instead. */
+  icon?: string
   end?: boolean
   disabled?: boolean // not a live route yet; renders greyed out
+  /** Sub-destinations, rendered indented under this one. Hidden in the collapsed rail, which has no room for them. */
+  children?: Dest[]
 }
 
 const PRIMARY: Dest[] = [
   { to: '/', label: 'Overview', icon: 'overview', end: true },
   { to: '/pushes', label: 'Pushes', icon: 'pushes' },
-  { to: '/contributions', label: 'Contributions', icon: 'contributions' },
-  { to: '/issues', label: 'Issues', icon: 'issues' },
+  {
+    to: '/contributions',
+    label: 'Contributions',
+    icon: 'contributions',
+    // Acting on an issue and reviewing what was acted on are the same category of work, so they sit together rather
+    // than the form being a destination of its own alongside Pushes.
+    children: [
+      { to: '/contributions', label: 'Activity', end: true },
+      { to: '/contributions/issues', label: 'Report an issue' },
+    ],
+  },
   { to: '/repos', label: 'Repos', icon: 'repos' },
   { to: '/providers', label: 'Providers', icon: 'providers' },
 ]
@@ -116,7 +128,8 @@ const ADMIN: Dest[] = [
   { to: '/mirror-cache', label: 'Mirror cache', icon: 'mirror' },
 ]
 
-function Icon({ name }: { name: string }) {
+function Icon({ name }: { name?: string }) {
+  if (!name) return null
   return (
     <svg
       className="h-[18px] w-[18px] shrink-0"
@@ -228,9 +241,24 @@ export function Sidebar({ currentUser, dark, toggleDark, collapsed }: SidebarPro
 
       {/* Destinations */}
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-2.5 py-2">
-        {PRIMARY.map((d) => (
-          <NavRow key={d.to} dest={d} collapsed={collapsed} />
-        ))}
+        {PRIMARY.map((d) =>
+          d.children && !collapsed ? (
+            <div key={d.to} className="space-y-0.5">
+              {/* A category, not a destination: its label names what the rows below it have in common. */}
+              <div className="flex items-center gap-2.5 px-2.5 py-1.5 text-sm font-medium text-slate-400">
+                <Icon name={d.icon} />
+                <span className="truncate">{d.label}</span>
+              </div>
+              <div className="ml-[19px] space-y-0.5 border-l border-slate-700 pl-2">
+                {d.children.map((c) => (
+                  <NavRow key={c.to} dest={c} collapsed={collapsed} />
+                ))}
+              </div>
+            </div>
+          ) : (
+            <NavRow key={d.to} dest={d} collapsed={collapsed} />
+          ),
+        )}
 
         {isAdmin && (
           <>

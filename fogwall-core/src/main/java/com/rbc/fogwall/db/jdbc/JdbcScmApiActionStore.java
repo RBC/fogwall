@@ -1,6 +1,7 @@
 package com.rbc.fogwall.db.jdbc;
 
 import com.rbc.fogwall.db.ScmApiActionStore;
+import com.rbc.fogwall.db.model.ScmApiActionOrigin;
 import com.rbc.fogwall.db.model.ScmApiActionQuery;
 import com.rbc.fogwall.db.model.ScmApiActionRecord;
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
@@ -38,10 +39,10 @@ public class JdbcScmApiActionStore implements ScmApiActionStore {
     public void save(ScmApiActionRecord record) {
         jdbc.update("""
                 INSERT INTO scm_api_action_records (id, timestamp, provider, scm_username, resolved_user, repo_owner,
-                    repo_name, mutation_field, node_id, node_type, status, reason, variables_json,
+                    repo_name, mutation_field, node_id, node_type, status, origin, reason, variables_json,
                     user_agent, client_type, client_version, upstream_status, entity_id, merge_commit_sha)
                 VALUES (:id, :timestamp, :provider, :scmUsername, :resolvedUser, :repoOwner, :repoName, :mutationField,
-                    :nodeId, :nodeType, :status, :reason, :variablesJson,
+                    :nodeId, :nodeType, :status, :origin, :reason, :variablesJson,
                     :userAgent, :clientType, :clientVersion, :upstreamStatus, :entityId, :mergeCommitSha)
                 """, toParams(record));
     }
@@ -71,6 +72,10 @@ public class JdbcScmApiActionStore implements ScmApiActionStore {
         if (query.getStatus() != null) {
             sql.append(" AND status = :status");
             params.addValue("status", query.getStatus().name());
+        }
+        if (query.getOrigin() != null) {
+            sql.append(" AND origin = :origin");
+            params.addValue("origin", query.getOrigin().name());
         }
         if (query.getProvider() != null) {
             sql.append(" AND provider = :provider");
@@ -108,6 +113,7 @@ public class JdbcScmApiActionStore implements ScmApiActionStore {
             .nodeId(rs.getString("node_id"))
             .nodeType(rs.getString("node_type"))
             .status(ScmApiActionStatus.valueOf(rs.getString("status")))
+            .origin(rs.getString("origin") == null ? null : ScmApiActionOrigin.valueOf(rs.getString("origin")))
             .reason(rs.getString("reason"))
             .variablesJson(rs.getString("variables_json"))
             .userAgent(rs.getString("user_agent"))
@@ -131,6 +137,7 @@ public class JdbcScmApiActionStore implements ScmApiActionStore {
                 .addValue("nodeId", r.getNodeId())
                 .addValue("nodeType", r.getNodeType())
                 .addValue("status", r.getStatus().name())
+                .addValue("origin", r.getOrigin() == null ? null : r.getOrigin().name())
                 .addValue("reason", r.getReason())
                 .addValue("variablesJson", r.getVariablesJson())
                 .addValue("userAgent", r.getUserAgent())
