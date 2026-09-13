@@ -6,6 +6,7 @@ import com.rbc.fogwall.crypto.TokenCipher;
 import com.rbc.fogwall.crypto.TokenCipherProvider;
 import com.rbc.fogwall.db.ScmApiActionStore;
 import com.rbc.fogwall.db.ScmApiEntityStore;
+import com.rbc.fogwall.db.model.ScmApiActionOrigin;
 import com.rbc.fogwall.db.model.ScmApiActionRecord;
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
 import com.rbc.fogwall.db.model.ScmApiEntityRecord;
@@ -36,8 +37,6 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class DashboardIssueService {
-
-    private static final String CLIENT_TYPE = "dashboard";
 
     private final ProviderRegistry providers;
     private final RepoPermissionService permissions;
@@ -351,8 +350,10 @@ public class DashboardIssueService {
                 .repoName(repo)
                 .mutationField(op.mutationField)
                 .status(status)
+                // Fogwall's own account of which surface acted. There is no client User-Agent to classify here: the
+                // caller is the dashboard, and the request that prompted it never reaches the upstream.
+                .origin(ScmApiActionOrigin.DASHBOARD)
                 .reason(reason)
-                .clientType(CLIENT_TYPE)
                 .upstreamStatus(upstreamStatus);
     }
 

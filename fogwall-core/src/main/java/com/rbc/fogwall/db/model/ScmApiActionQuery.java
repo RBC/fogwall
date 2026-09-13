@@ -10,6 +10,10 @@ import lombok.Data;
 @Builder
 public class ScmApiActionQuery {
     private ScmApiActionStatus status;
+
+    /** Which fogwall surface ran the action — dashboard or SCM API proxy. */
+    private ScmApiActionOrigin origin;
+
     private String provider;
     private String user;
     private String repoOwner;

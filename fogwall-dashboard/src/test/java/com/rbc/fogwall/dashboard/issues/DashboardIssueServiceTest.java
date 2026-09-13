@@ -17,6 +17,7 @@ import com.rbc.fogwall.crypto.TokenCipher;
 import com.rbc.fogwall.crypto.TokenCipherProvider;
 import com.rbc.fogwall.db.ScmApiActionStore;
 import com.rbc.fogwall.db.ScmApiEntityStore;
+import com.rbc.fogwall.db.model.ScmApiActionOrigin;
 import com.rbc.fogwall.db.model.ScmApiActionRecord;
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
 import com.rbc.fogwall.db.model.ScmApiEntityRecord;
@@ -100,10 +101,14 @@ class DashboardIssueServiceTest {
         when(cipher.decrypt(any())).thenReturn("gho_token".getBytes(StandardCharsets.UTF_8));
     }
 
-    private ScmApiActionStatus savedStatus() {
+    private ScmApiActionRecord savedRecord() {
         ArgumentCaptor<ScmApiActionRecord> captor = ArgumentCaptor.forClass(ScmApiActionRecord.class);
         verify(auditStore).save(captor.capture());
-        return captor.getValue().getStatus();
+        return captor.getValue();
+    }
+
+    private ScmApiActionStatus savedStatus() {
+        return savedRecord().getStatus();
     }
 
     @Test
@@ -122,6 +127,7 @@ class DashboardIssueServiceTest {
         assertEquals(201, outcome.httpStatus());
         assertEquals(42, outcome.result().number());
         assertEquals(ScmApiActionStatus.FORWARDED, savedStatus());
+        assertEquals(ScmApiActionOrigin.DASHBOARD, savedRecord().getOrigin());
         // A created issue is recorded in the SCM API entity registry (the current-state index the Contributions view
         // reads).
         verify(entityStore).save(any());

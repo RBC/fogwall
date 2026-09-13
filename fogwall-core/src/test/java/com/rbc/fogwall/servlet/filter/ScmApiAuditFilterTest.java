@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.rbc.fogwall.db.ScmApiActionStore;
+import com.rbc.fogwall.db.model.ScmApiActionOrigin;
 import com.rbc.fogwall.db.model.ScmApiActionRecord;
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
 import com.rbc.fogwall.servlet.ScmApiRequestContext;
@@ -43,6 +44,10 @@ class ScmApiAuditFilterTest {
         assertEquals("github", captor.getValue().getProvider());
         assertEquals("createIssue", captor.getValue().getMutationField());
         assertEquals(ScmApiActionStatus.FORWARDED, captor.getValue().getStatus());
+        assertEquals(
+                ScmApiActionOrigin.SCM_API,
+                captor.getValue().getOrigin(),
+                "the proxy path is the surface, whatever User-Agent the caller sent");
         assertEquals(context.getActionId(), captor.getValue().getId(), "the id the registry was told to point at");
     }
 

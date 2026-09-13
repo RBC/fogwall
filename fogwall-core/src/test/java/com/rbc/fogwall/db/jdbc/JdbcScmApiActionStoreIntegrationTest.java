@@ -2,6 +2,7 @@ package com.rbc.fogwall.db.jdbc;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.rbc.fogwall.db.model.ScmApiActionOrigin;
 import com.rbc.fogwall.db.model.ScmApiActionQuery;
 import com.rbc.fogwall.db.model.ScmApiActionRecord;
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
@@ -41,6 +42,7 @@ class JdbcScmApiActionStoreIntegrationTest {
                 .nodeId("R_1")
                 .nodeType("REPOSITORY")
                 .status(ScmApiActionStatus.FORWARDED)
+                .origin(ScmApiActionOrigin.SCM_API)
                 .reason(null)
                 .variablesJson("{\"input\":{\"repositoryId\":\"R_1\"}}")
                 .userAgent("GitHub CLI 2.98.0")
@@ -145,6 +147,18 @@ class JdbcScmApiActionStoreIntegrationTest {
         assertEquals(first.getId(), oldestFirst.get(0).getId());
     }
 
+    @Test
+    void find_filtersByOrigin() {
+        store.save(origin(ScmApiActionOrigin.DASHBOARD, "alice", "e-1"));
+        store.save(origin(ScmApiActionOrigin.SCM_API, "alice", "e-2"));
+
+        List<ScmApiActionRecord> dashboard = store.find(
+                ScmApiActionQuery.builder().origin(ScmApiActionOrigin.DASHBOARD).build());
+        assertEquals(1, dashboard.size());
+        assertEquals(ScmApiActionOrigin.DASHBOARD, dashboard.get(0).getOrigin());
+        assertEquals("e-1", dashboard.get(0).getEntityId());
+    }
+
     private static ScmApiActionRecord record(String owner, String name, ScmApiActionStatus status) {
         return ScmApiActionRecord.builder()
                 .provider("github")
@@ -154,6 +168,19 @@ class JdbcScmApiActionStoreIntegrationTest {
                 .repoName(name)
                 .mutationField("createIssue")
                 .status(status)
+                .build();
+    }
+
+    private static ScmApiActionRecord origin(ScmApiActionOrigin origin, String user, String entityId) {
+        return ScmApiActionRecord.builder()
+                .provider("github")
+                .resolvedUser(user)
+                .repoOwner("acme")
+                .repoName("widgets")
+                .mutationField("createIssue")
+                .status(ScmApiActionStatus.FORWARDED)
+                .origin(origin)
+                .entityId(entityId)
                 .build();
     }
 }

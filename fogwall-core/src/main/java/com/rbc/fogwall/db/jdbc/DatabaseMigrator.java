@@ -143,7 +143,8 @@ public class DatabaseMigrator {
                     Vendor.MYSQL_ONLY),
             // A plain ADD COLUMN, identical on every supported engine, so there is no MySQL-specific variant.
             new Migration("16", "scm token cache scm login", "db/migration/V16__scm_token_cache_login.sql", Vendor.ANY),
-            new Migration("17", "scm api merge", "db/migration/V17__scm_api_merge.sql", Vendor.ANY));
+            new Migration("17", "scm api merge", "db/migration/V17__scm_api_merge.sql", Vendor.ANY),
+            new Migration("18", "scm api action origin", "db/migration/V18__scm_api_action_origin.sql", Vendor.ANY));
 
     // ---------------------------------------------------------------------------
 

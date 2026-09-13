@@ -2,6 +2,7 @@ package com.rbc.fogwall.dashboard.controller;
 
 import com.rbc.fogwall.db.ScmApiActionStore;
 import com.rbc.fogwall.db.ScmApiEntityStore;
+import com.rbc.fogwall.db.model.ScmApiActionOrigin;
 import com.rbc.fogwall.db.model.ScmApiActionQuery;
 import com.rbc.fogwall.db.model.ScmApiActionRecord;
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
@@ -9,8 +10,10 @@ import com.rbc.fogwall.db.model.ScmApiEntityRecord;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -35,10 +38,11 @@ public class ScmApiActionController {
             operationId = "listScmApiActions",
             summary = "List SCM API proxy audit records",
             description =
-                    "Returns SCM API proxy mutation records ordered by most recent first, each with the pull/merge request or issue it created or touched when the upstream response named one. Filter by status (FORWARDED, DENIED, REJECTED, ERROR), provider, resolved user, repo owner/name, or free-text search. Paginate with limit/offset.")
+                    "Returns SCM API proxy mutation records ordered by most recent first, each with the pull/merge request or issue it created or touched when the upstream response named one. Filter by status (FORWARDED, DENIED, REJECTED, ERROR), origin (DASHBOARD, SCM_API), provider, resolved user, repo owner/name, or free-text search. Paginate with limit/offset.")
     @GetMapping
     public List<ScmApiActionView> list(
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) String origin,
             @RequestParam(required = false) String provider,
             @RequestParam(required = false) String user,
             @RequestParam(required = false) String repoOwner,
@@ -48,25 +52,13 @@ public class ScmApiActionController {
             @RequestParam(defaultValue = "0") int offset,
             @RequestParam(defaultValue = "true") boolean newestFirst) {
 
-        ScmApiActionQuery.ScmApiActionQueryBuilder query = ScmApiActionQuery.builder()
-                .provider(provider)
-                .user(user)
-                .repoOwner(repoOwner)
-                .repoName(repoName)
-                .search(search)
-                .limit(limit)
-                .offset(offset)
-                .newestFirst(newestFirst);
-
-        if (status != null && !status.isBlank()) {
-            try {
-                query.status(ScmApiActionStatus.valueOf(status.toUpperCase()));
-            } catch (IllegalArgumentException e) {
-                return List.of();
-            }
+        Optional<ScmApiActionQuery> query =
+                buildQuery(status, origin, provider, user, repoOwner, repoName, search, limit, offset, newestFirst);
+        if (query.isEmpty()) {
+            return List.of();
         }
 
-        List<ScmApiActionRecord> records = scmApiActionStore.find(query.build());
+        List<ScmApiActionRecord> records = scmApiActionStore.find(query.get());
         Map<String, ScmApiEntityRecord> entities = scmApiEntityStore
                 .findByIds(records.stream()
                         .map(ScmApiActionRecord::getEntityId)
@@ -91,5 +83,44 @@ public class ScmApiActionController {
                                 : scmApiEntityStore.findById(r.getEntityId()).orElse(null)))
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * The filters both listings share. Empty when the caller named a status or origin that does not exist — the listing
+     * answers with no rows rather than an error, since the filter came from a query string.
+     */
+    private static Optional<ScmApiActionQuery> buildQuery(
+            String status,
+            String origin,
+            String provider,
+            String user,
+            String repoOwner,
+            String repoName,
+            String search,
+            int limit,
+            int offset,
+            boolean newestFirst) {
+
+        ScmApiActionQuery.ScmApiActionQueryBuilder query = ScmApiActionQuery.builder()
+                .provider(provider)
+                .user(user)
+                .repoOwner(repoOwner)
+                .repoName(repoName)
+                .search(search)
+                .limit(limit)
+                .offset(offset)
+                .newestFirst(newestFirst);
+
+        try {
+            if (status != null && !status.isBlank()) {
+                query.status(ScmApiActionStatus.valueOf(status.toUpperCase(Locale.ROOT)));
+            }
+            if (origin != null && !origin.isBlank()) {
+                query.origin(ScmApiActionOrigin.valueOf(origin.toUpperCase(Locale.ROOT)));
+            }
+        } catch (IllegalArgumentException e) {
+            return Optional.empty();
+        }
+        return Optional.of(query.build());
     }
 }

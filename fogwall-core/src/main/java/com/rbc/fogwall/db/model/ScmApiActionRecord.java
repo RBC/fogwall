@@ -52,6 +52,12 @@ public class ScmApiActionRecord {
 
     private ScmApiActionStatus status;
 
+    /**
+     * Which fogwall surface ran the action — the dashboard's own write path, or the SCM API proxy. Fogwall's account of
+     * its own entry point, so unlike {@link #clientType} it can be filtered and reported on.
+     */
+    private ScmApiActionOrigin origin;
+
     /** Human-readable reason for a {@link ScmApiActionStatus#DENIED} or {@link ScmApiActionStatus#ERROR} outcome. */
     private String reason;
 

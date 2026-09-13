@@ -1,10 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchScmApiActions } from '../api'
+import { ContributionsTabs } from '../components/ContributionsTabs'
 import { StatusBadge } from '../components/StatusBadge'
-import type { ScmApiActionRecord, ScmApiActionStatus, ScmApiEntity, CurrentUser } from '../types'
+import type {
+  ScmApiActionOrigin,
+  ScmApiActionRecord,
+  ScmApiActionStatus,
+  ScmApiEntity,
+  CurrentUser,
+} from '../types'
 
 const PAGE_SIZE = 25
 const STATUSES: ScmApiActionStatus[] = ['FORWARDED', 'DENIED', 'REJECTED', 'ERROR']
+
+const ORIGINS: { value: '' | ScmApiActionOrigin; label: string }[] = [
+  { value: '', label: 'All surfaces' },
+  { value: 'DASHBOARD', label: 'Dashboard' },
+  { value: 'SCM_API', label: 'SCM API' },
+]
+
+const ORIGIN_LABEL: Record<ScmApiActionOrigin, string> = {
+  DASHBOARD: 'dashboard',
+  SCM_API: 'SCM API',
+}
 
 function formatTime(ts: string | number | undefined) {
   if (!ts) return ''
@@ -48,6 +66,7 @@ interface ScmApiActionListProps {
 export function ScmApiActionList({ currentUser }: ScmApiActionListProps) {
   const [actions, setActions] = useState<ScmApiActionRecord[]>([])
   const [filterStatus, setFilterStatus] = useState<string>('')
+  const [filterOrigin, setFilterOrigin] = useState<'' | ScmApiActionOrigin>('')
   const [filterSearch, setFilterSearch] = useState('')
   const [myActionsOnly, setMyActionsOnly] = useState(false)
   const [newestFirst, setNewestFirst] = useState(true)
@@ -59,10 +78,18 @@ export function ScmApiActionList({ currentUser }: ScmApiActionListProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const load = useCallback(
-    async (status: string, search: string, myOnly: boolean, newest: boolean, pageNum: number) => {
+    async (
+      status: string,
+      origin: string,
+      search: string,
+      myOnly: boolean,
+      newest: boolean,
+      pageNum: number,
+    ) => {
       const offset = pageNum * PAGE_SIZE
       const params = new URLSearchParams({ limit: String(PAGE_SIZE + 1), offset: String(offset) })
       if (status) params.set('status', status)
+      if (origin) params.set('origin', origin)
       if (search) params.set('search', search)
       if (myOnly && currentUser?.username) params.set('user', currentUser.username)
       params.set('newestFirst', String(newest))
@@ -76,29 +103,35 @@ export function ScmApiActionList({ currentUser }: ScmApiActionListProps) {
 
   useEffect(() => {
     void Promise.resolve().then(() =>
-      load(filterStatus, filterSearch, myActionsOnly, newestFirst, page),
+      load(filterStatus, filterOrigin, filterSearch, myActionsOnly, newestFirst, page),
     )
     const timer = setInterval(
-      () => load(filterStatus, filterSearch, myActionsOnly, newestFirst, page),
+      () => load(filterStatus, filterOrigin, filterSearch, myActionsOnly, newestFirst, page),
       10_000,
     )
     return () => clearInterval(timer)
-  }, [filterStatus, filterSearch, myActionsOnly, newestFirst, page, load])
+  }, [filterStatus, filterOrigin, filterSearch, myActionsOnly, newestFirst, page, load])
 
   function handleSearchChange(value: string) {
     setFilterSearch(value)
     setPage(0)
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(
-      () => load(filterStatus, value, myActionsOnly, newestFirst, 0),
+      () => load(filterStatus, filterOrigin, value, myActionsOnly, newestFirst, 0),
       300,
     )
   }
 
   return (
     <div>
-      <div className="max-w-6xl px-6 pt-6">
-        <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-200">Contributions</h1>
+      <div className="max-w-6xl px-6 pt-6 pb-3">
+        <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-200">Activity</h1>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          Every SCM API record, from the dashboard and the proxy alike.
+        </p>
+      </div>
+      <div className="max-w-6xl px-6">
+        <ContributionsTabs />
       </div>
 
       {/* Status filter chips */}
@@ -144,6 +177,32 @@ export function ScmApiActionList({ currentUser }: ScmApiActionListProps) {
           className="border border-gray-300 rounded px-3 py-1.5 text-sm bg-white shadow-sm w-56 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400"
         />
 
+        {/* Which surface ran the action — fogwall's own record of it, not the caller's User-Agent. */}
+        <div
+          role="group"
+          aria-label="Surface"
+          className="flex overflow-hidden rounded border border-gray-300 dark:border-slate-600"
+        >
+          {ORIGINS.map((o) => (
+            <button
+              key={o.value || 'all'}
+              onClick={() => {
+                setFilterOrigin(o.value)
+                setPage(0)
+              }}
+              aria-pressed={filterOrigin === o.value}
+              className={
+                'border-r border-gray-300 px-3 py-1.5 text-sm transition-colors last:border-r-0 dark:border-slate-600 ' +
+                (filterOrigin === o.value
+                  ? 'bg-gray-900 text-white dark:bg-slate-100 dark:text-gray-900'
+                  : 'bg-white text-gray-600 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-300 dark:hover:bg-gray-700')
+              }
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+
         {currentUser && (
           <button
             onClick={() => {
@@ -178,7 +237,9 @@ export function ScmApiActionList({ currentUser }: ScmApiActionListProps) {
           </span>
           {lastRefresh && <span>refreshed {lastRefresh}</span>}
           <button
-            onClick={() => load(filterStatus, filterSearch, myActionsOnly, newestFirst, page)}
+            onClick={() =>
+              load(filterStatus, filterOrigin, filterSearch, myActionsOnly, newestFirst, page)
+            }
             className="text-blue-600 hover:underline dark:text-blue-400"
           >
             &#8635; Refresh
@@ -202,8 +263,15 @@ export function ScmApiActionList({ currentUser }: ScmApiActionListProps) {
             <div className="flex items-center gap-4 px-5 py-3">
               <StatusBadge status={action.status} />
               <div className="flex-1 min-w-0 space-y-0.5">
-                <div className="font-mono text-sm text-gray-900 truncate dark:text-gray-100">
-                  {action.provider ?? '—'} · {action.mutationField ?? '—'}
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-sm text-gray-900 truncate dark:text-gray-100">
+                    {action.provider ?? '—'} · {action.mutationField ?? '—'}
+                  </span>
+                  {action.origin && (
+                    <span className="shrink-0 rounded-full border border-gray-200 px-1.5 py-0.5 text-[10.5px] font-medium text-gray-500 dark:border-slate-600 dark:text-gray-400">
+                      {ORIGIN_LABEL[action.origin]}
+                    </span>
+                  )}
                 </div>
                 <div className="text-xs text-gray-500 truncate dark:text-gray-400">
                   {action.repoOwner && action.repoName

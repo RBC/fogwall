@@ -6,7 +6,9 @@ import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Indexes;
 import com.mongodb.client.model.Sorts;
+import com.mongodb.client.model.Updates;
 import com.rbc.fogwall.db.ScmApiActionStore;
+import com.rbc.fogwall.db.model.ScmApiActionOrigin;
 import com.rbc.fogwall.db.model.ScmApiActionQuery;
 import com.rbc.fogwall.db.model.ScmApiActionRecord;
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
@@ -34,6 +36,23 @@ public class MongoScmApiActionStore implements ScmApiActionStore {
         MongoCollection<Document> col = getCollection();
         col.createIndex(Indexes.ascending("resolved_user"));
         col.createIndex(Indexes.descending("timestamp"));
+        // Serves the Activity view's "my actions on this surface" filter.
+        col.createIndex(Indexes.ascending("origin", "resolved_user"));
+        backfillOrigin(col);
+    }
+
+    /**
+     * Gives records written before origin existed the same treatment the JDBC migration gives them, since there is no
+     * migrator on this side to carry it: the dashboard stamped the literal {@code dashboard} into {@code client_type},
+     * and every other value there is a {@code User-Agent} classification, which only the proxy path produces. Both
+     * updates are idempotent and match nothing once they have run.
+     */
+    private static void backfillOrigin(MongoCollection<Document> col) {
+        Bson unset = Filters.eq("origin", null);
+        col.updateMany(
+                Filters.and(unset, Filters.regex("client_type", "^dashboard$", "i")),
+                Updates.set("origin", ScmApiActionOrigin.DASHBOARD.name()));
+        col.updateMany(unset, Updates.set("origin", ScmApiActionOrigin.SCM_API.name()));
     }
 
     @Override
@@ -49,6 +68,7 @@ public class MongoScmApiActionStore implements ScmApiActionStore {
                 .append("node_id", r.getNodeId())
                 .append("node_type", r.getNodeType())
                 .append("status", r.getStatus().name())
+                .append("origin", r.getOrigin() == null ? null : r.getOrigin().name())
                 .append("reason", r.getReason())
                 .append("variables_json", r.getVariablesJson())
                 .append("user_agent", r.getUserAgent())
@@ -72,6 +92,9 @@ public class MongoScmApiActionStore implements ScmApiActionStore {
 
         if (query.getStatus() != null) {
             filters.add(Filters.eq("status", query.getStatus().name()));
+        }
+        if (query.getOrigin() != null) {
+            filters.add(Filters.eq("origin", query.getOrigin().name()));
         }
         if (query.getProvider() != null) {
             filters.add(Filters.eq("provider", query.getProvider()));
@@ -116,6 +139,7 @@ public class MongoScmApiActionStore implements ScmApiActionStore {
                 .nodeId(doc.getString("node_id"))
                 .nodeType(doc.getString("node_type"))
                 .status(ScmApiActionStatus.valueOf(doc.getString("status")))
+                .origin(doc.getString("origin") == null ? null : ScmApiActionOrigin.valueOf(doc.getString("origin")))
                 .reason(doc.getString("reason"))
                 .variablesJson(doc.getString("variables_json"))
                 .userAgent(doc.getString("user_agent"))

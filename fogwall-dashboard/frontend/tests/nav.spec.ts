@@ -9,7 +9,13 @@ test.describe('navigation', () => {
     await page.goto('/dashboard/')
     const side = page.locator('aside')
 
-    for (const label of ['Overview', 'Pushes', 'Contributions', 'Issues', 'Repos', 'Providers']) {
+    for (const label of ['Overview', 'Pushes', 'Repos', 'Providers']) {
+      await expect(side.getByRole('link', { name: label, exact: true })).toBeVisible()
+    }
+
+    // Contributions is a category: the label names what its sub-destinations have in common, and they carry the links.
+    await expect(side.getByText('Contributions', { exact: true })).toBeVisible()
+    for (const label of ['Activity', 'Report an issue']) {
       await expect(side.getByRole('link', { name: label, exact: true })).toBeVisible()
     }
 

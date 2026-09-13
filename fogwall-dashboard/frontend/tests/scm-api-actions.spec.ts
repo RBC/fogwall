@@ -66,6 +66,19 @@ test.describe('SCM API actions', () => {
     await expect(secret.getByRole('link', { name: /#\d+/ })).toHaveCount(0)
   })
 
+  test('the surface filter separates proxy records from dashboard ones', async ({ page }) => {
+    // Every captured record came through the proxy, so the split is visible: SCM API keeps them, Dashboard keeps none.
+    await expect(page.getByText('SCM API', { exact: true }).first()).toBeVisible()
+    await page.getByRole('button', { name: 'SCM API' }).click()
+    await expect(card(page, /createIssue|issues.create/).first()).toBeVisible()
+
+    await page.getByRole('button', { name: 'Dashboard' }).click()
+    await expect(page.getByText('No SCM API action records found.')).toBeVisible()
+
+    await page.getByRole('button', { name: 'All surfaces' }).click()
+    await expect(page.getByText('No SCM API action records found.')).toHaveCount(0)
+  })
+
   test('a forwarded mutation records its payload on every dialect', async ({ page }) => {
     for (const op of [
       'gitlab · merge_requests.create',

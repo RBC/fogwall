@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Route, Routes } from 'react-router'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import { fetchConfig, fetchMe } from './api'
 import { Breadcrumbs } from './components/Breadcrumbs'
 import { Sidebar } from './components/Sidebar'
@@ -66,13 +66,15 @@ export default function App() {
                 />
                 <Route path="/push/:id/diff" element={<PushDiff dark={dark} />} />
                 <Route path="/providers" element={<Providers />} />
-                <Route path="/issues" element={<Issues />} />
+                {/* Issue filing moved under Contributions, which is the category it belongs to. */}
+                <Route path="/issues" element={<Navigate to="/contributions/issues" replace />} />
                 <Route path="/setup" element={<Setup />} />
                 <Route path="/repos" element={<Repos currentUser={currentUser} />} />
                 <Route
                   path="/contributions"
                   element={<ScmApiActionList currentUser={currentUser} />}
                 />
+                <Route path="/contributions/issues" element={<Issues />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/users" element={<Users authProvider={authProvider} />} />
                 <Route
