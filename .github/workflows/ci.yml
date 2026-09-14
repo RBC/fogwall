@@ -33,6 +33,13 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # ratchet:gradle/actions/setup-gradle@v6
 
+      - name: Cache the gitleaks binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # ratchet:actions/cache@v6.1.0
+        with:
+          path: ~/.cache/gitleaks
+          key: gitleaks-${{ hashFiles('build.gradle') }}
+          restore-keys: gitleaks-
+
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # ratchet:actions/setup-node@v6
         with:
           node-version: '26.3.1'
@@ -40,7 +47,9 @@ jobs:
           cache-dependency-path: fogwall-dashboard/frontend/package-lock.json
 
       - name: Build and test
-        run: ./gradlew build
+        run: |
+          export GITLEAKS_CACHE_DIR="$HOME/.cache/gitleaks"
+          ./gradlew build
 
       - name: Verify coverage thresholds
         run: ./gradlew jacocoTestCoverageVerification
@@ -148,6 +157,13 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # ratchet:gradle/actions/setup-gradle@v6
 
+      - name: Cache the gitleaks binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # ratchet:actions/cache@v6.1.0
+        with:
+          path: ~/.cache/gitleaks
+          key: gitleaks-${{ hashFiles('build.gradle') }}
+          restore-keys: gitleaks-
+
       # The SCM API listeners serve TLS, and the CLIs that talk to them require HTTPS to a custom host.
       - name: Generate listener certificates
         run: bash test/make-certs.sh
@@ -194,7 +210,9 @@ jobs:
       # Gitea seeds itself: the gitea-seed service creates the users, orgs and repos after Gitea reports healthy.
 
       - name: Run compose smoke tests
-        run: ./gradlew :fogwall-dashboard:composeTest
+        run: |
+          export GITLEAKS_CACHE_DIR="$HOME/.cache/gitleaks"
+          ./gradlew :fogwall-dashboard:composeTest
 
       - name: Dump proxy logs on failure
         if: failure()
@@ -228,6 +246,13 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # ratchet:gradle/actions/setup-gradle@v6
 
+      - name: Cache the gitleaks binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # ratchet:actions/cache@v6.1.0
+        with:
+          path: ~/.cache/gitleaks
+          key: gitleaks-${{ hashFiles('build.gradle') }}
+          restore-keys: gitleaks-
+
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # ratchet:actions/setup-node@v6
         with:
           node-version: '26.3.1'
@@ -246,7 +271,9 @@ jobs:
       # `gradlew :fogwall-dashboard:run` finds everything up-to-date and only has to boot Spring,
       # instead of cold-compiling inside the webServer timeout. See #550.
       - name: Pre-build the dashboard app
-        run: ./gradlew :fogwall-dashboard:assemble
+        run: |
+          export GITLEAKS_CACHE_DIR="$HOME/.cache/gitleaks"
+          ./gradlew :fogwall-dashboard:assemble
 
       - name: Run Playwright tests
         run: npm run test:e2e
@@ -299,8 +326,17 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # ratchet:gradle/actions/setup-gradle@v6
 
+      - name: Cache the gitleaks binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # ratchet:actions/cache@v6.1.0
+        with:
+          path: ~/.cache/gitleaks
+          key: gitleaks-${{ hashFiles('build.gradle') }}
+          restore-keys: gitleaks-
+
       - name: Run e2e tests
-        run: ./gradlew :fogwall-server:e2eTest :fogwall-dashboard:e2eTest
+        run: |
+          export GITLEAKS_CACHE_DIR="$HOME/.cache/gitleaks"
+          ./gradlew :fogwall-server:e2eTest :fogwall-dashboard:e2eTest
         # Covers a cold compile as well as the suites themselves; the server suite alone runs ~3m on a
         # healthy runner, the dashboard auth suite (LDAP/OIDC via Testcontainers) well under 1m warm
         timeout-minutes: 15

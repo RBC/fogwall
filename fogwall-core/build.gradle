@@ -1,3 +1,6 @@
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+
 buildscript {
     configurations.all {
         resolutionStrategy {
@@ -253,6 +256,18 @@ tasks.register('downloadGitleaks') {
         def tmpDir = layout.buildDirectory.dir("tmp/gitleaks").get().asFile
         tmpDir.mkdirs()
 
+        // Optional CI-owned cache, entirely separate from anything Gradle manages so it can't disturb the build cache
+        // or the setup-gradle action's save/restore. When GITLEAKS_CACHE_DIR points somewhere, a binary already there
+        // is reused and a freshly downloaded one is written back for the next build; when it is unset — a laptop, a
+        // fresh clone — this whole layer is skipped and the download works exactly as it always has. CI populates it
+        // (a BuildKit cache mount for the image build, actions/cache for the gradle jobs); the version is in the file
+        // name, so a bump never serves a stale binary.
+        def cacheEnv = System.getenv('GITLEAKS_CACHE_DIR')
+        def cacheDir = cacheEnv?.trim() ? new File(cacheEnv.trim()) : null
+        if (cacheDir != null) {
+            cacheDir.mkdirs()
+        }
+
         gitleaksTargets.each { suffix ->
             def out = gitleaksResourceDir.get().file("gitleaks/${suffix}").asFile
             if (out.exists()) {
@@ -261,24 +276,51 @@ tasks.register('downloadGitleaks') {
             }
             out.parentFile.mkdirs()
 
-            def tarName = "gitleaks_${gitleaksVersion}_${suffix}.tar.gz"
-            def tarUrl  = "${baseDownloadUrl}/v${gitleaksVersion}/${tarName}"
-            def tarFile = new File(tmpDir, tarName)
+            def cached = cacheDir != null ? new File(cacheDir, "gitleaks_${gitleaksVersion}_${suffix}") : null
+            if (cached != null && cached.exists()) {
+                logger.lifecycle("gitleaks ${gitleaksVersion} (${suffix}) restored from cache ${cached}")
+            } else {
+                def tarName = "gitleaks_${gitleaksVersion}_${suffix}.tar.gz"
+                def tarUrl  = "${baseDownloadUrl}/v${gitleaksVersion}/${tarName}"
+                def tarFile = new File(tmpDir, tarName)
 
-            logger.lifecycle("Downloading gitleaks ${gitleaksVersion} (${suffix})...")
-            new URL(tarUrl).withInputStream { is -> tarFile.bytes = is.bytes }
+                logger.lifecycle("Downloading gitleaks ${gitleaksVersion} (${suffix})...")
+                // GitHub's release CDN returns transient 5xx/timeouts often enough to fail a whole build; a couple of
+                // retries turn that into a slow build rather than a red one.
+                def attempts = 0
+                while (true) {
+                    try {
+                        new URL(tarUrl).withInputStream { is -> tarFile.bytes = is.bytes }
+                        break
+                    } catch (IOException e) {
+                        if (++attempts >= 3) {
+                            throw new GradleException(
+                                    "Failed to download ${tarUrl} after ${attempts} attempts: ${e.message}", e)
+                        }
+                        logger.warn("gitleaks download failed (attempt ${attempts}/3): ${e.message} — retrying")
+                        Thread.sleep(2000L * attempts)
+                    }
+                }
 
-            // Extract to a suffix-specific temp dir to avoid name collision between targets
-            def extractDir = new File(tmpDir, suffix)
-            extractDir.mkdirs()
-            ant.untar(src: tarFile.absolutePath, dest: extractDir.absolutePath, compression: 'gzip') {
-                patternset { include(name: 'gitleaks') }
+                // Extract to a suffix-specific temp dir to avoid name collision between targets
+                def extractDir = new File(tmpDir, suffix)
+                extractDir.mkdirs()
+                ant.untar(src: tarFile.absolutePath, dest: extractDir.absolutePath, compression: 'gzip') {
+                    patternset { include(name: 'gitleaks') }
+                }
+                def extracted = new File(extractDir, 'gitleaks')
+                if (!extracted.exists()) {
+                    throw new GradleException("gitleaks binary not found in ${tarName} after extraction")
+                }
+                if (cached != null) {
+                    // Copy (not rename) into the cache: build/ and the cache dir may be on different filesystems.
+                    Files.copy(extracted.toPath(), cached.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                } else {
+                    cached = extracted
+                }
             }
-            def extracted = new File(extractDir, 'gitleaks')
-            if (!extracted.exists()) {
-                throw new GradleException("gitleaks binary not found in ${tarName} after extraction")
-            }
-            extracted.renameTo(out)
+
+            Files.copy(cached.toPath(), out.toPath(), StandardCopyOption.REPLACE_EXISTING)
             out.setExecutable(true)
             logger.lifecycle("Bundled gitleaks (${suffix}) at ${out} (${out.length()} bytes)")
         }
