@@ -45,12 +45,14 @@ COPY . .
 ARG BUILD_COMMIT=unknown
 RUN --mount=type=cache,target=/root/.gradle/caches \
     --mount=type=cache,target=/root/.gradle/wrapper \
+    --mount=type=cache,target=/gitleaks-cache \
     --mount=type=cache,target=/root/.npm \
     case "${TARGETARCH}" in \
       arm64) GITLEAKS_TARGET=linux_arm64 ;; \
       *)     GITLEAKS_TARGET=linux_x64   ;; \
     esac \
-    && ./gradlew clean :fogwall-server:installDist :fogwall-dashboard:installDist generateThirdPartyNotices \
+    && GITLEAKS_CACHE_DIR=/gitleaks-cache \
+       ./gradlew clean :fogwall-server:installDist :fogwall-dashboard:installDist generateThirdPartyNotices \
        -PgitleaksTargets=${GITLEAKS_TARGET} -PbuildCommit=${BUILD_COMMIT} --no-daemon -q
 
 # Prepend a conf/ directory to the classpath so that a mounted fogwall-local.yml
