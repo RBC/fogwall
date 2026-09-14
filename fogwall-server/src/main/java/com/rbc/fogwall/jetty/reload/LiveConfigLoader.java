@@ -10,15 +10,20 @@ import com.rbc.fogwall.permission.RepoPermissionService;
 import java.io.IOException;
 import java.nio.file.*;
 import java.util.Comparator;
+import java.util.EnumSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.dataformat.yaml.YAMLMapper;
 
 /**
  * Manages hot-reloading of {@link ConfigHolder} at runtime, without restarting the server.
@@ -32,8 +37,9 @@ import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
  *       a YAML file from the working tree on a fixed interval.
  * </ol>
  *
- * <p>Each reload can target a specific {@link Section} or {@link Section#ALL}. Provider, server, and database changes
- * log a WARNING — those sections require a restart.
+ * <p>Each reload can target a specific {@link Section} or {@link Section#ALL}. Either way it applies only the sections
+ * the source document actually declares — a section the document is silent about keeps its current live value rather
+ * than reverting to the base default. Provider, server, and database changes log a WARNING — those require a restart.
  *
  * <p>A concurrent reload guard prevents overlapping reloads.
  */
@@ -42,7 +48,7 @@ public class LiveConfigLoader {
 
     /**
      * Config sections that support hot-reload. Pass to {@link #reload(Section)} to reload only the specified section,
-     * or use {@link #ALL} to reload everything.
+     * or use {@link #ALL} to reload every section the source document declares.
      */
     public enum Section {
         COMMIT,
@@ -70,13 +76,31 @@ public class LiveConfigLoader {
         }
     }
 
+    private static final YAMLMapper YAML = new YAMLMapper();
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
+
+    /** Top-level YAML key to the reloadable section it configures. Keys absent here are not hot-reloadable sections. */
+    private static final Map<String, Section> SECTION_KEYS = Map.of(
+            "commit", Section.COMMIT,
+            "diff-scan", Section.DIFF_SCAN,
+            "secret-scan", Section.SECRET_SCAN,
+            "binary-blob", Section.BINARY_BLOB,
+            "rules", Section.RULES,
+            "permissions", Section.PERMISSIONS,
+            "attestations", Section.ATTESTATIONS);
+
     private final ConfigHolder configHolder;
     private final FogwallConfig startupConfig;
     private final ReloadConfig reloadConfig;
     private final UrlRuleRegistry urlRuleRegistry;
     private final RepoPermissionService repoPermissionService;
 
-    private final AtomicBoolean reloading = new AtomicBoolean(false);
+    /**
+     * Serializes reloads. An explicit {@link #reload(Section)} blocks on this and always applies; the background
+     * file-watch and git-poll sources {@code tryLock} and skip when a reload is already running, since a dropped poll
+     * is caught by the next one.
+     */
+    private final ReentrantLock reloadLock = new ReentrantLock();
 
     private Thread fileWatchThread;
     private ScheduledExecutorService gitPollScheduler;
@@ -144,16 +168,20 @@ public class LiveConfigLoader {
     public String reload(Section section) {
         ReloadConfig.FileSourceConfig fileCfg = reloadConfig.getFile();
         ReloadConfig.GitSourceConfig gitCfg = reloadConfig.getGit();
+        String label = section.name().toLowerCase().replace('_', '-');
 
         if (fileCfg.isEnabled() && !fileCfg.getPath().isBlank()) {
-            reloadFromFile(Path.of(fileCfg.getPath()).toAbsolutePath(), section);
-            return "Reloaded " + section.name().toLowerCase().replace('_', '-') + " from file: " + fileCfg.getPath();
+            boolean applied = reloadFromFile(Path.of(fileCfg.getPath()).toAbsolutePath(), section, true);
+            return applied
+                    ? "Reloaded " + label + " from file: " + fileCfg.getPath()
+                    : "Reload of " + label + " from file failed — see server logs";
         }
 
         if (gitCfg.isEnabled() && !gitCfg.getUrl().isBlank()) {
-            reloadFromGit(section);
-            return "Reloaded " + section.name().toLowerCase().replace('_', '-') + " from git: " + gitCfg.getUrl() + " ("
-                    + gitCfg.getBranch() + ")";
+            boolean applied = reloadFromGit(section, true);
+            return applied
+                    ? "Reloaded " + label + " from git: " + gitCfg.getUrl() + " (" + gitCfg.getBranch() + ")"
+                    : "Reload of " + label + " from git failed — see server logs";
         }
 
         return "No external reload sources configured — config unchanged";
@@ -189,8 +217,8 @@ public class LiveConfigLoader {
                 for (WatchEvent<?> event : key.pollEvents()) {
                     Path changed = dir.resolve((Path) event.context());
                     if (changed.equals(watchPath)) {
-                        log.info("Config file changed: {} — triggering reload (all sections)", changed);
-                        reloadFromFile(watchPath, Section.ALL);
+                        log.info("Config file changed: {} — triggering reload of the sections it declares", changed);
+                        reloadFromFile(watchPath, Section.ALL, false);
                     }
                 }
                 if (!key.reset()) {
@@ -203,18 +231,26 @@ public class LiveConfigLoader {
         }
     }
 
-    private void reloadFromFile(Path overrideFile, Section section) {
-        if (!reloading.compareAndSet(false, true)) {
+    /**
+     * @param blocking wait for the reload guard (an explicit reload) rather than skip when busy (a background poll)
+     * @return whether the reload was applied
+     */
+    private boolean reloadFromFile(Path overrideFile, Section section, boolean blocking) {
+        if (blocking) {
+            reloadLock.lock();
+        } else if (!reloadLock.tryLock()) {
             log.debug("Reload already in progress — skipping");
-            return;
+            return false;
         }
         try {
             FogwallConfig newConfig = FogwallConfigLoader.loadWithOverride(overrideFile);
-            applyReload(newConfig, section);
+            applyReload(newConfig, sectionsToApply(section, overrideFile));
+            return true;
         } catch (Exception e) {
             log.error("Config reload from file {} failed: {}", overrideFile, e.getMessage(), e);
+            return false;
         } finally {
-            reloading.set(false);
+            reloadLock.unlock();
         }
     }
 
@@ -229,7 +265,7 @@ public class LiveConfigLoader {
                     "reload.git.interval-seconds=0 — git-source will only reload on POST /api/config/reload; no polling");
             gitPollScheduler = Executors.newSingleThreadScheduledExecutor(
                     Thread.ofVirtual().name("config-git-poller").factory());
-            gitPollScheduler.submit(() -> reloadFromGit(Section.ALL));
+            gitPollScheduler.submit(() -> reloadFromGit(Section.ALL, false));
             return;
         }
         log.info(
@@ -240,13 +276,19 @@ public class LiveConfigLoader {
         gitPollScheduler = Executors.newSingleThreadScheduledExecutor(
                 Thread.ofVirtual().name("config-git-poller").factory());
         gitPollFuture = gitPollScheduler.scheduleAtFixedRate(
-                () -> reloadFromGit(Section.ALL), 0, intervalSeconds, TimeUnit.SECONDS);
+                () -> reloadFromGit(Section.ALL, false), 0, intervalSeconds, TimeUnit.SECONDS);
     }
 
-    private void reloadFromGit(Section section) {
-        if (!reloading.compareAndSet(false, true)) {
+    /**
+     * @param blocking wait for the reload guard (an explicit reload) rather than skip when busy (a background poll)
+     * @return whether the reload was applied
+     */
+    private boolean reloadFromGit(Section section, boolean blocking) {
+        if (blocking) {
+            reloadLock.lock();
+        } else if (!reloadLock.tryLock()) {
             log.debug("Reload already in progress — skipping git poll");
-            return;
+            return false;
         }
         Path cloneDir = null;
         try {
@@ -254,12 +296,15 @@ public class LiveConfigLoader {
             Path yamlFile = fetchGitConfig(cloneDir);
             if (yamlFile != null) {
                 FogwallConfig newConfig = FogwallConfigLoader.loadWithOverride(yamlFile);
-                applyReload(newConfig, section);
+                applyReload(newConfig, sectionsToApply(section, yamlFile));
+                return true;
             }
+            return false;
         } catch (Exception e) {
             log.error("Config reload from git failed: {}", e.getMessage(), e);
+            return false;
         } finally {
-            reloading.set(false);
+            reloadLock.unlock();
             deleteQuietly(cloneDir);
         }
     }
@@ -342,33 +387,57 @@ public class LiveConfigLoader {
     // Apply reload
     // -----------------------------------------------------------------------
 
-    private void applyReload(FogwallConfig newConfig, Section section) {
+    /**
+     * The reloadable sections a source document actually declares, keyed by their top-level YAML key. A reload applies
+     * only these — a section the document is silent about keeps its current live value rather than reverting to the
+     * base default, so a partial reload file patches the sections it names and leaves the rest alone.
+     */
+    private Set<Section> declaredSections(Path source) throws IOException {
+        Map<String, Object> tree;
+        try (var in = Files.newInputStream(source)) {
+            tree = YAML.readValue(in, MAP_TYPE);
+        }
+        if (tree == null) return EnumSet.noneOf(Section.class);
+        Set<Section> declared = EnumSet.noneOf(Section.class);
+        for (String key : tree.keySet()) {
+            Section section = SECTION_KEYS.get(key);
+            if (section != null) declared.add(section);
+        }
+        return declared;
+    }
+
+    /**
+     * The concrete sections to apply for a reload: those declared in {@code source}, narrowed to {@code requested} when
+     * a specific section was asked for. {@link Section#ALL} means every declared section.
+     */
+    private Set<Section> sectionsToApply(Section requested, Path source) throws IOException {
+        Set<Section> declared = declaredSections(source);
+        if (requested == Section.ALL) return declared;
+        declared.retainAll(EnumSet.of(requested));
+        return declared;
+    }
+
+    private void applyReload(FogwallConfig newConfig, Set<Section> sections) {
         var builder = new JettyConfigurationBuilder(newConfig);
         // Validate all provider cross-references before applying any changes. If the new config has
         // a bad reference, this throws and the reload is aborted — the live config is not modified.
         builder.validateProviderReferences();
 
-        switch (section) {
-            case COMMIT -> reloadCommit(builder);
-            case DIFF_SCAN -> reloadDiffScan(builder);
-            case SECRET_SCAN -> reloadSecretScanning(builder);
-            case BINARY_BLOB -> reloadBinaryBlob(builder);
-            case RULES -> reloadRules(builder, newConfig);
-            case PERMISSIONS -> reloadPermissions(builder, newConfig);
-            case ATTESTATIONS -> reloadAttestations(builder, newConfig);
-            case ALL -> {
-                reloadCommit(builder);
-                reloadDiffScan(builder);
-                reloadSecretScanning(builder);
-                reloadBinaryBlob(builder);
-                reloadRules(builder, newConfig);
-                reloadPermissions(builder, newConfig);
-                reloadAttestations(builder, newConfig);
+        for (Section section : sections) {
+            switch (section) {
+                case COMMIT -> reloadCommit(builder);
+                case DIFF_SCAN -> reloadDiffScan(builder);
+                case SECRET_SCAN -> reloadSecretScanning(builder);
+                case BINARY_BLOB -> reloadBinaryBlob(builder);
+                case RULES -> reloadRules(builder, newConfig);
+                case PERMISSIONS -> reloadPermissions(builder, newConfig);
+                case ATTESTATIONS -> reloadAttestations(builder, newConfig);
+                case ALL -> throw new IllegalArgumentException("ALL must be resolved to concrete sections first");
             }
         }
 
         warnOnRestartRequired(newConfig);
-        log.info("Config reload complete — section: {}", section);
+        log.info("Config reload complete — sections: {}", sections);
     }
 
     private void reloadCommit(JettyConfigurationBuilder builder) {

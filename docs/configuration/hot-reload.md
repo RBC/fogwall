@@ -46,10 +46,27 @@ credentials. For token-only auth (GitHub, GitLab, Gitea PATs) the username can b
 Provider, server, database and `scm-oauth` sections always require a restart — they describe how the deployment is set
 up rather than policy that changes over time.
 
+## Partial reload files
+
+A reload applies only the sections the file declares. A section the file omits keeps its current live value — it is not
+reset to a default. So a reload file can carry just what it means to change:
+
+```yaml
+secret-scan:
+  enabled: false
+```
+
+reloads secret scanning and leaves rules, commit checks and everything else as they are.
+
+The file must still be structurally valid on its own: keys are checked against the config schema, and cross-references
+are validated against the composed config. A user or permission entry that names a provider requires that provider to
+exist and be enabled in the base config — even though providers are not themselves hot-reloadable — or the whole reload
+is refused.
+
 ## Manual trigger
 
 ```
-POST /api/config/reload                         # reload all sections
+POST /api/config/reload                         # reload every section the source declares
 POST /api/config/reload?section=commit          # commit rules only
 POST /api/config/reload?section=diff-scan       # diff scan only
 POST /api/config/reload?section=secret-scan     # gitleaks config only
