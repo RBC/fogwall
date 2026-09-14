@@ -2,7 +2,7 @@ buildscript {
     configurations.configureEach {
         resolutionStrategy {
             force 'org.codehaus.plexus:plexus-utils:3.6.2'
-            force 'org.bouncycastle:bcpg-jdk18on:1.85'
+            force 'org.bouncycastle:bcpg-jdk18on:1.86'
             // Jackson 2.x on the *plugin* classpath (gradle-node-plugin, cyclonedx-gradle-plugin).
             // The runtime pin in the subprojects eachDependency table does not reach this
             // configuration, and the dependency graph submitted to GitHub includes it.
@@ -14,7 +14,7 @@ buildscript {
 }
 
 plugins {
-    id 'com.diffplug.spotless' version '8.10.1' apply false
+    id 'com.diffplug.spotless' version '8.10.2' apply false
     id 'org.cyclonedx.bom' version '3.4.1'
     id 'com.github.node-gradle.node' version '7.1.0' apply false
     id 'com.github.jk1.dependency-license-report' version '3.1.4' apply false
@@ -26,13 +26,13 @@ ext {
     pmdVersion = '7.27.0'
 
     // JGit
-    jgitVersion = '7.7.1.202607240634-r'
+    jgitVersion = '7.8.0.202609011348-r'
 
     // HTTP
     apacheHttpClientVersion = '5.6.4'
 
     // Jetty / Servlet
-    jettyVersion = '12.1.12'
+    jettyVersion = '12.1.13'
     jakartaServletVersion = '6.1.0'
 
     // Logging
@@ -41,11 +41,11 @@ ext {
 
     // Database
     hikariVersion = '7.1.0'
-    h2Version = '2.4.240'
+    h2Version = '2.5.250'
     postgresVersion = '42.7.13'
     mysqlVersion = '26.7.0'
     mariadbVersion = '3.5.10'
-    mongoVersion = '5.11.0'
+    mongoVersion = '5.11.1'
 
     // Jackson
     jacksonBomVersion = '3.2.2'
@@ -66,7 +66,7 @@ ext {
     gestaltVersion = '0.38.0'
 
     // BouncyCastle
-    bouncyCastleVersion = '1.85'
+    bouncyCastleVersion = '1.86'
 
     // Apache MINA SSHD
     minaSshdVersion = '2.19.0'
@@ -88,7 +88,7 @@ ext {
     swaggerUiVersion = '5.32.14'
 
     // OpenTelemetry
-    opentelemetryBomVersion = '1.64.0'
+    opentelemetryBomVersion = '1.66.0'
     opentelemetryInstrumentationAlphaBomVersion = '2.31.1-alpha'
 }
 
