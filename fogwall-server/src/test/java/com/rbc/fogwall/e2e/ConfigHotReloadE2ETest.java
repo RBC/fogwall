@@ -19,7 +19,7 @@ import org.junit.jupiter.api.*;
  *   <li><b>Block</b> — write a YAML override file that restricts the section under test; reload it; verify a push that
  *       violates the new restriction is rejected.
  *   <li><b>Reload</b> — write a permissive YAML override; reload it; verify the same (previously uncommitted) push now
- *       succeeds on retry.
+ *       succeeds.
  * </ol>
  *
  * <p>Each test gets its own Gitea repository and its own {@link HotReloadJettyFixture} instance so there is no shared
@@ -139,9 +139,8 @@ class ConfigHotReloadE2ETest {
                 secret-scan:
                   enabled: false
                 """);
-        assertTrue(
-                awaitReload(permissive, Section.COMMIT, git, repo, true),
-                "push should succeed after commit rules are relaxed");
+        proxy.reloadSection(permissive, Section.COMMIT);
+        assertTrue(git.tryPush(repo), "push should succeed after commit rules are relaxed");
     }
 
     /** Verifies that diff content block literals are enforced after a reload and relaxed after a second reload. */
@@ -175,9 +174,8 @@ class ConfigHotReloadE2ETest {
                 secret-scan:
                   enabled: false
                 """);
-        assertTrue(
-                awaitReload(permissive, Section.DIFF_SCAN, git, repo, true),
-                "push should succeed after diff-scan rules are relaxed");
+        proxy.reloadSection(permissive, Section.DIFF_SCAN);
+        assertTrue(git.tryPush(repo), "push should succeed after diff-scan rules are relaxed");
     }
 
     /**
@@ -227,9 +225,8 @@ class ConfigHotReloadE2ETest {
                   enabled: false
                 """);
         if (!blocked.succeeded()) {
-            assertTrue(
-                    awaitReload(permissive, Section.SECRET_SCAN, git, repo, true),
-                    "push should succeed after secret scanning is disabled");
+            proxy.reloadSection(permissive, Section.SECRET_SCAN);
+            assertTrue(git.tryPush(repo), "push should succeed after secret scanning is disabled");
         }
     }
 
@@ -274,9 +271,8 @@ class ConfigHotReloadE2ETest {
                 secret-scan:
                   enabled: false
                 """);
-        assertTrue(
-                awaitReload(permissive, Section.RULES, git, repo, true),
-                "push should succeed after deny rule is removed");
+        proxy.reloadSection(permissive, Section.RULES);
+        assertTrue(git.tryPush(repo), "push should succeed after deny rule is removed");
     }
 
     /**
@@ -307,50 +303,14 @@ class ConfigHotReloadE2ETest {
             assertTrue(
                     gitProxy.reloadSection(Section.COMMIT).contains("from git"),
                     "reload should report the git source, not the file one");
-            assertTrue(
-                    awaitPush(gitProxy, git, repo, false),
-                    "push should be blocked by the rule the config repo carries");
+            assertFalse(git.tryPush(repo), "push should be blocked by the rule the config repo carries");
 
             // Relax the rule in the repository; the next reload picks up the new commit.
             pushConfig(configRepo, repoConfig(""));
 
-            assertTrue(
-                    awaitPush(gitProxy, git, repo, true), "push should succeed after the config repo relaxes the rule");
+            gitProxy.reloadSection(Section.COMMIT);
+            assertTrue(git.tryPush(repo), "push should succeed after the config repo relaxes the rule");
         }
-    }
-
-    /**
-     * Reloads from the config repo and pushes, until the push behaves as {@code wanted} or the attempts run out.
-     *
-     * <p>The retry is needed because a reload started while another is still running is dropped, and the caller is told
-     * it succeeded either way; the startup load is already in flight when a fixture hands back control, so a single
-     * reload call cannot be relied on to have applied anything.
-     */
-    private boolean awaitPush(HotReloadJettyFixture fixture, GitHelper git, Path repo, boolean wanted)
-            throws Exception {
-        for (int attempt = 0; attempt < 5; attempt++) {
-            fixture.reloadSection(Section.COMMIT);
-            if (git.tryPush(repo) == wanted) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Reloads {@code section} from an override file and pushes, retrying until the push behaves as {@code wanted} or
-     * the attempts run out. Same reason as {@link #awaitPush}: a reload issued while a previous one is still running is
-     * dropped and reported as succeeding anyway, so a single reload-then-push can race the reload that precedes it.
-     */
-    private boolean awaitReload(Path override, Section section, GitHelper git, Path repo, boolean wanted)
-            throws Exception {
-        for (int attempt = 0; attempt < 5; attempt++) {
-            proxy.reloadSection(override, section);
-            if (git.tryPush(repo) == wanted) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /** The proxy-mode push URL for a fixture other than the per-test one. */
@@ -367,8 +327,8 @@ class ConfigHotReloadE2ETest {
      * the provider set is whatever the base config ships. Anything here referencing {@code gitea-e2e} would fail
      * validation, which is why there are no users or permissions: those are not the repository's to carry.
      *
-     * <p>The access rule is, though. A reload replaces the rules with what it finds, so omitting it would leave the
-     * proxy with none and refuse the push for the wrong reason.
+     * <p>The access rule is, though: the repository carries the policy it wants in force, and this test asserts on the
+     * commit rule it reloads, so it declares the allow rule the push needs alongside it.
      */
     private static String repoConfig(String blockedLiterals) {
         return """
