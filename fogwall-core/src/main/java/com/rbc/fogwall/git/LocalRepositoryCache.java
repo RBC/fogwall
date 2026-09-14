@@ -2,6 +2,7 @@ package com.rbc.fogwall.git;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -10,7 +11,6 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +25,7 @@ import org.eclipse.jgit.lib.RefDatabase;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.transport.CredentialsProvider;
 import org.eclipse.jgit.transport.URIish;
+import org.eclipse.jgit.util.FileUtils;
 
 /**
  * Manages local clones of remote repositories for inspection and filtering. This service uses JGit to clone
@@ -599,7 +600,9 @@ public class LocalRepositoryCache {
                         }
                     })
                     .sum();
-        } catch (IOException ex) {
+        } catch (IOException | UncheckedIOException ex) {
+            // UncheckedIOException: the lazy walk's iterator throws it when an entry vanishes mid-traversal, the same
+            // JGit background-maintenance race deleteDirectory guards against.
             log.warn("Could not compute size of cached mirror at {}: {}", directory, ex.getMessage());
             return 0L;
         }
@@ -697,10 +700,11 @@ public class LocalRepositoryCache {
         if (!Files.exists(directory)) {
             return;
         }
-        Files.walk(directory)
-                .sorted(Comparator.reverseOrder())
-                .map(Path::toFile)
-                .forEach(File::delete);
+        // A bare mirror can have JGit background maintenance touching it — auto-gc creates and removes transient lock
+        // files (gc.log.lock) under the directory. Delete through JGit's own FileUtils, which retries and skips entries
+        // that vanish mid-walk, rather than a lazy Files.walk whose iterator throws NoSuchFileException on one that
+        // disappears between listing and visiting.
+        FileUtils.delete(directory.toFile(), FileUtils.RECURSIVE | FileUtils.RETRY | FileUtils.SKIP_MISSING);
     }
 
     /**
