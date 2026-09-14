@@ -22,16 +22,15 @@ safe_rm_rf() {
     rm -rf "${dir}"
 }
 
-# resolve_pat() — set GIT_PASSWORD from env var or a PAT file
-# Args: $1 = path to PAT file (e.g. ~/.github-pat)
+# resolve_pat() — set GIT_PASSWORD from the environment, or from the file GIT_PASSWORD_FILE names
 resolve_pat() {
-    local pat_file="$1"
     GIT_PASSWORD="${GIT_PASSWORD:-}"
-    if [ -z "${GIT_PASSWORD}" ] && [ -f "${pat_file}" ]; then
+    local pat_file="${GIT_PASSWORD_FILE:-}"
+    if [ -z "${GIT_PASSWORD}" ] && [ -n "${pat_file}" ] && [ -f "${pat_file}" ]; then
         GIT_PASSWORD="$(cat "${pat_file}")"
     fi
     if [ -z "${GIT_PASSWORD}" ]; then
-        echo "ERROR: GIT_PASSWORD not set and ${pat_file} not found" >&2
+        echo "ERROR: set GIT_PASSWORD, or GIT_PASSWORD_FILE to a file holding the token" >&2
         exit 1
     fi
     export GIT_PASSWORD

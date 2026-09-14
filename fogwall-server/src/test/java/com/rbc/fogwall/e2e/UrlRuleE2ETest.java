@@ -36,6 +36,7 @@ import org.junit.jupiter.api.*;
 class UrlRuleE2ETest {
 
     static GiteaContainer gitea;
+    static String adminToken;
     /** Proxy with URL rules configured, auto-approves clean pushes. */
     static JettyProxyFixture proxy;
 
@@ -46,6 +47,7 @@ class UrlRuleE2ETest {
         gitea = new GiteaContainer();
         gitea.start();
         gitea.createAdminUser();
+        adminToken = gitea.generateAdminPushToken();
         gitea.createTestRepo(); // creates test-owner/test-repo
 
         // Create additional repos needed for the deny-rule tests.
@@ -70,13 +72,13 @@ class UrlRuleE2ETest {
     // ── URL helpers ──────────────────────────────────────────────────────────
 
     private String proxyUrl(String org, String repo) {
-        String creds = encode(GiteaContainer.ADMIN_USER) + ":" + encode(GiteaContainer.ADMIN_PASSWORD);
+        String creds = encode(GiteaContainer.ADMIN_USER) + ":" + encode(adminToken);
         // getPushBase/getProxyBase already have the correct host segment (e.g. /proxy/localhost)
         return proxy.getProxyBase().replace("http://", "http://" + creds + "@") + "/" + org + "/" + repo + ".git";
     }
 
     private String pushUrl(String org, String repo) {
-        String creds = encode(GiteaContainer.ADMIN_USER) + ":" + encode(GiteaContainer.ADMIN_PASSWORD);
+        String creds = encode(GiteaContainer.ADMIN_USER) + ":" + encode(adminToken);
         return proxy.getPushBase().replace("http://", "http://" + creds + "@") + "/" + org + "/" + repo + ".git";
     }
 
@@ -115,8 +117,7 @@ class UrlRuleE2ETest {
         // Clone directly from Gitea — no proxy, no URL rule enforcement on clone
         String directUrl = gitea.getBaseUrl() + "/" + cloneOrg + "/" + cloneRepo + ".git";
         String directWithCreds = directUrl.replace(
-                "http://",
-                "http://" + encode(GiteaContainer.ADMIN_USER) + ":" + encode(GiteaContainer.ADMIN_PASSWORD) + "@");
+                "http://", "http://" + encode(GiteaContainer.ADMIN_USER) + ":" + encode(adminToken) + "@");
         GitHelper git = new GitHelper(tempDir);
         Path repoDir = git.clone(directWithCreds, suffix);
         git.setAuthor(repoDir, GiteaContainer.VALID_AUTHOR_NAME, GiteaContainer.VALID_AUTHOR_EMAIL);

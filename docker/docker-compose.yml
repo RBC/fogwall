@@ -18,10 +18,9 @@ services:
       # Uncomment below to enable TLS termination
 #      - "8443:8443"
     volumes:
-      - ./fogwall-docker-default.yml:/app/conf/fogwall-docker-default.yml:ro
-      # On hosts with Podman+SELinux the mount above is unreadable by the container and the config profile is
-      # silently skipped — replace that line with this one so podman relabels the file (see CONTRIBUTING.md):
-#      - ./fogwall-docker-default.yml:/app/conf/fogwall-docker-default.yml:z
+      # :z so SELinux hosts (Podman on Fedora/RHEL) can read the mount; Docker ignores the suffix where SELinux is
+      # not in play.
+      - ./fogwall-docker-default.yml:/app/conf/fogwall-docker-default.yml:z
       # Uncomment to enable debug logging (see docker/log4j2-debug.xml):
 #      - ./log4j2-debug.xml:/app/conf/log4j2-debug.xml:ro
       # Uncomment to enable TLS, presumes self-signed localhost certs (see test/make-certs.sh):
@@ -31,7 +30,8 @@ services:
         condition: service_healthy
     environment:
       FOGWALL_API_KEY: "change-me-in-production"
-      FOGWALL_CONFIG_PROFILES: docker-default
+      # Composed by compose.sh, which knows which overlays are in play. Defaults to the base profile alone.
+      FOGWALL_CONFIG_PROFILES: ${FOGWALL_CONFIG_PROFILES:-docker-default}
       # Uncomment together with the volume mount above to activate debug logging:
 #      JAVA_TOOL_OPTIONS: -Dlog4j2.configurationFile=/app/conf/log4j2-debug.xml
       # Uncomment the tls volume + 8443 port above and these two to terminate TLS (see test/make-certs.sh):
@@ -63,13 +63,36 @@ services:
       GITEA__log__LEVEL: "Warn"
       GITEA__repository__DEFAULT_BRANCH: "main"
     volumes:
-      - gitea-data:/data
+      - gitea-data:/var/lib/gitea
+      - gitea-config:/etc/gitea
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/api/healthz"]
       interval: 5s
       timeout: 5s
       retries: 12
       start_period: 10s
+
+  # ── Gitea seeding ──────────────────────────────────────────────────────────
+  # Creates the users, orgs and repositories the smoke suite expects, then exits. Runs on every `up` and is
+  # idempotent, so a fresh volume is seeded automatically and an existing one is left alone — no separate step to
+  # remember, and nothing to re-run after a recreate.
+  #
+  # Reuses the Gitea image because it already carries both tools this needs: the `gitea` CLI, which creates users by
+  # writing to the database directly, and `curl`, for the orgs and repositories the CLI cannot create.
+  #
+  # Deliberately mints no tokens. Tests issue their own from the seeded passwords — Gitea is unusual in allowing
+  # that with plain basic auth — so nothing has to be handed between this and the suite.
+  gitea-seed:
+    image: docker.io/gitea/gitea:1.25-rootless
+    depends_on:
+      gitea:
+        condition: service_healthy
+    volumes:
+      - gitea-data:/var/lib/gitea
+      - gitea-config:/etc/gitea
+      - ./gitea-seed.sh:/gitea-seed.sh:z
+    entrypoint: ["/bin/sh", "/gitea-seed.sh"]
+    restart: "no"
 
   # ── PostgreSQL (optional — start with: docker compose --profile postgres up) ─
   postgres:
@@ -179,6 +202,7 @@ services:
     ports:
       - "4317:4317"   # OTLP gRPC
       - "4318:4318"   # OTLP HTTP
+      - "8889:8889"   # Prometheus scrape endpoint — what the compose suite asserts telemetry arrived on
     depends_on:
       - jaeger
 
@@ -193,14 +217,17 @@ services:
       - "16686:16686"   # Jaeger UI
 
   # ── Prometheus (optional — metrics store for the --otel stack) ─────────────
-  # Scrapes the metrics the collector re-exposes on :8889. Query/graph UI at http://localhost:9090.
+  # Scrapes the metrics the collector re-exposes on :8889. Query/graph UI at http://localhost:9091.
   prometheus:
     image: docker.io/prom/prometheus:v3.1.0
     profiles: [otel]
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:z
     ports:
-      - "9090:9090"   # Prometheus UI
+      # 9091 on the host: the oidc overlay's mock provider needs 9090, because its issuer URI names that port and the
+      # browser flow resolves mock-oauth2 to localhost. Two overlays claiming one port meant the second to start
+      # simply never did, and whatever depended on it waited.
+      - "9091:9090"   # Prometheus UI
     depends_on:
       - otel-collector
 
@@ -225,6 +252,7 @@ services:
 
 volumes:
   gitea-data:
+  gitea-config:
   postgres-data:
   mysql-data:
   mariadb-data:

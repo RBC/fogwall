@@ -11,8 +11,8 @@
 ## `FOGWALL_CONFIG_PROFILES`
 
 Set this environment variable to a comma-separated list of profile names. For each name, fogwall looks for
-`fogwall-{name}.yml` on the classpath (including any files mounted into `/app/conf/` in Docker). Unknown or missing
-profile files are silently skipped.
+`fogwall-{name}.yml` on the classpath (including any files mounted into `/app/conf/` in Docker). A name with no matching
+file fails startup, naming the file it wanted — fogwall does not start on base defaults with the profile missing.
 
 ```bash
 # Local development — loads fogwall-local.yml
@@ -27,19 +27,32 @@ FOGWALL_CONFIG_PROFILES=docker-default,oidc
 ```
 
 Later profiles take priority over earlier ones. All profiles take priority over `fogwall.yml`. Environment variables
-override everything.
+override everything. Merging is per key, so a profile that sets one provider's port leaves every other provider and
+every other setting alone.
 
-## Bundled profiles
+**A profile name resolves to exactly one file.** fogwall takes the first `fogwall-{name}.yml` on the classpath; a second
+file of the same name further along is not merged in, it is never read. Profiles meant to compose therefore need
+distinct names — which is why the dashboard's local settings are `fogwall-dashboard.yml` rather than a second
+`fogwall-local.yml`.
 
-| Profile name     | File                         | Purpose                                                   |
-| ---------------- | ---------------------------- | --------------------------------------------------------- |
-| `local`          | `fogwall-local.yml`          | Local development: dev users, Vite CORS, test allow rules |
-| `docker-default` | `fogwall-docker-default.yml` | Docker base: admin user, Gitea provider, validation rules |
-| `ldap`           | `fogwall-ldap.yml`           | LDAP authentication config (used with `docker-default`)   |
-| `oidc`           | `fogwall-oidc.yml`           | OIDC authentication config (used with `docker-default`)   |
+## Where profiles come from
 
-> When running via `./gradlew run`, `FOGWALL_CONFIG_PROFILES=local` is set automatically. In Docker, set it explicitly
-> via the Compose file or your deployment config.
+Only `fogwall.yml` is bundled in the jar. Every profile is a file supplied from outside it, so nothing that configures a
+particular deployment — users, credentials, hosts — is ever packaged into an artifact that ships somewhere else.
+
+| Profile name     | File                         | Supplied by                                           |
+| ---------------- | ---------------------------- | ----------------------------------------------------- |
+| `local`          | `fogwall-local.yml`          | `config/` in a clone; the developer's own, gitignored |
+| `dashboard`      | `fogwall-dashboard.yml`      | `config/` in a clone; what only the dashboard reads   |
+| `docker-default` | `fogwall-docker-default.yml` | Mounted into `/app/conf/` by Docker Compose           |
+| `ldap`           | `fogwall-ldap.yml`           | Mounted into `/app/conf/`, used with `docker-default` |
+| `oidc`           | `fogwall-oidc.yml`           | Mounted into `/app/conf/`, used with `docker-default` |
+
+In a container, mount each profile at `/app/config/fogwall-{name}.yml` — that directory is on the classpath ahead of the
+application's own jars.
+
+> When running via `./gradlew run`, `FOGWALL_CONFIG_PROFILES=local` is set automatically and `config/` is put on the
+> classpath. In Docker, set it explicitly via the Compose file or your deployment config.
 
 ## Docker Compose
 

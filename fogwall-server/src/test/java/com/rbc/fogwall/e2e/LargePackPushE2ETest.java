@@ -2,7 +2,6 @@ package com.rbc.fogwall.e2e;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.rbc.fogwall.approval.AutoApprovalGateway;
 import com.rbc.fogwall.db.model.PushQuery;
 import com.rbc.fogwall.db.model.PushStatus;
 import java.net.URLEncoder;
@@ -58,6 +57,7 @@ class LargePackPushE2ETest {
     private static final int NEW_FILES_PER_FOLLOWUP = 3;
 
     static GiteaContainer gitea;
+    static String adminToken;
     static Path tempDir;
 
     @BeforeAll
@@ -65,6 +65,7 @@ class LargePackPushE2ETest {
         gitea = new GiteaContainer();
         gitea.start();
         gitea.createAdminUser();
+        adminToken = gitea.generateAdminPushToken();
         gitea.createTestRepo();
         tempDir = Files.createTempDirectory("fogwall-largpack-e2e-");
     }
@@ -115,7 +116,7 @@ class LargePackPushE2ETest {
     private static String credUrl(int port, String path) {
         String creds = URLEncoder.encode(GiteaContainer.ADMIN_USER, StandardCharsets.UTF_8)
                 + ":"
-                + URLEncoder.encode(GiteaContainer.ADMIN_PASSWORD, StandardCharsets.UTF_8);
+                + URLEncoder.encode(adminToken, StandardCharsets.UTF_8);
         return "http://" + creds + "@localhost:" + port + path;
     }
 
@@ -129,7 +130,7 @@ class LargePackPushE2ETest {
 
         @BeforeEach
         void start() throws Exception {
-            proxy = new JettyProxyFixture(gitea.getBaseUri(), AutoApprovalGateway::new);
+            proxy = new JettyProxyFixture(gitea.getBaseUri(), JettyProxyFixture.ApprovalMode.AUTO);
         }
 
         @AfterEach
@@ -174,7 +175,7 @@ class LargePackPushE2ETest {
 
         @BeforeEach
         void start() throws Exception {
-            proxy = new JettyProxyFixture(gitea.getBaseUri(), AutoApprovalGateway::new);
+            proxy = new JettyProxyFixture(gitea.getBaseUri(), JettyProxyFixture.ApprovalMode.AUTO);
         }
 
         @AfterEach

@@ -2,18 +2,11 @@ package com.rbc.fogwall.e2e;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.rbc.fogwall.config.BinaryBlobConfig;
-import com.rbc.fogwall.config.CommitConfig;
-import com.rbc.fogwall.config.DiffScanConfig;
-import com.rbc.fogwall.config.SecretScanConfig;
-import com.rbc.fogwall.db.memory.InMemoryUrlRuleRegistry;
-import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.jetty.reload.LiveConfigLoader.Section;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.*;
 
@@ -37,6 +30,7 @@ class ConfigHotReloadE2ETest {
 
     // Shared across all tests — containers are expensive to start.
     static GiteaContainer gitea;
+    static String adminToken;
 
     // Per-test — fresh config state and repo for every test method.
     HotReloadJettyFixture proxy;
@@ -48,6 +42,7 @@ class ConfigHotReloadE2ETest {
         gitea = new GiteaContainer();
         gitea.start();
         gitea.createAdminUser();
+        adminToken = gitea.generateAdminPushToken();
         // Creates the test org (test-owner) plus an initial repo; subsequent tests add their own repos.
         gitea.createTestRepo();
     }
@@ -63,14 +58,7 @@ class ConfigHotReloadE2ETest {
         gitea.createRepo(GiteaContainer.TEST_ORG, repoName);
         tempDir = Files.createTempDirectory("fogwall-hotreload-e2e-");
 
-        var configHolder = new ConfigHolder(
-                CommitConfig.defaultConfig(),
-                DiffScanConfig.defaultConfig(),
-                SecretScanConfig.defaultConfig(),
-                BinaryBlobConfig.defaultConfig(),
-                List.of());
-        var configRegistry = new InMemoryUrlRuleRegistry();
-        proxy = new HotReloadJettyFixture(gitea.getBaseUri(), configHolder, configRegistry);
+        proxy = new HotReloadJettyFixture(gitea.getBaseUri());
 
         // Seed allow-all so requests reach the validation filters under test.
         Path allowAll = Files.createTempFile(tempDir, "allow-all-", ".yml");
@@ -99,7 +87,7 @@ class ConfigHotReloadE2ETest {
 
     private String url() {
         String user = URLEncoder.encode(GiteaContainer.ADMIN_USER, StandardCharsets.UTF_8);
-        String pass = URLEncoder.encode(GiteaContainer.ADMIN_PASSWORD, StandardCharsets.UTF_8);
+        String pass = URLEncoder.encode(adminToken, StandardCharsets.UTF_8);
         return "http://" + user + ":" + pass + "@localhost:" + proxy.getPort() + "/proxy/" + proxy.getGiteaHostPort()
                 + "/" + GiteaContainer.TEST_ORG + "/" + repoName + ".git";
     }
@@ -151,9 +139,9 @@ class ConfigHotReloadE2ETest {
                 secret-scan:
                   enabled: false
                 """);
-        proxy.reloadSection(permissive, Section.COMMIT);
-
-        assertTrue(git.tryPush(repo), "push should succeed after commit rules are relaxed");
+        assertTrue(
+                awaitReload(permissive, Section.COMMIT, git, repo, true),
+                "push should succeed after commit rules are relaxed");
     }
 
     /** Verifies that diff content block literals are enforced after a reload and relaxed after a second reload. */
@@ -187,9 +175,9 @@ class ConfigHotReloadE2ETest {
                 secret-scan:
                   enabled: false
                 """);
-        proxy.reloadSection(permissive, Section.DIFF_SCAN);
-
-        assertTrue(git.tryPush(repo), "push should succeed after diff-scan rules are relaxed");
+        assertTrue(
+                awaitReload(permissive, Section.DIFF_SCAN, git, repo, true),
+                "push should succeed after diff-scan rules are relaxed");
     }
 
     /**
@@ -238,10 +226,10 @@ class ConfigHotReloadE2ETest {
                 secret-scan:
                   enabled: false
                 """);
-        proxy.reloadSection(permissive, Section.SECRET_SCAN);
-
         if (!blocked.succeeded()) {
-            assertTrue(git.tryPush(repo), "push should succeed after secret scanning is disabled");
+            assertTrue(
+                    awaitReload(permissive, Section.SECRET_SCAN, git, repo, true),
+                    "push should succeed after secret scanning is disabled");
         }
     }
 
@@ -286,8 +274,160 @@ class ConfigHotReloadE2ETest {
                 secret-scan:
                   enabled: false
                 """);
-        proxy.reloadSection(permissive, Section.RULES);
+        assertTrue(
+                awaitReload(permissive, Section.RULES, git, repo, true),
+                "push should succeed after deny rule is removed");
+    }
 
-        assertTrue(git.tryPush(repo), "push should succeed after deny rule is removed");
+    /**
+     * The git source: fogwall clones a config repository and applies the YAML it finds there.
+     *
+     * <p>Distinct from every other test here, which stages a file on disk. This one puts the config where an operator
+     * would — in a repository — and is the only coverage the clone path has.
+     *
+     * <p>The repository carries the whole hot-reloadable picture, not just the rule under test, because that is what
+     * the feature does: a reload applies every section from the repo, so anything it omits reverts to base defaults.
+     */
+    @Test
+    void gitSourceReload() throws Exception {
+        String configRepo =
+                "config-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        gitea.createRepo(GiteaContainer.TEST_ORG, configRepo);
+        String configRepoUrl = gitea.getBaseUrl() + "/" + GiteaContainer.TEST_ORG + "/" + configRepo + ".git";
+
+        pushConfig(configRepo, repoConfig("        - \"GITSOURCE_BLOCKED\""));
+
+        try (var gitProxy = new HotReloadJettyFixture(gitea.getBaseUri(), configRepoUrl)) {
+            GitHelper git = git();
+            Path repo = git.clone(proxyUrl(gitProxy), "git-source-reload");
+            git.setAuthor(repo, GiteaContainer.VALID_AUTHOR_NAME, GiteaContainer.VALID_AUTHOR_EMAIL);
+            git.writeAndStage(repo, "file.txt", "git source reload");
+            git.commit(repo, "feat: GITSOURCE_BLOCKED — should be blocked once the repo config is pulled");
+
+            assertTrue(
+                    gitProxy.reloadSection(Section.COMMIT).contains("from git"),
+                    "reload should report the git source, not the file one");
+            assertTrue(
+                    awaitPush(gitProxy, git, repo, false),
+                    "push should be blocked by the rule the config repo carries");
+
+            // Relax the rule in the repository; the next reload picks up the new commit.
+            pushConfig(configRepo, repoConfig(""));
+
+            assertTrue(
+                    awaitPush(gitProxy, git, repo, true), "push should succeed after the config repo relaxes the rule");
+        }
+    }
+
+    /**
+     * Reloads from the config repo and pushes, until the push behaves as {@code wanted} or the attempts run out.
+     *
+     * <p>The retry is needed because a reload started while another is still running is dropped, and the caller is told
+     * it succeeded either way; the startup load is already in flight when a fixture hands back control, so a single
+     * reload call cannot be relied on to have applied anything.
+     */
+    private boolean awaitPush(HotReloadJettyFixture fixture, GitHelper git, Path repo, boolean wanted)
+            throws Exception {
+        for (int attempt = 0; attempt < 5; attempt++) {
+            fixture.reloadSection(Section.COMMIT);
+            if (git.tryPush(repo) == wanted) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Reloads {@code section} from an override file and pushes, retrying until the push behaves as {@code wanted} or
+     * the attempts run out. Same reason as {@link #awaitPush}: a reload issued while a previous one is still running is
+     * dropped and reported as succeeding anyway, so a single reload-then-push can race the reload that precedes it.
+     */
+    private boolean awaitReload(Path override, Section section, GitHelper git, Path repo, boolean wanted)
+            throws Exception {
+        for (int attempt = 0; attempt < 5; attempt++) {
+            proxy.reloadSection(override, section);
+            if (git.tryPush(repo) == wanted) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** The proxy-mode push URL for a fixture other than the per-test one. */
+    private String proxyUrl(HotReloadJettyFixture fixture) {
+        return "http://" + URLEncoder.encode(GiteaContainer.ADMIN_USER, StandardCharsets.UTF_8) + ":"
+                + URLEncoder.encode(adminToken, StandardCharsets.UTF_8) + "@localhost:" + fixture.getPort() + "/proxy/"
+                + fixture.getGiteaHostPort() + "/" + GiteaContainer.TEST_ORG + "/" + repoName + ".git";
+    }
+
+    /**
+     * What a config repository holds: the hot-reloadable policy, and nothing that names a provider.
+     *
+     * <p>A reload composes the base config with this file alone — the fixture's own override is not in the picture — so
+     * the provider set is whatever the base config ships. Anything here referencing {@code gitea-e2e} would fail
+     * validation, which is why there are no users or permissions: those are not the repository's to carry.
+     *
+     * <p>The access rule is, though. A reload replaces the rules with what it finds, so omitting it would leave the
+     * proxy with none and refuse the push for the wrong reason.
+     */
+    private static String repoConfig(String blockedLiterals) {
+        return """
+                # A reload file has to be a valid config in its own right. Providers are not hot-reloadable, so this
+                # changes nothing at runtime — but without it the users below reference a provider the base config
+                # ships disabled, and validation refuses the whole file.
+                providers:
+                  gitea:
+                    enabled: true
+                commit:
+                  message:
+                    block:
+                      literals:
+                %s
+                secret-scan:
+                  enabled: false
+                rules:
+                  allow:
+                    - enabled: true
+                      order: 1
+                      operation: BOTH
+                      match:
+                        target: OWNER
+                        value: "*"
+                        type: GLOB
+                users:
+                  - username: %s
+                    emails:
+                      - %s
+                    scm-identities:
+                      - provider: gitea
+                        username: %s
+                permissions:
+                  - username: %s
+                    provider: gitea
+                    match:
+                      target: SLUG
+                      value: ".*"
+                      type: REGEX
+                    grant: MAINTAIN
+                """.formatted(
+                        blockedLiterals,
+                        GiteaContainer.ADMIN_USER,
+                        GiteaContainer.VALID_AUTHOR_EMAIL,
+                        GiteaContainer.ADMIN_USER,
+                        GiteaContainer.ADMIN_USER);
+    }
+
+    /** Commits {@code fogwall.yml} to the config repository, straight to Gitea rather than through the proxy. */
+    private void pushConfig(String configRepo, String yaml) throws Exception {
+        String url = "http://" + URLEncoder.encode(GiteaContainer.ADMIN_USER, StandardCharsets.UTF_8) + ":"
+                + URLEncoder.encode(adminToken, StandardCharsets.UTF_8) + "@"
+                + gitea.getBaseUrl().replace("http://", "") + "/" + GiteaContainer.TEST_ORG + "/" + configRepo
+                + ".git";
+        GitHelper git = git();
+        Path repo = git.clone(url, "config-repo-" + UUID.randomUUID().toString().substring(0, 8));
+        git.setAuthor(repo, GiteaContainer.VALID_AUTHOR_NAME, GiteaContainer.VALID_AUTHOR_EMAIL);
+        git.writeAndStage(repo, "fogwall.yml", yaml);
+        git.commit(repo, "chore: update fogwall config");
+        assertTrue(git.tryPush(repo), "config repo push should succeed");
     }
 }

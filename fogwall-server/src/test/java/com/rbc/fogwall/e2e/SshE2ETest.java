@@ -286,7 +286,8 @@ class SshE2ETest {
                         .access(AccessRule.Access.DENY)
                         .operation(AccessRule.Operation.BOTH)
                         .target(MatchTarget.SLUG)
-                        .value(GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO)
+                        // SLUG rules carry the leading slash the request path has — the evaluator normalises nothing.
+                        .value("/" + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO)
                         .matchType(MatchType.LITERAL)
                         .build());
 

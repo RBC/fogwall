@@ -1,230 +1,161 @@
 package com.rbc.fogwall.e2e;
 
-import com.rbc.fogwall.approval.AutoApprovalGateway;
-import com.rbc.fogwall.config.ContentPatternConfig;
-import com.rbc.fogwall.config.GpgConfig;
-import com.rbc.fogwall.config.SshConfig;
+import com.rbc.fogwall.config.FogwallConfigLoader;
 import com.rbc.fogwall.db.PushStore;
-import com.rbc.fogwall.db.PushStoreFactory;
-import com.rbc.fogwall.db.memory.InMemoryUrlRuleRegistry;
-import com.rbc.fogwall.db.model.AccessRule;
-import com.rbc.fogwall.db.model.MatchTarget;
-import com.rbc.fogwall.db.model.MatchType;
-import com.rbc.fogwall.git.LocalRepositoryCache;
-import com.rbc.fogwall.git.ServerReceivePackFactory;
-import com.rbc.fogwall.permission.InMemoryRepoPermissionStore;
-import com.rbc.fogwall.permission.RepoPermission;
-import com.rbc.fogwall.permission.RepoPermissionService;
-import com.rbc.fogwall.provider.FogwallProvider;
-import com.rbc.fogwall.provider.ForgejoProvider;
-import com.rbc.fogwall.service.SshScmIdentityEnricher;
-import com.rbc.fogwall.ssh.SshGitServer;
-import com.rbc.fogwall.ssh.SshKeyUtils;
-import com.rbc.fogwall.ssh.SshProviderTarget;
-import com.rbc.fogwall.user.ScmIdentity;
-import com.rbc.fogwall.user.SshKeyEntry;
-import com.rbc.fogwall.user.StaticUserStore;
-import com.rbc.fogwall.user.UserEntry;
+import com.rbc.fogwall.db.UrlRuleRegistry;
+import com.rbc.fogwall.jetty.FogwallJettyApplication;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.URI;
 import java.nio.file.Files;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.nio.file.Path;
 
 /**
- * Test fixture that starts a fogwall SSH server ({@link SshGitServer}) on an ephemeral port, wired to a
- * {@link StaticUserStore} pre-seeded with a test SSH key.
+ * Starts a real fogwall SSH server for {@code @Tag("e2e")} tests, through the same path production takes:
+ * {@link FogwallConfigLoader} composes {@code fogwall-test-e2e.yml} with a generated override, and
+ * {@link FogwallJettyApplication#start} does the assembly — including the SSH transport, via
+ * {@code SshServerRegistrar}.
  *
- * <p>The fixture targets a {@link GiteaContainer} as the upstream git provider via SSH. Approval is auto-granted so
- * happy-path tests go straight to FORWARDED without UI interaction.
+ * <p>Two provider entries reach the same upstream Gitea over SSH: the primary routed by the upstream host:port, the
+ * alias by {@link #ALIAS_PATH_SUFFIX}, so multi-provider SSH routing is exercised on one container. The test key is
+ * registered in Gitea under {@link GiteaContainer#ADMIN_USER}; the proxy user's SCM identity is linked to that login on
+ * both entries so the enricher can verify the connecting fingerprint against ADMIN_USER's Gitea keys. Approval is auto,
+ * so a clean push goes straight to FORWARDED.
  *
- * <p>Usage:
+ * <p>Trust-on-first-use pins whatever SSH host key the container presents on the first upstream connect, since the
+ * Gitea test container regenerates its host key on each start and it cannot be pinned ahead of time.
  *
  * <pre>{@code
- * proxy = new SshProxyFixture(gitea, pubKeyLine);
- * // push via: ssh://localhost:<proxy.getSshPort()>/<gitea-host>:<gitea-ssh-port>/owner/repo.git
+ * proxy = new SshProxyFixture(gitea, pubKeyLine, adminToken);
+ * // push via: proxy.pushUrl(owner, repo)
  * }</pre>
  */
 class SshProxyFixture implements AutoCloseable {
 
-    /** Proxy username used for the pre-seeded SSH test key. */
+    /** Proxy username the pre-seeded SSH test key resolves to. */
     static final String TEST_USER = "ssh-test-user";
 
-    private final SshGitServer sshServer;
+    /** The two provider entries; the alias is a second route to the same Gitea for the multi-provider routing test. */
+    private static final String PRIMARY_PROVIDER = "gitea-ssh-e2e";
+
+    private static final String ALIAS_PROVIDER = "gitea-ssh-e2e-alias";
+
+    /** Path suffix the alias entry is routed under; the primary is routed by the upstream host:port. */
+    private static final String ALIAS_PATH_SUFFIX = "/gitea-alias";
+
+    private final FogwallJettyApplication.Running running;
     private final int sshPort;
-    private final PushStore pushStore;
     private final String giteaSshHostPort;
-    private final InMemoryUrlRuleRegistry urlRuleRegistry;
 
     /**
-     * Creates and starts the SSH fixture.
-     *
      * @param gitea running Gitea container (SSH port must be exposed)
      * @param publicKeyLine OpenSSH authorized_keys line for the test identity
+     * @param giteaApiToken token the enricher uses to list the upstream login's keys (Gitea requires sign-in to view)
      */
     SshProxyFixture(GiteaContainer gitea, String publicKeyLine, String giteaApiToken) throws Exception {
-        String fingerprint = SshKeyUtils.fingerprint(publicKeyLine);
-
-        var sshKeyEntry = SshKeyEntry.builder()
-                .id("config:" + fingerprint)
-                .fingerprint(fingerprint)
-                .publicKey(SshKeyUtils.normalise(publicKeyLine))
-                .label("e2e-test")
-                .createdAt(Instant.EPOCH)
-                .locked(true)
-                .build();
-
         URI giteaSshUri = gitea.getSshUri();
         this.giteaSshHostPort = giteaSshUri.getHost() + ":" + giteaSshUri.getPort();
+        this.sshPort = findFreePort();
 
-        // Provider name is also the providerId used when matching scm_identities in the enricher.
-        String providerId = "gitea-ssh-e2e";
-        // Second provider entry, same Gitea backend but routed under a distinct pathSuffix instead of host:port —
-        // exercises real multi-provider SSH routing (issue #447) without standing up a second upstream container.
-        String aliasProviderId = "gitea-ssh-e2e-alias";
-
-        // The test key is registered in Gitea under ADMIN_USER — link the test user's SCM identity accordingly
-        // so the enricher can verify the connecting fingerprint against ADMIN_USER's Gitea keys. One identity per
-        // provider entry, since identity resolution is keyed by providerId.
-        var testUser = UserEntry.builder()
-                .username(TEST_USER)
-                .emails(List.of(GiteaContainer.VALID_AUTHOR_EMAIL))
-                .scmIdentities(List.of(
-                        ScmIdentity.builder()
-                                .provider(providerId)
-                                .username(GiteaContainer.ADMIN_USER)
-                                .build(),
-                        ScmIdentity.builder()
-                                .provider(aliasProviderId)
-                                .username(GiteaContainer.ADMIN_USER)
-                                .build()))
-                .sshKeys(List.of(sshKeyEntry))
-                .build();
-
-        var userStore = new StaticUserStore(List.of(testUser));
-
-        // ForgejoProvider implements SshKeyFingerprintLookup — required for SSH identity verification. One provider
-        // entry serves both transports (#531): uri is the HTTP/API endpoint, sshUri is the SSH transport fogwall
-        // forwards over. The container maps HTTP and SSH to different host ports, so the primary entry pins its route
-        // key to the Gitea SSH host:port (via pathSuffix, leading slash required to match the normalised push path) so
-        // the push URLs below still resolve. apiToken is required because the Gitea container has REQUIRE_SIGNIN_VIEW.
-        URI giteaHttpUri = URI.create(gitea.getBaseUrl());
-        var provider = ForgejoProvider.builder()
-                .name(providerId)
-                .uri(giteaHttpUri)
-                .sshUri(giteaSshUri)
-                .pathSuffix("/" + giteaSshHostPort)
-                .apiToken(giteaApiToken)
-                .build();
-        var aliasProvider = ForgejoProvider.builder()
-                .name(aliasProviderId)
-                .uri(giteaHttpUri)
-                .sshUri(giteaSshUri)
-                .pathSuffix(ALIAS_PATH_SUFFIX)
-                .apiToken(giteaApiToken)
-                .build();
-
-        pushStore = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
-        var cache = new LocalRepositoryCache(Files.createTempDirectory("fogwall-ssh-e2e-cache-"), 0, true);
-
-        urlRuleRegistry = new InMemoryUrlRuleRegistry();
-        urlRuleRegistry.save(AccessRule.builder()
-                .ruleOrder(1)
-                .access(AccessRule.Access.ALLOW)
-                .operation(AccessRule.Operation.BOTH)
-                .target(MatchTarget.OWNER)
-                .value("*")
-                .matchType(MatchType.GLOB)
-                .build());
-
-        // Seed a catch-all PUSH permission for the test user against both provider entries.
-        var permissionStore = new InMemoryRepoPermissionStore();
-        for (FogwallProvider p : List.of(provider, aliasProvider)) {
-            permissionStore.save(RepoPermission.builder()
-                    .username(TEST_USER)
-                    .provider(p.getProviderId())
-                    .value("/**")
-                    .matchType(MatchType.GLOB)
-                    .grant(RepoPermission.Grant.PUSH)
-                    .build());
+        Path hostKey = Files.createTempDirectory("fogwall-ssh-e2e-hostkey-").resolve("host_key");
+        Path override = writeOverride(gitea, giteaSshUri, publicKeyLine, giteaApiToken, hostKey);
+        try {
+            running = FogwallJettyApplication.start(FogwallConfigLoader.loadWithOverride("test-e2e", override));
+        } finally {
+            Files.deleteIfExists(override);
         }
-        var permissionService = new RepoPermissionService(permissionStore);
-
-        Map<String, SshProviderTarget> routes = new LinkedHashMap<>();
-        for (FogwallProvider p : List.of(provider, aliasProvider)) {
-            var receivePackFactory = new ServerReceivePackFactory(
-                    p,
-                    JettyProxyFixture::buildCommitConfig,
-                    null,
-                    null,
-                    null,
-                    ContentPatternConfig.defaultConfig(),
-                    GpgConfig.defaultConfig(),
-                    permissionService,
-                    null,
-                    pushStore,
-                    new AutoApprovalGateway(pushStore),
-                    null,
-                    Duration.ofSeconds(10),
-                    urlRuleRegistry);
-            receivePackFactory.setSshScmIdentityEnricher(new SshScmIdentityEnricher());
-            routes.put(p.servletPath(), new SshProviderTarget(p, receivePackFactory));
-        }
-
-        sshPort = findFreePort();
-        var sshConfig = new SshConfig();
-        sshConfig.setEnabled(true);
-        sshConfig.setPort(sshPort);
-        sshConfig.setHostKeyPath(Files.createTempDirectory("fogwall-ssh-e2e-hostkey-")
-                .resolve("host_key")
-                .toString());
-        // The Gitea test container regenerates its SSH host key on each start, so it can't be pinned ahead of time.
-        // Trust-on-first-use pins whatever key the container presents on the first upstream connect — the same
-        // mechanism operators opt into for internal providers (see SshConfig#isTrustOnFirstUse).
-        sshConfig.setTrustOnFirstUse(true);
-
-        sshServer = SshGitServer.create(sshConfig, routes, cache, userStore, urlRuleRegistry, List.of());
-        sshServer.start();
     }
 
-    /** Path suffix the second (alias) provider entry is routed under — see the multi-provider routing note above. */
-    private static final String ALIAS_PATH_SUFFIX = "/gitea-alias";
+    /** The half of the configuration that only exists at runtime: the SSH port, the container, and the test key. */
+    private Path writeOverride(
+            GiteaContainer gitea, URI giteaSshUri, String publicKeyLine, String apiToken, Path hostKey)
+            throws IOException {
+        String yaml = "server:\n"
+                + "  approval-mode: auto\n"
+                + "  ssh:\n"
+                + "    enabled: true\n"
+                + "    port: " + sshPort + "\n"
+                + "    host-key-path: \"" + hostKey + "\"\n"
+                + "    trust-on-first-use: true\n"
+                + "providers:\n"
+                + providerBlock(PRIMARY_PROVIDER, gitea.getBaseUrl(), apiToken, "/" + giteaSshHostPort, giteaSshUri)
+                + providerBlock(ALIAS_PROVIDER, gitea.getBaseUrl(), apiToken, ALIAS_PATH_SUFFIX, giteaSshUri)
+                + "users:\n"
+                + "  - username: " + TEST_USER + "\n"
+                + "    emails:\n"
+                + "      - " + GiteaContainer.VALID_AUTHOR_EMAIL + "\n"
+                + "    scm-identities:\n"
+                + "      - provider: " + PRIMARY_PROVIDER + "\n"
+                + "        username: " + GiteaContainer.ADMIN_USER + "\n"
+                + "      - provider: " + ALIAS_PROVIDER + "\n"
+                + "        username: " + GiteaContainer.ADMIN_USER + "\n"
+                + "    ssh-keys:\n"
+                + "      - public-key: \"" + publicKeyLine + "\"\n"
+                + "rules:\n"
+                + "  allow:\n"
+                + "    - enabled: true\n"
+                + "      order: 1\n"
+                + "      operation: BOTH\n"
+                + "      match:\n"
+                + "        target: OWNER\n"
+                + "        value: \"*\"\n"
+                + "        type: GLOB\n"
+                + "permissions:\n"
+                + grant(PRIMARY_PROVIDER)
+                + grant(ALIAS_PROVIDER);
+
+        Path file = Files.createTempFile("fogwall-ssh-e2e-override-", ".yml");
+        Files.writeString(file, yaml);
+        return file;
+    }
+
+    private static String providerBlock(String name, String httpUri, String apiToken, String pathSuffix, URI sshUri) {
+        return "  " + name + ":\n"
+                + "    enabled: true\n"
+                + "    type: forgejo\n"
+                + "    uri: " + httpUri + "\n"
+                + "    api-token: " + apiToken + "\n"
+                + "    path-suffix: \"" + pathSuffix + "\"\n"
+                + "    ssh:\n"
+                + "      uri: " + sshUri + "\n";
+    }
+
+    private static String grant(String provider) {
+        return "  - username: " + TEST_USER + "\n"
+                + "    provider: " + provider + "\n"
+                + "    match:\n"
+                + "      target: SLUG\n"
+                + "      value: \".*\"\n"
+                + "      type: REGEX\n"
+                + "    grant: PUSH\n";
+    }
 
     /** The host port the fogwall SSH server is listening on. */
     int getSshPort() {
         return sshPort;
     }
 
-    /** The push URL for a repository, targeting this SSH fixture's primary (host:port-routed) provider entry. */
+    /** The push URL for a repository, targeting the primary (host:port-routed) provider entry. */
     String pushUrl(String owner, String repo) {
         return "ssh://localhost:" + sshPort + "/" + giteaSshHostPort + "/" + owner + "/" + repo + ".git";
     }
 
-    /**
-     * The push URL for a repository, targeting this SSH fixture's second provider entry (routed by
-     * {@link #ALIAS_PATH_SUFFIX} instead of host:port) — same upstream Gitea backend, different provider entry, used to
-     * verify multi-provider SSH routing (issue #447).
-     */
+    /** The push URL for a repository, targeting the alias ({@link #ALIAS_PATH_SUFFIX}-routed) provider entry. */
     String aliasPushUrl(String owner, String repo) {
         return "ssh://localhost:" + sshPort + ALIAS_PATH_SUFFIX + "/" + owner + "/" + repo + ".git";
     }
 
     PushStore getPushStore() {
-        return pushStore;
+        return running.ctx().pushStore();
     }
 
-    InMemoryUrlRuleRegistry getUrlRuleRegistry() {
-        return urlRuleRegistry;
+    UrlRuleRegistry getUrlRuleRegistry() {
+        return running.ctx().urlRuleRegistry();
     }
 
     @Override
-    public void close() {
-        sshServer.stop();
+    public void close() throws Exception {
+        running.close();
     }
 
     private static int findFreePort() throws IOException {

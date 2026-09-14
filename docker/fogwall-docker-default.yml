@@ -23,6 +23,10 @@ users:
     scm-identities:
       - provider: gitea
         username: test-user
+    # The compose SSH smoke test authenticates with this key (test/ssh/compose_ed25519); the SSH server only runs
+    # under the `ssh` profile. Its counterpart is registered in Gitea for test-user by docker/gitea-seed.sh.
+    ssh-keys:
+      - public-key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFZpJaD4A4w0l7PY02oqUWViTg5gLhD2+i2pY47ajwO0 fogwall-compose-test-key (throwaway; local Gitea only)"
 
   - username: user2
     password-hash: "{noop}Test1234!"
@@ -53,6 +57,16 @@ permissions:
       value: /test-owner/test-repo
       type: LITERAL
     grant: PUSH
+
+  # The same repository through the SCM API listeners the contributions overlay turns on. PUSH does not imply it:
+  # pushing to a fork proposes nothing, so the two are granted separately.
+  - username: test-user
+    provider: gitea
+    match:
+      target: SLUG
+      value: /test-owner/test-repo
+      type: LITERAL
+    grant: PROPOSE
 
   # user2: GLOB — any repo under otherorg
   - username: user2

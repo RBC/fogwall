@@ -2,7 +2,6 @@ package com.rbc.fogwall.e2e;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.rbc.fogwall.approval.AutoApprovalGateway;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -23,6 +22,7 @@ import org.junit.jupiter.api.*;
 class ProxyModeAutoApproveE2ETest {
 
     static GiteaContainer gitea;
+    static String adminToken;
     static JettyProxyFixture proxy;
     static Path tempDir;
 
@@ -31,9 +31,10 @@ class ProxyModeAutoApproveE2ETest {
         gitea = new GiteaContainer();
         gitea.start();
         gitea.createAdminUser();
+        adminToken = gitea.generateAdminPushToken();
         gitea.createTestRepo();
 
-        proxy = new JettyProxyFixture(gitea.getBaseUri(), AutoApprovalGateway::new);
+        proxy = new JettyProxyFixture(gitea.getBaseUri(), JettyProxyFixture.ApprovalMode.AUTO);
         tempDir = Files.createTempDirectory("fogwall-proxy-auto-e2e-");
     }
 
@@ -46,7 +47,7 @@ class ProxyModeAutoApproveE2ETest {
     private String repoUrl() {
         String creds = URLEncoder.encode(GiteaContainer.ADMIN_USER, StandardCharsets.UTF_8)
                 + ":"
-                + URLEncoder.encode(GiteaContainer.ADMIN_PASSWORD, StandardCharsets.UTF_8);
+                + URLEncoder.encode(adminToken, StandardCharsets.UTF_8);
         return "http://" + creds + "@localhost:" + proxy.getPort()
                 + "/proxy/" + proxy.getGiteaHostPort() + "/"
                 + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO + ".git";
