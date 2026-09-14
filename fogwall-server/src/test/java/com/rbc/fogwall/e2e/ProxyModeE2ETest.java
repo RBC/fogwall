@@ -30,6 +30,7 @@ import org.junit.jupiter.api.*;
 class ProxyModeE2ETest {
 
     static GiteaContainer gitea;
+    static String adminToken;
     static JettyProxyFixture proxy;
     static Path tempDir;
 
@@ -41,6 +42,7 @@ class ProxyModeE2ETest {
         gitea = new GiteaContainer();
         gitea.start();
         gitea.createAdminUser();
+        adminToken = gitea.generateAdminPushToken();
         gitea.createTestRepo(); // creates the test-owner org; the per-test repos are added below
 
         proxy = new JettyProxyFixture(gitea.getBaseUri());
@@ -65,7 +67,7 @@ class ProxyModeE2ETest {
     private String repoUrl() {
         String creds = URLEncoder.encode(GiteaContainer.ADMIN_USER, StandardCharsets.UTF_8)
                 + ":"
-                + URLEncoder.encode(GiteaContainer.ADMIN_PASSWORD, StandardCharsets.UTF_8);
+                + URLEncoder.encode(adminToken, StandardCharsets.UTF_8);
         return "http://" + creds + "@localhost:" + proxy.getPort()
                 + "/proxy/" + proxy.getGiteaHostPort() + "/"
                 + GiteaContainer.TEST_ORG + "/" + repoName + ".git";

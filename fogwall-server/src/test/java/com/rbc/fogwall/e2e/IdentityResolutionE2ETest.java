@@ -2,26 +2,17 @@ package com.rbc.fogwall.e2e;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.rbc.fogwall.approval.UiApprovalGateway;
-import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.db.model.Attestation;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
-import com.rbc.fogwall.permission.InMemoryRepoPermissionStore;
 import com.rbc.fogwall.permission.RepoPermission;
-import com.rbc.fogwall.permission.RepoPermissionService;
-import com.rbc.fogwall.service.PushIdentityResolver;
 import com.rbc.fogwall.servlet.filter.CommitAttributionPolicyFilter;
-import com.rbc.fogwall.user.ReadOnlyUserStore;
-import com.rbc.fogwall.user.StaticUserStore;
-import com.rbc.fogwall.user.UserEntry;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import org.junit.jupiter.api.*;
 
 /**
@@ -50,6 +41,8 @@ class IdentityResolutionE2ETest {
 
     static GiteaContainer gitea;
     static JettyProxyFixture proxy;
+    static String testUserToken;
+    static String adminToken;
     static Path tempDir;
 
     @BeforeAll
@@ -61,30 +54,25 @@ class IdentityResolutionE2ETest {
         gitea.createTestUser();
         gitea.addTestUserAsCollaborator();
 
-        // Only TEST_USER is in the proxy store — admin is intentionally absent (unlinked)
-        var userStore = new StaticUserStore(List.of(UserEntry.builder()
-                .username(GiteaContainer.TEST_USER)
-                .emails(List.of(GiteaContainer.TEST_USER_EMAIL))
-                .scmIdentities(List.of())
-                .build()));
-        var identityResolver = usernameResolver(userStore);
+        testUserToken = gitea.generateTestUserToken();
+        adminToken = gitea.generateAdminPushToken();
 
-        var permissionStore = new InMemoryRepoPermissionStore();
+        // Only TEST_USER is in the proxy store — admin is intentionally absent (unlinked)
         proxy = new JettyProxyFixture(
                 gitea.getBaseUri(),
-                UiApprovalGateway::new,
-                identityResolver,
-                new RepoPermissionService(permissionStore));
+                List.of(new JettyProxyFixture.TestUser(
+                        GiteaContainer.TEST_USER, GiteaContainer.TEST_USER_EMAIL, GiteaContainer.TEST_USER)),
+                null);
 
-        // Seed permission grant after creating the fixture so we can use the real providerId
-        permissionStore.save(RepoPermission.builder()
-                .username(GiteaContainer.TEST_USER)
-                .provider(proxy.getProviderId())
-                .target(MatchTarget.SLUG)
-                .value("/" + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO)
-                .matchType(MatchType.LITERAL)
-                .grant(RepoPermission.Grant.PUSH)
-                .build());
+        proxy.getPermissionService()
+                .save(RepoPermission.builder()
+                        .username(GiteaContainer.TEST_USER)
+                        .provider(proxy.getProviderId())
+                        .target(MatchTarget.SLUG)
+                        .value("/" + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO)
+                        .matchType(MatchType.LITERAL)
+                        .grant(RepoPermission.Grant.PUSH)
+                        .build());
 
         tempDir = Files.createTempDirectory("fogwall-ident-e2e-");
     }
@@ -97,16 +85,10 @@ class IdentityResolutionE2ETest {
 
     // ── helpers ───────────────────────────────────────────────────────────────────
 
-    /** Test-only resolver: maps HTTP Basic-auth username directly to a proxy user (no SCM API call). */
-    private static PushIdentityResolver usernameResolver(ReadOnlyUserStore store) {
-        return (provider, pushUsername, token) ->
-                pushUsername != null && !pushUsername.isBlank() ? store.findByUsername(pushUsername) : Optional.empty();
-    }
-
     private String linkedUrl() {
         String creds = URLEncoder.encode(GiteaContainer.TEST_USER, StandardCharsets.UTF_8)
                 + ":"
-                + URLEncoder.encode(GiteaContainer.TEST_USER_PASSWORD, StandardCharsets.UTF_8);
+                + URLEncoder.encode(testUserToken, StandardCharsets.UTF_8);
         return "http://" + creds + "@localhost:" + proxy.getPort()
                 + "/proxy/" + proxy.getGiteaHostPort() + "/"
                 + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO + ".git";
@@ -119,7 +101,7 @@ class IdentityResolutionE2ETest {
     private String unlinkedUrl() {
         String creds = URLEncoder.encode(GiteaContainer.ADMIN_USER, StandardCharsets.UTF_8)
                 + ":"
-                + URLEncoder.encode(GiteaContainer.ADMIN_PASSWORD, StandardCharsets.UTF_8);
+                + URLEncoder.encode(adminToken, StandardCharsets.UTF_8);
         return "http://" + creds + "@localhost:" + proxy.getPort()
                 + "/proxy/" + proxy.getGiteaHostPort() + "/"
                 + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO + ".git";
@@ -182,35 +164,26 @@ class IdentityResolutionE2ETest {
     @Test
     @Order(3)
     void linkedUser_wrongCommitEmail_strictMode_rejected() throws Exception {
-        var strictPermissionStore = new InMemoryRepoPermissionStore();
-        var strictUserStore = new StaticUserStore(List.of(UserEntry.builder()
-                .username(GiteaContainer.TEST_USER)
-                .emails(List.of(GiteaContainer.TEST_USER_EMAIL))
-                .scmIdentities(List.of())
-                .build()));
-        var strictResolver = usernameResolver(strictUserStore);
-
         try (var strictProxy = new JettyProxyFixture(
                 gitea.getBaseUri(),
-                UiApprovalGateway::new,
-                strictResolver,
-                new RepoPermissionService(strictPermissionStore),
-                CommitConfig.CommitAttributionPolicyConfig.builder()
-                        .committer(CommitConfig.CommitAttributionPolicyMode.STRICT)
-                        .build())) {
+                List.of(new JettyProxyFixture.TestUser(
+                        GiteaContainer.TEST_USER, GiteaContainer.TEST_USER_EMAIL, GiteaContainer.TEST_USER)),
+                "strict")) {
 
-            strictPermissionStore.save(RepoPermission.builder()
-                    .username(GiteaContainer.TEST_USER)
-                    .provider(strictProxy.getProviderId())
-                    .target(MatchTarget.SLUG)
-                    .value("/" + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO)
-                    .matchType(MatchType.LITERAL)
-                    .grant(RepoPermission.Grant.PUSH)
-                    .build());
+            strictProxy
+                    .getPermissionService()
+                    .save(RepoPermission.builder()
+                            .username(GiteaContainer.TEST_USER)
+                            .provider(strictProxy.getProviderId())
+                            .target(MatchTarget.SLUG)
+                            .value("/" + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO)
+                            .matchType(MatchType.LITERAL)
+                            .grant(RepoPermission.Grant.PUSH)
+                            .build());
 
             String url = URLEncoder.encode(GiteaContainer.TEST_USER, StandardCharsets.UTF_8)
                     + ":"
-                    + URLEncoder.encode(GiteaContainer.TEST_USER_PASSWORD, StandardCharsets.UTF_8);
+                    + URLEncoder.encode(testUserToken, StandardCharsets.UTF_8);
             url = "http://" + url + "@localhost:" + strictProxy.getPort()
                     + "/proxy/" + proxy.getGiteaHostPort() + "/"
                     + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO + ".git";

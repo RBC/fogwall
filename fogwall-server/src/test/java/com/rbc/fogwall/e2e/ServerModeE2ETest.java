@@ -24,6 +24,7 @@ import org.junit.jupiter.api.*;
 class ServerModeE2ETest {
 
     static GiteaContainer gitea;
+    static String adminToken;
     static JettyProxyFixture proxy;
     static Path tempDir;
 
@@ -32,9 +33,10 @@ class ServerModeE2ETest {
         gitea = new GiteaContainer();
         gitea.start();
         gitea.createAdminUser();
+        adminToken = gitea.generateAdminPushToken();
         gitea.createTestRepo();
 
-        proxy = new JettyProxyFixture(gitea.getBaseUri());
+        proxy = new JettyProxyFixture(gitea.getBaseUri(), JettyProxyFixture.ApprovalMode.AUTO);
         tempDir = Files.createTempDirectory("fogwall-sf-e2e-");
     }
 
@@ -58,7 +60,7 @@ class ServerModeE2ETest {
     private String repoUrlFor(JettyProxyFixture fixture) {
         String creds = URLEncoder.encode(GiteaContainer.ADMIN_USER, StandardCharsets.UTF_8)
                 + ":"
-                + URLEncoder.encode(GiteaContainer.ADMIN_PASSWORD, StandardCharsets.UTF_8);
+                + URLEncoder.encode(adminToken, StandardCharsets.UTF_8);
         return "http://" + creds + "@localhost:" + fixture.getPort()
                 + "/push/" + fixture.getGiteaHostPort() + "/"
                 + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO + ".git";
@@ -125,7 +127,8 @@ class ServerModeE2ETest {
     @Order(4)
     void fetchDisabled_cloneRefusedButPushStillWorks() throws Exception {
         // A separate fixture against the same Gitea with serve-fetch turned off — server mode is push-only.
-        try (JettyProxyFixture noFetch = new JettyProxyFixture(gitea.getBaseUri(), false)) {
+        try (JettyProxyFixture noFetch =
+                new JettyProxyFixture(gitea.getBaseUri(), JettyProxyFixture.ApprovalMode.AUTO, false)) {
             GitHelper git = new GitHelper(tempDir);
 
             // Clone/fetch is refused with a clear git-side message, not a 404 that reads as a missing repo.

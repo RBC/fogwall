@@ -22,9 +22,17 @@ application {
 }
 
 tasks.named('run') {
-    // Default to the 'local' profile so fogwall-local.yml is loaded in local dev.
+    // Default to the 'local' profile so config/fogwall-local.yml is loaded in local dev.
     // Override by setting FOGWALL_CONFIG_PROFILES in your shell before running.
     environment 'FOGWALL_CONFIG_PROFILES', System.getenv('FOGWALL_CONFIG_PROFILES') ?: 'local'
+    // Prepend the config directory to the runtime classpath so `fogwall-<profile>.yml` files that live OUTSIDE
+    // src/main/resources — and therefore never ship in the jar or the image — are what the profiles resolve to.
+    // Defaults to config/, which is gitignored and bootstrapped from the committed examples on first run.
+    // Usage: ./gradlew :fogwall-server:run -PconfigDir=path/to/dir   (relative paths resolve against the repo root)
+    if (!project.hasProperty('configDir')) {
+        dependsOn rootProject.tasks.named('bootstrapConfig')
+    }
+    classpath = files(rootProject.file(project.findProperty('configDir') ?: 'config')) + classpath
     jvmArgs "-Dlog4j2.configurationFile=${projectDir}/src/main/resources/log4j2-local.xml"
     jvmArgs "-Dfogwall.pidfile=${buildDir}/fogwall.pid"
 }
@@ -125,6 +133,9 @@ tasks.register('e2eTest', Test) {
     useJUnitPlatform {
         includeTags 'e2e'
     }
+    // One JVM per class. The fixture boots a real server per class, and that configures JGit's process-wide window
+    // cache; a second boot in the same JVM invalidates the pack handles the first one is still reading through.
+    forkEvery = 1
     // Container startup can be slow
     timeout = java.time.Duration.ofMinutes(10)
 }

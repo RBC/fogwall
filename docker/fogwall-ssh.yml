@@ -1,0 +1,20 @@
+# Enables fogwall's SSH transport for server mode. Selected with FOGWALL_CONFIG_PROFILES and mounted by
+# docker/docker-compose.ssh.yml, which composes it after docker-default so the users, keys and grants that profile
+# carries stay in force. `compose.sh --ssh` wires both.
+#
+# The gitea provider gains an ssh endpoint pointing at the container's internal SSH port; fogwall forwards the client's
+# agent over it. Trust-on-first-use pins whatever host key the container presents, since the rootless Gitea image
+# regenerates its host key on each start.
+server:
+  ssh:
+    enabled: true
+    port: 2222
+    host-key-path: /tmp/fogwall-ssh/host_key
+    trust-on-first-use: true
+
+providers:
+  gitea:
+    enabled: true
+    uri: http://gitea:3000
+    ssh:
+      uri: ssh://git@gitea:2222

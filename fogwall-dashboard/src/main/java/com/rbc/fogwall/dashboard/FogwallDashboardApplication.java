@@ -70,7 +70,18 @@ public class FogwallDashboardApplication {
         log.info("Starting fogwall with dashboard {}...", BuildInfo.get().display());
         FogwallJettyApplication.writePidFile();
 
-        var fogwallConfig = FogwallConfigLoader.load();
+        start(FogwallConfigLoader.load()).server().join();
+    }
+
+    /**
+     * Builds and starts the dashboard — the proxy, the REST API and the review UI — from a loaded configuration, and
+     * returns before serving finishes.
+     *
+     * <p>The assembly lives here rather than in {@link #main} so that a caller standing the same stack up for a test
+     * drives the real {@link JettyConfigurationBuilder}, {@link FogwallServletRegistrar} and Spring registration
+     * instead of a second copy of this wiring.
+     */
+    public static FogwallJettyApplication.Running start(FogwallConfig fogwallConfig) throws Exception {
         var configBuilder = new JettyConfigurationBuilder(fogwallConfig);
         configBuilder.validateProviderReferences(); // fail fast before any DB or port setup
         configBuilder.applyOutboundProxySystemWiring(); // before any outbound connection is made
@@ -188,7 +199,7 @@ public class FogwallDashboardApplication {
         log.info("  Health:     http://localhost:{}/api/health", connector.getPort());
         log.info("  Swagger UI: http://localhost:{}/swagger-ui", connector.getPort());
 
-        server.join();
+        return new FogwallJettyApplication.Running(server, connector.getLocalPort(), ctx, providers, liveConfigLoader);
     }
 
     private static void registerSpringServlet(

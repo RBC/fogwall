@@ -115,6 +115,26 @@ tasks.register('installGitHooks') {
     }
 }
 
+// Local development config lives in config/ and belongs to the developer: gitignored, never packaged into a jar
+// or an image, and never on a test's classpath. The run tasks put the directory on the runtime classpath so
+// FOGWALL_CONFIG_PROFILES resolves fogwall-local.yml and fogwall-dashboard.yml from there, the same way the images
+// put /app/conf ahead of their own jars.
+tasks.register('bootstrapConfig') {
+    group = 'build setup'
+    description = 'Creates config/*.yml from the committed examples when they are missing.'
+    def configDir = rootProject.file('config')
+    doLast {
+        configDir.listFiles({ File f -> f.name.endsWith('.yml.example') } as FileFilter).sort().each { example ->
+            def target = new File(configDir, example.name - '.example')
+            if (!target.exists()) {
+                target.text = example.text
+                logger.lifecycle("Created config/${target.name} from ${example.name} — add your own identities and "
+                        + 'repositories before pushing through it.')
+            }
+        }
+    }
+}
+
 // Single entry point for every formatter and linter, so .githooks/pre-commit needs one
 // Gradle invocation instead of three. Each tool keeps its own semantics: spotless and
 // prettier rewrite in place, eslint verifies and fails on violations it cannot fix.
@@ -194,7 +214,7 @@ subprojects {
 
         pmd {
             toolVersion = pmdVersion
-            ruleSetFiles = rootProject.files('config/pmd/ruleset.xml')
+            ruleSetFiles = rootProject.files('pmd/config/ruleset.xml')
             ruleSets = []
             // The starter set from #383 has been reviewed and every finding resolved — this now
             // fails ./gradlew build (and so CI, and merging) and .githooks/pre-commit.
@@ -207,7 +227,7 @@ subprojects {
             tasks.register("pmdMetrics${ss.name.capitalize()}", org.gradle.api.plugins.quality.Pmd) {
                 group = 'verification'
                 description = "Measures complexity/design metrics for the ${ss.name} source set. Ad hoc, not part of build/check."
-                ruleSetFiles = rootProject.files('config/pmd/metrics-ruleset.xml')
+                ruleSetFiles = rootProject.files('pmd/config/metrics-ruleset.xml')
                 ruleSets = []
                 ignoreFailures = true
                 source = ss.allJava
@@ -247,6 +267,10 @@ subprojects {
                 showExceptions = true
                 showStackTraces = true
             }
+            // Tests assert on base defaults and on profiles they load themselves. A FOGWALL_CONFIG_PROFILES
+            // exported in the developer's shell for `run` would otherwise change what they see — and, since a
+            // named profile that resolves to nothing is now a startup failure, break them outright.
+            environment 'FOGWALL_CONFIG_PROFILES', ''
         }
 
         // Best-effort extraction of embedded META-INF/LICENSE, META-INF/NOTICE, and root

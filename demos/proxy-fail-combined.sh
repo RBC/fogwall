@@ -4,7 +4,7 @@
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
-resolve_pat ~/.github-pat
+resolve_pat
 export GIT_REPO=${GIT_REPO:-"github.com/coopernetes/test-repo.git"}
 GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME:-"Thomas Cooper"}
 

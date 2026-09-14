@@ -1,6 +1,7 @@
 package com.rbc.fogwall.jetty;
 
 import com.rbc.fogwall.build.BuildInfo;
+import com.rbc.fogwall.config.FogwallConfig;
 import com.rbc.fogwall.config.FogwallConfigLoader;
 import com.rbc.fogwall.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.config.ScmOAuthConfig;
@@ -38,8 +39,8 @@ import org.eclipse.jetty.util.thread.VirtualThreadPool;
  * <p>This entry point runs the proxy only - no dashboard, no REST API. For the full stack including the approval
  * workflow UI, use {@code fogwallWithDashboardApplication} from the {@code fogwall-dashboard} module.
  *
- * <p>Configuration is loaded from {@code fogwall.yml} and {@code fogwall-local.yml}, overridable with {@code fogwall_}
- * environment variables.
+ * <p>Configuration is loaded from {@code fogwall.yml}, then each profile named in {@code FOGWALL_CONFIG_PROFILES},
+ * overridable with {@code fogwall_} environment variables.
  */
 @Slf4j
 public class FogwallJettyApplication {
@@ -51,9 +52,38 @@ public class FogwallJettyApplication {
         writePidFile();
 
         var fogwallConfig = FogwallConfigLoader.load();
+        // A property of this distribution, not of the assembly: the dashboard reuses start() and can satisfy both.
+        rejectDashboardOnlyConfig(new JettyConfigurationBuilder(fogwallConfig));
+        start(fogwallConfig).server().join();
+    }
+
+    /**
+     * A started server and the pieces a caller needs to reach past it: the port actually bound, which is not the
+     * configured one when that was 0, and the context holding the stores its decisions are recorded in.
+     */
+    public record Running(
+            Server server,
+            int port,
+            FogwallContext ctx,
+            List<FogwallProvider> providers,
+            LiveConfigLoader liveConfigLoader)
+            implements AutoCloseable {
+        @Override
+        public void close() throws Exception {
+            server.stop();
+        }
+    }
+
+    /**
+     * Builds and starts the proxy from a loaded configuration, and returns before serving finishes.
+     *
+     * <p>Everything between configuration and a listening socket lives here rather than in {@link #main}, so that a
+     * caller assembling the same server for a test drives the real {@link JettyConfigurationBuilder} and
+     * {@link FogwallServletRegistrar} rather than a second copy of this wiring that can drift from it.
+     */
+    public static Running start(FogwallConfig fogwallConfig) throws Exception {
         var configBuilder = new JettyConfigurationBuilder(fogwallConfig);
         configBuilder.validateProviderReferences(); // fail fast before any DB or port setup
-        rejectDashboardOnlyConfig(configBuilder);
         configBuilder.applyOutboundProxySystemWiring(); // before any outbound connection is made
         configBuilder.setTelemetry(OpenTelemetryBootstrap.build(
                 fogwallConfig.getOtel(), BuildInfo.get().version()));
@@ -139,7 +169,7 @@ public class FogwallJettyApplication {
                     provider.servletMapping());
         }
 
-        server.join();
+        return new Running(server, connector.getLocalPort(), ctx, providers, liveConfigLoader);
     }
 
     /**
@@ -163,6 +193,9 @@ public class FogwallJettyApplication {
      *
      * <p>Deliberately fatal rather than ignored: silently downgrading a security setting an operator asked for is the
      * worse failure. Run the dashboard distribution if you want either of these.
+     *
+     * <p>Called from {@link #main} rather than from {@link #start}, because it describes what this distribution can
+     * serve rather than how the server is assembled — the dashboard builds the same server and can satisfy both.
      */
     static void rejectDashboardOnlyConfig(JettyConfigurationBuilder configBuilder) {
         if (configBuilder.buildScmOAuthConfig().getIdentityMode() == ScmOAuthConfig.IdentityMode.STRICT) {

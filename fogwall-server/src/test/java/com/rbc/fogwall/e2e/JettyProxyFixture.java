@@ -1,369 +1,305 @@
 package com.rbc.fogwall.e2e;
 
-import com.rbc.fogwall.approval.ApprovalGateway;
-import com.rbc.fogwall.approval.AutoApprovalGateway;
-import com.rbc.fogwall.approval.UiApprovalGateway;
-import com.rbc.fogwall.config.BinaryBlobConfig;
-import com.rbc.fogwall.config.BlockConfig;
-import com.rbc.fogwall.config.CommitConfig;
-import com.rbc.fogwall.config.ContentPatternConfig;
-import com.rbc.fogwall.config.DiffScanConfig;
-import com.rbc.fogwall.config.EmailRule;
-import com.rbc.fogwall.config.GpgConfig;
-import com.rbc.fogwall.config.SecretScanConfig;
+import com.rbc.fogwall.config.FogwallConfigLoader;
 import com.rbc.fogwall.db.PushStore;
-import com.rbc.fogwall.db.PushStoreFactory;
-import com.rbc.fogwall.db.memory.InMemoryUrlRuleRegistry;
 import com.rbc.fogwall.db.model.AccessRule;
-import com.rbc.fogwall.db.model.MatchTarget;
-import com.rbc.fogwall.db.model.MatchType;
-import com.rbc.fogwall.git.DisabledFetchUploadPackFactory;
-import com.rbc.fogwall.git.LocalRepositoryCache;
-import com.rbc.fogwall.git.ServerReceivePackFactory;
-import com.rbc.fogwall.git.ServerRepositoryResolver;
-import com.rbc.fogwall.git.ServerUploadPackFactory;
-import com.rbc.fogwall.git.UpstreamAuthProbe;
-import com.rbc.fogwall.jetty.BlockingContentHandler;
 import com.rbc.fogwall.jetty.FogwallJettyApplication;
+import com.rbc.fogwall.jetty.FogwallServletRegistrar;
 import com.rbc.fogwall.permission.RepoPermissionService;
-import com.rbc.fogwall.provider.GenericProxyProvider;
-import com.rbc.fogwall.service.PushIdentityResolver;
-import com.rbc.fogwall.servlet.FogwallServlet;
-import com.rbc.fogwall.servlet.filter.*;
-import jakarta.servlet.DispatcherType;
+import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.EnumSet;
+import java.nio.file.Path;
 import java.util.List;
-import java.util.UUID;
-import java.util.function.Function;
-import java.util.regex.Pattern;
-import org.eclipse.jetty.ee11.servlet.FilterHolder;
-import org.eclipse.jetty.ee11.servlet.ServletContextHandler;
-import org.eclipse.jetty.ee11.servlet.ServletHolder;
-import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.server.ServerConnector;
-import org.eclipse.jetty.util.thread.QueuedThreadPool;
-import org.eclipse.jgit.http.server.GitServlet;
+import java.util.stream.Collectors;
 
 /**
- * Starts and stops a real Jetty server wired up identically to {@code fogwallJettyApplication} but with a single
- * {@link GenericProxyProvider} pointing at the test Gitea instance, listening on an ephemeral port.
+ * Starts a real fogwall server for {@code @Tag("e2e")} tests, through the same path production takes:
+ * {@link FogwallConfigLoader} composes {@code fogwall-test-e2e.yml} with a generated override, and
+ * {@link FogwallJettyApplication#start} does the assembly.
  *
- * <p>Intended for use inside {@code @Tag("e2e")} tests as a JUnit {@code @BeforeAll} / {@code @AfterAll} resource.
+ * <p>The override carries what is only known once the process is running — the port the upstream container bound —
+ * along with the handful of settings a test varies: the approval mode, whether fetches are served, and the access rules
+ * in force.
+ *
+ * <p>The provider is declared {@code type: forgejo}, which is what a Gitea host is: the Forgejo provider implements
+ * token identity lookup, so a test authenticating with a Gitea access token resolves through the same {@code GET
+ * /api/v1/user} path production uses.
+ *
+ * <p>Intended as a JUnit {@code @BeforeAll} / {@code @AfterAll} resource.
  */
 class JettyProxyFixture implements AutoCloseable {
 
-    private static final String PUSH_PREFIX = "/push";
-    private static final String PROXY_PREFIX = "/proxy";
+    /** Which approval gateway the server runs, mapped to {@code server.approval-mode}. */
+    enum ApprovalMode {
+        /** Clean pushes block pending human review. The production default for the dashboard. */
+        UI("ui"),
+        /** Clean pushes are approved as they arrive; nothing waits for a reviewer. */
+        AUTO("auto");
 
-    private final Server server;
-    private final int port;
-    private final PushStore pushStore;
+        private final String configValue;
+
+        ApprovalMode(String configValue) {
+            this.configValue = configValue;
+        }
+    }
+
+    /**
+     * The provider's config map key, which is also its {@code providerId} — so a test can name it in a permission grant
+     * or an SCM identity before the fixture is built.
+     *
+     * <p>A name the base config already declares, rather than one invented here. A reload composes the base config with
+     * the reload source and nothing else, so a user or permission naming a provider that exists only in a fixture's
+     * generated override would fail validation the moment anything reloaded.
+     */
+    static final String PROVIDER_NAME = "gitea";
+
+    /**
+     * A proxy user for the override. {@code scmLogin} is the login on the upstream that the user's token resolves to;
+     * the real Forgejo lookup matches it, so it has to be the account the test pushes as.
+     */
+    record TestUser(String username, String email, String scmLogin) {}
+
+    /**
+     * The registered user a fixture gets unless a test names its own: the Gitea account the suite pushes as, linked to
+     * a proxy user of the same name.
+     *
+     * <p>There is no such thing as a fixture with no users. The base config ships an {@code admin} entry, so the
+     * identity path is always live — a push whose token resolves to a login no user claims is refused, exactly as it
+     * would be for an operator.
+     */
+    private static final List<TestUser> DEFAULT_USERS = List.of(
+            new TestUser(GiteaContainer.ADMIN_USER, GiteaContainer.VALID_AUTHOR_EMAIL, GiteaContainer.ADMIN_USER));
+
+    private final FogwallJettyApplication.Running running;
     private final String providerId;
     private final String giteaHostPort;
 
-    /**
-     * Create a fixture with UI (block-then-approve) approval mode for the transparent proxy path. This is the
-     * production default: clean pushes are blocked pending human review.
-     */
+    /** UI (block-then-approve) approval, fetches served, one catch-all allow rule, no registered users. */
     JettyProxyFixture(URI giteaUri) throws Exception {
-        this(giteaUri, UiApprovalGateway::new);
+        this(giteaUri, ApprovalMode.UI, List.of(), true, DEFAULT_USERS, null, true);
+    }
+
+    /** As {@link #JettyProxyFixture(URI)} with a chosen approval mode. */
+    JettyProxyFixture(URI giteaUri, ApprovalMode approvalMode) throws Exception {
+        this(giteaUri, approvalMode, List.of(), true, DEFAULT_USERS, null, true);
     }
 
     /**
-     * Create a fixture with a custom approval gateway factory for the transparent proxy path. The factory receives the
-     * shared {@link PushStore} and returns the gateway to use in {@link PushFinalizerFilter}.
-     */
-    JettyProxyFixture(URI giteaUri, Function<PushStore, ApprovalGateway> proxyGatewayFactory) throws Exception {
-        this(giteaUri, proxyGatewayFactory, null, null);
-    }
-
-    /**
-     * Create a fixture with optional identity and permission filters enabled on the transparent proxy path. When
-     * {@code identityResolver} is non-null, {@link CheckUserPushPermissionFilter} and
-     * {@link CommitAttributionPolicyFilter} are added to the filter chain (matching production order). The
-     * {@code permissionService} must also be non-null when identity checking is enabled. Defaults to committer=warn,
-     * author=off.
-     */
-    JettyProxyFixture(
-            URI giteaUri,
-            Function<PushStore, ApprovalGateway> proxyGatewayFactory,
-            PushIdentityResolver identityResolver,
-            RepoPermissionService permissionService)
-            throws Exception {
-        this(
-                giteaUri,
-                proxyGatewayFactory,
-                identityResolver,
-                permissionService,
-                CommitConfig.CommitAttributionPolicyConfig.builder().build());
-    }
-
-    /**
-     * Create a fixture with URL allow/deny rules enforced on both the transparent proxy path and the server mode path.
-     * Uses auto-approve for the approval gateway so that allowed pushes go through without a review step.
+     * An explicit rule set instead of the catch-all allow, on auto-approve so that a push the rules allow completes
+     * rather than stopping at a review step the test is not about.
      */
     JettyProxyFixture(URI giteaUri, List<AccessRule> configRules) throws Exception {
-        this(
-                giteaUri,
-                AutoApprovalGateway::new,
-                null,
-                null,
-                CommitConfig.CommitAttributionPolicyConfig.builder().build(),
-                configRules,
-                true);
+        this(giteaUri, ApprovalMode.AUTO, configRules, true, DEFAULT_USERS, null, true);
     }
 
-    /**
-     * Create a fixture with the server mode clone/fetch toggle set (#478). {@code serveFetch=false} makes server mode
-     * push-only: {@code git-upload-pack} is not served and clone/fetch is refused, while push (receive-pack) still
-     * works.
-     */
+    /** UI approval, with {@code providers.<name>.serve-fetch} set. */
     JettyProxyFixture(URI giteaUri, boolean serveFetch) throws Exception {
-        this(
-                giteaUri,
-                UiApprovalGateway::new,
-                null,
-                null,
-                CommitConfig.CommitAttributionPolicyConfig.builder().build(),
-                List.of(),
-                serveFetch);
+        this(giteaUri, ApprovalMode.UI, List.of(), serveFetch, DEFAULT_USERS, null, true);
+    }
+
+    /** A chosen approval mode, with {@code providers.<name>.serve-fetch} set. */
+    JettyProxyFixture(URI giteaUri, ApprovalMode approvalMode, boolean serveFetch) throws Exception {
+        this(giteaUri, approvalMode, List.of(), serveFetch, DEFAULT_USERS, null, true);
     }
 
     /**
-     * Create a fixture with identity and permission filters enabled, using an explicit identity verification config.
+     * UI approval with named users and <em>no</em> grants — for the tests that assert on the permission gate itself and
+     * seed their own grants through {@link #getPermissionService()}.
      */
-    JettyProxyFixture(
-            URI giteaUri,
-            Function<PushStore, ApprovalGateway> proxyGatewayFactory,
-            PushIdentityResolver identityResolver,
-            RepoPermissionService permissionService,
-            CommitConfig.CommitAttributionPolicyConfig attributionPolicyConfig)
-            throws Exception {
-        this(
-                giteaUri,
-                proxyGatewayFactory,
-                identityResolver,
-                permissionService,
-                attributionPolicyConfig,
-                List.of(),
-                true);
+    JettyProxyFixture(URI giteaUri, List<TestUser> users, String committerAttributionPolicy) throws Exception {
+        this(giteaUri, ApprovalMode.UI, List.of(), true, users, committerAttributionPolicy, false);
     }
 
-    /** Full constructor — all options. */
     JettyProxyFixture(
             URI giteaUri,
-            Function<PushStore, ApprovalGateway> proxyGatewayFactory,
-            PushIdentityResolver identityResolver,
-            RepoPermissionService permissionService,
-            CommitConfig.CommitAttributionPolicyConfig attributionPolicyConfig,
+            ApprovalMode approvalMode,
             List<AccessRule> configRules,
-            boolean serveFetch)
+            boolean serveFetch,
+            List<TestUser> users,
+            String committerAttributionPolicy,
+            boolean grantAll)
             throws Exception {
-        // Same thread model as production: bounded virtual-thread dispatch on top of the platform pool.
-        var threadPool = new QueuedThreadPool();
-        threadPool.setName("e2e-fixture");
-        server = new Server(threadPool);
-        FogwallJettyApplication.enableVirtualThreads(server, threadPool, "e2e-fixture", 512);
-        var connector = new ServerConnector(server);
-        connector.setPort(0); // ephemeral
-        server.addConnector(connector);
-
-        pushStore = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
-        var serverCache = new LocalRepositoryCache(Files.createTempDirectory("fogwall-e2e-sf-"), 0, true);
-        var proxyCache = new LocalRepositoryCache();
-
-        var provider =
-                GenericProxyProvider.builder().name("gitea-e2e").uri(giteaUri).build();
-        provider.setServeFetch(serveFetch); // #478 fetch toggle
-        this.providerId = provider.getProviderId();
         this.giteaHostPort = giteaUri.getHost() + ":" + giteaUri.getPort();
-
-        var commitConfig = buildCommitConfig();
-        var context = new ServletContextHandler("/", false, false);
-
-        var urlRuleRegistry = new InMemoryUrlRuleRegistry();
-        if (configRules.isEmpty()) {
-            // No explicit rules — seed a catch-all allow rule so the proxy is open
-            urlRuleRegistry.save(AccessRule.builder()
-                    .ruleOrder(1)
-                    .access(AccessRule.Access.ALLOW)
-                    .operation(AccessRule.Operation.BOTH)
-                    .target(MatchTarget.OWNER)
-                    .value("*")
-                    .matchType(MatchType.GLOB)
-                    .build());
-        } else {
-            configRules.forEach(urlRuleRegistry::save);
+        Path override = writeOverride(
+                giteaUri, approvalMode, configRules, serveFetch, users, committerAttributionPolicy, grantAll);
+        try {
+            running = FogwallJettyApplication.start(FogwallConfigLoader.loadWithOverride("test-e2e", override));
+        } finally {
+            Files.deleteIfExists(override);
         }
+        this.providerId = running.providers().getFirst().getProviderId();
+    }
 
-        // Server mode GitServlet on /push/...
-        var resolver = new ServerRepositoryResolver(serverCache, provider);
-        var gitServlet = new GitServlet();
-        gitServlet.setRepositoryResolver(resolver);
-        var approvalGateway = new AutoApproveGateway(pushStore);
-        gitServlet.setReceivePackFactory(new ServerReceivePackFactory(
-                provider,
-                () -> commitConfig,
-                DiffScanConfig::defaultConfig,
-                SecretScanConfig::defaultConfig,
-                BinaryBlobConfig::defaultConfig,
-                ContentPatternConfig.defaultConfig(),
-                GpgConfig.defaultConfig(),
-                null,
-                null,
-                pushStore,
-                approvalGateway,
-                null,
-                Duration.ofSeconds(30),
-                urlRuleRegistry));
-        // Mirrors FogwallServletRegistrar.registerGitServlet: serve fetches, or mount the refusing factory (#478).
-        gitServlet.setUploadPackFactory(
-                provider.isServeFetch() ? new ServerUploadPackFactory() : new DisabledFetchUploadPackFactory());
+    /**
+     * Writes the half of the configuration that cannot be committed: the upstream the container bound this run, and the
+     * settings this test varies.
+     */
+    private static Path writeOverride(
+            URI giteaUri,
+            ApprovalMode approvalMode,
+            List<AccessRule> configRules,
+            boolean serveFetch,
+            List<TestUser> users,
+            String committerAttributionPolicy,
+            boolean grantAll)
+            throws IOException {
+        String rules = configRules.isEmpty()
+                // No explicit rules — open the proxy, so a test about something else is not refused by an access rule.
+                ? """
+                rules:
+                  allow:
+                    - enabled: true
+                      order: 1
+                      operation: BOTH
+                      match:
+                        target: OWNER
+                        value: "*"
+                        type: GLOB
+                """
+                : renderRules(configRules);
 
-        String pushServletPath = PUSH_PREFIX + provider.servletPath();
-        String pushMapping = pushServletPath + "/*";
-        var gitHolder = new ServletHolder(gitServlet);
-        gitHolder.setName("git-gitea-e2e");
-        context.addServlet(gitHolder, pushMapping);
-        // Mirrors FogwallServletRegistrar: without this the fixture would exercise a server mode
-        // wiring production never runs, leaking every push's quarantine instead of discarding it.
-        context.addFilter(
-                new FilterHolder(new QuarantineCleanupFilter()), pushMapping, EnumSet.of(DispatcherType.REQUEST));
-        context.addFilter(
-                new FilterHolder(new SmartHttpErrorFilter()), pushMapping, EnumSet.of(DispatcherType.REQUEST));
-        context.addFilter(
-                new FilterHolder(new BasicAuthChallengeFilter(provider, new UpstreamAuthProbe())),
-                pushMapping,
-                EnumSet.of(DispatcherType.REQUEST));
+        String yaml = """
+                server:
+                  approval-mode: %s
+                providers:
+                  %s:
+                    enabled: true
+                    type: forgejo
+                    uri: %s
+                    serve-fetch: %s
+                %s%s%s%s""".formatted(
+                        approvalMode.configValue,
+                        PROVIDER_NAME,
+                        giteaUri,
+                        serveFetch,
+                        rules,
+                        renderUsers(users),
+                        renderAttributionPolicy(committerAttributionPolicy),
+                        grantAll ? renderGrants(users) : "");
 
-        // Transparent proxy fogwallServlet on /proxy/...
-        String proxyServletPath = PROXY_PREFIX + provider.servletPath();
-        String proxyMapping = proxyServletPath + "/*";
+        Path file = Files.createTempFile("fogwall-e2e-override-", ".yml");
+        Files.writeString(file, yaml);
+        return file;
+    }
 
-        var proxyServlet = new FogwallServlet(pushStore);
-        var proxyHolder = new ServletHolder(proxyServlet);
-        proxyHolder.setName("proxy-gitea-e2e");
-        proxyHolder.setInitParameter("proxyTo", giteaUri.toString());
-        proxyHolder.setInitParameter("prefix", proxyServletPath);
-        proxyHolder.setInitParameter("hostHeader", giteaUri.getHost());
-        proxyHolder.setInitParameter("preserveHost", "false");
-        context.addServlet(proxyHolder, proxyMapping);
-
-        // Proxy-mode filter chain — mirrors FogwallServletRegistrar.registerCoreFilters().
-        // PushStoreAuditFilter wraps the entire chain via try-finally and implements plain Filter
-        // (not FogwallFilter), so it is registered first, outside the sorted list.
-        String serviceUrl = "http://localhost";
-        addFilter(context, proxyMapping, new PushStoreAuditFilter(pushStore));
-
-        // Build the orderable filter list and sort by getOrder() to match production behaviour.
-        // ForceGitClientFilter returns Integer.MIN_VALUE so it sorts to the top automatically.
-        // Note: SecretScanningFilter and FetchStore-backed UrlRuleAggregateFilter are omitted here
-        // because the fixture uses simplified configs that don't need them.
-        List<FogwallFilter> filters = new ArrayList<>();
-        filters.add(new ForceGitClientFilter());
-        filters.add(new ParseGitRequestFilter(provider));
-        filters.add(new AllowApprovedPushFilter(pushStore, serviceUrl, permissionService));
-        filters.add(new EnrichPushCommitsFilter(provider, proxyCache));
-        filters.add(new UrlRuleAggregateFilter(100, provider, urlRuleRegistry));
-        if (identityResolver != null && permissionService != null) {
-            filters.add(new CheckUserPushPermissionFilter(identityResolver, permissionService));
-            filters.add(new CommitAttributionPolicyFilter(identityResolver, attributionPolicyConfig));
+    private static String renderUsers(List<TestUser> users) {
+        if (users.isEmpty()) {
+            return "";
         }
-        filters.add(new CheckEmptyBranchFilter());
-        filters.add(new CheckHiddenCommitsFilter());
-        filters.add(new CheckAuthorEmailsFilter(commitConfig));
-        filters.add(new CheckCommitMessagesFilter(commitConfig));
-        filters.add(new ScanDiffFilter(DiffScanConfig.defaultConfig()));
-        filters.add(new GpgSignatureFilter(GpgConfig.defaultConfig()));
-        filters.add(new ValidationSummaryFilter());
-        filters.add(new FetchFinalizerFilter());
-        filters.add(new PushFinalizerFilter(serviceUrl, proxyGatewayFactory.apply(pushStore)));
-        filters.add(new AuditLogFilter());
-        filters.sort(Comparator.comparingInt(FogwallFilter::getOrder));
-        for (FogwallFilter filter : filters) {
-            addFilter(context, proxyMapping, filter);
+        return "users:\n"
+                + users.stream()
+                        .map(u -> """
+                                  - username: %s
+                                    emails:
+                                      - %s
+                                    scm-identities:
+                                      - provider: %s
+                                        username: %s
+                                """.formatted(u.username(), u.email(), PROVIDER_NAME, u.scmLogin()))
+                        .collect(Collectors.joining());
+    }
+
+    /** A catch-all grant per user, so a test about validation is not stopped by the permission gate first. */
+    private static String renderGrants(List<TestUser> users) {
+        if (users.isEmpty()) {
+            return "";
         }
+        return "permissions:\n"
+                + users.stream()
+                        .map(u -> """
+                                  - username: %s
+                                    provider: %s
+                                    match:
+                                      target: SLUG
+                                      value: ".*"
+                                      type: REGEX
+                                    grant: MAINTAIN
+                                """.formatted(u.username(), PROVIDER_NAME))
+                        .collect(Collectors.joining());
+    }
 
-        server.setHandler(new BlockingContentHandler(context));
-        server.start();
+    private static String renderAttributionPolicy(String committer) {
+        return committer == null ? "" : """
+                commit:
+                  attribution-policy:
+                    committer: %s
+                """.formatted(committer);
+    }
 
-        port = ((ServerConnector) server.getConnectors()[0]).getLocalPort();
+    /** Renders a test's {@link AccessRule} list back into the config shape the loader reads. */
+    private static String renderRules(List<AccessRule> configRules) {
+        String allow = renderRuleList(configRules, AccessRule.Access.ALLOW);
+        String deny = renderRuleList(configRules, AccessRule.Access.DENY);
+        var sb = new StringBuilder("rules:\n");
+        if (!deny.isEmpty()) {
+            sb.append("  deny:\n").append(deny);
+        }
+        if (!allow.isEmpty()) {
+            sb.append("  allow:\n").append(allow);
+        }
+        return sb.toString();
+    }
+
+    private static String renderRuleList(List<AccessRule> rules, AccessRule.Access access) {
+        return rules.stream()
+                .filter(r -> r.getAccess() == access)
+                .map(r -> """
+                            - enabled: %s
+                              order: %d
+                              operation: %s
+                              provider: %s
+                              match:
+                                target: %s
+                                value: "%s"
+                                type: %s
+                        """.formatted(
+                                r.isEnabled(),
+                                r.getRuleOrder(),
+                                r.getOperation(),
+                                PROVIDER_NAME,
+                                r.getTarget(),
+                                r.getValue(),
+                                r.getMatchType()))
+                .collect(Collectors.joining());
     }
 
     /** The port the proxy is listening on. */
     int getPort() {
-        return port;
+        return running.port();
     }
 
-    /** The in-memory push store, exposed for approval flow in tests. */
+    /** The push store the server records its decisions in. */
     PushStore getPushStore() {
-        return pushStore;
+        return running.ctx().pushStore();
     }
 
-    /** The provider ID used by this fixture — use this when seeding permission grants. */
+    /** The permission service behind the server — writable, so a test can grant mid-run. */
+    RepoPermissionService getPermissionService() {
+        return running.ctx().repoPermissionService();
+    }
+
     String getProviderId() {
         return providerId;
     }
 
+    /** {@code host:port} of the upstream Gitea, as it appears in a proxy URL. */
     String getGiteaHostPort() {
         return giteaHostPort;
     }
 
+    /** Base URL for server mode, at the deprecated {@code /push} alias production still serves. */
     String getPushBase() {
-        return "http://localhost:" + port + PUSH_PREFIX + "/" + giteaHostPort;
+        return "http://localhost:" + getPort() + FogwallServletRegistrar.PUSH_PATH_PREFIX + "/" + giteaHostPort;
     }
 
+    /** Base URL for the transparent proxy. */
     String getProxyBase() {
-        return "http://localhost:" + port + PROXY_PREFIX + "/" + giteaHostPort;
+        return "http://localhost:" + getPort() + FogwallServletRegistrar.PROXY_PATH_PREFIX + "/" + giteaHostPort;
     }
 
     @Override
     public void close() throws Exception {
-        server.stop();
-    }
-
-    private static void addFilter(ServletContextHandler ctx, String mapping, jakarta.servlet.Filter filter) {
-        var holder = new FilterHolder(filter);
-        holder.setAsyncSupported(true);
-        ctx.addFilter(holder, mapping, EnumSet.of(DispatcherType.REQUEST));
-    }
-
-    /**
-     * Commit validation config matching the shell-script test suite:
-     *
-     * <ul>
-     *   <li>Author email domain must be one of the known test domains
-     *   <li>Block {@code noreply}/{@code bot} local parts
-     *   <li>Block WIP / fixup! / DO NOT MERGE messages
-     *   <li>Block {@code password=} / {@code token=} secrets in messages
-     * </ul>
-     */
-    static CommitConfig buildCommitConfig() {
-        return CommitConfig.builder()
-                .author(CommitConfig.AuthorConfig.builder()
-                        .email(CommitConfig.EmailConfig.builder()
-                                .rules(List.of(
-                                        EmailRule.allow(
-                                                EmailRule.Field.DOMAIN,
-                                                EmailRule.Match.REGEX,
-                                                "(proton\\.me|gmail\\.com|outlook\\.com|yahoo\\.com|example\\.com)$"),
-                                        EmailRule.block(
-                                                EmailRule.Field.LOCAL,
-                                                EmailRule.Match.REGEX,
-                                                "^(noreply|no-reply|bot|nobody)$")))
-                                .build())
-                        .build())
-                .message(CommitConfig.MessageConfig.builder()
-                        .block(BlockConfig.builder()
-                                .literals(List.of("WIP", "DO NOT MERGE", "fixup!", "squash!"))
-                                .patterns(List.of(Pattern.compile("(?i)(password|secret|token)\\s*[=:]\\s*\\S+")))
-                                .build())
-                        .build())
-                .build();
+        running.close();
     }
 }

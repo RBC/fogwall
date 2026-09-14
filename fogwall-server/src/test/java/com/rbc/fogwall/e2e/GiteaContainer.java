@@ -170,11 +170,6 @@ class GiteaContainer extends GenericContainer<GiteaContainer> {
     }
 
     /**
-     * Generates a personal access token for the admin user. Used by the SSH enricher to authenticate against Gitea's
-     * SSH key listing API ({@code GET /api/v1/users/{login}/keys}), which requires a token when
-     * {@code REQUIRE_SIGNIN_VIEW=true}.
-     */
-    /**
      * Generates a token for {@value #TEST_USER} with the scopes the SCM API surface needs. Wider than
      * {@link #generateTestUserToken()}: opening and closing a pull request reads and writes issues, because Gitea
      * models a pull request as one.
@@ -187,8 +182,23 @@ class GiteaContainer extends GenericContainer<GiteaContainer> {
                 List.of("read:user", "read:repository", "write:repository", "read:issue", "write:issue"));
     }
 
+    /**
+     * Generates a personal access token for the admin user. Used by the SSH enricher to authenticate against Gitea's
+     * SSH key listing API ({@code GET /api/v1/users/{login}/keys}), which requires a token when
+     * {@code REQUIRE_SIGNIN_VIEW=true}.
+     */
     String generateAdminToken() throws IOException, InterruptedException {
         return generateToken(ADMIN_USER, ADMIN_PASSWORD, "e2e-ssh-enricher-token", List.of("read:user"));
+    }
+
+    /**
+     * Generates an admin token that can push. Distinct from {@link #generateAdminToken()}, which carries only
+     * {@code read:user}: a push forwards the client's credential upstream, so it needs write access there, and the
+     * proxy resolves identity from the same credential, so it needs {@code read:user} too.
+     */
+    String generateAdminPushToken() throws IOException, InterruptedException {
+        return generateToken(
+                ADMIN_USER, ADMIN_PASSWORD, "e2e-admin-push-token", List.of("read:user", "write:repository"));
     }
 
     private String generateToken(String username, String password, String tokenName, List<String> scopes)

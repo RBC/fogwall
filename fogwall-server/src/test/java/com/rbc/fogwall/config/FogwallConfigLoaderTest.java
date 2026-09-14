@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import org.github.gestalt.config.builder.GestaltBuilder;
 import org.github.gestalt.config.exceptions.GestaltException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -12,8 +13,8 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * Tests for {@link FogwallConfigLoader}.
  *
- * <p>Verifies that the base config ({@code fogwall.yml}) is loaded and merged with local overrides
- * ({@code fogwall-local.yml}) correctly. Environment variable overrides are exercised in the e2e suite.
+ * <p>Verifies that the base config ({@code fogwall.yml}) is loaded and that profiles resolve, or fail, the way they
+ * should. Environment variable overrides are exercised in the e2e suite.
  */
 class FogwallConfigLoaderTest {
 
@@ -368,6 +369,22 @@ class FogwallConfigLoaderTest {
     void envVarToConfigPath_doubleUnderscore_hyphenatedTopLevelKey() {
         // FOGWALL_SECRET_SCAN__ENABLED → secret-scan.enabled
         assertEquals("secret-scan.enabled", FogwallConfigLoader.envVarToConfigPath("FOGWALL_SECRET_SCAN__ENABLED"));
+    }
+
+    // --- profile resolution ---
+
+    @Test
+    void addProfileSources_profileNotOnClasspath_failsNamingTheFile() {
+        GestaltException e = assertThrows(
+                GestaltException.class,
+                () -> FogwallConfigLoader.addProfileSources(new GestaltBuilder(), "nonexistent", false));
+        assertTrue(e.getMessage().contains("fogwall-nonexistent.yml"), e.getMessage());
+    }
+
+    @Test
+    void addProfileSources_noProfiles_isNoOp() {
+        assertDoesNotThrow(() -> FogwallConfigLoader.addProfileSources(new GestaltBuilder(), null, false));
+        assertDoesNotThrow(() -> FogwallConfigLoader.addProfileSources(new GestaltBuilder(), "  ", false));
     }
 
     private Path writeYaml(String yaml) throws IOException {

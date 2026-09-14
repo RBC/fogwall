@@ -24,8 +24,7 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>Attestation questions — global reviewer prompts (applies to all providers in this release)
  * </ul>
  *
- * <p>Provider, server, and database changes log a warning and require a restart (or the UI-driven provider hot-swap
- * from coopernetes/fogwall#75).
+ * <p>Provider, server, and database changes log a warning and require a restart.
  *
  * <p>Filters, hooks and controllers access config via typed getters, typically passed as method references (e.g.
  * {@code configHolder::getCommitConfig}).

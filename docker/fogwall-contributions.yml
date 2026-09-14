@@ -1,20 +1,23 @@
-# Enables the SCM API listeners, one port per provider. Selected with FOGWALL_CONFIG_PROFILES and
-# mounted by docker/docker-compose.contributions.yml; provisioning an SCM API identity + grant is in
-# test/otel-smoke/README.md.
+# Enables the SCM API listeners, one port per provider. Selected with FOGWALL_CONFIG_PROFILES and mounted by
+# docker/docker-compose.contributions.yml, which composes it after docker-default so the users and grants that
+# profile carries are still in force.
+#
+# require-validated-head is on, matching the shipped default: a pull request whose head commit fogwall has no push
+# record for is refused. Opening one therefore means pushing the branch through fogwall first.
 providers:
   github:
     enabled: true
-    scm-api: { enabled: true, port: 8481, require-validated-head: false, merge-enabled: true }
+    scm-api: { enabled: true, port: 8481, require-validated-head: true, merge-enabled: true }
   gitlab:
     enabled: true
-    scm-api: { enabled: true, port: 8482, require-validated-head: false, merge-enabled: true }
+    scm-api: { enabled: true, port: 8482, require-validated-head: true, merge-enabled: true }
   codeberg:
     enabled: true
-    scm-api: { enabled: true, port: 8483, require-validated-head: false, merge-enabled: true }
+    scm-api: { enabled: true, port: 8483, require-validated-head: true, merge-enabled: true }
   gitea:
     enabled: true
     uri: http://gitea:3000 # local container; set to https://gitea.com for a real repo
-    scm-api: { enabled: true, port: 8484, require-validated-head: false, merge-enabled: true }
+    scm-api: { enabled: true, port: 8484, require-validated-head: true, merge-enabled: true }
 
 scm-api:
   block:

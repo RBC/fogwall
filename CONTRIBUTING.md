@@ -81,10 +81,33 @@ Opens the approval dashboard at `http://localhost:8080/`. Stop with:
 The dashboard module always uses UI-mode approval (pushes block until manually approved). The standalone server defaults
 to auto-approve.
 
-### Local config override
+### Local config — the first thing to do after cloning
 
-Place overrides in `fogwall-server/src/main/resources/fogwall-local.yml`. The local file takes priority over
-`fogwall.yml`. At minimum, add an allow rule for your test repo and a permission entry for your proxy user:
+Your local configuration lives in `config/`, it is gitignored, and it is yours. Nothing in there ships in a jar or an
+image, and no test reads it. Copy the examples and edit them:
+
+```shell
+cp config/fogwall-local.yml.example config/fogwall-local.yml
+cp config/fogwall-dashboard.yml.example config/fogwall-dashboard.yml
+```
+
+The `run` tasks do that copy for you the first time if you skip it, and put `config/` on the runtime classpath so the
+profiles resolve from there.
+
+`fogwall-local.yml` holds providers, rules, permissions, users and scanning — the things a standalone proxy also needs.
+Settings only the dashboard reads (session store, Vite CORS, issue filing, attestation questions) live in
+`fogwall-dashboard.yml`; the dashboard's `run` task loads both, `local` then `dashboard`, and both take priority over
+the `fogwall.yml` baked into the jar.
+
+Two things to change before your first push: add your own SCM login under the `dev` user's `scm-identities`, and set the
+email your commits are authored with. Without the first, identity does not resolve; without the second, the author check
+refuses the push.
+
+A profile named in `FOGWALL_CONFIG_PROFILES` with no matching file on the classpath fails startup, naming the file it
+wanted. It does not fall back to defaults.
+
+At minimum you also need an allow rule for your test repo and a permission entry for your proxy user — scoped to one
+repository, not to every slug:
 
 ```yaml
 rules:
@@ -228,147 +251,32 @@ content), when a scenario is added, or when the fixture profile changes push out
 `manifest.json` in the same PR as the change. Config-page changes (rules, providers, groups) only need the profile
 edited. See [test/capture/README.md](test/capture/README.md).
 
-### Manual integration test scripts (`test/`)
-
-The `test/` directory contains bash scripts for exercising both proxy modes against a running server. They are the
-fastest way to verify a feature end-to-end without writing Java.
-
-Test scripts share a common library (`test/common.sh`) with setup, cleanup, and assertion helpers. Individual test cases
-are organized into logical groupings by test outcome (pass/fail) and proxy mode (push/proxy).
-
-#### Environment variables
-
-All scripts share these variables:
-
-| Variable          | Default                                           | Description                                        |
-| ----------------- | ------------------------------------------------- | -------------------------------------------------- |
-| `GIT_USERNAME`    | `me`                                              | HTTP Basic-auth username (arbitrary for the proxy) |
-| `GIT_PASSWORD`    | _(read from PAT file, see below)_                 | Personal access token for the upstream SCM         |
-| `GIT_REPO`        | `github.com/coopernetes/test-repo.git`            | Target repo for GitHub pass/fail scripts           |
-| `GITHUB_REPO`     | `github.com/coopernetes/test-repo.git`            | Target repo for GitHub identity scripts            |
-| `GITLAB_REPO`     | `gitlab.com/coopernetes/test-repo-gitlab.git`     | Target repo for GitLab identity scripts            |
-| `CODEBERG_REPO`   | `codeberg.org/coopernetes/test-repo-codeberg.git` | Target repo for Codeberg identity scripts          |
-| `FOGWALL_API_KEY` | `change-me-in-production`                         | API key used by approval scripts                   |
-
-Scripts read the upstream PAT from a file if `GIT_PASSWORD` is not set:
-
-| Script group     | PAT file          |
-| ---------------- | ----------------- |
-| GitHub scripts   | `~/.github-pat`   |
-| GitLab scripts   | `~/.gitlab-pat`   |
-| Codeberg scripts | `~/.codeberg-pat` |
-
-#### Test entry points
-
-Run tests by logical grouping. Each entry point orchestrates multiple related test cases:
-
-**Server mode (push):**
-
-- `bash test/push-pass-all.sh` — golden-path pushes and tag pushes (should succeed)
-- `bash test/push-fail-all.sh` — validation failures (should be rejected)
-
-**Transparent proxy:**
-
-- `bash test/proxy-pass-all.sh` — golden-path and tag pushes (require manual approval)
-- `bash test/proxy-fail-all.sh` — validation failures (should be rejected)
-
-**Identity verification:**
-
-- `bash test/push-identity-all.sh` — SCM identity resolution across providers
-- `bash test/proxy-identity-all.sh` — SCM identity resolution via proxy
-
-#### Individual test scripts
-
-If running a single test case by name:
-
-**Server mode (push):**
-
-| Script                 | Category | What it tests                                          |
-| ---------------------- | -------- | ------------------------------------------------------ |
-| `push-pass.sh`         | Pass     | Golden-path push — should succeed and forward upstream |
-| `push-pass-tag.sh`     | Pass     | Lightweight and annotated tags — should succeed        |
-| `push-pass-secrets.sh` | Pass     | File patterns that look like secrets but pass gitleaks |
-| `push-fail-author.sh`  | Fail     | Invalid author email domains (noreply, disallowed)     |
-| `push-fail-message.sh` | Fail     | Commit message validation (WIP, fixup, DO NOT MERGE)   |
-| `push-fail-diff.sh`    | Fail     | Diff content scanning (internal URLs, patterns)        |
-| `push-fail-secrets.sh` | Fail     | Gitleaks detecting secrets in diff (AWS, GitHub, PEM)  |
-
-**Transparent proxy:**
-
-| Script                  | Category | What it tests                                              |
-| ----------------------- | -------- | ---------------------------------------------------------- |
-| `proxy-pass.sh`         | Pass     | Golden-path push — blocks for approval, then auto-approves |
-| `proxy-pass-tag.sh`     | Pass     | Lightweight and annotated tags through proxy               |
-| `proxy-fail-author.sh`  | Fail     | Invalid author email domains (noreply, disallowed)         |
-| `proxy-fail-message.sh` | Fail     | Commit message validation (WIP, fixup, DO NOT MERGE)       |
-| `proxy-fail-diff.sh`    | Fail     | Diff content scanning (internal URLs, patterns)            |
-| `proxy-fail-secrets.sh` | Fail     | Gitleaks detecting secrets in diff (AWS, GitHub, PEM)      |
-
-#### Running tests against your own repo
-
-The scripts default to repos owned by the project maintainer. To run them against your own repos you need:
-
-1. **A test repo** you can push to on GitHub (and optionally GitLab/Codeberg for identity tests).
-
-2. **PAT files** for each provider you want to test:
-
-   ```shell
-   echo "ghp_yourtoken" > ~/.github-pat
-   echo "glpat-yourtoken" > ~/.gitlab-pat   # optional
-   echo "yourtoken" > ~/.codeberg-pat       # optional
-   chmod 600 ~/.github-pat ~/.gitlab-pat ~/.codeberg-pat
-   ```
-
-3. **Allow rules and permissions** in `fogwall-local.yml` — add your repo slug to the `rules.allow` slugs list and add
-   `PUSH`/`REVIEW` permission entries for your proxy user. See
-   [docs/configuration/index.md](docs/configuration/index.md) for the full reference.
-
-4. **Run with your repo** — single scripts accept an inline override; orchestrators need an export:
-
-   ```shell
-   # Single script — inline is fine:
-   GIT_REPO=github.com/your-org/your-repo.git bash test/push-pass.sh
-
-   # Orchestrators (call subscripts via bash) — must export:
-   export GIT_REPO=github.com/your-org/your-repo.git
-   bash test/push-pass-all.sh
-   bash test/proxy-pass-all.sh
-
-   # Provider-specific identity tests use separate variables:
-   export GITHUB_REPO=github.com/your-org/your-repo.git
-   export GITLAB_REPO=gitlab.com/your-org/your-repo.git
-   bash test/push-identity-all.sh
-   ```
-
-#### Running tests manually
-
-Make sure the server is running first (see above), then:
+### Compose smoke tests (packaged image, requires Docker/Podman)
 
 ```shell
-# Run all passing push tests:
-bash test/push-pass-all.sh
-
-# Run all failure push tests:
-bash test/push-fail-all.sh
-
-# Run a single test case:
-bash test/push-fail-secrets.sh
+bash compose.sh --contributions -- up -d
+./gradlew :fogwall-dashboard:composeTest
 ```
 
-#### Full suite runners
+These are black-box against the **packaged image and shipped config** — is it up, does it function, on this database and
+this auth. They are tagged `@Tag("compose")`, live in
+`fogwall-dashboard/src/test/java/com/rbc/fogwall/dashboard/compose/`, and attach to whatever `compose.sh` brought up
+rather than starting anything themselves, so a test skips when the axis it needs is not running. One representative pass
+and one representative fail per axis, never a feature matrix.
 
-Two scripts spin up a complete Docker Compose environment (fogwall + Gitea + database), run all test groups, then tear
-down:
+The axes, each a `compose.sh` flag:
 
 ```shell
-bash test/run-postgres.sh             # PostgreSQL backend
-bash test/run-mongo.sh                # MongoDB backend
-
-# Leave the environment running after the suite (useful for debugging):
-bash test/run-postgres.sh --no-teardown
+bash compose.sh --db postgres -- up -d     # a database driver: default | postgres | mysql | mariadb | mongo
+bash compose.sh --auth ldap -- up -d       # a directory identity signs in and reviews a push
+bash compose.sh --otel -- up -d            # spans and metrics reach the collector
+bash compose.sh --contributions -- up -d   # the SCM API listeners, over TLS (run test/make-certs.sh first)
+bash compose.sh --ssh -- up -d             # fogwall's git-over-SSH transport on 2222
 ```
 
-These build the Docker image from source, so no pre-existing server is needed.
+CI runs `composeTest` in a matrix — one leg per database plus `ldap` and `otel` — against the image built once and
+loaded into each leg. Anything finer-grained than an axis (per-scanner cases, rule-match permutations) belongs in the
+unit and e2e suites, which prove it more cheaply.
 
 ## Docker Compose (local Gitea)
 
@@ -400,7 +308,7 @@ for traces, Prometheus + Grafana for metrics):
 
 | File                             | What it adds                                                    | Flag     | UIs                                                         |
 | -------------------------------- | --------------------------------------------------------------- | -------- | ----------------------------------------------------------- |
-| `docker/docker-compose.otel.yml` | OTel Collector, Jaeger (traces), Prometheus + Grafana (metrics) | `--otel` | Jaeger :16686 · Grafana :3001 (no login) · Prometheus :9090 |
+| `docker/docker-compose.otel.yml` | OTel Collector, Jaeger (traces), Prometheus + Grafana (metrics) | `--otel` | Jaeger :16686 · Grafana :3001 (no login) · Prometheus :9091 |
 
 Any auth overlay can be combined with any database overlay (or none, to keep H2), and `--otel` composes with all of
 them. Use the `compose.sh` wrapper rather than bare `docker compose` — it assembles the right `-f`/`--profile` flags and
@@ -542,8 +450,8 @@ bash compose.sh [same --auth/--db flags as start] -- down -v
   not to take effect. Pass `--force-recreate`. That recreates Gitea too and resets its volume, so re-run
   `bash docker/gitea-setup.sh` afterwards or the seeded users, repos and tokens are gone (an invalid-token 401 from the
   Gitea API is the giveaway).
-- **`test/gitea-push-pass.sh` is interactive.** Server mode holds the git session while the push waits for review, so
-  the script blocks until you approve it in the dashboard at the push-record URL it prints. It is not usable unattended.
+- **Server mode is interactive.** It holds the git session while the push waits for review, so anything pushing to
+  `/server/…` blocks until you approve it in the dashboard.
 
 ## Code style
 

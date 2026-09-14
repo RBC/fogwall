@@ -1,0 +1,40 @@
+# Copy this file to config/fogwall-dashboard.yml. The dashboard half of local development, composed with
+# fogwall-local.yml — FOGWALL_CONFIG_PROFILES=local,dashboard is the default for ./gradlew :fogwall-dashboard:run.
+# It adds only what a standalone proxy has no use for. Every key is documented at https://rbc.github.io/fogwall/.
+server:
+  service-url: http://localhost:8080
+  session-store: jdbc
+  allowed-origins:
+    - http://localhost:5173
+
+# Issue filing through the dashboard, with the account linked under Profile.
+providers:
+  github:
+    issues-enabled: true
+  gitlab:
+    issues-enabled: true
+  codeberg:
+    issues-enabled: true
+
+# Questions the approval UI asks a reviewer before they can approve a held push.
+attestations:
+  - id: reviewed-content
+    type: checkbox
+    label: "I have reviewed the diff and it contains no sensitive or proprietary information"
+    required: true
+    links:
+      - text: "Data classification policy"
+        url: "https://policies.corp.example.com/data-classification"
+  - id: policy-compliance
+    type: checkbox
+    label: "This push complies with our open source contribution policy"
+    required: true
+    links:
+      - text: "Open source contribution policy"
+        url: "https://policies.corp.example.com/open-source-contribution"
+      - text: "Approved license list"
+        url: "https://policies.corp.example.com/approved-licenses"
+  - id: ticket-ref
+    type: text
+    label: "Internal ticket or justification reference"
+    required: false

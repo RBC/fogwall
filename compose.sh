@@ -2,7 +2,7 @@
 # Wrapper around docker/podman compose that assembles the right overlay flags.
 #
 # Usage:
-#   bash compose.sh [--auth ldap|oidc] [--db postgres|mysql|mariadb|mongo] [--otel] -- <compose subcommand> [args...]
+#   bash compose.sh [--auth ldap|oidc] [--db postgres|mysql|mariadb|mongo] [--otel] [--contributions] [--ssh] -- <compose subcommand> [args...]
 #
 # Examples:
 #   bash compose.sh -- up -d
@@ -11,6 +11,8 @@
 #   bash compose.sh --db mysql -- up -d
 #   bash compose.sh --auth ldap --db postgres -- up -d
 #   bash compose.sh --otel -- up -d
+#   bash compose.sh --contributions -- up -d      # SCM API listeners on 8481-8484 (run test/make-certs.sh first)
+#   bash compose.sh --ssh -- up -d                # git-over-SSH on 2222
 #   bash compose.sh --db postgres --otel -- up -d
 #   bash compose.sh --auth ldap --db postgres -- down -v
 
@@ -19,6 +21,8 @@ set -euo pipefail
 AUTH=""
 DB=""
 OTEL=""
+CONTRIBUTIONS=""
+SSH=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -34,13 +38,21 @@ while [[ $# -gt 0 ]]; do
       OTEL="1"
       shift
       ;;
+    --contributions)
+      CONTRIBUTIONS="1"
+      shift
+      ;;
+    --ssh)
+      SSH="1"
+      shift
+      ;;
     --)
       shift
       break
       ;;
     *)
       echo "Unknown option: $1" >&2
-      echo "Usage: bash compose.sh [--auth ldap|oidc] [--db postgres|mysql|mariadb|mongo] [--otel] -- <compose subcommand> [args...]" >&2
+      echo "Usage: bash compose.sh [--auth ldap|oidc] [--db postgres|mysql|mariadb|mongo] [--otel] [--contributions] [--ssh] -- <compose subcommand> [args...]" >&2
       exit 1
       ;;
   esac
@@ -68,6 +80,14 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_DIR="${SCRIPT_DIR}/docker"
 
+# Compose the whole profile list here, in one place. Compose merges environment per key with the last -f winning, so
+# a profile set per overlay would let a later overlay silently drop an earlier one's profile.
+PROFILES="docker-default"
+[[ -n "$AUTH" ]] && PROFILES="${PROFILES},${AUTH}"
+[[ -n "$CONTRIBUTIONS" ]] && PROFILES="${PROFILES},contributions"
+[[ -n "$SSH" ]] && PROFILES="${PROFILES},ssh"
+export FOGWALL_CONFIG_PROFILES="$PROFILES"
+
 ARGS=(-f "${COMPOSE_DIR}/docker-compose.yml")
 
 if [[ -n "$AUTH" ]]; then
@@ -80,6 +100,14 @@ fi
 
 if [[ -n "$OTEL" ]]; then
   ARGS+=(--profile otel -f "${COMPOSE_DIR}/docker-compose.otel.yml")
+fi
+
+if [[ -n "$CONTRIBUTIONS" ]]; then
+  ARGS+=(-f "${COMPOSE_DIR}/docker-compose.contributions.yml")
+fi
+
+if [[ -n "$SSH" ]]; then
+  ARGS+=(-f "${COMPOSE_DIR}/docker-compose.ssh.yml")
 fi
 
 $COMPOSE "${ARGS[@]}" "$@"

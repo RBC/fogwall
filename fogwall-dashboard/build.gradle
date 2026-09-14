@@ -129,21 +129,25 @@ tasks.named('processResources') {
 }
 
 tasks.named('run') {
-    // Default to the 'local' profile so fogwall-local.yml is loaded in local dev.
+    // Default to 'local,dashboard': config/fogwall-local.yml configures the proxy, config/fogwall-dashboard.yml
+    // adds what only the dashboard uses. Later profiles win, and each name resolves to ONE classpath resource, so
+    // the two must not share a file name.
     // Override by setting FOGWALL_CONFIG_PROFILES in your shell before running.
-    environment 'FOGWALL_CONFIG_PROFILES', System.getenv('FOGWALL_CONFIG_PROFILES') ?: 'local'
+    environment 'FOGWALL_CONFIG_PROFILES', System.getenv('FOGWALL_CONFIG_PROFILES') ?: 'local,dashboard'
     // Pass through API key so test scripts can use X-Api-Key without a session.
     // Default keeps the dev experience simple; override in shell for a stricter key.
     environment 'FOGWALL_API_KEY', System.getenv('FOGWALL_API_KEY') ?: 'change-me-in-production'
     jvmArgs "-Dlog4j2.configurationFile=${rootDir}/fogwall-server/src/main/resources/log4j2-local.xml"
     jvmArgs "-Dfogwall.pidfile=${buildDir}/fogwall.pid"
-    // Prepend an extra directory to the runtime classpath so `fogwall-<profile>.yml` files that live OUTSIDE
-    // src/main/resources (and therefore never ship in the jar) can be picked up by FOGWALL_CONFIG_PROFILES.
-    // Used by the Playwright fixture profile and the fixture capture script.
+    // Prepend the config directory to the runtime classpath so `fogwall-<profile>.yml` files that live OUTSIDE
+    // src/main/resources — and therefore never ship in the jar or the image — are what the profiles resolve to.
+    // Defaults to config/, which is gitignored and bootstrapped from the committed examples on first run; the
+    // Playwright fixture and the fixture capture script point it at their own directory instead.
     // Usage: ./gradlew :fogwall-dashboard:run -PconfigDir=path/to/dir   (relative paths resolve against the repo root)
-    if (project.hasProperty('configDir')) {
-        classpath = files(rootProject.file(project.property('configDir'))) + classpath
+    if (!project.hasProperty('configDir')) {
+        dependsOn rootProject.tasks.named('bootstrapConfig')
     }
+    classpath = files(rootProject.file(project.findProperty('configDir') ?: 'config')) + classpath
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -301,7 +305,7 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.named('test') {
     useJUnitPlatform {
-        excludeTags 'e2e'
+        excludeTags 'e2e', 'compose'
     }
 }
 
@@ -315,6 +319,28 @@ tasks.register('e2eTest', Test) {
     }
     // Container startup can be slow
     timeout = java.time.Duration.ofMinutes(10)
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Compose suite. Black-box checks against a stack a developer or the workflow already brought up with compose.sh —
+// the packaged image, the shipped config, a real database and a real Gitea. It covers the axes that only exist once
+// the thing is assembled; everything provable more cheaply lives in test or e2eTest.
+//
+//   bash compose.sh -- up -d && bash docker/gitea-setup.sh
+//   ./gradlew :fogwall-dashboard:composeTest
+// ---------------------------------------------------------------------------------------------------------------
+tasks.register('composeTest', Test) {
+    group = 'verification'
+    description = 'Runs black-box tests against a running Docker Compose stack (see compose.sh)'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'compose'
+    }
+    systemProperty 'fogwall.url', System.getProperty('fogwall.url', System.getenv('FOGWALL_URL') ?: '')
+    systemProperty 'fogwall.gitea.url', System.getProperty('fogwall.gitea.url', System.getenv('GITEA_URL') ?: '')
+    environment 'FOGWALL_API_KEY', System.getenv('FOGWALL_API_KEY') ?: 'change-me-in-production'
+    timeout = java.time.Duration.ofMinutes(15)
 }
 
 tasks.named('check') {

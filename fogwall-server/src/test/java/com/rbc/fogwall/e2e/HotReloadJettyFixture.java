@@ -1,170 +1,148 @@
 package com.rbc.fogwall.e2e;
 
-import com.rbc.fogwall.approval.AutoApprovalGateway;
-import com.rbc.fogwall.config.ContentPatternConfig;
 import com.rbc.fogwall.config.FogwallConfigLoader;
-import com.rbc.fogwall.config.GpgConfig;
-import com.rbc.fogwall.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.db.PushStore;
-import com.rbc.fogwall.db.PushStoreFactory;
-import com.rbc.fogwall.db.memory.InMemoryUrlRuleRegistry;
-import com.rbc.fogwall.git.LocalRepositoryCache;
-import com.rbc.fogwall.git.ServerReceivePackFactory;
-import com.rbc.fogwall.git.ServerRepositoryResolver;
-import com.rbc.fogwall.git.ServerUploadPackFactory;
-import com.rbc.fogwall.git.UpstreamAuthProbe;
-import com.rbc.fogwall.jetty.reload.ConfigHolder;
+import com.rbc.fogwall.jetty.FogwallJettyApplication;
+import com.rbc.fogwall.jetty.FogwallServletRegistrar;
 import com.rbc.fogwall.jetty.reload.LiveConfigLoader;
 import com.rbc.fogwall.jetty.reload.LiveConfigLoader.Section;
-import com.rbc.fogwall.provider.GenericProxyProvider;
-import com.rbc.fogwall.servlet.FogwallServlet;
-import com.rbc.fogwall.servlet.filter.*;
-import jakarta.servlet.DispatcherType;
+import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
-import java.util.EnumSet;
-import java.util.UUID;
-import org.eclipse.jetty.ee11.servlet.FilterHolder;
-import org.eclipse.jetty.ee11.servlet.ServletContextHandler;
-import org.eclipse.jetty.ee11.servlet.ServletHolder;
-import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.server.ServerConnector;
-import org.eclipse.jgit.http.server.GitServlet;
 
 /**
- * Variant of {@link JettyProxyFixture} that wires all hot-reloadable config through a live {@link ConfigHolder} and an
- * {@link InMemoryUrlRuleRegistry}, enabling tests to verify that config changes take effect mid-test without restarting
- * the server.
+ * A {@link JettyProxyFixture} with a reload source attached, for tests that change configuration mid-run and assert the
+ * next request sees it.
  *
- * <p>Both the transparent proxy path ({@code /proxy/...}) and the server mode path ({@code /push/...}) use supplier
- * references into the {@link ConfigHolder}. Updating the holder — via {@link #reloadSection(Path, Section)} —
- * immediately affects the next request on either path.
+ * <p>Reloads go through the production {@link LiveConfigLoader}: the fixture points {@code reload.file.path} at a file
+ * it owns, a test writes YAML into it, and {@link #reloadSection} triggers the same call the {@code POST
+ * /api/config/reload} endpoint makes. Nothing here decides which config section a change belongs to — that is the
+ * behaviour under test.
  *
- * <p>Uses {@link AutoApprovalGateway} so that allowed pushes go through without requiring a human review step.
+ * <p>Auto-approve, so an allowed push completes without waiting on a review step.
  */
 class HotReloadJettyFixture implements AutoCloseable {
 
-    private static final String PUSH_PREFIX = "/push";
-    private static final String PROXY_PREFIX = "/proxy";
+    private static final String PROVIDER_NAME = "gitea";
 
-    private final Server server;
-    private final int port;
-    private final PushStore pushStore;
+    private final FogwallJettyApplication.Running running;
     private final String providerId;
     private final String giteaHostPort;
-    private final ConfigHolder configHolder;
-    private final InMemoryUrlRuleRegistry configRegistry;
+    private final Path reloadFile;
 
-    HotReloadJettyFixture(URI giteaUri, ConfigHolder configHolder, InMemoryUrlRuleRegistry configRegistry)
-            throws Exception {
-        this.configHolder = configHolder;
-        this.configRegistry = configRegistry;
-
-        server = new Server();
-        var connector = new ServerConnector(server);
-        connector.setPort(0);
-        server.addConnector(connector);
-
-        pushStore = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
-        var serverCache = new LocalRepositoryCache(Files.createTempDirectory("fogwall-hotreload-sf-"), 0, true);
-        var proxyCache = new LocalRepositoryCache();
-
-        var provider = GenericProxyProvider.builder()
-                .name("gitea-e2e-hotreload")
-                .uri(giteaUri)
-                .build();
-        this.providerId = provider.getProviderId();
-        this.giteaHostPort = giteaUri.getHost() + ":" + giteaUri.getPort();
-
-        var context = new ServletContextHandler("/", false, false);
-        var approvalGateway = new AutoApprovalGateway(pushStore);
-
-        // Server mode GitServlet on /push/...
-        var resolver = new ServerRepositoryResolver(serverCache, provider);
-        var gitServlet = new GitServlet();
-        gitServlet.setRepositoryResolver(resolver);
-        gitServlet.setReceivePackFactory(new ServerReceivePackFactory(
-                provider,
-                configHolder::getCommitConfig,
-                configHolder::getDiffScanConfig,
-                configHolder::getSecretScanConfig,
-                configHolder::getBinaryBlobConfig,
-                ContentPatternConfig.defaultConfig(),
-                GpgConfig.defaultConfig(),
-                null,
-                null,
-                pushStore,
-                approvalGateway,
-                null,
-                Duration.ofSeconds(30),
-                configRegistry));
-        gitServlet.setUploadPackFactory(new ServerUploadPackFactory());
-
-        String pushServletPath = PUSH_PREFIX + provider.servletPath();
-        String pushMapping = pushServletPath + "/*";
-        var gitHolder = new ServletHolder(gitServlet);
-        gitHolder.setName("git-gitea-hotreload");
-        context.addServlet(gitHolder, pushMapping);
-        // Mirrors FogwallServletRegistrar — see JettyProxyFixture for why the fixture must not diverge.
-        context.addFilter(
-                new FilterHolder(new QuarantineCleanupFilter()), pushMapping, EnumSet.of(DispatcherType.REQUEST));
-        context.addFilter(
-                new FilterHolder(new SmartHttpErrorFilter()), pushMapping, EnumSet.of(DispatcherType.REQUEST));
-        context.addFilter(
-                new FilterHolder(new BasicAuthChallengeFilter(provider, new UpstreamAuthProbe())),
-                pushMapping,
-                EnumSet.of(DispatcherType.REQUEST));
-
-        // Transparent proxy fogwallServlet on /proxy/...
-        String proxyServletPath = PROXY_PREFIX + provider.servletPath();
-        String proxyMapping = proxyServletPath + "/*";
-
-        var proxyServlet = new FogwallServlet(pushStore);
-        var proxyHolder = new ServletHolder(proxyServlet);
-        proxyHolder.setName("proxy-gitea-hotreload");
-        proxyHolder.setInitParameter("proxyTo", giteaUri.toString());
-        proxyHolder.setInitParameter("prefix", proxyServletPath);
-        proxyHolder.setInitParameter("hostHeader", giteaUri.getHost());
-        proxyHolder.setInitParameter("preserveHost", "false");
-        context.addServlet(proxyHolder, proxyMapping);
-
-        String serviceUrl = "http://localhost";
-        addFilter(context, proxyMapping, new PushStoreAuditFilter(pushStore));
-        addFilter(context, proxyMapping, new ForceGitClientFilter());
-        addFilter(context, proxyMapping, new ParseGitRequestFilter(provider));
-        addFilter(context, proxyMapping, new EnrichPushCommitsFilter(provider, proxyCache));
-        addFilter(context, proxyMapping, new AllowApprovedPushFilter(pushStore, serviceUrl, null));
-        // Always register the URL rule filter, backed by the live configRegistry.
-        // Note: proxy is fail-closed — no matching rule results in 403.
-        // Tests must seed the registry with at least one allow rule before making requests.
-        addFilter(context, proxyMapping, new UrlRuleAggregateFilter(100, provider, null, configRegistry));
-        addFilter(context, proxyMapping, new CheckEmptyBranchFilter());
-        addFilter(context, proxyMapping, new CheckHiddenCommitsFilter());
-        addFilter(context, proxyMapping, new CheckAuthorEmailsFilter(configHolder::getCommitConfig));
-        addFilter(context, proxyMapping, new CheckCommitMessagesFilter(configHolder::getCommitConfig));
-        addFilter(context, proxyMapping, new ScanDiffFilter(configHolder::getDiffScanConfig));
-        addFilter(context, proxyMapping, new SecretScanningFilter(configHolder::getSecretScanConfig));
-        addFilter(context, proxyMapping, new GpgSignatureFilter(GpgConfig.defaultConfig()));
-        addFilter(context, proxyMapping, new ValidationSummaryFilter());
-        addFilter(context, proxyMapping, new FetchFinalizerFilter());
-        addFilter(context, proxyMapping, new PushFinalizerFilter(serviceUrl, approvalGateway));
-        addFilter(context, proxyMapping, new AuditLogFilter());
-
-        server.setHandler(context);
-        server.start();
-
-        port = ((ServerConnector) server.getConnectors()[0]).getLocalPort();
+    /** Reloads come from a file this fixture owns. */
+    HotReloadJettyFixture(URI giteaUri) throws Exception {
+        this(giteaUri, null);
     }
 
-    /** The port the proxy is listening on. */
+    /**
+     * Reloads come from a git repository, cloned on every reload — the source an operator points at a config repo. Pass
+     * the clone URL of a repository holding {@code fogwall.yml} on its default branch.
+     */
+    HotReloadJettyFixture(URI giteaUri, String configRepoUrl) throws Exception {
+        this.giteaHostPort = giteaUri.getHost() + ":" + giteaUri.getPort();
+        this.reloadFile = Files.createTempFile("fogwall-e2e-reload-", ".yml");
+        // An empty document: the loader warns if the watched file is missing, and a reload before any test has
+        // written to it should change nothing rather than fail.
+        Files.writeString(reloadFile, "{}\n");
+
+        Path override = writeOverride(giteaUri, reloadFile, configRepoUrl);
+        try {
+            running = FogwallJettyApplication.start(FogwallConfigLoader.loadWithOverride("test-e2e", override));
+        } finally {
+            Files.deleteIfExists(override);
+        }
+        this.providerId = running.providers().getFirst().getProviderId();
+    }
+
+    private static Path writeOverride(URI giteaUri, Path reloadFile, String configRepoUrl) throws IOException {
+        // Only one source at a time: reload() takes the file source when it is enabled and never reaches the git one.
+        String source = configRepoUrl == null ? """
+                reload:
+                  file:
+                    enabled: true
+                    path: %s
+                """.formatted(reloadFile) : """
+                reload:
+                  file:
+                    enabled: false
+                  git:
+                    enabled: true
+                    url: %s
+                    branch: main
+                    file-path: fogwall.yml
+                    interval-seconds: 0
+                """.formatted(configRepoUrl);
+
+        String yaml = """
+                server:
+                  approval-mode: auto
+                providers:
+                  %s:
+                    enabled: true
+                    type: forgejo
+                    uri: %s
+                %srules:
+                  allow:
+                    - enabled: true
+                      order: 1
+                      operation: BOTH
+                      match:
+                        target: OWNER
+                        value: "*"
+                        type: GLOB
+                users:
+                  - username: %s
+                    emails:
+                      - %s
+                    scm-identities:
+                      - provider: %s
+                        username: %s
+                permissions:
+                  - username: %s
+                    provider: %s
+                    match:
+                      target: SLUG
+                      value: ".*"
+                      type: REGEX
+                    grant: MAINTAIN
+                """.formatted(
+                        PROVIDER_NAME,
+                        giteaUri,
+                        source,
+                        GiteaContainer.ADMIN_USER,
+                        GiteaContainer.VALID_AUTHOR_EMAIL,
+                        PROVIDER_NAME,
+                        GiteaContainer.ADMIN_USER,
+                        GiteaContainer.ADMIN_USER,
+                        PROVIDER_NAME);
+
+        Path file = Files.createTempFile("fogwall-e2e-override-", ".yml");
+        Files.writeString(file, yaml);
+        return file;
+    }
+
+    /**
+     * Applies {@code overrideYaml} to the running server by writing it to the watched reload file and triggering the
+     * section reload, exactly as the REST endpoint does.
+     */
+    void reloadSection(Path overrideYaml, Section section) throws Exception {
+        Files.writeString(reloadFile, Files.readString(overrideYaml));
+        running.liveConfigLoader().reload(section);
+    }
+
+    /** Triggers a reload from whichever source is configured, without staging a file first. */
+    String reloadSection(Section section) {
+        return running.liveConfigLoader().reload(section);
+    }
+
     int getPort() {
-        return port;
+        return running.port();
     }
 
     PushStore getPushStore() {
-        return pushStore;
+        return running.ctx().pushStore();
     }
 
     String getProviderId() {
@@ -175,44 +153,20 @@ class HotReloadJettyFixture implements AutoCloseable {
         return giteaHostPort;
     }
 
-    String getProxyBase() {
-        return "http://localhost:" + port + PROXY_PREFIX + "/" + giteaHostPort;
+    String getPushBase() {
+        return "http://localhost:" + getPort() + FogwallServletRegistrar.PUSH_PATH_PREFIX + "/" + giteaHostPort;
     }
 
-    /**
-     * Reloads the specified config section by loading {@code overrideYaml} on top of the base classpath config and
-     * applying the result to the live {@link ConfigHolder} and/or {@link InMemoryUrlRuleRegistry}.
-     *
-     * <p>This exercises the same code path as {@link LiveConfigLoader} — the YAML is parsed by
-     * {@link FogwallConfigLoader#loadWithOverride}, then the relevant section is built by
-     * {@link JettyConfigurationBuilder} and applied atomically.
-     */
-    void reloadSection(Path overrideYaml, Section section) throws Exception {
-        var newConfig = FogwallConfigLoader.loadWithOverride(overrideYaml);
-        var builder = new JettyConfigurationBuilder(newConfig);
-        switch (section) {
-            case COMMIT -> configHolder.update(builder.buildCommitConfig());
-            case DIFF_SCAN -> configHolder.update(builder.buildDiffScanConfig());
-            case SECRET_SCAN -> configHolder.update(builder.buildSecretScanConfig());
-            case RULES -> configRegistry.seedFromConfig(builder.buildConfigRules(newConfig));
-            case ALL -> {
-                configHolder.update(builder.buildCommitConfig());
-                configHolder.update(builder.buildDiffScanConfig());
-                configHolder.update(builder.buildSecretScanConfig());
-                configRegistry.seedFromConfig(builder.buildConfigRules(newConfig));
-            }
-            default -> throw new IllegalArgumentException("Unsupported section: " + section);
-        }
+    String getProxyBase() {
+        return "http://localhost:" + getPort() + FogwallServletRegistrar.PROXY_PATH_PREFIX + "/" + giteaHostPort;
     }
 
     @Override
     public void close() throws Exception {
-        server.stop();
-    }
-
-    private static void addFilter(ServletContextHandler ctx, String mapping, jakarta.servlet.Filter filter) {
-        var holder = new FilterHolder(filter);
-        holder.setAsyncSupported(true);
-        ctx.addFilter(holder, mapping, EnumSet.of(DispatcherType.REQUEST));
+        try {
+            running.close();
+        } finally {
+            Files.deleteIfExists(reloadFile);
+        }
     }
 }

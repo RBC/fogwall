@@ -33,7 +33,7 @@ import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
  * </ol>
  *
  * <p>Each reload can target a specific {@link Section} or {@link Section#ALL}. Provider, server, and database changes
- * log a WARNING — those sections require a restart (coopernetes/fogwall#75).
+ * log a WARNING — those sections require a restart.
  *
  * <p>A concurrent reload guard prevents overlapping reloads.
  */
@@ -421,8 +421,8 @@ public class LiveConfigLoader {
                 .getProviders()
                 .keySet()
                 .equals(startupConfig.getProviders().keySet())) {
-            log.warn("Config reload: providers section changed — restart required for the new providers to take effect"
-                    + " (see coopernetes/fogwall#75 for UI-driven hot-swap)");
+            log.warn(
+                    "Config reload: providers section changed — restart required for the new providers to take effect");
         }
         if (newConfig.getServer().getPort() != startupConfig.getServer().getPort()) {
             log.warn("Config reload: server.port changed — restart required");

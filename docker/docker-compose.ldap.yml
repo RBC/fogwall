@@ -19,7 +19,8 @@ services:
       LDAP_ADMIN_PASSWORD: adminpassword
       LDAP_TLS: "false"
     volumes:
-      - ./ldap-bootstrap.ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom/01-users.ldif:ro
+      # :z relabels for SELinux; without it the directory silently starts with none of these users.
+      - ./ldap-bootstrap.ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom/01-users.ldif:z
     # --copy-service is required for osixia/openldap to pick up custom LDIF files.
     command: ["--loglevel", "warning", "--copy-service"]
     ports:
@@ -34,9 +35,8 @@ services:
 
   fogwall:
     volumes:
-      - ./fogwall-ldap.yml:/app/conf/fogwall-ldap.yml:ro
+      - ./fogwall-ldap.yml:/app/conf/fogwall-ldap.yml:z
     environment:
-      FOGWALL_CONFIG_PROFILES: docker-default,ldap
     depends_on:
       openldap:
         condition: service_healthy

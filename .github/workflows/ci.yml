@@ -109,7 +109,7 @@ jobs:
           retention-days: 1
 
   docker-smoke-test:
-    name: Docker Smoke Test (${{ matrix.db }})
+    name: Docker Smoke Test (${{ matrix.auth || (matrix.otel && 'otel') || (matrix.ssh && 'ssh') || matrix.db }})
     runs-on: ubuntu-latest
     needs: build-smoke-image
     if: >
@@ -118,8 +118,16 @@ jobs:
       github.event_name == 'pull_request'
     strategy:
       matrix:
-        db: [default, postgres, mongo]
-        # auth: [ldap, oidc]  # Uncomment when auth smoke tests are added
+        include:
+          - db: default
+          - db: postgres
+          - db: mongo
+          - db: default
+            auth: ldap
+          - db: default
+            otel: true
+          - db: default
+            ssh: true
       fail-fast: false
 
     steps:
@@ -133,15 +141,43 @@ jobs:
       - name: Load fogwall image
         run: docker load < fogwall-image.tar.gz
 
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # ratchet:actions/setup-java@v6.0.0
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # ratchet:gradle/actions/setup-gradle@v6
+
+      # The SCM API listeners serve TLS, and the CLIs that talk to them require HTTPS to a custom host.
+      - name: Generate listener certificates
+        run: bash test/make-certs.sh
+
+      # Pinned and checksum-verified, so a failure in the SCM API cases points at fogwall, not a changed client.
+      - name: Install tea
+        env:
+          TEA_VERSION: 0.15.1
+        run: |
+          base="https://dl.gitea.com/tea/${TEA_VERSION}"
+          curl -fsSL -o tea "${base}/tea-${TEA_VERSION}-linux-amd64"
+          curl -fsSL -o tea.sha256 "${base}/tea-${TEA_VERSION}-linux-amd64.sha256"
+          sed "s| tea-${TEA_VERSION}-linux-amd64| tea|" tea.sha256 | sha256sum --check -
+          chmod +x tea
+          sudo mv tea /usr/local/bin/tea
+          tea --version
+
       - name: Start stack
         env:
           DB: ${{ matrix.db }}
+          AUTH: ${{ matrix.auth }}
+          OTEL: ${{ matrix.otel }}
+          SSH: ${{ matrix.ssh }}
         run: |
-          if [[ "$DB" != "default" ]]; then
-            bash compose.sh --db "$DB" -- up -d
-          else
-            bash compose.sh -- up -d
-          fi
+          args=()
+          [[ "$DB" != "default" ]] && args+=(--db "$DB")
+          [[ -n "$AUTH" ]] && args+=(--auth "$AUTH")
+          [[ -n "$OTEL" ]] && args+=(--otel)
+          [[ -n "$SSH" ]] && args+=(--ssh)
+          bash compose.sh "${args[@]}" --contributions -- up -d
         timeout-minutes: 5
 
       - name: Wait for proxy health
@@ -155,31 +191,25 @@ jobs:
           done
           curl -sf http://localhost:8080/api/health
 
-      - name: Seed Gitea
-        run: bash docker/gitea-setup.sh
+      # Gitea seeds itself: the gitea-seed service creates the users, orgs and repos after Gitea reports healthy.
 
-      - name: Run proxy smoke tests
-        run: |
-          source test/gitea/tokens.env
-          export GIT_PASSWORD="${GITEA_TESTUSER_TOKEN}"
-          export GIT_USERNAME="me"
-          export GIT_REPO="gitea:3000/test-owner/test-repo.git"
-          export GIT_AUTHOR_NAME="test-user"
-          export GIT_EMAIL="testuser@example.com"
-          # Proxy mode only — server mode passes queue for approval and hang
-          bash test/proxy-pass.sh
-          bash test/proxy-fail-secrets.sh
+      - name: Run compose smoke tests
+        run: ./gradlew :fogwall-dashboard:composeTest
 
       - name: Dump proxy logs on failure
         if: failure()
         env:
           DB: ${{ matrix.db }}
+          AUTH: ${{ matrix.auth }}
+          OTEL: ${{ matrix.otel }}
+          SSH: ${{ matrix.ssh }}
         run: |
-          if [[ "$DB" != "default" ]]; then
-            bash compose.sh --db "$DB" -- logs fogwall
-          else
-            bash compose.sh -- logs fogwall
-          fi
+          args=()
+          [[ "$DB" != "default" ]] && args+=(--db "$DB")
+          [[ -n "$AUTH" ]] && args+=(--auth "$AUTH")
+          [[ -n "$OTEL" ]] && args+=(--otel)
+          [[ -n "$SSH" ]] && args+=(--ssh)
+          bash compose.sh "${args[@]}" --contributions -- logs fogwall
 
   playwright-test:
     name: Playwright UI Tests

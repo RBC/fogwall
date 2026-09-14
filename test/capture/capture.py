@@ -21,7 +21,7 @@ specification of what the fixture database contains. Standard library only; no t
        fogwall-dashboard/frontend/tests/fixtures/fogwall.sql      the database
        fogwall-dashboard/frontend/tests/fixtures/manifest.json    scenario name → push id / ref
 
-Prereqs: test/capture/mapping.env (+ optional secrets.env), the PAT files it names, ssh-agent holding the key that
+Prereqs: test/capture/mapping.env (+ optional secrets.env), the tokens it names, ssh-agent holding the key that
 is registered on github.com, git, ssh-keygen, openssl, the four SCM CLIs (gh, glab, tea, fj), and nothing else
 listening on :8080 / :2222 / :8443 or the SCM API ports (8481-8484). The PATs must be able to create AND delete
 repositories: GitHub `repo` + `delete_repo`; GitLab `api`; Codeberg/Gitea `write:user` + `write:repository` +
@@ -87,7 +87,7 @@ def indent(text: str) -> None:
 
 
 # ═════════════════════════════════════════════════════════════════════════════════════════════════════════════════
-# 0. Inputs — mapping.env / secrets.env are bash files (secrets.env runs jq); source them through bash once.
+# 0. Inputs — mapping.env / secrets.env are bash files; source them through bash once.
 # ═════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 def load_env_files() -> dict[str, str]:
     mapping = HERE / "mapping.env"
@@ -107,12 +107,10 @@ def load_env_files() -> dict[str, str]:
 
 
 def read_pat(env: dict[str, str], name: str) -> str:
-    val = env.get(f"{name}_PAT", "")
-    file = Path(os.path.expanduser(env.get(f"{name}_PAT_FILE", "")))
-    if not val and file.is_file():
-        val = file.read_text().strip()
+    """The provider token, from the environment or mapping.env. Never from a path this file assumes."""
+    val = env.get(f"{name}_PAT", "").strip()
     if not val:
-        raise Fatal(f"{name}_PAT not set and {file} not found")
+        raise Fatal(f"{name}_PAT is not set — export it or set it in mapping.env")
     return val
 
 
@@ -167,7 +165,7 @@ class Identity:
         pairs += [
             (FIX["name"], self.name),
             (FIX["handle"], self.handle),
-            # The domain-allow regex in the profile is YAML-escaped: example\\.org → coopernetes\\.ca
+            # The domain-allow regex in the profile is YAML-escaped: example\\.org → your\\.domain
             (FIX["domain"].replace(".", "\\\\."), self.domain.replace(".", "\\\\.")),
             (FIX["domain"], self.domain),
         ]

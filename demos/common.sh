@@ -3,7 +3,7 @@
 # Source this file in test scripts to get common functions and setup
 
 source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
-resolve_pat ~/.github-pat
+resolve_pat
 export GIT_REPO=${GIT_REPO:-"github.com/coopernetes/test-repo.git"}
 
 # Test counters (exported so they survive subshells)

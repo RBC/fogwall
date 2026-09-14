@@ -14,7 +14,7 @@
 # After a push through the proxy:
 #   - traces:  http://localhost:16686 (Jaeger UI, service "fogwall")
 #   - metrics: http://localhost:3001  (Grafana, "fogwall — Observability" dashboard; no login)
-#              http://localhost:9090  (Prometheus, to explore fogwall_push_* directly)
+#              http://localhost:9091  (Prometheus, to explore fogwall_push_* directly)
 #   - raw spans + metrics as text: docker compose logs otel-collector
 services:
   fogwall:

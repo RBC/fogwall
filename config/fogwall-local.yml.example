@@ -1,0 +1,123 @@
+# Copy this file to config/fogwall-local.yml and make it yours. It is gitignored — nothing in config/ ships in a jar
+# or an image, and nothing here is read by any test. Every key is documented at https://rbc.github.io/fogwall/.
+#
+# Loaded by ./gradlew :fogwall-server:run and, with fogwall-dashboard.yml, by ./gradlew :fogwall-dashboard:run.
+server:
+  ssh:
+    enabled: true
+  # Serving the SCM API listeners over TLS needs a certificate that does not exist until you make one, so this is
+  # commented out — uncommented with no file there, fogwall will not start. To work on the SCM API proxy:
+  #   ./test/make-certs.sh, uncomment the three lines below, then the scm-api block on the provider you want.
+  # tls:
+  #   certificate: ../docker/tls/localhost.crt
+  #   key: ../docker/tls/localhost.key
+
+# Three real upstreams, one per provider family: GitHub, GitLab and Forgejo. Add gitea.com or a self-hosted host the
+# same way. The Docker Compose stack runs its own Gitea under its own profile and is not configured here.
+providers:
+  github:
+    enabled: true
+    ssh:
+      enabled: true
+    # scm-api:
+    #   enabled: true
+    #   port: 9443
+  gitlab:
+    enabled: true
+    # scm-api:
+    #   enabled: true
+    #   port: 9444
+  codeberg:
+    enabled: true
+    # scm-api:
+    #   enabled: true
+    #   port: 9446
+
+auth:
+  provider: local
+
+users:
+  - username: admin
+    password-hash: "{noop}admin"
+    roles: [ADMIN]
+    emails:
+      - admin@example.com
+
+  - username: dev
+    password-hash: "{noop}password"
+    roles: [ADMIN, SELF_CERTIFY]
+    # Your own login per provider — a push resolves the caller from their token and matches it here. Without this,
+    # identity does not resolve and every push is refused.
+    # scm-identities:
+    #   - provider: github
+    #     username: your-github-login
+    emails:
+      # The address your commits are authored with, or the author check refuses them.
+      - dev@example.com
+
+  - username: reviewer
+    password-hash: "{noop}password"
+
+commit:
+  author:
+    email:
+      domain:
+        allow: "(proton\\.me|gmail\\.com|outlook\\.com|yahoo\\.com|example\\.com)$"
+      local:
+        block: "^(noreply|no-reply|bot|nobody)$"
+  message:
+    block:
+      literals:
+        - "WIP"
+        - "DO NOT MERGE"
+        - "fixup!"
+        - "squash!"
+      patterns:
+        - '(?i)(password|secret|token)\s*[=:]\s*\S+'
+
+diff-scan:
+  block:
+    literals:
+      - "internal.corp.example.com"
+    patterns:
+      - '(?i)https?://[a-z0-9.-]*\.corp\.example\.com\b'
+
+secret-scan:
+  enabled: true
+
+scm-api:
+  block:
+    literals:
+      - "internal.corp.example.com"
+    patterns:
+      - '(?i)https?://[a-z0-9.-]*\.corp\.example\.com\b'
+
+binary-blob:
+  enabled: true
+  max-size-bytes: 52428800
+  deny-mime-types:
+    - application/pdf
+    - application/zip
+
+# Permissions and rules are left to the seeding script, which scopes them to the repository you name rather than to
+# every slug on a provider. Add them here only for something you want on every run.
+#
+# permissions:
+#   - username: dev
+#     provider: github
+#     match:
+#       target: SLUG
+#       value: /your-login/your-test-repo
+#       type: LITERAL
+#     grant: PUSH
+#
+# rules:
+#   allow:
+#     - enabled: true
+#       order: 100
+#       operation: BOTH
+#       provider: github
+#       match:
+#         target: SLUG
+#         value: /your-login/your-test-repo
+#         type: LITERAL

@@ -21,8 +21,8 @@ import org.github.gestalt.config.source.MapConfigSourceBuilder;
  * <ol>
  *   <li>{@code fogwall.yml} — base defaults shipped with the jar
  *   <li>Profile configs named in {@code FOGWALL_CONFIG_PROFILES} — comma-separated list of profile names; each loads
- *       {@code fogwall-{profile}.yml} from the classpath in order (optional, silently skipped if absent). Later
- *       profiles take priority over earlier ones.
+ *       {@code fogwall-{profile}.yml} from the classpath in order. Later profiles take priority over earlier ones, and
+ *       a name with no matching file fails startup.
  *   <li>Environment variables with {@code FOGWALL_} prefix (highest priority)
  * </ol>
  *
@@ -69,6 +69,21 @@ public final class FogwallConfigLoader {
      * @throws GestaltException if the base config cannot be parsed
      */
     public static FogwallConfig load() throws GestaltException {
+        return load(System.getenv(PROFILES_ENV_VAR));
+    }
+
+    /**
+     * Loads and merges configuration from the base file, the named profiles and environment variable overrides,
+     * choosing the profiles explicitly rather than inheriting {@code FOGWALL_CONFIG_PROFILES}.
+     *
+     * <p>For callers that compose their own profile set — tests, chiefly, which cannot set an environment variable in
+     * their own process and must not be steered by one a developer exported for {@code run}.
+     *
+     * @param profiles comma-separated profile names, or null/blank for none
+     * @return fully-populated {@link FogwallConfig}
+     * @throws GestaltException if the base config cannot be parsed, or a named profile is not on the classpath
+     */
+    public static FogwallConfig load(String profiles) throws GestaltException {
         YamlStructureValidator.validateClasspathResource(BASE_CONFIG);
 
         var builder = new GestaltBuilder()
@@ -79,23 +94,7 @@ public final class FogwallConfigLoader {
                 ClassPathConfigSourceBuilder.builder().setResource(BASE_CONFIG).build());
         log.info("Loaded base configuration from {}", BASE_CONFIG);
 
-        // Profile configs: FOGWALL_CONFIG_PROFILES=docker-default,ldap
-        // loads fogwall-docker-default.yml then fogwall-ldap.yml (later = higher priority)
-        String profilesEnv = System.getenv(PROFILES_ENV_VAR);
-        if (profilesEnv != null && !profilesEnv.isBlank()) {
-            for (String profile : profilesEnv.split(",")) {
-                String profileConfig = "fogwall-" + profile.trim() + ".yml";
-                if (FogwallConfigLoader.class.getClassLoader().getResource(profileConfig) != null) {
-                    YamlStructureValidator.validateClasspathResource(profileConfig);
-                    builder.addSource(ClassPathConfigSourceBuilder.builder()
-                            .setResource(profileConfig)
-                            .build());
-                    log.info("Loaded profile configuration from {}", profileConfig);
-                } else {
-                    log.debug("Profile config {} not found on classpath (skipped)", profileConfig);
-                }
-            }
-        }
+        addProfileSources(builder, profiles, true);
 
         // Env var overrides: FOGWALL_SERVER_PORT → server.port
         Map<String, String> envOverrides = buildEnvOverrides();
@@ -124,6 +123,23 @@ public final class FogwallConfigLoader {
      * @throws GestaltException if the base or override config cannot be parsed
      */
     public static FogwallConfig loadWithOverride(Path overrideFile) throws GestaltException {
+        return loadWithOverride(System.getenv(PROFILES_ENV_VAR), overrideFile);
+    }
+
+    /**
+     * As {@link #loadWithOverride(Path)}, choosing the profiles explicitly rather than inheriting
+     * {@code FOGWALL_CONFIG_PROFILES}.
+     *
+     * <p>The pairing a test fixture needs: a committed profile for everything that is fixed, and a generated file on
+     * top for what cannot be known until the process is running — the port an upstream container bound, the temporary
+     * directory a database lives in.
+     *
+     * @param profiles comma-separated profile names, or null/blank for none
+     * @param overrideFile path to the external YAML file to overlay
+     * @return fully-populated {@link FogwallConfig} with the override applied
+     * @throws GestaltException if the base or override config cannot be parsed
+     */
+    public static FogwallConfig loadWithOverride(String profiles, Path overrideFile) throws GestaltException {
         try {
             YamlStructureValidator.validateFile(overrideFile);
         } catch (IOException e) {
@@ -137,17 +153,7 @@ public final class FogwallConfigLoader {
         builder.addSource(
                 ClassPathConfigSourceBuilder.builder().setResource(BASE_CONFIG).build());
 
-        String profilesEnv = System.getenv(PROFILES_ENV_VAR);
-        if (profilesEnv != null && !profilesEnv.isBlank()) {
-            for (String profile : profilesEnv.split(",")) {
-                String profileConfig = "fogwall-" + profile.trim() + ".yml";
-                if (FogwallConfigLoader.class.getClassLoader().getResource(profileConfig) != null) {
-                    builder.addSource(ClassPathConfigSourceBuilder.builder()
-                            .setResource(profileConfig)
-                            .build());
-                }
-            }
-        }
+        addProfileSources(builder, profiles, false);
 
         Map<String, String> envOverrides = buildEnvOverrides();
         if (!envOverrides.isEmpty()) {
@@ -163,6 +169,46 @@ public final class FogwallConfigLoader {
         Gestalt gestalt = builder.build();
         gestalt.loadConfigs();
         return gestalt.getConfig("", FogwallConfig.class);
+    }
+
+    /**
+     * Adds a source for each profile named in {@code FOGWALL_CONFIG_PROFILES}, in order, so that later profiles take
+     * priority over earlier ones.
+     *
+     * <p>A profile is a file the operator supplies — mounted into {@code /app/conf} in the image, or the {@code conf/}
+     * directory the run tasks put on the classpath in local development. A name that resolves to nothing is a
+     * misconfiguration rather than something to carry on from: fogwall would start on base defaults with no providers,
+     * no users and no rules, and the first sign of it would be traffic being refused for reasons nothing explains.
+     *
+     * @param profilesEnv the raw comma-separated value, or null/blank for no profiles
+     * @param validate whether to run structural validation on each profile, as the initial load does
+     * @throws GestaltException if a named profile is not on the classpath
+     */
+    static void addProfileSources(GestaltBuilder builder, String profilesEnv, boolean validate)
+            throws GestaltException {
+        if (profilesEnv == null || profilesEnv.isBlank()) {
+            return;
+        }
+        for (String profile : profilesEnv.split(",")) {
+            String name = profile.trim();
+            if (name.isEmpty()) {
+                continue;
+            }
+            String profileConfig = "fogwall-" + name + ".yml";
+            if (FogwallConfigLoader.class.getClassLoader().getResource(profileConfig) == null) {
+                throw new GestaltException(PROFILES_ENV_VAR + " names the profile '" + name + "' but " + profileConfig
+                        + " is not on the classpath. Supply the file — config/" + profileConfig
+                        + " in local development, /app/conf/" + profileConfig
+                        + " in a container — or remove the name from " + PROFILES_ENV_VAR + ".");
+            }
+            if (validate) {
+                YamlStructureValidator.validateClasspathResource(profileConfig);
+            }
+            builder.addSource(ClassPathConfigSourceBuilder.builder()
+                    .setResource(profileConfig)
+                    .build());
+            log.info("Loaded profile configuration from {}", profileConfig);
+        }
     }
 
     private static Map<String, String> buildEnvOverrides() {

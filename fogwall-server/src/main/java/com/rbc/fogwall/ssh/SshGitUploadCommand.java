@@ -140,7 +140,9 @@ public class SshGitUploadCommand implements Command {
             // Mirrors UrlRuleAggregateFilter's fetch-side gate — the only enforcement point for URL allow/deny
             // rules on this transport, since SSH has no servlet filter chain.
             var evaluator = new UrlRuleEvaluator(urlRuleRegistry, route.provider());
-            String slug = owner + "/" + repo;
+            // Leading slash to match the form HTTP and the SSH push path use — SLUG rules are anchored on it
+            // (UrlRuleEvaluator: "a SLUG pattern carries the leading / the request path has").
+            String slug = "/" + owner + "/" + repo;
             UrlRuleEvaluator.Result result = evaluator.evaluate(slug, owner, repo, HttpOperation.FETCH);
             if (!(result instanceof UrlRuleEvaluator.Result.Allowed allowed)) {
                 String reason = result instanceof UrlRuleEvaluator.Result.Denied denied

@@ -1,0 +1,57 @@
+# The fixed half of an e2e fixture's configuration. Everything that depends on the running process — the port the
+# upstream container bound, the approval mode a test wants, its rules and permissions — is generated alongside this
+# and layered on top; see JettyProxyFixture.
+#
+# This file exists so the e2e suite boots through FogwallConfigLoader and JettyConfigurationBuilder rather than
+# assembling a second copy of the filter chain that can drift from production.
+server:
+  # An ephemeral port: the fixture reads back what Jetty bound.
+  port: 0
+  approval-mode: ui
+  service-url: http://localhost
+
+database:
+  type: h2-mem
+
+# Only the provider a fixture declares in its generated override is wanted; the public hosts the base config enables
+# would otherwise be mounted alongside it.
+providers:
+  github:
+    enabled: false
+  gitlab:
+    enabled: false
+  codeberg:
+    enabled: false
+
+# Open mode: with no users configured there is no identity to resolve, so the permission and attribution checks skip.
+# The base config ships an `admin` user, so a fixture that wants open mode has to say so. A fixture that wants the
+# identity path declares its own users in the generated override, which replaces this.
+users: []
+
+commit:
+  author:
+    email:
+      rules:
+        - { action: allow, field: domain, match: regex, value: "(proton\\.me|gmail\\.com|outlook\\.com|yahoo\\.com|example\\.com)$" }
+        - { action: block, field: local, match: regex, value: "^(noreply|no-reply|bot|nobody)$" }
+  message:
+    block:
+      literals:
+        - "WIP"
+        - "DO NOT MERGE"
+        - "fixup!"
+        - "squash!"
+      patterns:
+        - '(?i)(password|secret|token)\s*[=:]\s*\S+'
+
+# The hand-wired fixtures this replaces passed the code defaults for every scanner, which are off — unlike the base
+# config, which turns three of them on. Left off so the conversion changes no test's expectations; scanning coverage
+# belongs to the compose suite, which runs the shipped configuration.
+secret-scan:
+  enabled: false
+
+binary-blob:
+  enabled: false
+
+content-patterns:
+  enabled: false

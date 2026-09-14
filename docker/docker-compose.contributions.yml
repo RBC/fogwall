@@ -9,7 +9,6 @@
 services:
   fogwall:
     environment:
-      FOGWALL_CONFIG_PROFILES: contributions
       FOGWALL_SERVER_TLS_CERTIFICATE: /app/conf/tls/localhost.crt
       FOGWALL_SERVER_TLS_KEY: /app/conf/tls/localhost.key
     ports:

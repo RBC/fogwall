@@ -1,0 +1,27 @@
+# Overlay: expose fogwall's SSH transport and load the ssh profile. Compose it with the base stack:
+#
+#   bash compose.sh --ssh -- up -d
+#
+# fogwall listens for git-over-SSH on 2222 and forwards the client's agent to the Gitea container. The host key is
+# generated under /tmp on first start. Push to it with:
+#
+#   ssh://localhost:2222/gitea:3000/<owner>/<repo>.git   (agent forwarding required: ssh -A)
+#
+# SSH identity verification needs a provider api-token (Forgejo/Gitea cannot list a user's keys anonymously). gitea-seed
+# mints one onto the config volume; fogwall waits for the seed, reads the token from there and sets it as the gitea
+# provider's api-token. This is the only overlay that gates fogwall on the seed.
+services:
+  fogwall:
+    depends_on:
+      gitea-seed:
+        condition: service_completed_successfully
+    entrypoint:
+      - /bin/sh
+      - -c
+      - export FOGWALL_PROVIDERS__GITEA__API_TOKEN="$(cat /gitea-shared/fogwall-ssh-token)"; exec /app/bin/fogwall-dashboard
+    ports:
+      - "2222:2222"
+    volumes:
+      # :z relabels for SELinux (Podman on Fedora/RHEL); Docker ignores the suffix where SELinux is not in play.
+      - ./fogwall-ssh.yml:/app/conf/fogwall-ssh.yml:z
+      - gitea-config:/gitea-shared:ro
