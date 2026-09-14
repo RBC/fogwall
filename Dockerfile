@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1@sha256:2780b5c3bab67f1f76c781860de469442999ed1a0d7992a5efdf2cffc0e3d769
 
 # ── Build stage ──────────────────────────────────────────────────────────────
-FROM docker.io/eclipse-temurin:25-jdk-noble@sha256:534968c051301957beae735e7ba1db54d99ddecf08746d3b9d4f318cc132dbc3 AS builder
+FROM docker.io/eclipse-temurin:25-jdk-noble@sha256:264fafc3390db78c93dc51da0109a0d66ad1fb59f7a893f12b7e3df1f15e52da AS builder
 
 # Install Node.js directly from the official distribution with SHA256 verification.
 # To update: download the new tarball, verify against nodejs.org/dist/vX.Y.Z/SHASUMS256.txt,
@@ -63,7 +63,7 @@ RUN sed -i \
 # ── Runtime stage: standalone server (no dashboard, no Spring, no Node) ────────
 # Not built by default — `docker build --target server .` opts in explicitly.
 # Lighter footprint: no React/Node build step, no Spring/dashboard dependencies.
-FROM docker.io/eclipse-temurin:25-jre-noble@sha256:b4c93a50fc67612798db73d68ca3b0ee4ebdd51736e59cca370e689b9797037e AS server
+FROM docker.io/eclipse-temurin:25-jre-noble@sha256:d120abd9d8d7dec94520ce974ece62d0e4eed8576eb00bbc84e6128307ab48ef AS server
 
 ARG SECURITY_UPGRADE_PKGS="libssl3t64 openssl"
 
@@ -108,7 +108,7 @@ USER 1000
 ENTRYPOINT ["/app/bin/fogwall-server"]
 
 # ── Runtime stage: dashboard (default) ──────────────────────────────────────────
-FROM docker.io/eclipse-temurin:25-jre-noble@sha256:b4c93a50fc67612798db73d68ca3b0ee4ebdd51736e59cca370e689b9797037e AS dashboard
+FROM docker.io/eclipse-temurin:25-jre-noble@sha256:d120abd9d8d7dec94520ce974ece62d0e4eed8576eb00bbc84e6128307ab48ef AS dashboard
 
 # Packages to upgrade beyond what the base image ships, space-separated.
 # Used to patch CVEs that are fixed in Ubuntu's repos but not yet picked up by
