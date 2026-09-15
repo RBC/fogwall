@@ -17,8 +17,8 @@ public class ValidationContext {
     private final List<ValidationIssue> issues = new ArrayList<>();
 
     /** Record a policy violation found by a validation hook (the check ran and the push breaks a rule). */
-    public void addIssue(String hookName, String summary, String detail) {
-        issues.add(new ValidationIssue(hookName, summary, detail, false));
+    public void addIssue(PushStepKind kind, String summary, String detail) {
+        issues.add(new ValidationIssue(kind, summary, detail, false));
     }
 
     /**
@@ -27,8 +27,8 @@ public class ValidationContext {
      * as an error so the audit trail and operators can tell "the check found a problem" apart from "the check itself
      * failed and needs intervention".
      */
-    public void addError(String hookName, String summary, String detail) {
-        issues.add(new ValidationIssue(hookName, summary, detail, true));
+    public void addError(PushStepKind kind, String summary, String detail) {
+        issues.add(new ValidationIssue(kind, summary, detail, true));
     }
 
     /** Whether any validation hook reported an issue (a violation or an error). */
@@ -42,8 +42,10 @@ public class ValidationContext {
     }
 
     /**
-     * A single issue reported by a hook. {@code error} distinguishes a check that could not complete ({@code true})
-     * from a policy violation ({@code false}); both block the push.
+     * A single issue reported by a hook. {@code kind} identifies which step raised it — the failing step's audit record
+     * and its ordering derive from that, so no separate hook-name → order mapping is needed. {@code error}
+     * distinguishes a check that could not complete ({@code true}) from a policy violation ({@code false}); both block
+     * the push.
      */
-    public record ValidationIssue(String hookName, String summary, String detail, boolean error) {}
+    public record ValidationIssue(PushStepKind kind, String summary, String detail, boolean error) {}
 }

@@ -17,7 +17,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
+import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.Repository;
@@ -38,44 +39,20 @@ import org.eclipse.jgit.transport.*;
  * </ul>
  */
 @Slf4j
+@RequiredArgsConstructor
 public class PushStorePersistenceHook {
-
-    /**
-     * Maps server mode hook names to canonical step orders matching the equivalent proxy filter. Used so REJECTED push
-     * records sort validation steps in the same order as proxy mode.
-     */
-    private static final Map<String, Integer> HOOK_STEP_ORDER = Map.of(
-            PushStepKind.URL_RULE.key(), 100,
-            PushStepKind.AUTHOR_EMAIL.key(), 2100,
-            PushStepKind.COMMIT_MESSAGE.key(), 2200,
-            PushStepKind.DIFF_SCAN.key(), 2300,
-            PushStepKind.SECRET_SCAN.key(), 2500);
 
     private final PushStore pushStore;
     private final FogwallProvider provider;
+
+    @Setter
     private PushContext pushContext;
+
+    @Setter
     private String serviceUrl;
+
+    @Setter
     private boolean autoApproval;
-
-    public PushStorePersistenceHook(PushStore pushStore, FogwallProvider provider) {
-        this.pushStore = pushStore;
-        this.provider = provider;
-    }
-
-    /** Set the shared push context for accumulating steps from other hooks (e.g., diff generation). */
-    public void setPushContext(PushContext pushContext) {
-        this.pushContext = pushContext;
-    }
-
-    /** Set the dashboard service URL so the rejection message can include a direct link to the push record. */
-    public void setServiceUrl(String serviceUrl) {
-        this.serviceUrl = serviceUrl;
-    }
-
-    /** When {@code true}, suppresses dashboard links in user-facing output (auto-approval mode). */
-    public void setAutoApproval(boolean autoApproval) {
-        this.autoApproval = autoApproval;
-    }
 
     /**
      * Returns a {@link PreReceiveHook} that persists the validation outcome as the push's single lifecycle record. Runs
@@ -134,18 +111,17 @@ public class PushStorePersistenceHook {
                             allSteps.add(step);
                         }
                     }
-                    int fallbackOrder = 0;
                     for (var issue : validationContext.getIssues()) {
-                        int stepOrder = HOOK_STEP_ORDER.getOrDefault(issue.hookName(), fallbackOrder);
+                        // A failing step sorts at the position of the step that raised it — the same key the passing
+                        // steps carry — so the record reads in pipeline order without a separate name→order map.
                         allSteps.add(PushStep.builder()
                                 .pushId(recordId)
-                                .stepName(issue.hookName())
-                                .stepOrder(stepOrder)
+                                .stepName(issue.kind().key())
+                                .stepOrder(issue.kind().displayOrder())
                                 .status(StepStatus.FAIL)
                                 .content(GitClientUtils.stripColors(issue.detail()))
                                 .errorMessage(issue.summary())
                                 .build());
-                        fallbackOrder++;
                     }
 
                     allSteps.sort(Comparator.comparingInt(PushStep::getStepOrder));

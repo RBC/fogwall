@@ -9,6 +9,7 @@ import com.rbc.fogwall.git.CommitInspectionService;
 import com.rbc.fogwall.git.DiffGenerationHook;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.validation.BlockedContentDiffCheck;
 import com.rbc.fogwall.validation.Violation;
@@ -39,15 +40,13 @@ import org.eclipse.jgit.lib.Repository;
  * <p>This filter runs at order 300, in the content filters range (200-399).
  */
 @Slf4j
-public class ScanDiffFilter extends AbstractFogwallFilter {
-
-    private static final int ORDER = 300;
+public final class ScanDiffFilter extends AbstractFogwallFilter {
 
     private final Supplier<DiffScanConfig> diffScanConfigSupplier;
 
     /** Live-reload constructor — config is read from the supplier on every request. */
     public ScanDiffFilter(Supplier<DiffScanConfig> diffScanConfigSupplier) {
-        super(ORDER, Set.of(HttpOperation.PUSH));
+        super(LifecycleStage.MANDATORY_PROCESSING, Set.of(HttpOperation.PUSH));
         this.diffScanConfigSupplier = diffScanConfigSupplier;
     }
 
@@ -100,7 +99,7 @@ public class ScanDiffFilter extends AbstractFogwallFilter {
             PushStep diffStep = PushStep.builder()
                     .pushId(requestDetails.getId().toString())
                     .stepName(DiffGenerationHook.STEP_NAME_PUSH_DIFF)
-                    .stepOrder(ORDER - 20)
+                    .stepOrder(PushStepKind.DIFF_GENERATION.displayOrder())
                     .status(StepStatus.PASS)
                     .content(diff)
                     .build();

@@ -4,6 +4,7 @@ import static com.rbc.fogwall.servlet.FogwallServlet.GIT_REQUEST_ATTR;
 
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.git.PushStepKind;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,12 +16,10 @@ import java.util.Set;
 // A filter that sets a git request to be ALLOWED for fetch requests so long as the request
 // has passed through all applicable fetch filters unmodified (ie. request is still in PENDING
 // initial state & not a mutated result such as ERROR, REJECTED or REVIEW)
-public class FetchFinalizerFilter extends AbstractFogwallFilter {
-
-    private static final int ORDER = Integer.MAX_VALUE - 2;
+public final class FetchFinalizerFilter extends AbstractFogwallFilter {
 
     public FetchFinalizerFilter() {
-        super(ORDER, Set.of(HttpOperation.FETCH));
+        super(LifecycleStage.MANDATORY_POST, Set.of(HttpOperation.FETCH));
     }
 
     @Override

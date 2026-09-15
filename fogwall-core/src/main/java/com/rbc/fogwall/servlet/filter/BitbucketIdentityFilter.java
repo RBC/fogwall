@@ -4,6 +4,7 @@ import static com.rbc.fogwall.servlet.FogwallServlet.GIT_REQUEST_ATTR;
 
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.provider.BitbucketProvider;
 import com.rbc.fogwall.provider.ScmUserInfo;
@@ -32,12 +33,10 @@ import lombok.extern.slf4j.Slf4j;
  * throughout the rest of the chain if needed.
  */
 @Slf4j
-public class BitbucketIdentityFilter extends ProviderAwareFogwallFilter<BitbucketProvider> {
-
-    private static final int ORDER = 148;
+public final class BitbucketIdentityFilter extends ProviderAwareFogwallFilter<BitbucketProvider> {
 
     public BitbucketIdentityFilter(BitbucketProvider provider) {
-        super(ORDER, Set.of(HttpOperation.PUSH), provider);
+        super(LifecycleStage.MANDATORY_PROCESSING, Set.of(HttpOperation.PUSH), provider);
     }
 
     @Override

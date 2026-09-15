@@ -34,9 +34,7 @@ import org.eclipse.jgit.transport.ReceivePack;
  * by the same factory.
  */
 @Slf4j
-public class CheckUserPushPermissionHook implements FogwallHook {
-
-    private static final int ORDER = 150;
+public final class CheckUserPushPermissionHook implements MandatoryFogwallHook {
 
     private final PushIdentityResolver identityResolver;
     private final RepoPermissionService repoPermissionService;
@@ -124,7 +122,7 @@ public class CheckUserPushPermissionHook implements FogwallHook {
             log.debug("No identity resolver configured (open mode), skipping permission check");
             pushContext.addStep(PushStep.builder()
                     .stepName(getStepName())
-                    .stepOrder(ORDER)
+                    .stepOrder(displayOrder())
                     .status(StepStatus.PASS)
                     .build());
             return;
@@ -133,7 +131,7 @@ public class CheckUserPushPermissionHook implements FogwallHook {
         if (pushUser == null || pushUser.isEmpty()) {
             log.warn("No authenticated push user in repo config — push denied (fail-closed)");
             validationContext.addIssue(
-                    "CheckUserPushPermissionHook", "No authenticated user", "Push rejected: no authenticated user.");
+                    PushStepKind.PUSH_PERMISSION, "No authenticated user", "Push rejected: no authenticated user.");
             return;
         }
 
@@ -155,7 +153,7 @@ public class CheckUserPushPermissionHook implements FogwallHook {
                             + profileHint,
                     RED,
                     null);
-            validationContext.addIssue("CheckUserPushPermissionHook", "Identity not linked: " + pushUser, detail);
+            validationContext.addIssue(PushStepKind.PUSH_PERMISSION, "Identity not linked: " + pushUser, detail);
             return;
         }
 
@@ -183,7 +181,7 @@ public class CheckUserPushPermissionHook implements FogwallHook {
                     RED,
                     null);
             validationContext.addIssue(
-                    "CheckUserPushPermissionHook", "User not authorized: " + user.getUsername(), detail);
+                    PushStepKind.PUSH_PERMISSION, "User not authorized: " + user.getUsername(), detail);
             return;
         }
 
@@ -207,7 +205,7 @@ public class CheckUserPushPermissionHook implements FogwallHook {
                 pushContext.setScmUsername(importedLogin.get());
                 pushContext.addStep(PushStep.builder()
                         .stepName(getStepName())
-                        .stepOrder(ORDER)
+                        .stepOrder(displayOrder())
                         .status(StepStatus.PASS)
                         .build());
                 return;
@@ -234,7 +232,7 @@ public class CheckUserPushPermissionHook implements FogwallHook {
                             RED,
                             null);
                     validationContext.addIssue(
-                            "CheckUserPushPermissionHook",
+                            PushStepKind.PUSH_PERMISSION,
                             "SSH identity verification not supported by provider",
                             detail);
                     return;
@@ -251,7 +249,7 @@ public class CheckUserPushPermissionHook implements FogwallHook {
                         RED,
                         null);
                 validationContext.addIssue(
-                        "CheckUserPushPermissionHook",
+                        PushStepKind.PUSH_PERMISSION,
                         "SSH key not linked to any SCM identity for " + user.getUsername(),
                         detail);
                 return;
@@ -281,7 +279,7 @@ public class CheckUserPushPermissionHook implements FogwallHook {
         }
         pushContext.addStep(PushStep.builder()
                 .stepName(getStepName())
-                .stepOrder(ORDER)
+                .stepOrder(displayOrder())
                 .status(StepStatus.PASS)
                 .build());
     }
@@ -302,7 +300,7 @@ public class CheckUserPushPermissionHook implements FogwallHook {
                 RED,
                 null);
         validationContext.addIssue(
-                "CheckUserPushPermissionHook", "No OAuth-verified SCM identity for " + user.getUsername(), detail);
+                PushStepKind.PUSH_PERMISSION, "No OAuth-verified SCM identity for " + user.getUsername(), detail);
     }
 
     /**
@@ -334,14 +332,14 @@ public class CheckUserPushPermissionHook implements FogwallHook {
                 RED,
                 null);
         validationContext.addIssue(
-                "CheckUserPushPermissionHook",
+                PushStepKind.PUSH_PERMISSION,
                 "SSH key not imported from " + providerId + " for " + user.getUsername(),
                 detail);
     }
 
     @Override
-    public int getOrder() {
-        return ORDER;
+    public LifecycleStage stage() {
+        return LifecycleStage.MANDATORY_PROCESSING;
     }
 
     @Override

@@ -155,17 +155,10 @@ class UrlRuleFilterTest {
     private UrlRuleAggregateFilter aggregateWith(AccessRule... rules) {
         var registry = new InMemoryUrlRuleRegistry();
         for (AccessRule r : rules) registry.save(r);
-        return new UrlRuleAggregateFilter(50, GITHUB, registry);
+        return new UrlRuleAggregateFilter(GITHUB, registry);
     }
 
     // --- UrlRuleAggregateFilter ---
-
-    @Test
-    void aggregate_orderBelowMinimum_throws() {
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> new UrlRuleAggregateFilter(49, GITHUB, new InMemoryUrlRuleRegistry()));
-    }
 
     @Test
     void aggregate_ruleMatches_passes() throws Exception {
@@ -200,18 +193,24 @@ class UrlRuleFilterTest {
 
         aggregate.doHttpFilter(mockPushRequest(details), resp.mock);
 
-        assertTrue(resp.committed.get(), "Request not matching any allow rule should be blocked");
+        assertEquals(
+                GitRequestDetails.GitResult.REJECTED,
+                details.getResult(),
+                "Request not matching any allow rule should be blocked");
     }
 
     @Test
     void aggregate_emptyRules_blocks() throws Exception {
-        var aggregate = new UrlRuleAggregateFilter(50, GITHUB, new InMemoryUrlRuleRegistry());
+        var aggregate = new UrlRuleAggregateFilter(GITHUB, new InMemoryUrlRuleRegistry());
         GitRequestDetails details = makeDetails("owner", "repo", "/owner/repo");
         FakeResponse resp = new FakeResponse();
 
         aggregate.doHttpFilter(mockPushRequest(details), resp.mock);
 
-        assertTrue(resp.committed.get(), "No rules configured — fail-closed should block");
+        assertEquals(
+                GitRequestDetails.GitResult.REJECTED,
+                details.getResult(),
+                "No rules configured — fail-closed should block");
     }
 
     @Test
@@ -238,7 +237,10 @@ class UrlRuleFilterTest {
 
         aggregate.doHttpFilter(mockPushRequest(details), resp.mock);
 
-        assertTrue(resp.committed.get(), "Lower-order deny rule wins over higher-order allow rule");
+        assertEquals(
+                GitRequestDetails.GitResult.REJECTED,
+                details.getResult(),
+                "Lower-order deny rule wins over higher-order allow rule");
     }
 
     @Test
@@ -284,14 +286,17 @@ class UrlRuleFilterTest {
 
         aggregate.doHttpFilter(mockPushRequest(details), resp.mock);
 
-        assertTrue(resp.committed.get(), "No allow rules — fail-closed blocks unmatched requests");
+        assertEquals(
+                GitRequestDetails.GitResult.REJECTED,
+                details.getResult(),
+                "No allow rules — fail-closed blocks unmatched requests");
     }
 
     // --- /info/refs blocking ---
 
     @Test
     void infoRefs_noAllowRule_returns403() throws Exception {
-        var aggregate = new UrlRuleAggregateFilter(50, GITHUB, new InMemoryUrlRuleRegistry());
+        var aggregate = new UrlRuleAggregateFilter(GITHUB, new InMemoryUrlRuleRegistry());
         GitRequestDetails details = makeInfoDetails("owner", "repo", "/owner/repo");
         FakeResponse resp = new FakeResponse();
 
@@ -380,7 +385,7 @@ class UrlRuleFilterTest {
     void infoRefs_fetchBlocked_notAllowed_recordsFetch() throws Exception {
         FetchStore fetchStore = mock(FetchStore.class);
         var registry = new InMemoryUrlRuleRegistry();
-        var aggregate = new UrlRuleAggregateFilter(50, GITHUB, fetchStore, registry);
+        var aggregate = new UrlRuleAggregateFilter(GITHUB, fetchStore, registry);
         GitRequestDetails details = makeInfoDetails("owner", "repo", "/owner/repo");
         FakeResponse resp = new FakeResponse();
 
@@ -404,7 +409,7 @@ class UrlRuleFilterTest {
                 .value("/owner/repo")
                 .matchType(MatchType.LITERAL)
                 .build());
-        var aggregate = new UrlRuleAggregateFilter(50, GITHUB, fetchStore, registry);
+        var aggregate = new UrlRuleAggregateFilter(GITHUB, fetchStore, registry);
         GitRequestDetails details = makeInfoDetails("owner", "repo", "/owner/repo");
         FakeResponse resp = new FakeResponse();
 
@@ -420,7 +425,7 @@ class UrlRuleFilterTest {
     void infoRefs_pushBlocked_doesNotRecordFetch() throws Exception {
         FetchStore fetchStore = mock(FetchStore.class);
         var registry = new InMemoryUrlRuleRegistry();
-        var aggregate = new UrlRuleAggregateFilter(50, GITHUB, fetchStore, registry);
+        var aggregate = new UrlRuleAggregateFilter(GITHUB, fetchStore, registry);
         GitRequestDetails details = makeInfoDetails("owner", "repo", "/owner/repo");
         FakeResponse resp = new FakeResponse();
 
@@ -442,7 +447,7 @@ class UrlRuleFilterTest {
                 .value("/owner/repo")
                 .matchType(MatchType.LITERAL)
                 .build());
-        var aggregate = new UrlRuleAggregateFilter(50, GITHUB, fetchStore, registry);
+        var aggregate = new UrlRuleAggregateFilter(GITHUB, fetchStore, registry);
         GitRequestDetails details = makeInfoDetails("owner", "repo", "/owner/repo");
         FakeResponse resp = new FakeResponse();
 
@@ -461,7 +466,7 @@ class UrlRuleFilterTest {
                 .pathSuffix("/proxy")
                 .blockedInfoRefsStatus(404)
                 .build();
-        var aggregate = new UrlRuleAggregateFilter(50, provider, new InMemoryUrlRuleRegistry());
+        var aggregate = new UrlRuleAggregateFilter(provider, new InMemoryUrlRuleRegistry());
         GitRequestDetails details = makeInfoDetails("owner", "repo", "/owner/repo");
         FakeResponse resp = new FakeResponse();
 

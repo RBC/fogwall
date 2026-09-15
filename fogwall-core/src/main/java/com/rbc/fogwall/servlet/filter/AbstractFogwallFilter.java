@@ -1,61 +1,69 @@
 package com.rbc.fogwall.servlet.filter;
 
-import static com.rbc.fogwall.servlet.FogwallServlet.GIT_REQUEST_ATTR;
-
-import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.ServletRequest;
-import jakarta.servlet.ServletResponse;
+import com.rbc.fogwall.git.LifecycleStage;
 import jakarta.servlet.http.HttpServletRequest;
-import java.io.IOException;
 import java.util.Set;
 import java.util.function.Predicate;
-import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
-@RequiredArgsConstructor
+/**
+ * Base class for built-in filters. Holds the filter's {@link LifecycleStage} and the {@link HttpOperation}s it applies
+ * to. The fail-fast and pre-approval short-circuits live in the shared {@link FogwallFilter#doFilter} template; this
+ * class only exposes the configured fail-fast flag to it.
+ */
 @Slf4j
-public abstract class AbstractFogwallFilter implements FogwallFilter {
-    protected final int order;
+public abstract sealed class AbstractFogwallFilter implements MandatoryFogwallFilter
+        permits ProviderAwareFogwallFilter,
+                AllowApprovedPushFilter,
+                AuditLogFilter,
+                BinaryBlobFilter,
+                CheckAuthorEmailsFilter,
+                CheckCommitMessagesFilter,
+                CheckEmptyBranchFilter,
+                CheckHiddenCommitsFilter,
+                CheckTrailersFilter,
+                CheckUserPushPermissionFilter,
+                CommitAttributionPolicyFilter,
+                ContentPatternDiffFilter,
+                ContentPatternMessageFilter,
+                FetchFinalizerFilter,
+                GpgSignatureFilter,
+                PushFinalizerFilter,
+                ScanDiffFilter,
+                SecretScanningFilter,
+                ValidationSummaryFilter {
+    protected final LifecycleStage stage;
     protected final Set<HttpOperation> applicableOperations;
 
     /**
-     * When {@code true}, skip this filter if a prior filter has already set the push result to
-     * {@link GitRequestDetails.GitResult#REJECTED}. Only applies to non-system, non-terminal filters (order 0 through
-     * {@code Integer.MAX_VALUE - 100}).
+     * When {@code true}, skip this filter if a prior filter has already recorded a rejection. Only takes effect for
+     * {@link LifecycleStage#MANDATORY_PROCESSING} filters; pre/post-stage filters always run (see
+     * {@link FogwallFilter#doFilter}).
      */
     @Setter
     private boolean failFast = false;
 
-    /**
-     * Apply this fogwallFilter against all Git operations.
-     *
-     * @param order Order the filter is applied
-     */
-    public AbstractFogwallFilter(int order) {
+    /** Applies this filter to all git operations. */
+    protected AbstractFogwallFilter(LifecycleStage stage) {
+        this.stage = stage;
         this.applicableOperations = ALL_OPERATIONS;
-        this.order = order;
+    }
+
+    protected AbstractFogwallFilter(LifecycleStage stage, Set<HttpOperation> applicableOperations) {
+        this.stage = stage;
+        this.applicableOperations = applicableOperations;
     }
 
     @Override
-    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
-            throws IOException, ServletException {
-        if (failFast && order >= 0 && order < Integer.MAX_VALUE - 100) {
-            var details = (GitRequestDetails) ((HttpServletRequest) request).getAttribute(GIT_REQUEST_ATTR);
-            if (details != null && details.getResult() == GitRequestDetails.GitResult.REJECTED) {
-                chain.doFilter(request, response);
-                return;
-            }
-        }
-        FogwallFilter.super.doFilter(request, response, chain);
+    public LifecycleStage stage() {
+        return this.stage;
     }
 
     @Override
-    public int getOrder() {
-        return this.order;
+    public boolean failFast() {
+        return this.failFast;
     }
 
     @Override
@@ -65,8 +73,8 @@ public abstract class AbstractFogwallFilter implements FogwallFilter {
 
     @Override
     public String toString() {
-        return this.getClass().getSimpleName() + "{" + "order="
-                + order + ", appliedOperations="
+        return this.getClass().getSimpleName() + "{" + "stage="
+                + stage + ", appliedOperations="
                 + applicableOperations + '}';
     }
 }

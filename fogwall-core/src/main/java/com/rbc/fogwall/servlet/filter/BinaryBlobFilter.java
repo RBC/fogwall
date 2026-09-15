@@ -7,6 +7,7 @@ import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.git.CommitInspectionService;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.validation.BinaryBlobCheck;
 import com.rbc.fogwall.validation.Violation;
@@ -36,15 +37,13 @@ import org.eclipse.jgit.lib.Repository;
  * <p>This filter runs at order 290, in the content filters range (200-399) — just before {@link ScanDiffFilter}.
  */
 @Slf4j
-public class BinaryBlobFilter extends AbstractFogwallFilter {
-
-    private static final int ORDER = 290;
+public final class BinaryBlobFilter extends AbstractFogwallFilter {
 
     private final Supplier<BinaryBlobConfig> binaryBlobConfigSupplier;
 
     /** Live-reload constructor — config is read from the supplier on every request. */
     public BinaryBlobFilter(Supplier<BinaryBlobConfig> binaryBlobConfigSupplier) {
-        super(ORDER, Set.of(HttpOperation.PUSH));
+        super(LifecycleStage.MANDATORY_PROCESSING, Set.of(HttpOperation.PUSH));
         this.binaryBlobConfigSupplier = binaryBlobConfigSupplier;
     }
 

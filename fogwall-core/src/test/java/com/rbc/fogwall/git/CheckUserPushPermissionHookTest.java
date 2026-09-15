@@ -97,8 +97,8 @@ class CheckUserPushPermissionHookTest {
 
         assertTrue(validationContext.hasIssues(), "Missing pushUser must produce a validation issue");
         assertEquals(
-                "CheckUserPushPermissionHook",
-                validationContext.getIssues().get(0).hookName());
+                PushStepKind.PUSH_PERMISSION,
+                validationContext.getIssues().get(0).kind());
         assertTrue(pushContext.getSteps().isEmpty(), "No PASS step should be recorded when check fails");
         verifyNoInteractions(resolver, permService);
     }
@@ -122,8 +122,8 @@ class CheckUserPushPermissionHookTest {
 
         assertTrue(validationContext.hasIssues());
         assertEquals(
-                "CheckUserPushPermissionHook",
-                validationContext.getIssues().get(0).hookName());
+                PushStepKind.PUSH_PERMISSION,
+                validationContext.getIssues().get(0).kind());
         assertTrue(
                 validationContext.getIssues().get(0).summary().contains("Identity not linked"),
                 "Issue message should mention 'Identity not linked'");
@@ -153,8 +153,8 @@ class CheckUserPushPermissionHookTest {
 
         assertTrue(validationContext.hasIssues());
         assertEquals(
-                "CheckUserPushPermissionHook",
-                validationContext.getIssues().get(0).hookName());
+                PushStepKind.PUSH_PERMISSION,
+                validationContext.getIssues().get(0).kind());
         assertTrue(
                 validationContext.getIssues().get(0).summary().contains("not authorized"),
                 "Issue message should mention 'not authorized'");

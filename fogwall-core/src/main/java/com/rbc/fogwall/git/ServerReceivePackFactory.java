@@ -422,28 +422,31 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
         var attributionPolicyHook = new CommitAttributionPolicyHook(
                 pushIdentityResolver, commitConfig.getAttributionPolicy(), validationContext, pushContext, provider);
 
-        List<FogwallHook> validationHooks = new ArrayList<>(List.of(
-                new RepositoryUrlRuleHook(urlRuleRegistry, provider, validationContext, pushContext),
-                permissionHook,
-                attributionPolicyHook,
-                new CheckEmptyBranchHook(pushContext),
-                new CheckHiddenCommitsHook(pushContext),
-                new AuthorEmailValidationHook(commitConfig, validationContext, pushContext),
-                new TrailerPolicyValidationHook(commitConfig, validationContext, pushContext),
-                new CommitMessageValidationHook(commitConfig, validationContext, pushContext),
-                new ContentPatternCommitMessageHook(contentPatternConfig, pushContext),
-                new ProxyPreReceiveHook(pushContext),
-                new DiffGenerationHook(validationContext, pushContext),
-                new BinaryBlobDetectionHook(binaryBlobConfig, validationContext, pushContext),
-                new DiffScanningHook(diffScanConfig, validationContext, pushContext),
-                new GpgSignatureHook(gpgConfig, validationContext, pushContext),
-                new SecretScanningHook(secretScanConfig, validationContext, pushContext),
-                new ContentPatternDiffHook(contentPatternConfig, pushContext)));
+        // Assembled in execution order. This list literal is the core-owned intra-stage order the stage model calls
+        // for; the stable sort below groups by lifecycle stage without disturbing it. All validation hooks are
+        // MANDATORY_PROCESSING today, so the sort is a no-op that documents the invariant and admits future stages.
+        List<FogwallHook> validationHooks = new ArrayList<>();
+        validationHooks.add(new RepositoryUrlRuleHook(urlRuleRegistry, provider, validationContext, pushContext));
         if (provider instanceof BitbucketProvider bitbucketProvider) {
             validationHooks.add(new BitbucketCredentialRewriteHook(bitbucketProvider, pushContext));
         }
+        validationHooks.add(permissionHook);
+        validationHooks.add(attributionPolicyHook);
         validationHooks.add(new PriorPushEnrichmentHook(pushStore, pushContext));
-        validationHooks.sort(Comparator.comparingInt(FogwallHook::getOrder));
+        validationHooks.add(new CheckEmptyBranchHook(validationContext, pushContext));
+        validationHooks.add(new CheckHiddenCommitsHook(validationContext, pushContext));
+        validationHooks.add(new AuthorEmailValidationHook(commitConfig, validationContext, pushContext));
+        validationHooks.add(new TrailerPolicyValidationHook(commitConfig, validationContext, pushContext));
+        validationHooks.add(new CommitMessageValidationHook(commitConfig, validationContext, pushContext));
+        validationHooks.add(new ContentPatternCommitMessageHook(contentPatternConfig, pushContext));
+        validationHooks.add(new ProxyPreReceiveHook(pushContext));
+        validationHooks.add(new DiffGenerationHook(validationContext, pushContext));
+        validationHooks.add(new BinaryBlobDetectionHook(binaryBlobConfig, validationContext, pushContext));
+        validationHooks.add(new DiffScanningHook(diffScanConfig, validationContext, pushContext));
+        validationHooks.add(new GpgSignatureHook(gpgConfig, validationContext, pushContext));
+        validationHooks.add(new SecretScanningHook(secretScanConfig, validationContext, pushContext));
+        validationHooks.add(new ContentPatternDiffHook(contentPatternConfig, pushContext));
+        validationHooks.sort(Comparator.comparingInt(h -> h.stage().ordinal()));
         return validationHooks;
     }
 
@@ -469,6 +472,7 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
                     if (isApprovalHook) {
                         heartbeat.pause();
                     }
+                    int issuesBefore = validationContext.getIssues().size();
                     try {
                         hook.onPreReceive(rp, commands);
                     } finally {
@@ -483,13 +487,32 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
                     } catch (IOException e) {
                         log.warn("Failed to flush sideband stream", e);
                     }
-                    // Stop chain if any command was rejected (e.g. by a lifecycle hook)
+                    // Stop chain if a pinned lifecycle hook (persistence verifier, approval) rejected a command.
                     if (commands.stream().anyMatch(cmd -> cmd.getResult() != ReceiveCommand.Result.NOT_ATTEMPTED)) {
                         return;
                     }
-                    // After a validation hook reports an issue, mark remaining validation hooks to skip
-                    if (failFast && hook instanceof FogwallHook && validationContext.hasIssues()) {
-                        skipValidationHooks = true;
+                    if (hook instanceof FogwallHook fogwallHook) {
+                        boolean addedIssue = validationContext.getIssues().size() > issuesBefore;
+                        // A hook that declares it ends the chain and recorded an issue: the runner applies the
+                        // rejection and stops before the pinned verifier — so these structural rejections persist no
+                        // push record, as when the hook set the command result itself.
+                        if (addedIssue && fogwallHook.terminatesChainOnFailure()) {
+                            String reason = validationContext
+                                    .getIssues()
+                                    .get(validationContext.getIssues().size() - 1)
+                                    .summary();
+                            for (ReceiveCommand cmd : commands) {
+                                if (cmd.getResult() == ReceiveCommand.Result.NOT_ATTEMPTED) {
+                                    cmd.setResult(ReceiveCommand.Result.REJECTED_OTHER_REASON, reason);
+                                }
+                            }
+                            return;
+                        }
+                        // After a non-terminating validation hook reports an issue, mark remaining validation hooks
+                        // to skip when fail-fast is on. The pinned verifier still runs and rejects.
+                        if (failFast && validationContext.hasIssues()) {
+                            skipValidationHooks = true;
+                        }
                     }
                 }
             }

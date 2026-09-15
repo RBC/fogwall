@@ -8,6 +8,7 @@ import static com.rbc.fogwall.servlet.FogwallServlet.GIT_REQUEST_ATTR;
 import com.rbc.fogwall.git.GitClientUtils;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.git.PushStepKind;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -26,23 +27,24 @@ import lombok.extern.slf4j.Slf4j;
  *       state problem.
  * </ul>
  *
- * <p>This filter short-circuits immediately via {@link #rejectAndSendError} without recording to
- * {@link ValidationSummaryFilter}.
- *
- * <p>Runs at order 210, at the start of the content validation range (200-399).
+ * <p>Terminating: an empty branch leaves nothing for the content stages to inspect, so recording the issue ends the
+ * chain.
  */
 @Slf4j
-public class CheckEmptyBranchFilter extends AbstractFogwallFilter {
-
-    private static final int ORDER = 210;
+public final class CheckEmptyBranchFilter extends AbstractFogwallFilter {
 
     public CheckEmptyBranchFilter() {
-        super(ORDER, Set.of(HttpOperation.PUSH));
+        super(LifecycleStage.MANDATORY_PROCESSING, Set.of(HttpOperation.PUSH));
     }
 
     @Override
     public Optional<PushStepKind> stepKind() {
         return Optional.of(PushStepKind.EMPTY_BRANCH);
+    }
+
+    @Override
+    public boolean terminatesChainOnFailure() {
+        return true;
     }
 
     @Override
@@ -85,6 +87,6 @@ public class CheckEmptyBranchFilter extends AbstractFogwallFilter {
         }
 
         log.warn("checkEmptyBranch: rejecting push - {}", message);
-        rejectAndSendError(request, response, title, GitClientUtils.format(title, message, RED, null));
+        recordIssue(request, title, GitClientUtils.format(title, message, RED, null));
     }
 }

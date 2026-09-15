@@ -7,6 +7,7 @@ import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.git.CommitInspectionService;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.validation.ContentPatternBundleResolver;
 import com.rbc.fogwall.validation.ContentPatternFinding;
@@ -33,14 +34,12 @@ import org.eclipse.jgit.lib.Repository;
  * <p>This filter runs at order 345, in the content filters range (200-399).
  */
 @Slf4j
-public class ContentPatternDiffFilter extends AbstractFogwallFilter {
-
-    private static final int ORDER = 345;
+public final class ContentPatternDiffFilter extends AbstractFogwallFilter {
 
     private final ContentPatternConfig config;
 
     public ContentPatternDiffFilter(ContentPatternConfig config) {
-        super(ORDER, Set.of(HttpOperation.PUSH));
+        super(LifecycleStage.MANDATORY_PROCESSING, Set.of(HttpOperation.PUSH));
         this.config = config != null ? config : ContentPatternConfig.defaultConfig();
     }
 

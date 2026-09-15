@@ -27,14 +27,14 @@ import org.eclipse.jgit.transport.ReceivePack;
  *       configuration or repository state problem.
  * </ul>
  *
- * <p>This hook short-circuits the chain immediately on failure (direct rejection, not via {@link ValidationContext}).
+ * <p>Terminating: an empty branch leaves nothing for the content stages to inspect. The hook records the issue and the
+ * chain runner ends the chain.
  */
 @Slf4j
 @RequiredArgsConstructor
-public class CheckEmptyBranchHook implements FogwallHook {
+public final class CheckEmptyBranchHook implements MandatoryFogwallHook {
 
-    private static final int ORDER = 210;
-
+    private final ValidationContext validationContext;
     private final PushContext pushContext;
 
     public void onPreReceive(ReceivePack rp, Collection<ReceiveCommand> commands) {
@@ -58,8 +58,8 @@ public class CheckEmptyBranchHook implements FogwallHook {
                 }
 
                 rp.sendMessage(color(RED, "" + sym(NO_ENTRY) + "  " + msg));
-                cmd.setResult(ReceiveCommand.Result.REJECTED_OTHER_REASON, msg);
-                // Chain stops once a command is rejected; remaining commands will be skipped
+                validationContext.addIssue(PushStepKind.EMPTY_BRANCH, msg, msg);
+                // Declared terminating: the chain runner rejects the commands and stops.
                 return;
 
             } catch (Exception e) {
@@ -70,15 +70,20 @@ public class CheckEmptyBranchHook implements FogwallHook {
         if (pushContext != null) {
             pushContext.addStep(PushStep.builder()
                     .stepName(getStepName())
-                    .stepOrder(ORDER)
+                    .stepOrder(displayOrder())
                     .status(StepStatus.PASS)
                     .build());
         }
     }
 
     @Override
-    public int getOrder() {
-        return ORDER;
+    public LifecycleStage stage() {
+        return LifecycleStage.MANDATORY_PROCESSING;
+    }
+
+    @Override
+    public boolean terminatesChainOnFailure() {
+        return true;
     }
 
     @Override

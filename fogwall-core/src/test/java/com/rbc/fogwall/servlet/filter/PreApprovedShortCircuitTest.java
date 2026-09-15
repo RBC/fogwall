@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.rbc.fogwall.git.GitRequestDetails;
+import com.rbc.fogwall.git.LifecycleStage;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -18,12 +19,12 @@ import org.junit.jupiter.api.Test;
  */
 class PreApprovedShortCircuitTest {
 
-    private static class RecordingFilter extends AbstractFogwallFilter {
+    private static class RecordingFilter extends AbstractCustomFogwallFilter {
         final AtomicBoolean ran = new AtomicBoolean(false);
         private final boolean skipWhenPreApproved;
 
         RecordingFilter(boolean skipWhenPreApproved) {
-            super(100);
+            super(LifecycleStage.CUSTOM_PRE);
             this.skipWhenPreApproved = skipWhenPreApproved;
         }
 
@@ -74,7 +75,7 @@ class PreApprovedShortCircuitTest {
                 new CheckUserPushPermissionFilter(null, null).skipWhenPreApproved(),
                 "CheckUserPushPermissionFilter must re-check the pusher on a pre-approved re-push");
         assertFalse(
-                new UrlRuleAggregateFilter(100, null, null).skipWhenPreApproved(),
+                new UrlRuleAggregateFilter(null, null).skipWhenPreApproved(),
                 "UrlRuleAggregateFilter must re-check the repository on a pre-approved re-push");
     }
 }

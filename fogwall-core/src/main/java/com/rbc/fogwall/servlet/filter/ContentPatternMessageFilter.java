@@ -6,6 +6,7 @@ import com.rbc.fogwall.config.ContentPatternConfig;
 import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.validation.ContentPatternBundleResolver;
 import com.rbc.fogwall.validation.ContentPatternFinding;
@@ -29,14 +30,12 @@ import lombok.extern.slf4j.Slf4j;
  * <p>This filter runs at order 265, in the content filters range (200-399).
  */
 @Slf4j
-public class ContentPatternMessageFilter extends AbstractFogwallFilter {
-
-    private static final int ORDER = 265;
+public final class ContentPatternMessageFilter extends AbstractFogwallFilter {
 
     private final ContentPatternConfig config;
 
     public ContentPatternMessageFilter(ContentPatternConfig config) {
-        super(ORDER, Set.of(HttpOperation.PUSH));
+        super(LifecycleStage.MANDATORY_PROCESSING, Set.of(HttpOperation.PUSH));
         this.config = config != null ? config : ContentPatternConfig.defaultConfig();
     }
 

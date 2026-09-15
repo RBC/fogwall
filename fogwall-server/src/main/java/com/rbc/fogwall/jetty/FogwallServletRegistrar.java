@@ -403,7 +403,7 @@ public final class FogwallServletRegistrar {
                     mapping,
                     EnumSet.of(DispatcherType.REQUEST));
             context.addFilter(
-                    new FilterHolder(new UrlRuleAggregateFilter(100, provider, fetchStore, urlRuleRegistry)),
+                    new FilterHolder(new UrlRuleAggregateFilter(provider, fetchStore, urlRuleRegistry)),
                     mapping,
                     EnumSet.of(DispatcherType.REQUEST));
 
@@ -930,13 +930,16 @@ public final class FogwallServletRegistrar {
             FetchStore fetchStore,
             UrlRuleRegistry urlRuleRegistry,
             ScmOAuthConfig scmOAuthConfig) {
+        // Assembled in execution order, grouped by lifecycle stage. The stable stage sort below preserves this
+        // core-owned intra-stage order; it groups MANDATORY_PRE → MANDATORY_PROCESSING → MANDATORY_POST and admits
+        // future custom stages between them.
         List<FogwallFilter> filters = new ArrayList<>();
+        // --- MANDATORY_PRE: parse, pre-approval short-circuit, enrichment ---
         filters.add(new ParseGitRequestFilter(provider, configBuilder.getMaxPushBytes()));
-        filters.add(new EnrichPushCommitsFilter(provider, repositoryCache, configBuilder.getMaxObjectSizeBytes()));
         filters.add(new AllowApprovedPushFilter(pushStore, serviceUrl, repoPermissionService));
-
-        filters.add(new UrlRuleAggregateFilter(100, provider, fetchStore, urlRuleRegistry));
-
+        filters.add(new EnrichPushCommitsFilter(provider, repositoryCache, configBuilder.getMaxObjectSizeBytes()));
+        // --- MANDATORY_PROCESSING: URL rules, permissions, content/commit checks ---
+        filters.add(new UrlRuleAggregateFilter(provider, fetchStore, urlRuleRegistry));
         if (provider instanceof BitbucketProvider bitbucketProvider) {
             filters.add(new BitbucketIdentityFilter(bitbucketProvider));
         }
@@ -951,9 +954,10 @@ public final class FogwallServletRegistrar {
         filters.add(new ContentPatternMessageFilter(contentPatternConfig));
         filters.add(new BinaryBlobFilter(binaryBlobConfigSupplier));
         filters.add(new ScanDiffFilter(diffScanConfigSupplier));
+        filters.add(new GpgSignatureFilter(GpgConfig.defaultConfig()));
         filters.add(new SecretScanningFilter(secretScanConfigSupplier));
         filters.add(new ContentPatternDiffFilter(contentPatternConfig));
-        filters.add(new GpgSignatureFilter(GpgConfig.defaultConfig()));
+        // --- MANDATORY_POST: summary, finalizers, audit ---
         filters.add(new ValidationSummaryFilter());
         filters.add(new FetchFinalizerFilter());
         filters.add(new PushFinalizerFilter(serviceUrl, approvalGateway));
@@ -966,7 +970,7 @@ public final class FogwallServletRegistrar {
             });
         }
 
-        filters.sort(Comparator.comparingInt(FogwallFilter::getOrder));
+        filters.sort(Comparator.comparingInt(f -> f.stage().ordinal()));
         return filters;
     }
 }

@@ -5,6 +5,7 @@ import static com.rbc.fogwall.servlet.FogwallServlet.GIT_REQUEST_ATTR;
 import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.validation.AuthorEmailCheck;
 import com.rbc.fogwall.validation.Violation;
@@ -25,14 +26,13 @@ import lombok.extern.slf4j.Slf4j;
  * <p>This filter runs at order 250, which is in the content filters range (200-399).
  */
 @Slf4j
-public class CheckAuthorEmailsFilter extends AbstractFogwallFilter {
+public final class CheckAuthorEmailsFilter extends AbstractFogwallFilter {
 
-    private static final int ORDER = 250;
     private final Supplier<CommitConfig> commitConfigSupplier;
 
     /** Live-reload constructor — config is read from the supplier on every request. */
     public CheckAuthorEmailsFilter(Supplier<CommitConfig> commitConfigSupplier) {
-        super(ORDER, Set.of(HttpOperation.PUSH));
+        super(LifecycleStage.MANDATORY_PROCESSING, Set.of(HttpOperation.PUSH));
         this.commitConfigSupplier = commitConfigSupplier;
     }
 

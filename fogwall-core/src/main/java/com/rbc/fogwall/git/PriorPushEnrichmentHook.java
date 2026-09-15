@@ -30,9 +30,7 @@ import org.eclipse.jgit.transport.ReceivePack;
  */
 @Slf4j
 @RequiredArgsConstructor
-public class PriorPushEnrichmentHook implements FogwallHook {
-
-    static final int ORDER = 195;
+public final class PriorPushEnrichmentHook implements MandatoryFogwallHook {
 
     private final PushStore pushStore;
     private final PushContext pushContext;
@@ -77,14 +75,14 @@ public class PriorPushEnrichmentHook implements FogwallHook {
 
         pushContext.addStep(PushStep.builder()
                 .stepName(getStepName())
-                .stepOrder(ORDER)
+                .stepOrder(displayOrder())
                 .status(StepStatus.PASS)
                 .build());
     }
 
     @Override
-    public int getOrder() {
-        return ORDER;
+    public LifecycleStage stage() {
+        return LifecycleStage.MANDATORY_PROCESSING;
     }
 
     @Override

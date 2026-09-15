@@ -10,6 +10,7 @@ import com.rbc.fogwall.git.Commit;
 import com.rbc.fogwall.git.GitClientUtils;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.git.PushStepKind;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -39,24 +40,25 @@ import org.eclipse.jgit.revwalk.RevWalk;
  *   <li><b>hidden</b> = {@code allNew} ∖ {@code introduced}.
  * </ol>
  *
- * <p>This filter short-circuits immediately via {@link #rejectAndSendError} without recording to
- * {@link ValidationSummaryFilter}. Requires {@link EnrichPushCommitsFilter} to have run first (for both
- * {@code pushedCommits} and the local repository on {@link GitRequestDetails#getLocalRepository()}).
- *
- * <p>Runs at order 220, early in the content validation range (200-399).
+ * <p>Terminating: unreferenced pack history means the push cannot be trusted, so recording the issue ends the chain.
+ * Requires {@link EnrichPushCommitsFilter} to have run first (for both {@code pushedCommits} and the local repository
+ * on {@link GitRequestDetails#getLocalRepository()}).
  */
 @Slf4j
-public class CheckHiddenCommitsFilter extends AbstractFogwallFilter {
-
-    private static final int ORDER = 220;
+public final class CheckHiddenCommitsFilter extends AbstractFogwallFilter {
 
     public CheckHiddenCommitsFilter() {
-        super(ORDER, Set.of(HttpOperation.PUSH));
+        super(LifecycleStage.MANDATORY_PROCESSING, Set.of(HttpOperation.PUSH));
     }
 
     @Override
     public Optional<PushStepKind> stepKind() {
         return Optional.of(PushStepKind.HIDDEN_COMMITS);
+    }
+
+    @Override
+    public boolean terminatesChainOnFailure() {
+        return true;
     }
 
     @Override
@@ -104,8 +106,7 @@ public class CheckHiddenCommitsFilter extends AbstractFogwallFilter {
                     + " and pushed to the remote.\n"
                     + "Please get approval on the commits, push them and try again.";
 
-            rejectAndSendError(
-                    request, response, "Hidden commits detected", GitClientUtils.format(title, message, RED, null));
+            recordIssue(request, "Hidden commits detected", GitClientUtils.format(title, message, RED, null));
 
         } catch (Exception e) {
             log.warn("Skipping hidden commits check: {}", e.getMessage());

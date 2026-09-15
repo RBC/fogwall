@@ -56,7 +56,7 @@ class CheckEmptyBranchHookTest {
         ReceivePack rp = new ReceivePack(repo);
         ReceiveCommand cmd = new ReceiveCommand(c1, c2, "refs/heads/main", ReceiveCommand.Type.UPDATE);
 
-        CheckEmptyBranchHook hook = new CheckEmptyBranchHook(new PushContext());
+        CheckEmptyBranchHook hook = new CheckEmptyBranchHook(new ValidationContext(), new PushContext());
         hook.onPreReceive(rp, List.of(cmd));
 
         assertEquals(
@@ -91,19 +91,13 @@ class CheckEmptyBranchHookTest {
         ReceivePack rp = new ReceivePack(freshRepo);
         // Simulating: the branch "main" is being created for the first time (old = zeros)
         ReceiveCommand cmd = new ReceiveCommand(ObjectId.zeroId(), first.getId(), "refs/heads/feature");
-        CheckEmptyBranchHook hook = new CheckEmptyBranchHook(new PushContext());
+        ValidationContext ctx = new ValidationContext();
+        CheckEmptyBranchHook hook = new CheckEmptyBranchHook(ctx, new PushContext());
         hook.onPreReceive(rp, List.of(cmd));
 
-        // main → first is already set, feature → first: "first" is reachable from main, so empty
-        // OR: there is no "main" ref yet in freshRepo... let us check
-        // In freshGit.commit(), HEAD is on the initial branch (usually "master" or "main" per git
-        // config) and a ref IS created. So this is the "empty branch" scenario.
-        // If the repo only has one branch (main/master) pointing to `first`, and we try to push a
-        // NEW branch also pointing to `first`, then git log first --not refs/heads/main = empty.
-        assertEquals(
-                ReceiveCommand.Result.REJECTED_OTHER_REASON,
-                cmd.getResult(),
-                "New branch pointing to existing commit must be rejected as empty");
+        // Terminating hooks record the issue; the chain runner rejects the command. The hook itself
+        // leaves the command NOT_ATTEMPTED.
+        assertTrue(ctx.hasIssues(), "New branch pointing to existing commit must be recorded as an empty-branch issue");
     }
 
     @Test
@@ -115,7 +109,7 @@ class CheckEmptyBranchHookTest {
         ReceiveCommand deleteCmd =
                 new ReceiveCommand(c1, ObjectId.zeroId(), "refs/heads/feature", ReceiveCommand.Type.DELETE);
 
-        CheckEmptyBranchHook hook = new CheckEmptyBranchHook(new PushContext());
+        CheckEmptyBranchHook hook = new CheckEmptyBranchHook(new ValidationContext(), new PushContext());
         hook.onPreReceive(rp, List.of(deleteCmd));
 
         assertEquals(
@@ -132,7 +126,7 @@ class CheckEmptyBranchHookTest {
         ReceiveCommand cmd = new ReceiveCommand(ObjectId.zeroId(), c1, "refs/heads/x");
         cmd.setResult(ReceiveCommand.Result.REJECTED_OTHER_REASON, "pre-rejected");
 
-        CheckEmptyBranchHook hook = new CheckEmptyBranchHook(new PushContext());
+        CheckEmptyBranchHook hook = new CheckEmptyBranchHook(new ValidationContext(), new PushContext());
         hook.onPreReceive(rp, List.of(cmd));
 
         // Result should remain the pre-set value - hook must not touch it
@@ -147,7 +141,7 @@ class CheckEmptyBranchHookTest {
         ReceivePack rp = new ReceivePack(repo);
         ReceiveCommand cmd = new ReceiveCommand(ObjectId.zeroId(), c1, "refs/tags/v1.0");
 
-        CheckEmptyBranchHook hook = new CheckEmptyBranchHook(new PushContext());
+        CheckEmptyBranchHook hook = new CheckEmptyBranchHook(new ValidationContext(), new PushContext());
         hook.onPreReceive(rp, List.of(cmd));
 
         assertEquals(
@@ -173,7 +167,7 @@ class CheckEmptyBranchHookTest {
         ReceivePack rp = new ReceivePack(repo);
         ReceiveCommand cmd = new ReceiveCommand(ObjectId.zeroId(), tagId, "refs/tags/v2.0");
 
-        CheckEmptyBranchHook hook = new CheckEmptyBranchHook(new PushContext());
+        CheckEmptyBranchHook hook = new CheckEmptyBranchHook(new ValidationContext(), new PushContext());
         hook.onPreReceive(rp, List.of(cmd));
 
         assertEquals(
@@ -191,7 +185,7 @@ class CheckEmptyBranchHookTest {
         ReceiveCommand cmd = new ReceiveCommand(c1, c2, "refs/heads/main", ReceiveCommand.Type.UPDATE);
         PushContext pushCtx = new PushContext();
 
-        CheckEmptyBranchHook hook = new CheckEmptyBranchHook(pushCtx);
+        CheckEmptyBranchHook hook = new CheckEmptyBranchHook(new ValidationContext(), pushCtx);
         hook.onPreReceive(rp, List.of(cmd));
 
         assertFalse(pushCtx.getSteps().isEmpty(), "A PASS step must be recorded");

@@ -1,6 +1,5 @@
 package com.rbc.fogwall.git;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -59,7 +58,7 @@ class ValidationHookFailClosedTest {
     @Test
     void addError_blocksAndIsFlaggedAsError() {
         var ctx = new ValidationContext();
-        ctx.addError("someHook", "could not complete", "boom");
+        ctx.addError(PushStepKind.URL_RULE, "could not complete", "boom");
 
         assertTrue(ctx.hasIssues(), "an error must block the push");
         assertTrue(ctx.getIssues().get(0).error(), "the issue must be flagged as an error");
@@ -91,18 +90,17 @@ class ValidationHookFailClosedTest {
         try (Git git = Git.init().setDirectory(tempDir.toFile()).call()) {
             Repository repo = git.getRepository();
             ReceivePack rp = new ReceivePack(repo);
-            // A branch update whose endpoints don't exist in the repo makes the range walk throw. This hook has no
-            // ValidationContext — it rejects commands directly — so fail-closed means the command is rejected.
+            // A branch update whose endpoints don't exist in the repo makes the range walk throw. Fail-closed means
+            // the hook records a blocking error, which the chain runner then turns into a rejection.
             ObjectId from = ObjectId.fromString("1111111111111111111111111111111111111111");
             ObjectId to = ObjectId.fromString("2222222222222222222222222222222222222222");
             ReceiveCommand cmd = new ReceiveCommand(from, to, "refs/heads/main", ReceiveCommand.Type.UPDATE);
 
-            new CheckHiddenCommitsHook(new PushContext()).onPreReceive(rp, List.of(cmd));
+            ValidationContext ctx = new ValidationContext();
+            new CheckHiddenCommitsHook(ctx, new PushContext()).onPreReceive(rp, List.of(cmd));
 
-            assertEquals(
-                    ReceiveCommand.Result.REJECTED_OTHER_REASON,
-                    cmd.getResult(),
-                    "a hidden-commit check error must reject the push (fail closed)");
+            assertTrue(
+                    ctx.hasIssues(), "a hidden-commit check error must be recorded as a blocking issue (fail closed)");
         }
     }
 }

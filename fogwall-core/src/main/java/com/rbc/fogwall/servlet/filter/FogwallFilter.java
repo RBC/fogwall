@@ -8,6 +8,7 @@ import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.git.GitClientUtils;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.git.PushStepKind;
 // import org.springframework.core.Ordered;
 import com.rbc.fogwall.servlet.FogwallServlet;
@@ -34,28 +35,18 @@ import org.slf4j.LoggerFactory;
  * requests and provides a method to filter only HTTP requests. Classes implementing this interface signal whether this
  * filter should be applied to a given request using a {@link Predicate}.
  *
- * <p>Custom filters should generally extend {@link AbstractFogwallFilter} or {@link ProviderAwareFogwallFilter}
+ * <p>Built-in filters are {@code final} and extend {@link AbstractFogwallFilter} or {@link ProviderAwareFogwallFilter};
+ * external filters implement {@link CustomFogwallFilter} (typically via {@code AbstractCustomFogwallFilter}), the only
+ * extension surface. The mandatory subtype is {@code sealed} to {@code fogwall-core}, so no external code can implement
+ * a step that runs in a mandatory stage.
  *
- * <h2>Filter Order Ranges</h2>
+ * <h2>Execution order</h2>
  *
- * Filters are executed in order based on their {@link #getOrder()} value. The following ranges are reserved:
- *
- * <ul>
- *   <li><b>System filters (Integer.MIN_VALUE to Integer.MIN_VALUE+99):</b> Core preprocessing filters that must run
- *       first (e.g., ForceGitClientFilter, ParseGitRequestFilter, EnrichPushCommitsFilter).
- *   <li><b>Authorization filters (0-199):</b> Filters that determine if a request is allowed (pre-approval check, URL
- *       allow rules, user push-permission checks). Built-in filters use steps of 50; custom filters can be inserted
- *       between them.
- *   <li><b>Content filters (200-399):</b> Core validation filters (empty-branch guard, hidden-commit detection, author
- *       email, commit message, diff scanning, GPG signatures, secret scanning). Built-in filters use steps of 10-30;
- *       custom filters can be inserted between them.
- *   <li><b>Extended filters (400-499):</b> Reserved for user-defined post-content filters.
- *   <li><b>Terminal filters (Integer.MAX_VALUE-3 to Integer.MAX_VALUE-1):</b> Aggregation and finalizer filters that
- *       must run after all content filters (ValidationSummaryFilter, FetchFinalizerFilter, PushFinalizerFilter).
- *   <li><b>Audit filters (Integer.MAX_VALUE):</b> Audit and logging filters that must run last.
- * </ul>
+ * Filters run in {@link #stage()} order (see {@link LifecycleStage}); within a stage, order is the fixed position in
+ * the core-owned registration list. A filter also declares, via {@link #terminatesChainOnFailure()}, whether recording
+ * an issue ends the chain for this request or merely accumulates a finding the summary reports at the end.
  */
-public interface FogwallFilter extends Filter {
+public sealed interface FogwallFilter extends Filter permits MandatoryFogwallFilter, CustomFogwallFilter {
 
     Set<HttpOperation> ALL_OPERATIONS = Set.of(HttpOperation.values());
 
@@ -72,7 +63,36 @@ public interface FogwallFilter extends Filter {
      */
     void doHttpFilter(HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException;
 
-    int getOrder();
+    /** The lifecycle stage this filter runs in; see {@link LifecycleStage}. */
+    LifecycleStage stage();
+
+    /**
+     * Whether recording an issue in this filter ends the chain for this request. Access-control filters that refuse the
+     * push (URL rule, push permission) and structural guards that make continuing meaningless (empty branch, hidden
+     * commits) return {@code true}: the chain runner sends the rejection and stops, so no later stage runs against a
+     * push already refused. Content-validation filters return {@code false} (the default) — their findings accumulate
+     * so the developer sees every problem in one push.
+     */
+    default boolean terminatesChainOnFailure() {
+        return false;
+    }
+
+    /**
+     * Whether this filter is skipped once an earlier filter has recorded a rejection (fail-fast mode). Non-terminating
+     * processing-stage filters honour this; pre/post-stage filters never do. Base classes expose the configured value;
+     * the default is {@code false}.
+     */
+    default boolean failFast() {
+        return false;
+    }
+
+    /**
+     * The persisted {@code step_order} for this filter's audit step — a stable display-ordering value, distinct from
+     * chain execution order. Derived from {@link #stepKind()} so a step sorts identically in both proxy modes.
+     */
+    default int displayOrder() {
+        return stepKind().map(PushStepKind::displayOrder).orElse(0);
+    }
 
     /**
      * From the request details, determine if the filter should be applied. This method is called before the filter is
@@ -108,6 +128,16 @@ public interface FogwallFilter extends Filter {
         HttpServletRequest httpRequest = (HttpServletRequest) request;
         HttpServletResponse httpResponse = (HttpServletResponse) response;
 
+        // Fail-fast: once an earlier filter recorded a rejection, skip remaining processing-stage filters. Pre- and
+        // post-stage filters (parse/enrich, summary/finalizers) still run so the response is finalized correctly.
+        if (failFast() && stage() == LifecycleStage.MANDATORY_PROCESSING) {
+            var failFastDetails = (GitRequestDetails) httpRequest.getAttribute(GIT_REQUEST_ATTR);
+            if (failFastDetails != null && failFastDetails.getResult() == GitRequestDetails.GitResult.REJECTED) {
+                chain.doFilter(request, response);
+                return;
+            }
+        }
+
         // Short-circuit if a prior filter pre-approved this push (e.g. AllowApprovedPushFilter)
         if (Boolean.TRUE.equals(httpRequest.getAttribute(PRE_APPROVED_ATTR)) && skipWhenPreApproved()) {
             chain.doFilter(request, response);
@@ -139,9 +169,34 @@ public interface FogwallFilter extends Filter {
             int stepsAfter = details != null ? details.getSteps().size() : 0;
             if (stepsAfter == stepsBefore) {
                 recordStep(httpRequest, StepStatus.PASS, "", "");
+            } else if (terminatesChainOnFailure()
+                    && details != null
+                    && details.getResult() == GitRequestDetails.GitResult.REJECTED) {
+                // This filter declares that recording an issue ends the chain. The runner (not the filter) sends the
+                // rejection and stops here, so no later stage runs against a push already refused — reproducing the
+                // single-message rejection these access-control/structural filters used to emit themselves.
+                sendTerminalRejection(
+                        httpRequest, httpResponse, details.getSteps().get(stepsAfter - 1));
+                return;
             }
         }
         chain.doFilter(request, response);
+    }
+
+    /**
+     * Sends the rejection for a {@link #terminatesChainOnFailure()} filter that recorded an issue: the recorded step's
+     * message plus the push-record link, exactly as {@link #rejectAndSendError} would have. Called by the chain runner
+     * ({@link #doFilter}), never by a filter directly.
+     */
+    private void sendTerminalRejection(HttpServletRequest request, HttpServletResponse response, PushStep step)
+            throws IOException {
+        var details = (GitRequestDetails) request.getAttribute(GIT_REQUEST_ATTR);
+        String formattedMessage = step.getContent() != null ? step.getContent() : details.getReason();
+        String serviceUrl = (String) request.getAttribute(SERVICE_URL_ATTR);
+        boolean isPush = details.getOperation() == HttpOperation.PUSH;
+        String link = isPush && serviceUrl != null ? serviceUrl + "/dashboard/push/" + details.getId() : null;
+        String fullMessage = link != null ? formattedMessage + "\n\nView push record: " + link : formattedMessage;
+        sendGitError(request, response, fullMessage);
     }
 
     /**
@@ -241,7 +296,7 @@ public interface FogwallFilter extends Filter {
         PushStep step = PushStep.builder()
                 .pushId(details.getId().toString())
                 .stepName(getStepName())
-                .stepOrder(this.getOrder())
+                .stepOrder(displayOrder())
                 .status(status)
                 .content(GitClientUtils.stripColors(content))
                 .blockedMessage(status == StepStatus.BLOCKED ? reason : null)

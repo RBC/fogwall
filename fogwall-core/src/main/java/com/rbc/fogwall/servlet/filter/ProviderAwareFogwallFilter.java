@@ -1,6 +1,7 @@
 package com.rbc.fogwall.servlet.filter;
 
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.provider.FogwallProvider;
 import java.util.Set;
 
@@ -15,25 +16,26 @@ import java.util.Set;
  *     directly; narrow this to a concrete subtype only for filters with genuinely provider-type-specific logic (e.g.
  *     {@code BitbucketIdentityFilter} needs {@code BitbucketProvider}).
  */
-public abstract class ProviderAwareFogwallFilter<P extends FogwallProvider> extends AbstractFogwallFilter {
+public abstract sealed class ProviderAwareFogwallFilter<P extends FogwallProvider> extends AbstractFogwallFilter
+        permits BitbucketIdentityFilter, EnrichPushCommitsFilter, ParseGitRequestFilter, UrlRuleAggregateFilter {
 
     protected final P provider;
 
-    public ProviderAwareFogwallFilter(int order, Set<HttpOperation> appliedOperations, P provider) {
-        super(order, appliedOperations);
+    public ProviderAwareFogwallFilter(LifecycleStage stage, Set<HttpOperation> appliedOperations, P provider) {
+        super(stage, appliedOperations);
         this.provider = provider;
     }
 
     /** Applies this filter to all git operations for the given provider. */
-    public ProviderAwareFogwallFilter(int order, P provider) {
-        this(order, ALL_OPERATIONS, provider);
+    public ProviderAwareFogwallFilter(LifecycleStage stage, P provider) {
+        this(stage, ALL_OPERATIONS, provider);
     }
 
     @Override
     public String toString() {
         return this.getClass().getSimpleName() + "{" + "provider="
-                + provider.getName() + ", order="
-                + order + ", appliedOperations="
+                + provider.getName() + ", stage="
+                + stage + ", appliedOperations="
                 + applicableOperations + '}';
     }
 }

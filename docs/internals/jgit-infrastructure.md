@@ -125,11 +125,13 @@ without access to the HTTP request.
 `ServerReceivePackFactory` creates a fresh `ReceivePack` for each push request. Its main job is assembling the hook
 chain:
 
-- **Orderable validation hooks** implement `FogwallHook` and are sorted by `getOrder()`. Two ranges are used:
-  - Authorization (0–199): whitelist check, user permission
-  - Content filtering (200–399): empty branch, hidden commits, email/message validation, diffs, GPG, secret scanning
+- **Validation hooks** implement `FogwallHook` and declare a `LifecycleStage`; the roster is a fixed, core-owned list
+  and is sorted by stage. The built-in hooks all run in `MANDATORY_PROCESSING`: URL rules and user permission, then
+  empty-branch and hidden-commit guards, then email/message validation, diffs, GPG, and secret scanning. Each hook also
+  declares `terminatesChainOnFailure()` — the structural guards (empty branch, hidden commits) end the chain on a
+  finding; the rest accumulate.
 - **Lifecycle hooks** are pinned at fixed positions around the validation hooks: persistence (before/after) and approval
-  (after).
+  (after). They do not implement `FogwallHook`.
 
 The factory also:
 

@@ -23,9 +23,7 @@ import org.eclipse.jgit.transport.ReceivePack;
  */
 @Slf4j
 @RequiredArgsConstructor
-public class TrailerPolicyValidationHook implements FogwallHook {
-
-    private static final int ORDER = 255;
+public final class TrailerPolicyValidationHook implements MandatoryFogwallHook {
 
     private final CommitConfig commitConfig;
     private final ValidationContext validationContext;
@@ -42,19 +40,19 @@ public class TrailerPolicyValidationHook implements FogwallHook {
             if (cmd.getType() == ReceiveCommand.Type.DELETE) continue;
             try {
                 for (Violation v : check.check(getCommits(repo, cmd))) {
-                    validationContext.addIssue(getStepName(), v.reason(), v.formattedDetail());
+                    validationContext.addIssue(PushStepKind.TRAILERS, v.reason(), v.formattedDetail());
                     allViolations.add(v);
                 }
             } catch (Exception e) {
                 // Fail closed: a validation control that cannot run must block the push, not silently pass.
                 log.error("Failed to validate commit trailers for {}", cmd.getRefName(), e);
                 validationContext.addError(
-                        getStepName(),
+                        PushStepKind.TRAILERS,
                         "commit trailer policy could not complete for " + cmd.getRefName(),
                         "Validation error: " + e.getMessage());
                 pushContext.addStep(PushStep.builder()
                         .stepName(getStepName())
-                        .stepOrder(ORDER)
+                        .stepOrder(displayOrder())
                         .status(StepStatus.FAIL)
                         .errorMessage("Validation error: " + e.getMessage())
                         .build());
@@ -65,15 +63,15 @@ public class TrailerPolicyValidationHook implements FogwallHook {
         if (allViolations.isEmpty() && !hadError) {
             pushContext.addStep(PushStep.builder()
                     .stepName(getStepName())
-                    .stepOrder(ORDER)
+                    .stepOrder(displayOrder())
                     .status(StepStatus.PASS)
                     .build());
         }
     }
 
     @Override
-    public int getOrder() {
-        return ORDER;
+    public LifecycleStage stage() {
+        return LifecycleStage.MANDATORY_PROCESSING;
     }
 
     @Override

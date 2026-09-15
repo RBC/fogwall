@@ -14,7 +14,11 @@ import lombok.ToString;
 @ToString
 public class FilterProperties {
     private boolean enabled = false;
+
+    /** @deprecated A filter declares its {@link com.rbc.fogwall.git.LifecycleStage} rather than a numeric order. */
+    @Deprecated
     private int order = 0;
+
     private Set<HttpOperation> operations;
     private List<String> providers = new ArrayList<>();
 }

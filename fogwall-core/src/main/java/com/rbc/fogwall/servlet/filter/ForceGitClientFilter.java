@@ -2,6 +2,7 @@ package com.rbc.fogwall.servlet.filter;
 
 import static com.rbc.fogwall.servlet.FogwallServlet.ERROR_ATTR;
 
+import com.rbc.fogwall.git.LifecycleStage;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -19,7 +20,7 @@ import org.eclipse.jgit.http.server.GitSmartHttpTools;
  * Git clients. Exclude with caution!
  */
 @Slf4j
-public final class ForceGitClientFilter implements FogwallFilter {
+public final class ForceGitClientFilter implements MandatoryFogwallFilter {
 
     @Override
     public Predicate<HttpServletRequest> shouldFilter() {
@@ -27,8 +28,8 @@ public final class ForceGitClientFilter implements FogwallFilter {
     }
 
     @Override
-    public int getOrder() {
-        return Integer.MIN_VALUE;
+    public LifecycleStage stage() {
+        return LifecycleStage.MANDATORY_PRE;
     }
 
     @Override
