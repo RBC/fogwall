@@ -20,9 +20,7 @@ import org.eclipse.jgit.transport.ReceivePack;
  * directly.
  */
 @Slf4j
-public class ProxyPreReceiveHook implements FogwallHook {
-
-    private static final int ORDER = 270;
+public final class ProxyPreReceiveHook implements MandatoryFogwallHook {
 
     private final PushContext pushContext;
 
@@ -57,15 +55,15 @@ public class ProxyPreReceiveHook implements FogwallHook {
 
         pushContext.addStep(PushStep.builder()
                 .stepName(getStepName())
-                .stepOrder(ORDER)
+                .stepOrder(displayOrder())
                 .status(StepStatus.PASS)
                 .logs(logs)
                 .build());
     }
 
     @Override
-    public int getOrder() {
-        return ORDER;
+    public LifecycleStage stage() {
+        return LifecycleStage.MANDATORY_PROCESSING;
     }
 
     @Override

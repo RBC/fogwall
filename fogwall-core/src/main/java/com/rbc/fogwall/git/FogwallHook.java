@@ -4,31 +4,42 @@ import java.util.Optional;
 import org.eclipse.jgit.transport.PreReceiveHook;
 
 /**
- * A {@link PreReceiveHook} with an associated order value, used to sort hooks in the server mode receive chain.
+ * A {@link PreReceiveHook} that runs in a {@link LifecycleStage} of the server-mode receive chain. Hooks execute in
+ * stage order; within a stage, order is the fixed position in the core-owned roster
+ * {@link ServerReceivePackFactory#buildValidationHooks} assembles. A hook also declares, via
+ * {@link #terminatesChainOnFailure()}, whether recording an issue ends the chain for this push or merely accumulates a
+ * finding the pinned verifier reports at the end.
  *
- * <p>Hooks are executed in ascending order of their {@link #getOrder()} value. The following ranges mirror the filter
- * order scheme and are reserved:
- *
- * <ul>
- *   <li><b>Negative (&lt;= -1):</b> System lifecycle hooks that must run first or last (e.g., persistence hooks).
- *       Custom hooks must not use negative values.
- *   <li><b>0-199 authorization range:</b> URL rule and user/repo/provider permission checks.
- *   <li><b>200-399 content filtering range:</b> Commit content validation (emails, messages, diffs, signatures,
- *       secrets). Built-in hooks use multiples of 10 within this range to leave room for custom hooks between them.
- *   <li><b>400-499 post-validation range:</b> Reserved for future use (e.g., outbound commit decoration).
- *   <li><b>500+ extended range:</b> Custom bespoke hooks.
- * </ul>
- *
- * <p>Lifecycle hooks ({@code PushStorePersistenceHook}, {@code ApprovalPreReceiveHook}) do not implement this interface
- * and are always pinned at fixed positions in the chain by {@link ServerReceivePackFactory}.
+ * <p>The mandatory subtype {@link MandatoryFogwallHook} is {@code sealed} to {@code fogwall-core}, so external code can
+ * only ever contribute to a custom stage via {@link CustomFogwallHook}. Lifecycle hooks
+ * ({@code PushStorePersistenceHook}, {@code ApprovalPreReceiveHook}) do not implement this interface and are pinned at
+ * fixed positions by {@link ServerReceivePackFactory}.
  */
-public interface FogwallHook extends PreReceiveHook {
+public sealed interface FogwallHook extends PreReceiveHook permits MandatoryFogwallHook, CustomFogwallHook {
 
-    /** Returns the order value that determines this hook's position in the chain. */
-    int getOrder();
+    /** The lifecycle stage this hook runs in; see {@link LifecycleStage}. */
+    LifecycleStage stage();
+
+    /**
+     * Whether recording an issue in this hook ends the chain for this push. Structural guards that make continuing
+     * meaningless (empty branch, hidden commits) return {@code true}: the chain runner rejects the commands and stops.
+     * Validation hooks return {@code false} (the default) so their findings accumulate and the pusher sees every
+     * problem at once.
+     */
+    default boolean terminatesChainOnFailure() {
+        return false;
+    }
 
     /** Returns a human-readable name for this hook, used in logging and diagnostics. */
     String getName();
+
+    /**
+     * The persisted {@code step_order} for this hook's audit step — a stable display-ordering value, distinct from
+     * chain execution order. Derived from {@link #stepKind()} so a step sorts identically in both proxy modes.
+     */
+    default int displayOrder() {
+        return stepKind().map(PushStepKind::displayOrder).orElse(0);
+    }
 
     /**
      * The canonical identity of the step this hook implements, or empty for lifecycle hooks that are not audited

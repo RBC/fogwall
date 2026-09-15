@@ -8,6 +8,7 @@ import com.rbc.fogwall.config.SecretScanConfig;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.GitleaksRunner;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.git.QuarantineObjectStore;
 import jakarta.servlet.http.HttpServletRequest;
@@ -33,9 +34,8 @@ import lombok.extern.slf4j.Slf4j;
  * error message. Check server logs for the underlying cause.
  */
 @Slf4j
-public class SecretScanningFilter extends AbstractFogwallFilter {
+public final class SecretScanningFilter extends AbstractFogwallFilter {
 
-    private static final int ORDER = 340;
     private static final String REMEDIATION_HINT =
             "→ Rotate any exposed credentials and remove the secret from your commit history before pushing.";
 
@@ -44,7 +44,7 @@ public class SecretScanningFilter extends AbstractFogwallFilter {
 
     /** Live-reload constructor — config is read from the supplier on every request. */
     public SecretScanningFilter(Supplier<SecretScanConfig> configSupplier, GitleaksRunner runner) {
-        super(ORDER, Set.of(HttpOperation.PUSH));
+        super(LifecycleStage.MANDATORY_PROCESSING, Set.of(HttpOperation.PUSH));
         this.configSupplier = configSupplier;
         this.runner = runner;
     }
@@ -56,7 +56,7 @@ public class SecretScanningFilter extends AbstractFogwallFilter {
 
     /** Fixed-config constructor. Useful in tests; wraps the value in a constant supplier. */
     public SecretScanningFilter(SecretScanConfig config, GitleaksRunner runner) {
-        super(ORDER, Set.of(HttpOperation.PUSH));
+        super(LifecycleStage.MANDATORY_PROCESSING, Set.of(HttpOperation.PUSH));
         this.configSupplier = () -> config;
         this.runner = runner;
     }

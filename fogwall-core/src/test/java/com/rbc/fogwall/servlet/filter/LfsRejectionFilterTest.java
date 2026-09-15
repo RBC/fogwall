@@ -3,6 +3,7 @@ package com.rbc.fogwall.servlet.filter;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.rbc.fogwall.git.LifecycleStage;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.WriteListener;
@@ -41,9 +42,9 @@ class LfsRejectionFilterTest {
     @Test
     void runsBeforeTheBodyIsBuffered() {
         assertEquals(
-                Integer.MIN_VALUE,
-                new LfsRejectionFilter().getOrder(),
-                "Must precede ParseGitRequestFilter at MIN_VALUE + 1, which buffers the body first");
+                LifecycleStage.MANDATORY_PRE,
+                new LfsRejectionFilter().stage(),
+                "Must precede ParseGitRequestFilter, which buffers the body first");
     }
 
     @Test

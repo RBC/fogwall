@@ -22,9 +22,7 @@ import org.eclipse.jgit.transport.ReceivePack;
  * {@link SecretScanningHook} findings.
  */
 @RequiredArgsConstructor
-public class ContentPatternDiffHook implements FogwallHook {
-
-    private static final int ORDER = 345;
+public final class ContentPatternDiffHook implements MandatoryFogwallHook {
 
     private final ContentPatternConfig config;
     private final PushContext pushContext;
@@ -34,7 +32,7 @@ public class ContentPatternDiffHook implements FogwallHook {
         if (!config.isEnabled() || !config.isScanDiff()) {
             pushContext.addStep(PushStep.builder()
                     .stepName(getStepName())
-                    .stepOrder(ORDER)
+                    .stepOrder(displayOrder())
                     .status(StepStatus.SKIPPED)
                     .build());
             return;
@@ -46,7 +44,7 @@ public class ContentPatternDiffHook implements FogwallHook {
         if (aggregateDiff == null || aggregateDiff.isBlank()) {
             pushContext.addStep(PushStep.builder()
                     .stepName(getStepName())
-                    .stepOrder(ORDER)
+                    .stepOrder(displayOrder())
                     .status(StepStatus.PASS)
                     .build());
             return;
@@ -54,12 +52,12 @@ public class ContentPatternDiffHook implements FogwallHook {
 
         var scanner = new PatternBundleScanner(ContentPatternBundleResolver.resolve(config));
         List<ContentPatternFinding> findings = scanner.scan(aggregateDiff);
-        ContentPatternStepRecorder.record(pushContext, getStepName(), ORDER, findings);
+        ContentPatternStepRecorder.record(pushContext, getStepName(), displayOrder(), findings);
     }
 
     @Override
-    public int getOrder() {
-        return ORDER;
+    public LifecycleStage stage() {
+        return LifecycleStage.MANDATORY_PROCESSING;
     }
 
     @Override

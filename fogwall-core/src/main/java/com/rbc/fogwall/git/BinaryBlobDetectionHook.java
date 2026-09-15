@@ -31,9 +31,7 @@ import org.eclipse.jgit.transport.ReceivePack;
  */
 @Slf4j
 @RequiredArgsConstructor
-public class BinaryBlobDetectionHook implements FogwallHook {
-
-    private static final int ORDER = 290;
+public final class BinaryBlobDetectionHook implements MandatoryFogwallHook {
 
     private final BinaryBlobConfig binaryBlobConfig;
     private final ValidationContext validationContext;
@@ -44,7 +42,7 @@ public class BinaryBlobDetectionHook implements FogwallHook {
         if (!binaryBlobConfig.isEnabled()) {
             pushContext.addStep(PushStep.builder()
                     .stepName(getStepName())
-                    .stepOrder(ORDER)
+                    .stepOrder(displayOrder())
                     .status(StepStatus.SKIPPED)
                     .build());
             return;
@@ -77,7 +75,7 @@ public class BinaryBlobDetectionHook implements FogwallHook {
                     logs.add("PASS: aggregate: " + cmd.getRefName());
                 } else {
                     for (Violation v : violations) {
-                        validationContext.addIssue(getStepName(), v.reason(), v.formattedDetail());
+                        validationContext.addIssue(PushStepKind.BINARY_BLOB, v.reason(), v.formattedDetail());
                         logs.add("FAIL: aggregate: " + v.reason());
                     }
                     anyFailed.set(true);
@@ -86,7 +84,7 @@ public class BinaryBlobDetectionHook implements FogwallHook {
                 // Fail closed: the blob scan could not run for this ref — block rather than skip.
                 log.warn("Binary blob detection failed for {}", cmd.getRefName(), e);
                 validationContext.addError(
-                        getStepName(),
+                        PushStepKind.BINARY_BLOB,
                         "binary blob scan could not complete for " + cmd.getRefName(),
                         "binary blob scan error: " + e.getMessage());
                 logs.add("ERROR: " + cmd.getRefName() + " - binary blob scan could not run");
@@ -104,7 +102,7 @@ public class BinaryBlobDetectionHook implements FogwallHook {
                         for (Violation v : violations) {
                             String reason = shortSha + ": " + v.reason();
                             String detail = "commit " + shortSha + ": " + v.formattedDetail();
-                            validationContext.addIssue(getStepName(), reason, detail);
+                            validationContext.addIssue(PushStepKind.BINARY_BLOB, reason, detail);
                             logs.add("FAIL: " + reason);
                         }
                         anyFailed.set(true);
@@ -114,7 +112,7 @@ public class BinaryBlobDetectionHook implements FogwallHook {
                 // Fail closed: the per-commit blob scan could not run for this ref — block rather than skip.
                 log.warn("Could not enumerate commits for per-commit binary blob scan on {}", cmd.getRefName(), e);
                 validationContext.addError(
-                        getStepName(),
+                        PushStepKind.BINARY_BLOB,
                         "binary blob scan could not complete for " + cmd.getRefName(),
                         "binary blob scan error: " + e.getMessage());
                 logs.add("ERROR: " + cmd.getRefName() + " - per-commit binary blob scan could not run");
@@ -125,7 +123,7 @@ public class BinaryBlobDetectionHook implements FogwallHook {
         if (!anyFailed.get()) {
             pushContext.addStep(PushStep.builder()
                     .stepName(getStepName())
-                    .stepOrder(ORDER)
+                    .stepOrder(displayOrder())
                     .status(StepStatus.PASS)
                     .logs(logs)
                     .build());
@@ -133,8 +131,8 @@ public class BinaryBlobDetectionHook implements FogwallHook {
     }
 
     @Override
-    public int getOrder() {
-        return ORDER;
+    public LifecycleStage stage() {
+        return LifecycleStage.MANDATORY_PROCESSING;
     }
 
     @Override

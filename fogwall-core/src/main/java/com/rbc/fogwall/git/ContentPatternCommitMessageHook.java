@@ -26,9 +26,7 @@ import org.eclipse.jgit.transport.ReceivePack;
  */
 @Slf4j
 @RequiredArgsConstructor
-public class ContentPatternCommitMessageHook implements FogwallHook {
-
-    private static final int ORDER = 265;
+public final class ContentPatternCommitMessageHook implements MandatoryFogwallHook {
 
     private final ContentPatternConfig config;
     private final PushContext pushContext;
@@ -38,7 +36,7 @@ public class ContentPatternCommitMessageHook implements FogwallHook {
         if (!config.isEnabled() || !config.isScanCommitMessages()) {
             pushContext.addStep(PushStep.builder()
                     .stepName(getStepName())
-                    .stepOrder(ORDER)
+                    .stepOrder(displayOrder())
                     .status(StepStatus.SKIPPED)
                     .build());
             return;
@@ -66,12 +64,12 @@ public class ContentPatternCommitMessageHook implements FogwallHook {
             }
         }
 
-        ContentPatternStepRecorder.record(pushContext, getStepName(), ORDER, allFindings);
+        ContentPatternStepRecorder.record(pushContext, getStepName(), displayOrder(), allFindings);
     }
 
     @Override
-    public int getOrder() {
-        return ORDER;
+    public LifecycleStage stage() {
+        return LifecycleStage.MANDATORY_PROCESSING;
     }
 
     @Override

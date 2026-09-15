@@ -27,9 +27,7 @@ import org.eclipse.jgit.transport.ReceivePack;
  */
 @Slf4j
 @RequiredArgsConstructor
-public class GpgSignatureHook implements FogwallHook {
-
-    private static final int ORDER = 320;
+public final class GpgSignatureHook implements MandatoryFogwallHook {
 
     private final GpgConfig config;
     private final ValidationContext validationContext;
@@ -48,7 +46,7 @@ public class GpgSignatureHook implements FogwallHook {
                 List<Violation> violations = check.check(getCommits(repo, cmd));
                 for (Violation v : violations) {
                     rp.sendMessage(color(RED, "" + sym(CROSS_MARK) + "  " + v.subject() + " - " + v.reason()));
-                    validationContext.addIssue("GpgSignatureHook", v.reason(), v.formattedDetail());
+                    validationContext.addIssue(PushStepKind.GPG_SIGNATURE, v.reason(), v.formattedDetail());
                     allViolations.add(v);
                 }
             } catch (Exception e) {
@@ -56,7 +54,7 @@ public class GpgSignatureHook implements FogwallHook {
                 log.error("Failed to check GPG signatures for {}", cmd.getRefName(), e);
                 rp.sendMessage(color(YELLOW, "" + sym(WARNING) + "  Could not check GPG signature: " + e.getMessage()));
                 validationContext.addError(
-                        "GpgSignatureHook",
+                        PushStepKind.GPG_SIGNATURE,
                         "GPG signature verification could not complete for " + cmd.getRefName(),
                         "Signature check error: " + e.getMessage());
                 hadError = true;
@@ -66,15 +64,15 @@ public class GpgSignatureHook implements FogwallHook {
         if (allViolations.isEmpty() && !hadError) {
             pushContext.addStep(PushStep.builder()
                     .stepName(getStepName())
-                    .stepOrder(ORDER)
+                    .stepOrder(displayOrder())
                     .status(StepStatus.PASS)
                     .build());
         }
     }
 
     @Override
-    public int getOrder() {
-        return ORDER;
+    public LifecycleStage stage() {
+        return LifecycleStage.MANDATORY_PROCESSING;
     }
 
     @Override

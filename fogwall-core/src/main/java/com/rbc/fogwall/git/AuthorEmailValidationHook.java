@@ -22,9 +22,7 @@ import org.eclipse.jgit.transport.ReceivePack;
  */
 @Slf4j
 @RequiredArgsConstructor
-public class AuthorEmailValidationHook implements FogwallHook {
-
-    private static final int ORDER = 250;
+public final class AuthorEmailValidationHook implements MandatoryFogwallHook {
 
     private final CommitConfig commitConfig;
     private final ValidationContext validationContext;
@@ -46,19 +44,19 @@ public class AuthorEmailValidationHook implements FogwallHook {
                 CommitInspectionService.getAnnotatedTagTagger(repo, cmd.getNewId())
                         .ifPresent(tagger -> violations.addAll(check.checkTagger(tagger)));
                 for (Violation v : violations) {
-                    validationContext.addIssue(getStepName(), v.reason(), v.formattedDetail());
+                    validationContext.addIssue(PushStepKind.AUTHOR_EMAIL, v.reason(), v.formattedDetail());
                     allViolations.add(v);
                 }
             } catch (Exception e) {
                 // Fail closed: a validation control that cannot run must block the push, not silently pass.
                 log.error("Failed to validate author emails for {}", cmd.getRefName(), e);
                 validationContext.addError(
-                        getStepName(),
+                        PushStepKind.AUTHOR_EMAIL,
                         "author email validation could not complete for " + cmd.getRefName(),
                         "Validation error: " + e.getMessage());
                 pushContext.addStep(PushStep.builder()
                         .stepName(getStepName())
-                        .stepOrder(ORDER)
+                        .stepOrder(displayOrder())
                         .status(StepStatus.FAIL)
                         .errorMessage("Validation error: " + e.getMessage())
                         .build());
@@ -69,15 +67,15 @@ public class AuthorEmailValidationHook implements FogwallHook {
         if (allViolations.isEmpty() && !hadError) {
             pushContext.addStep(PushStep.builder()
                     .stepName(getStepName())
-                    .stepOrder(ORDER)
+                    .stepOrder(displayOrder())
                     .status(StepStatus.PASS)
                     .build());
         }
     }
 
     @Override
-    public int getOrder() {
-        return ORDER;
+    public LifecycleStage stage() {
+        return LifecycleStage.MANDATORY_PROCESSING;
     }
 
     @Override

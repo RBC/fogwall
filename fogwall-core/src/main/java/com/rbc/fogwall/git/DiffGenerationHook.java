@@ -32,9 +32,7 @@ import org.eclipse.jgit.transport.ReceivePack;
  */
 @Slf4j
 @RequiredArgsConstructor
-public class DiffGenerationHook implements FogwallHook {
-
-    private static final int ORDER = 280;
+public final class DiffGenerationHook implements MandatoryFogwallHook {
 
     public static final String STEP_NAME_PUSH_DIFF = "diff";
     public static final String STEP_NAME_BRANCH_DIFF = "diff:default-branch";
@@ -86,7 +84,7 @@ public class DiffGenerationHook implements FogwallHook {
 
             PushStep step = PushStep.builder()
                     .stepName(STEP_NAME_PUSH_DIFF)
-                    .stepOrder(ORDER)
+                    .stepOrder(displayOrder())
                     .status(StepStatus.PASS)
                     .content(diff)
                     .build();
@@ -101,12 +99,12 @@ public class DiffGenerationHook implements FogwallHook {
             // silently skipped downstream).
             log.error("Failed to generate push diff for {}", refName, e);
             validationContext.addError(
-                    "diff",
+                    PushStepKind.DIFF_GENERATION,
                     "diff generation could not complete for " + refName,
                     "Diff generation error: " + e.getMessage());
             pushContext.addStep(PushStep.builder()
                     .stepName(STEP_NAME_PUSH_DIFF)
-                    .stepOrder(ORDER)
+                    .stepOrder(displayOrder())
                     .status(StepStatus.FAIL)
                     .errorMessage("Diff generation error: " + e.getMessage())
                     .build());
@@ -143,7 +141,7 @@ public class DiffGenerationHook implements FogwallHook {
 
             PushStep step = PushStep.builder()
                     .stepName(STEP_NAME_BRANCH_DIFF)
-                    .stepOrder(ORDER + 1)
+                    .stepOrder(displayOrder() + 1)
                     .status(StepStatus.PASS)
                     .content(diff)
                     .build();
@@ -159,8 +157,8 @@ public class DiffGenerationHook implements FogwallHook {
     }
 
     @Override
-    public int getOrder() {
-        return ORDER;
+    public LifecycleStage stage() {
+        return LifecycleStage.MANDATORY_PROCESSING;
     }
 
     @Override

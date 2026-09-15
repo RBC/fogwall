@@ -23,9 +23,7 @@ import org.eclipse.jgit.transport.ReceivePack;
  * <p>Mirrors the behaviour of {@link UrlRuleAggregateFilter} for the JGit hook chain.
  */
 @Slf4j
-public class RepositoryUrlRuleHook implements FogwallHook {
-
-    private static final int ORDER = 100;
+public final class RepositoryUrlRuleHook implements MandatoryFogwallHook {
 
     private final UrlRuleEvaluator evaluator;
     private final ValidationContext validationContext;
@@ -98,7 +96,7 @@ public class RepositoryUrlRuleHook implements FogwallHook {
         String detail =
                 GitClientUtils.format(sym(NO_ENTRY) + "  " + title, sym(CROSS_MARK) + "  " + message, RED, null);
         if (validationContext != null) {
-            validationContext.addIssue(getStepName(), reason, detail);
+            validationContext.addIssue(PushStepKind.URL_RULE, reason, detail);
             // PushStorePersistenceHook creates the FAIL step from the issue; don't also add it to pushContext
         } else {
             rp.sendMessage(detail);
@@ -109,7 +107,7 @@ public class RepositoryUrlRuleHook implements FogwallHook {
             }
             pushContext.addStep(PushStep.builder()
                     .stepName(getStepName())
-                    .stepOrder(ORDER)
+                    .stepOrder(displayOrder())
                     .status(StepStatus.FAIL)
                     .content(reason)
                     .build());
@@ -119,14 +117,14 @@ public class RepositoryUrlRuleHook implements FogwallHook {
     private void recordPass() {
         pushContext.addStep(PushStep.builder()
                 .stepName(getStepName())
-                .stepOrder(ORDER)
+                .stepOrder(displayOrder())
                 .status(StepStatus.PASS)
                 .build());
     }
 
     @Override
-    public int getOrder() {
-        return ORDER;
+    public LifecycleStage stage() {
+        return LifecycleStage.MANDATORY_PROCESSING;
     }
 
     @Override

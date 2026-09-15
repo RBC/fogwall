@@ -30,9 +30,8 @@ import org.eclipse.jgit.transport.ReceivePack;
  */
 @Slf4j
 @RequiredArgsConstructor
-public class SecretScanningHook implements FogwallHook {
+public final class SecretScanningHook implements MandatoryFogwallHook {
 
-    private static final int ORDER = 340;
     private static final String REMEDIATION_HINT =
             "→ Rotate any exposed credentials and remove the secret from your commit history before pushing.";
 
@@ -97,7 +96,7 @@ public class SecretScanningHook implements FogwallHook {
             } else {
                 pushContext.addStep(PushStep.builder()
                         .stepName(getStepName())
-                        .stepOrder(ORDER)
+                        .stepOrder(displayOrder())
                         .status(StepStatus.SKIPPED)
                         .build());
                 return;
@@ -107,20 +106,20 @@ public class SecretScanningHook implements FogwallHook {
         if (allViolations.isEmpty()) {
             pushContext.addStep(PushStep.builder()
                     .stepName(getStepName())
-                    .stepOrder(ORDER)
+                    .stepOrder(displayOrder())
                     .status(StepStatus.PASS)
                     .build());
             return;
         }
 
         for (Violation v : allViolations) {
-            validationContext.addIssue(getStepName(), v.reason(), v.formattedDetail());
+            validationContext.addIssue(PushStepKind.SECRET_SCAN, v.reason(), v.formattedDetail());
         }
     }
 
     @Override
-    public int getOrder() {
-        return ORDER;
+    public LifecycleStage stage() {
+        return LifecycleStage.MANDATORY_PROCESSING;
     }
 
     @Override

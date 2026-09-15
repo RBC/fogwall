@@ -37,14 +37,14 @@ import org.eclipse.jgit.transport.ReceivePack;
  *   <li><b>hidden</b> = {@code allNew} ∖ {@code introduced} - commits in the pack but outside the pushed range.
  * </ol>
  *
- * <p>This hook short-circuits the chain immediately on failure (direct rejection, not via {@link ValidationContext}).
+ * <p>Terminating: unreferenced pack history cannot be trusted. The hook records the issue and the chain runner ends the
+ * chain.
  */
 @Slf4j
 @RequiredArgsConstructor
-public class CheckHiddenCommitsHook implements FogwallHook {
+public final class CheckHiddenCommitsHook implements MandatoryFogwallHook {
 
-    private static final int ORDER = 220;
-
+    private final ValidationContext validationContext;
     private final PushContext pushContext;
 
     public void onPreReceive(ReceivePack rp, Collection<ReceiveCommand> commands) {
@@ -62,7 +62,7 @@ public class CheckHiddenCommitsHook implements FogwallHook {
                 if (pushContext != null) {
                     pushContext.addStep(PushStep.builder()
                             .stepName(getStepName())
-                            .stepOrder(ORDER)
+                            .stepOrder(displayOrder())
                             .status(StepStatus.PASS)
                             .build());
                 }
@@ -78,28 +78,26 @@ public class CheckHiddenCommitsHook implements FogwallHook {
             rp.sendMessage(color(RED, "" + sym(NO_ENTRY) + "  Push blocked - hidden commits detected"));
             rp.sendMessage(color(YELLOW, "  " + sym(WARNING) + "  " + msg));
 
-            for (ReceiveCommand cmd : commands) {
-                if (cmd.getResult() == ReceiveCommand.Result.NOT_ATTEMPTED) {
-                    cmd.setResult(ReceiveCommand.Result.REJECTED_OTHER_REASON, "Hidden commits detected");
-                }
-            }
+            // Declared terminating: the chain runner rejects the commands and stops.
+            validationContext.addIssue(PushStepKind.HIDDEN_COMMITS, "Hidden commits detected", msg);
 
         } catch (Exception e) {
             // Fail closed: if the hidden-commit check itself cannot run, block the push rather than allow
             // potentially-unreferenced pack history through unchecked.
             log.error("Failed to check hidden commits", e);
             rp.sendMessage(color(RED, "" + sym(NO_ENTRY) + "  Push blocked - hidden-commit check could not complete"));
-            for (ReceiveCommand cmd : commands) {
-                if (cmd.getResult() == ReceiveCommand.Result.NOT_ATTEMPTED) {
-                    cmd.setResult(ReceiveCommand.Result.REJECTED_OTHER_REASON, "Hidden-commit check error");
-                }
-            }
+            validationContext.addError(PushStepKind.HIDDEN_COMMITS, "Hidden-commit check error", e.getMessage());
         }
     }
 
     @Override
-    public int getOrder() {
-        return ORDER;
+    public LifecycleStage stage() {
+        return LifecycleStage.MANDATORY_PROCESSING;
+    }
+
+    @Override
+    public boolean terminatesChainOnFailure() {
+        return true;
     }
 
     @Override

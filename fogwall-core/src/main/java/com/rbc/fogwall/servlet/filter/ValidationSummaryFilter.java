@@ -12,6 +12,7 @@ import com.rbc.fogwall.db.model.PushStep;
 import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.git.PushStepKind;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -38,12 +39,10 @@ import lombok.extern.slf4j.Slf4j;
  * filter has had a chance to record issues before the combined response is sent.
  */
 @Slf4j
-public class ValidationSummaryFilter extends AbstractFogwallFilter {
-
-    private static final int ORDER = Integer.MAX_VALUE - 3;
+public final class ValidationSummaryFilter extends AbstractFogwallFilter {
 
     public ValidationSummaryFilter() {
-        super(ORDER, Set.of(HttpOperation.PUSH));
+        super(LifecycleStage.MANDATORY_POST, Set.of(HttpOperation.PUSH));
     }
 
     @Override

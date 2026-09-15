@@ -5,6 +5,7 @@ import static com.rbc.fogwall.servlet.FogwallServlet.GIT_REQUEST_ATTR;
 import com.rbc.fogwall.config.GpgConfig;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.validation.GpgSignatureCheck;
 import com.rbc.fogwall.validation.Violation;
@@ -23,13 +24,12 @@ import lombok.extern.slf4j.Slf4j;
  * <p>This filter runs at order 320, which is in the content filters range (200-399).
  */
 @Slf4j
-public class GpgSignatureFilter extends AbstractFogwallFilter {
+public final class GpgSignatureFilter extends AbstractFogwallFilter {
 
-    private static final int ORDER = 320;
     private final GpgSignatureCheck check;
 
     public GpgSignatureFilter(GpgConfig config) {
-        super(ORDER, Set.of(HttpOperation.PUSH));
+        super(LifecycleStage.MANDATORY_PROCESSING, Set.of(HttpOperation.PUSH));
         this.check = new GpgSignatureCheck(config);
     }
 

@@ -8,7 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
-public interface AuditFilter extends FogwallFilter {
+public sealed interface AuditFilter extends MandatoryFogwallFilter permits AuditLogFilter {
 
     void audit(GitRequestDetails requestDetails);
 

@@ -38,9 +38,7 @@ import org.eclipse.jgit.transport.ReceivePack;
  */
 @Slf4j
 @RequiredArgsConstructor
-public class DiffScanningHook implements FogwallHook {
-
-    private static final int ORDER = 300;
+public final class DiffScanningHook implements MandatoryFogwallHook {
 
     private final DiffScanConfig diffScanConfig;
     private final ValidationContext validationContext;
@@ -61,7 +59,7 @@ public class DiffScanningHook implements FogwallHook {
             List<Violation> violations = runCheck(aggregateDiff);
             if (!violations.isEmpty()) {
                 for (Violation v : violations) {
-                    validationContext.addIssue(getStepName(), v.reason(), v.formattedDetail());
+                    validationContext.addIssue(PushStepKind.DIFF_SCAN, v.reason(), v.formattedDetail());
                     logs.add("FAIL: aggregate: " + v.reason());
                 }
                 anyFailed.set(true);
@@ -98,7 +96,7 @@ public class DiffScanningHook implements FogwallHook {
                             for (Violation v : violations) {
                                 String reason = shortSha + ": " + v.reason();
                                 String detail = "commit " + shortSha + ": " + v.formattedDetail();
-                                validationContext.addIssue(getStepName(), reason, detail);
+                                validationContext.addIssue(PushStepKind.DIFF_SCAN, reason, detail);
                                 logs.add("FAIL: " + reason);
                             }
                             anyFailed.set(true);
@@ -107,7 +105,7 @@ public class DiffScanningHook implements FogwallHook {
                         // Fail closed: this commit's content could not be scanned — block rather than skip.
                         log.warn("Per-commit diff format failed for {}", commit.getSha(), e);
                         validationContext.addError(
-                                getStepName(),
+                                PushStepKind.DIFF_SCAN,
                                 "content scan could not complete for commit " + shortSha,
                                 "commit " + shortSha + ": diff scan error: " + e.getMessage());
                         logs.add("ERROR: " + shortSha + " - diff scan could not run");
@@ -118,7 +116,7 @@ public class DiffScanningHook implements FogwallHook {
                 // Fail closed: the per-commit scan could not run for this ref — block rather than skip.
                 log.warn("Could not enumerate commits for per-commit scan on {}", cmd.getRefName(), e);
                 validationContext.addError(
-                        getStepName(),
+                        PushStepKind.DIFF_SCAN,
                         "content scan could not complete for " + cmd.getRefName(),
                         "diff scan error: " + e.getMessage());
                 logs.add("ERROR: " + cmd.getRefName() + " - diff scan could not run");
@@ -129,7 +127,7 @@ public class DiffScanningHook implements FogwallHook {
         if (!anyFailed.get()) {
             pushContext.addStep(PushStep.builder()
                     .stepName(getStepName())
-                    .stepOrder(ORDER)
+                    .stepOrder(displayOrder())
                     .status(StepStatus.PASS)
                     .logs(logs)
                     .build());
@@ -145,8 +143,8 @@ public class DiffScanningHook implements FogwallHook {
     }
 
     @Override
-    public int getOrder() {
-        return ORDER;
+    public LifecycleStage stage() {
+        return LifecycleStage.MANDATORY_PROCESSING;
     }
 
     @Override

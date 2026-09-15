@@ -9,6 +9,7 @@ import static com.rbc.fogwall.servlet.FogwallServlet.GIT_REQUEST_ATTR;
 import com.rbc.fogwall.git.GitClientUtils;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.git.RepoPath;
 import com.rbc.fogwall.provider.FogwallProvider;
@@ -32,9 +33,7 @@ import org.eclipse.jgit.transport.PacketLineIn;
  * {@link ForceGitClientFilter}.
  */
 @Slf4j
-public class ParseGitRequestFilter extends ProviderAwareFogwallFilter<FogwallProvider> {
-
-    private static final int ORDER = Integer.MIN_VALUE + 1;
+public final class ParseGitRequestFilter extends ProviderAwareFogwallFilter<FogwallProvider> {
 
     /** A full git object id: 40 lowercase hex characters. Covers the all-zero create/delete sentinel. */
     private static final Pattern OBJECT_ID = Pattern.compile("^[0-9a-f]{40}$");
@@ -50,7 +49,7 @@ public class ParseGitRequestFilter extends ProviderAwareFogwallFilter<FogwallPro
 
     /** @param maxPushBytes largest request body to accept, in bytes; 0 disables the check */
     public ParseGitRequestFilter(FogwallProvider provider, long maxPushBytes) {
-        super(ORDER, provider);
+        super(LifecycleStage.MANDATORY_PRE, provider);
         this.maxPushBytes = maxPushBytes;
     }
 

@@ -193,8 +193,7 @@ class CommitAttributionPolicyHookTest {
                 .onPreReceive(rp, List.of(cmd));
 
         assertTrue(vc.hasIssues());
-        assertEquals(
-                PushStepKind.COMMIT_ATTRIBUTION.key(), vc.getIssues().get(0).hookName());
+        assertEquals(PushStepKind.COMMIT_ATTRIBUTION, vc.getIssues().get(0).kind());
         assertTrue(vc.getIssues().get(0).summary().contains("alice"));
     }
 

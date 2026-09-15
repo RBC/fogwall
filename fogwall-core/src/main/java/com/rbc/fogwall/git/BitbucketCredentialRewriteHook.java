@@ -25,16 +25,14 @@ import org.eclipse.jgit.transport.ReceivePack;
  */
 @Slf4j
 @RequiredArgsConstructor
-public class BitbucketCredentialRewriteHook implements FogwallHook {
-
-    private static final int ORDER = 148;
+public final class BitbucketCredentialRewriteHook implements MandatoryFogwallHook {
 
     private final BitbucketProvider provider;
     private final PushContext pushContext;
 
     @Override
-    public int getOrder() {
-        return ORDER;
+    public LifecycleStage stage() {
+        return LifecycleStage.MANDATORY_PROCESSING;
     }
 
     @Override

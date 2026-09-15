@@ -8,6 +8,7 @@ import static com.rbc.fogwall.servlet.FogwallServlet.GIT_REQUEST_ATTR;
 import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.git.*;
+import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.service.PushIdentityResolver;
 import com.rbc.fogwall.user.UserEntry;
 import jakarta.servlet.http.HttpServletRequest;
@@ -38,9 +39,7 @@ import lombok.extern.slf4j.Slf4j;
  * <p>Runs at order 160, after {@link CheckUserPushPermissionFilter} (150) and before content-validation filters (200+).
  */
 @Slf4j
-public class CommitAttributionPolicyFilter extends AbstractFogwallFilter {
-
-    private static final int ORDER = 160;
+public final class CommitAttributionPolicyFilter extends AbstractFogwallFilter {
 
     private final PushIdentityResolver identityResolver;
     private final Supplier<CommitConfig.CommitAttributionPolicyConfig> configSupplier;
@@ -48,7 +47,7 @@ public class CommitAttributionPolicyFilter extends AbstractFogwallFilter {
     /** Live-reload constructor — config is read from the supplier on every request. */
     public CommitAttributionPolicyFilter(
             PushIdentityResolver identityResolver, Supplier<CommitConfig> commitConfigSupplier) {
-        super(ORDER, Set.of(HttpOperation.PUSH));
+        super(LifecycleStage.MANDATORY_PROCESSING, Set.of(HttpOperation.PUSH));
         this.identityResolver = identityResolver;
         this.configSupplier = () -> {
             CommitConfig.CommitAttributionPolicyConfig c =
@@ -62,7 +61,7 @@ public class CommitAttributionPolicyFilter extends AbstractFogwallFilter {
     /** Fixed-config constructor. Useful in tests. */
     public CommitAttributionPolicyFilter(
             PushIdentityResolver identityResolver, CommitConfig.CommitAttributionPolicyConfig config) {
-        super(ORDER, Set.of(HttpOperation.PUSH));
+        super(LifecycleStage.MANDATORY_PROCESSING, Set.of(HttpOperation.PUSH));
         this.identityResolver = identityResolver;
         this.configSupplier = () -> config != null
                 ? config

@@ -72,7 +72,7 @@ class ValidationVerifierHookTest {
     @Test
     void withIssues_commandsRejected() {
         ValidationContext ctx = new ValidationContext();
-        ctx.addIssue("TestHook", "Something went wrong", "Details here");
+        ctx.addIssue(PushStepKind.URL_RULE, "Something went wrong", "Details here");
         ValidationVerifierHook hook = new ValidationVerifierHook(ctx);
         ReceivePack rp = makeReceivePack();
         ReceiveCommand cmd = createCommand();
@@ -88,8 +88,8 @@ class ValidationVerifierHookTest {
     @Test
     void multipleIssues_allCommandsRejected() {
         ValidationContext ctx = new ValidationContext();
-        ctx.addIssue("EmailHook", "Bad email", "email@example.io not allowed");
-        ctx.addIssue("MessageHook", "WIP message", "Message contains WIP");
+        ctx.addIssue(PushStepKind.AUTHOR_EMAIL, "Bad email", "email@example.io not allowed");
+        ctx.addIssue(PushStepKind.COMMIT_MESSAGE, "WIP message", "Message contains WIP");
         ValidationVerifierHook hook = new ValidationVerifierHook(ctx);
         ReceivePack rp = makeReceivePack();
         ReceiveCommand cmd1 = createCommand();
@@ -105,7 +105,7 @@ class ValidationVerifierHookTest {
     @Test
     void withIssues_alreadyRejectedCommand_notDoubleRejected() {
         ValidationContext ctx = new ValidationContext();
-        ctx.addIssue("TestHook", "Issue", "Detail");
+        ctx.addIssue(PushStepKind.URL_RULE, "Issue", "Detail");
         ValidationVerifierHook hook = new ValidationVerifierHook(ctx);
         ReceivePack rp = makeReceivePack();
 

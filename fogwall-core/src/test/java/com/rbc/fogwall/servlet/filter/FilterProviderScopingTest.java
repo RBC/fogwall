@@ -3,6 +3,7 @@ package com.rbc.fogwall.servlet.filter;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.rbc.fogwall.git.LifecycleStage;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
@@ -88,11 +89,11 @@ class FilterProviderScopingTest {
     }
 
     /** Records that it ran, and nothing else — the real per-filter logic isn't what's under test here. */
-    private static class MarkerFilter extends AbstractFogwallFilter {
+    private static class MarkerFilter extends AbstractCustomFogwallFilter {
         private final AtomicBoolean ran;
 
         MarkerFilter(AtomicBoolean ran) {
-            super(0);
+            super(LifecycleStage.CUSTOM_PRE);
             this.ran = ran;
         }
 

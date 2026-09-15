@@ -10,6 +10,7 @@ import com.rbc.fogwall.git.Commit;
 import com.rbc.fogwall.git.CommitInspectionService;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.git.QuarantineObjectStore;
@@ -52,12 +53,11 @@ import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
  * message, signature - rather than just the basic SHA/ref from the packet line header.
  */
 @Slf4j
-public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallProvider> {
+public final class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallProvider> {
 
     // Order 60 — runs after AllowApprovedPushFilter (50) so that re-pushes of approved pushes are
     // short-circuited by FogwallFilter before enrichment runs again. Must stay before content
     // validation filters (200+) which depend on localRepository and pushedCommits being set.
-    private static final int ORDER = 60;
     private final LocalRepositoryCache repositoryCache;
     private final long maxObjectSizeBytes;
 
@@ -73,7 +73,7 @@ public class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<FogwallP
     /** @param maxObjectSizeBytes largest decompressed size of any single pushed object; 0 = unlimited */
     public EnrichPushCommitsFilter(
             FogwallProvider provider, LocalRepositoryCache repositoryCache, long maxObjectSizeBytes) {
-        super(ORDER, Set.of(HttpOperation.PUSH), provider);
+        super(LifecycleStage.MANDATORY_PRE, Set.of(HttpOperation.PUSH), provider);
         this.repositoryCache = repositoryCache;
         this.maxObjectSizeBytes = maxObjectSizeBytes;
     }

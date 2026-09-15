@@ -13,6 +13,7 @@ import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -39,9 +40,7 @@ import lombok.extern.slf4j.Slf4j;
  * {@link GitRequestDetails}) but before URL rule and content validation filters.
  */
 @Slf4j
-public class AllowApprovedPushFilter extends AbstractFogwallFilter {
-
-    private static final int ORDER = 50;
+public final class AllowApprovedPushFilter extends AbstractFogwallFilter {
 
     private final PushStore pushStore;
     private final String serviceUrl;
@@ -49,7 +48,7 @@ public class AllowApprovedPushFilter extends AbstractFogwallFilter {
 
     public AllowApprovedPushFilter(
             PushStore pushStore, String serviceUrl, RepoPermissionService repoPermissionService) {
-        super(ORDER);
+        super(LifecycleStage.MANDATORY_PRE);
         this.pushStore = pushStore;
         this.serviceUrl = serviceUrl;
         this.repoPermissionService = repoPermissionService;

@@ -10,6 +10,7 @@ import com.rbc.fogwall.config.ScmOAuthConfig;
 import com.rbc.fogwall.git.GitClientUtils;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.service.PushIdentityResolver;
@@ -34,9 +35,8 @@ import lombok.extern.slf4j.Slf4j;
  * <p>This filter runs at order 150, which is in the authorization range (0-199).
  */
 @Slf4j
-public class CheckUserPushPermissionFilter extends AbstractFogwallFilter {
+public final class CheckUserPushPermissionFilter extends AbstractFogwallFilter {
 
-    private static final int ORDER = 150;
     private final PushIdentityResolver identityResolver;
     private final RepoPermissionService repoPermissionService;
     private final ScmOAuthConfig.IdentityMode identityMode;
@@ -50,7 +50,7 @@ public class CheckUserPushPermissionFilter extends AbstractFogwallFilter {
             PushIdentityResolver identityResolver,
             RepoPermissionService repoPermissionService,
             ScmOAuthConfig.IdentityMode identityMode) {
-        super(ORDER, Set.of(HttpOperation.PUSH));
+        super(LifecycleStage.MANDATORY_PROCESSING, Set.of(HttpOperation.PUSH));
         this.identityResolver = identityResolver;
         this.repoPermissionService = repoPermissionService;
         this.identityMode = identityMode != null ? identityMode : ScmOAuthConfig.IdentityMode.PERMISSIVE;
@@ -59,6 +59,12 @@ public class CheckUserPushPermissionFilter extends AbstractFogwallFilter {
     @Override
     public Optional<PushStepKind> stepKind() {
         return Optional.of(PushStepKind.PUSH_PERMISSION);
+    }
+
+    @Override
+    public boolean terminatesChainOnFailure() {
+        // Whoever cannot write here should not have their content scanned as if they could.
+        return true;
     }
 
     @Override
@@ -106,8 +112,7 @@ public class CheckUserPushPermissionFilter extends AbstractFogwallFilter {
             String title = sym(NO_ENTRY) + "  Push Blocked - Identity Not Linked";
             String message = sym(CROSS_MARK) + "  Your " + providerHostName
                     + " credentials could not be matched to a proxy account.\n\n" + profileHint;
-            rejectAndSendError(
-                    request, response, "Identity not linked", GitClientUtils.format(title, message, RED, null));
+            recordIssue(request, "Identity not linked", GitClientUtils.format(title, message, RED, null));
             return;
         }
 
@@ -135,8 +140,7 @@ public class CheckUserPushPermissionFilter extends AbstractFogwallFilter {
             String title = sym(NO_ENTRY) + "  Push Blocked - Unauthorized";
             String message = sym(CROSS_MARK) + "  " + user.getUsername() + " is not allowed to push to:\n" + "   "
                     + sym(LINK) + "  " + repoUrl;
-            rejectAndSendError(
-                    request, response, "User not authorized", GitClientUtils.format(title, message, RED, null));
+            recordIssue(request, "User not authorized", GitClientUtils.format(title, message, RED, null));
             return;
         }
 
@@ -161,7 +165,7 @@ public class CheckUserPushPermissionFilter extends AbstractFogwallFilter {
             Optional<String> identityOnFile =
                     identities.map(ScmIdentity::getUsername).findFirst();
             if (identityOnFile.isEmpty() && identityMode == ScmOAuthConfig.IdentityMode.STRICT) {
-                blockUnverifiedIdentity(request, response, user, tokenScmLogin);
+                blockUnverifiedIdentity(request, user, tokenScmLogin);
                 return;
             }
             // The record names the account the token belongs to. Identities on file only say which accounts the user
@@ -176,9 +180,7 @@ public class CheckUserPushPermissionFilter extends AbstractFogwallFilter {
      * <p>Mirrors the server-mode hook. Without this the setting applied to one proxy mode only, and a user could skip
      * it by pushing to {@code /proxy/…} instead of {@code /server/…} for the same provider.
      */
-    private void blockUnverifiedIdentity(
-            HttpServletRequest request, HttpServletResponse response, UserEntry user, String tokenScmLogin)
-            throws IOException {
+    private void blockUnverifiedIdentity(HttpServletRequest request, UserEntry user, String tokenScmLogin) {
         log.warn(
                 "User '{}' has no OAuth-verified SCM identity for token account '{}' — push denied (strict identity"
                         + " mode)",
@@ -190,8 +192,7 @@ public class CheckUserPushPermissionFilter extends AbstractFogwallFilter {
                 : "Ask an administrator to link your SCM account via OAuth.";
         String title = sym(NO_ENTRY) + "  Push Blocked - SCM Identity Not Verified";
         String message = sym(CROSS_MARK) + "  Your SCM identity is not verified.\n\n" + profileHint;
-        rejectAndSendError(
-                request, response, "No OAuth-verified SCM identity", GitClientUtils.format(title, message, RED, null));
+        recordIssue(request, "No OAuth-verified SCM identity", GitClientUtils.format(title, message, RED, null));
     }
 
     private static String[] extractBasicAuth(HttpServletRequest request) {

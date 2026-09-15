@@ -6,6 +6,7 @@ import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.git.Commit;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.validation.CommitMessageCheck;
 import com.rbc.fogwall.validation.Violation;
@@ -26,14 +27,13 @@ import lombok.extern.slf4j.Slf4j;
  * <p>This filter runs at order 260, which is in the content filters range (200-399).
  */
 @Slf4j
-public class CheckCommitMessagesFilter extends AbstractFogwallFilter {
+public final class CheckCommitMessagesFilter extends AbstractFogwallFilter {
 
-    private static final int ORDER = 260;
     private final Supplier<CommitConfig> commitConfigSupplier;
 
     /** Live-reload constructor — config is read from the supplier on every request. */
     public CheckCommitMessagesFilter(Supplier<CommitConfig> commitConfigSupplier) {
-        super(ORDER, Set.of(HttpOperation.PUSH));
+        super(LifecycleStage.MANDATORY_PROCESSING, Set.of(HttpOperation.PUSH));
         this.commitConfigSupplier = commitConfigSupplier;
     }
 

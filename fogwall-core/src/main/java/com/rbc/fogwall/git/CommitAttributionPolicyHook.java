@@ -40,9 +40,7 @@ import org.eclipse.jgit.transport.ReceivePack;
  * (open/permissive mode) the hook is a no-op.
  */
 @Slf4j
-public class CommitAttributionPolicyHook implements FogwallHook {
-
-    static final int ORDER = 160;
+public final class CommitAttributionPolicyHook implements MandatoryFogwallHook {
 
     private final PushIdentityResolver identityResolver;
     private final CommitConfig.CommitAttributionPolicyConfig config;
@@ -145,7 +143,7 @@ public class CommitAttributionPolicyHook implements FogwallHook {
                 // pass.
                 log.error("Failed to check commit attribution policy for {}", cmd.getRefName(), e);
                 validationContext.addError(
-                        getStepName(),
+                        PushStepKind.COMMIT_ATTRIBUTION,
                         "commit attribution policy could not complete for " + cmd.getRefName(),
                         "Commit attribution policy error: " + e.getMessage());
                 hadError = true;
@@ -174,7 +172,9 @@ public class CommitAttributionPolicyHook implements FogwallHook {
                     RED,
                     null);
             validationContext.addIssue(
-                    getStepName(), "Commit email not registered to push user " + user.getUsername(), detail);
+                    PushStepKind.COMMIT_ATTRIBUTION,
+                    "Commit email not registered to push user " + user.getUsername(),
+                    detail);
         } else {
             log.warn(
                     "Commit attribution policy warnings for push user '{}': {} mismatch(es)",
@@ -185,7 +185,7 @@ public class CommitAttributionPolicyHook implements FogwallHook {
             }
             pushContext.addStep(PushStep.builder()
                     .stepName(getStepName())
-                    .stepOrder(ORDER)
+                    .stepOrder(displayOrder())
                     .status(StepStatus.WARN)
                     .content(String.join("\n", warnViolations))
                     .build());
@@ -195,7 +195,7 @@ public class CommitAttributionPolicyHook implements FogwallHook {
     private void recordPass() {
         pushContext.addStep(PushStep.builder()
                 .stepName(getStepName())
-                .stepOrder(ORDER)
+                .stepOrder(displayOrder())
                 .status(StepStatus.PASS)
                 .build());
     }
@@ -215,8 +215,8 @@ public class CommitAttributionPolicyHook implements FogwallHook {
     }
 
     @Override
-    public int getOrder() {
-        return ORDER;
+    public LifecycleStage stage() {
+        return LifecycleStage.MANDATORY_PROCESSING;
     }
 
     @Override

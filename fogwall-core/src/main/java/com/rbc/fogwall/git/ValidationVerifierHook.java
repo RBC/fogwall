@@ -40,7 +40,7 @@ public class ValidationVerifierHook implements PreReceiveHook {
 
         for (int i = 0; i < issues.size(); i++) {
             var issue = issues.get(i);
-            rp.sendMessage(color(RED, "  " + (i + 1) + ". [" + issue.hookName() + "] " + issue.summary()));
+            rp.sendMessage(color(RED, "  " + (i + 1) + ". [" + issue.kind().key() + "] " + issue.summary()));
             if (issue.detail() != null && !issue.detail().isEmpty()) {
                 rp.sendMessage(color(YELLOW, "     " + issue.detail()));
             }

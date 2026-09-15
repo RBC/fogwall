@@ -1,5 +1,6 @@
 package com.rbc.fogwall.servlet.filter;
 
+import com.rbc.fogwall.git.LifecycleStage;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.ServletRequest;
@@ -27,7 +28,7 @@ import lombok.extern.slf4j.Slf4j;
  * body as its first action. Placed any later, an LFS upload would be read into heap before being refused.
  */
 @Slf4j
-public class LfsRejectionFilter implements FogwallFilter {
+public final class LfsRejectionFilter implements MandatoryFogwallFilter {
 
     /** Every LFS endpoint lives under this path segment, relative to the repository. */
     private static final String LFS_PATH_SEGMENT = "/info/lfs/";
@@ -39,8 +40,8 @@ public class LfsRejectionFilter implements FogwallFilter {
             + "Push the file directly instead, or contact an administrator if you need LFS for this repository.";
 
     @Override
-    public int getOrder() {
-        return Integer.MIN_VALUE;
+    public LifecycleStage stage() {
+        return LifecycleStage.MANDATORY_PRE;
     }
 
     @Override

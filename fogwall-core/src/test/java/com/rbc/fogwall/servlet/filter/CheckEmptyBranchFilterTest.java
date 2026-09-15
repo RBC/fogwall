@@ -141,10 +141,12 @@ class CheckEmptyBranchFilterTest {
 
         filter.doHttpFilter(mockPushRequest(details), fakeResponse.mock);
 
-        assertTrue(fakeResponse.committed.get(), "Response must be written for empty new branch");
-        // Body should mention the empty-branch message
-        String body = fakeResponse.body.toString();
-        assertTrue(body.contains("Empty Branch") || body.contains("commit"), "Body must explain the rejection");
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult(), "Empty new branch must be rejected");
+        // The recorded issue carries the message the runner emits to the client.
+        String recorded = details.getSteps().get(details.getSteps().size() - 1).getContent();
+        assertTrue(
+                recorded.contains("Empty Branch") || recorded.contains("commit"),
+                "Recorded issue must explain the rejection");
     }
 
     @Test
@@ -155,9 +157,9 @@ class CheckEmptyBranchFilterTest {
 
         filter.doHttpFilter(mockPushRequest(details), fakeResponse.mock);
 
-        assertTrue(fakeResponse.committed.get(), "Response must be written when commit data is missing");
-        String body = fakeResponse.body.toString();
-        assertTrue(body.contains("Not Found") || body.contains("administrator") || body.length() > 0);
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult(), "Missing commit data must be rejected");
+        String recorded = details.getSteps().get(details.getSteps().size() - 1).getContent();
+        assertTrue(recorded.contains("Not Found") || recorded.contains("administrator") || recorded.length() > 0);
     }
 
     @Test

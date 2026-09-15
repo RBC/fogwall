@@ -10,6 +10,7 @@ import static com.rbc.fogwall.servlet.FogwallServlet.*;
 import com.rbc.fogwall.approval.ApprovalGateway;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.git.PushStepKind;
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
@@ -43,15 +44,13 @@ import lombok.extern.slf4j.Slf4j;
  * {@link ValidationSummaryFilter}.
  */
 @Slf4j
-public class PushFinalizerFilter extends AbstractFogwallFilter {
-
-    private static final int ORDER = Integer.MAX_VALUE - 1;
+public final class PushFinalizerFilter extends AbstractFogwallFilter {
 
     private final String serviceUrl;
     private final ApprovalGateway approvalGateway;
 
     public PushFinalizerFilter(String serviceUrl, ApprovalGateway approvalGateway) {
-        super(ORDER, Set.of(HttpOperation.PUSH));
+        super(LifecycleStage.MANDATORY_POST, Set.of(HttpOperation.PUSH));
         this.serviceUrl = serviceUrl;
         this.approvalGateway = approvalGateway;
     }

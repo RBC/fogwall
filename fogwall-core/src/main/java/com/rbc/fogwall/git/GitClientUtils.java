@@ -5,7 +5,6 @@ import com.rbc.fogwall.db.model.StepStatus;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -235,14 +234,6 @@ public class GitClientUtils {
      * excluded. Returns an empty string if there are no relevant steps.
      */
     public static String buildValidationSummary(List<PushStep> steps) {
-        // Pure data / infrastructure steps that don't represent a user-visible check
-        Set<String> skipSteps = Set.of(
-                DiffGenerationHook.STEP_NAME_PUSH_DIFF,
-                DiffGenerationHook.STEP_NAME_BRANCH_DIFF,
-                "forward",
-                PushStepKind.COMMIT_INSPECTION.key(),
-                PushStepKind.PRIOR_PUSH_ENRICHMENT.key());
-
         // Human-readable label for each step's PushStepKind (header line). A step's stepName is its kind's key; every
         // kind shown to the client needs an entry here and in passResults below — a step missing from both silently
         // falls back to printing its raw key to the git client instead of failing the build.
@@ -279,9 +270,12 @@ public class GitClientUtils {
                 Map.entry(PushStepKind.CONTENT_PATTERN_DIFF.key(), "no PII/identifiers detected"),
                 Map.entry(PushStepKind.BINARY_BLOB.key(), "no blocked binary content")));
 
+        // Show only steps whose kind declares itself summarizable; internal plumbing (diff generation, request
+        // parsing, forwarding, …) declares otherwise and is left out. No step-order knowledge here.
         List<PushStep> relevant = steps.stream()
-                .filter(s -> s.getStepOrder() >= 100 && s.getStepOrder() <= 400)
-                .filter(s -> !skipSteps.contains(s.getStepName()))
+                .filter(s -> PushStepKind.forKey(s.getStepName())
+                        .map(PushStepKind::summarizable)
+                        .orElse(false))
                 .collect(Collectors.toList());
         if (relevant.isEmpty()) return "";
 

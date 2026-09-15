@@ -190,8 +190,7 @@ class CheckUserPushPermissionFilterTest {
         new CheckUserPushPermissionFilter(resolver, permService)
                 .doHttpFilter(mockRequest(details, basicAuth("ghost", "tok")), resp.mock);
 
-        assertTrue(resp.committed.get(), "Should block unresolved user");
-        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult(), "Should block unresolved user");
         verifyNoInteractions(permService);
     }
 
@@ -208,8 +207,7 @@ class CheckUserPushPermissionFilterTest {
         new CheckUserPushPermissionFilter(resolver, permService)
                 .doHttpFilter(mockRequest(details, basicAuth("corp", "tok")), resp.mock);
 
-        assertTrue(resp.committed.get(), "Should block unauthorized user");
-        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult(), "Should block unauthorized user");
     }
 
     // ---- authorized user passes ----
@@ -241,7 +239,7 @@ class CheckUserPushPermissionFilterTest {
         new CheckUserPushPermissionFilter(resolver, permService).doHttpFilter(mockRequest(details, null), resp.mock);
 
         verify(resolver).resolveIdentity(any(FogwallProvider.class), isNull(), isNull());
-        assertTrue(resp.committed.get());
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
     }
 
     // ---- provider instance is passed to resolver ----

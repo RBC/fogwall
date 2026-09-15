@@ -9,6 +9,7 @@ import com.rbc.fogwall.db.model.FetchRecord;
 import com.rbc.fogwall.git.GitClientUtils;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.servlet.FogwallServlet;
@@ -29,38 +30,30 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @ToString
-public class UrlRuleAggregateFilter extends ProviderAwareFogwallFilter<FogwallProvider> {
+public final class UrlRuleAggregateFilter extends ProviderAwareFogwallFilter<FogwallProvider> {
 
     private final UrlRuleEvaluator evaluator;
     private final FetchStore fetchStore;
 
-    // URL rule aggregate filters must be in the authorization range 50-199
-    private static final int MIN_ORDER = 50;
-    private static final int MAX_ORDER = 199;
-
-    public UrlRuleAggregateFilter(int order, FogwallProvider provider, UrlRuleRegistry urlRuleRegistry) {
-        this(order, provider, null, urlRuleRegistry);
+    public UrlRuleAggregateFilter(FogwallProvider provider, UrlRuleRegistry urlRuleRegistry) {
+        this(provider, null, urlRuleRegistry);
     }
 
-    public UrlRuleAggregateFilter(
-            int order, FogwallProvider provider, FetchStore fetchStore, UrlRuleRegistry urlRuleRegistry) {
-        super(validateOrder(order), ALL_OPERATIONS, provider);
+    public UrlRuleAggregateFilter(FogwallProvider provider, FetchStore fetchStore, UrlRuleRegistry urlRuleRegistry) {
+        super(LifecycleStage.MANDATORY_PROCESSING, ALL_OPERATIONS, provider);
         this.evaluator = new UrlRuleEvaluator(urlRuleRegistry, provider);
         this.fetchStore = fetchStore;
-    }
-
-    private static int validateOrder(int order) {
-        if (order < MIN_ORDER || order > MAX_ORDER) {
-            throw new IllegalArgumentException(String.format(
-                    "UrlRuleAggregateFilter order must be in the authorization range %d-%d (inclusive), but was %d",
-                    MIN_ORDER, MAX_ORDER, order));
-        }
-        return order;
     }
 
     @Override
     public Optional<PushStepKind> stepKind() {
         return Optional.of(PushStepKind.URL_RULE);
+    }
+
+    @Override
+    public boolean terminatesChainOnFailure() {
+        // A repository the pusher may not reach: refuse now, before any content is inspected.
+        return true;
     }
 
     @Override
@@ -99,9 +92,8 @@ public class UrlRuleAggregateFilter extends ProviderAwareFogwallFilter<FogwallPr
                 String message = verb + " this repository are not permitted.\n"
                         + "\n"
                         + "This repository has been explicitly denied by an administrator.";
-                rejectAndSendError(
+                recordIssue(
                         request,
-                        response,
                         "Repository blocked by deny rule",
                         GitClientUtils.formatForOperation(title, message, GitClientUtils.AnsiColor.RED, operation));
             }
@@ -112,22 +104,20 @@ public class UrlRuleAggregateFilter extends ProviderAwareFogwallFilter<FogwallPr
             case UrlRuleEvaluator.Result.NotAllowed _ -> {
                 log.debug("Blocked — no rule matched");
                 if (operation == HttpOperation.FETCH && fetchStore != null) recordFetch(request, false);
-                sendNotAllowed(request, response, operation);
+                sendNotAllowed(request, operation);
             }
         }
     }
 
-    private void sendNotAllowed(HttpServletRequest request, HttpServletResponse response, HttpOperation operation)
-            throws IOException {
+    private void sendNotAllowed(HttpServletRequest request, HttpOperation operation) {
         String action = operation == HttpOperation.PUSH ? "Push" : "Fetch";
         String title = sym(NO_ENTRY) + "  " + action + " Blocked - Repository Not Allowed";
         String verb = operation == HttpOperation.PUSH ? "Pushes to" : "Fetches from";
         String message = verb + " this repository are not permitted.\n"
                 + "\n"
                 + "Contact an administrator to add this repository to the allow rules.";
-        rejectAndSendError(
+        recordIssue(
                 request,
-                response,
                 "Repository not in allow list",
                 GitClientUtils.formatForOperation(title, message, GitClientUtils.AnsiColor.RED, operation));
     }

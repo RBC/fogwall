@@ -54,7 +54,7 @@ class CheckHiddenCommitsHookTest {
         ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
         PushContext pushContext = new PushContext();
 
-        new CheckHiddenCommitsHook(pushContext).onPreReceive(rp, List.of(cmd));
+        new CheckHiddenCommitsHook(new ValidationContext(), pushContext).onPreReceive(rp, List.of(cmd));
 
         assertEquals(ReceiveCommand.Result.NOT_ATTEMPTED, cmd.getResult());
         assertFalse(pushContext.getSteps().isEmpty());
@@ -69,7 +69,7 @@ class CheckHiddenCommitsHookTest {
         ReceiveCommand cmd =
                 new ReceiveCommand(c1.getId(), ObjectId.zeroId(), "refs/heads/main", ReceiveCommand.Type.DELETE);
 
-        new CheckHiddenCommitsHook(new PushContext()).onPreReceive(rp, List.of(cmd));
+        new CheckHiddenCommitsHook(new ValidationContext(), new PushContext()).onPreReceive(rp, List.of(cmd));
 
         assertEquals(ReceiveCommand.Result.NOT_ATTEMPTED, cmd.getResult());
     }
@@ -83,7 +83,7 @@ class CheckHiddenCommitsHookTest {
         ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
         cmd.setResult(ReceiveCommand.Result.REJECTED_OTHER_REASON, "pre-rejected");
 
-        new CheckHiddenCommitsHook(new PushContext()).onPreReceive(rp, List.of(cmd));
+        new CheckHiddenCommitsHook(new ValidationContext(), new PushContext()).onPreReceive(rp, List.of(cmd));
 
         assertEquals("pre-rejected", cmd.getMessage());
     }
@@ -111,7 +111,7 @@ class CheckHiddenCommitsHookTest {
         ReceiveCommand cmd = new ReceiveCommand(ObjectId.zeroId(), first.getId(), "refs/heads/main");
         PushContext pushContext = new PushContext();
 
-        new CheckHiddenCommitsHook(pushContext).onPreReceive(rp, List.of(cmd));
+        new CheckHiddenCommitsHook(new ValidationContext(), pushContext).onPreReceive(rp, List.of(cmd));
 
         // No existing refs → allNew == introduced → no hidden commits
         assertEquals(ReceiveCommand.Result.NOT_ATTEMPTED, cmd.getResult());
@@ -128,7 +128,7 @@ class CheckHiddenCommitsHookTest {
         ReceiveCommand cmd = new ReceiveCommand(ObjectId.zeroId(), tagged.getId(), "refs/tags/v1.0");
         PushContext pushContext = new PushContext();
 
-        new CheckHiddenCommitsHook(pushContext).onPreReceive(rp, List.of(cmd));
+        new CheckHiddenCommitsHook(new ValidationContext(), pushContext).onPreReceive(rp, List.of(cmd));
 
         assertEquals(
                 ReceiveCommand.Result.NOT_ATTEMPTED, cmd.getResult(), "Lightweight tag must pass hidden-commit check");
@@ -155,7 +155,7 @@ class CheckHiddenCommitsHookTest {
         ReceiveCommand cmd = new ReceiveCommand(ObjectId.zeroId(), tagObjId, "refs/tags/v2.0");
         PushContext pushContext = new PushContext();
 
-        new CheckHiddenCommitsHook(pushContext).onPreReceive(rp, List.of(cmd));
+        new CheckHiddenCommitsHook(new ValidationContext(), pushContext).onPreReceive(rp, List.of(cmd));
 
         assertEquals(
                 ReceiveCommand.Result.NOT_ATTEMPTED,
@@ -172,6 +172,7 @@ class CheckHiddenCommitsHookTest {
         ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
 
         // null pushContext path - hook should tolerate it (logs debug, skips addStep)
-        assertDoesNotThrow(() -> new CheckHiddenCommitsHook(null).onPreReceive(rp, List.of(cmd)));
+        assertDoesNotThrow(
+                () -> new CheckHiddenCommitsHook(new ValidationContext(), null).onPreReceive(rp, List.of(cmd)));
     }
 }
