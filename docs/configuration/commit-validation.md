@@ -12,8 +12,8 @@ commit:
   # user.email as the committer line, so there is no separate tagger policy to configure.
   committer:
     email:
-      # Unified allow/block rules — see "Email policy rules" below.
-      rules:
+      # Unified allow/block matchers — see "Email policy matchers" below.
+      matches:
         - { action: allow, field: domain, match: regex, value: "corp\\.example\\.com$" }
         - { action: block, field: local, match: regex, value: "^(noreply|no-reply|bot|nobody)$" }
 
@@ -24,16 +24,16 @@ commit:
   # author emails (the most common setup).
   author:
     email:
-      rules:
+      matches:
         - { action: allow, field: domain, match: regex, value: "corp\\.example\\.com$" }
 
   message:
+    # Content block — a bare string is a regex; use { match: literal, value: "..." } for a literal.
+    # Same shape as diff-scan.block and scm-api.block; see "Content matchers" in the diff-scan reference.
     block:
-      literals:
-        - "WIP"
-        - "DO NOT MERGE"
-      patterns:
-        - '(?i)(password|secret|token)\s*[=:]\s*\S+'
+      - '(?i)(password|secret|token)\s*[=:]\s*\S+'
+      - { match: literal, value: "WIP" }
+      - { match: literal, value: "DO NOT MERGE" }
 
   # Commit-trailer policy — DCO Signed-off-by and Co-authored-by. Both controls are enforce-or-off
   # and apply to both transports. See "Trailer policy" below.
@@ -43,17 +43,17 @@ commit:
       require-author-match: false # true = the Signed-off-by email must equal the commit author's
     co-authored-by:
       policy: off # off | ban | allowlist | require
-      # Under `allowlist`, each co-author email is checked against these rules (same shape as above):
+      # Under `allowlist`, each co-author email is checked against these matchers (same shape as above):
       email:
-        rules:
+        matches:
           - { action: allow, field: domain, match: regex, value: "corp\\.example\\.com$" }
           - { action: allow, field: address, match: literal, value: "noreply@anthropic.com" }
 ```
 
-## Email policy rules
+## Email policy matchers
 
-`author.email`, `committer.email`, and `co-authored-by.email` all share one shape: an ordered list of `rules`. Each rule
-is `{ action, field, match, value }`:
+`author.email`, `committer.email`, and `co-authored-by.email` all share one shape: an ordered list of `matches`. Each
+matcher is `{ action, field, match, value }`:
 
 | Key      | Values                           | Meaning                                                                                          |
 | -------- | -------------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -62,21 +62,21 @@ is `{ action, field, match, value }`:
 | `match`  | `literal` \| `regex`             | `literal` is case-insensitive exact equality; `regex` uses find-semantics. Default `regex`.      |
 | `value`  | string                           | The literal string or regex source.                                                              |
 
-Evaluation: **a block match always rejects**; then, **if any allow rule is present, the email must match at least one**
-to pass. With no allow rule, anything not blocked is permitted. This lets you express, for example, "allow `@corp.com`
-and the single bot address `noreply@anthropic.com`, but block the `svc-` service accounts":
+Evaluation: **a block match always rejects**; then, **if any allow matcher is present, the email must match at least
+one** to pass. With no allow matcher, anything not blocked is permitted. This lets you express, for example, "allow
+`@corp.com` and the single bot address `noreply@anthropic.com`, but block the `svc-` service accounts":
 
 ```yaml
-rules:
+matches:
   - { action: allow, field: domain, match: regex, value: "corp\\.example\\.com$" }
   - { action: allow, field: address, match: literal, value: "noreply@anthropic.com" }
   - { action: block, field: local, match: regex, value: "^svc-" }
 ```
 
 > **Deprecated aliases.** The older `email.domain.allow` and `email.local.block` single-regex keys are still accepted
-> for one minor release and are folded into equivalent `allow domain regex` / `block local regex` rules at startup (a
-> deprecation warning is logged). Migrate to the `rules` list — it can express blocks on domains, allows on local-parts,
-> full-address matching, and literals, none of which the old keys could.
+> for one minor release and are folded into equivalent `allow domain regex` / `block local regex` matchers at startup (a
+> deprecation warning is logged). Migrate to the `matches` list — it can express blocks on domains, allows on
+> local-parts, full-address matching, and literals, none of which the old keys could.
 
 ## Trailer policy
 
@@ -90,7 +90,7 @@ Two independent, enforce-or-off controls over commit-message trailers (both appl
   - `ban` — reject any commit that carries a `Co-authored-by:` trailer (e.g. legal teams requiring a single attributable
     author per commit).
   - `require` — reject any commit that has no `Co-authored-by:` trailer.
-  - `allowlist` — reject a `Co-authored-by` whose email is not permitted by `co-authored-by.email.rules` (the same
+  - `allowlist` — reject a `Co-authored-by` whose email is not permitted by `co-authored-by.email.matches` (the same
     email-policy shape above), e.g. to permit only approved internal bots.
 
 Captured `Signed-off-by` and `Co-authored-by` trailers are also stored on the push record and shown per-commit in the

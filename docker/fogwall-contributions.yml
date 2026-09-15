@@ -21,5 +21,4 @@ providers:
 
 scm-api:
   block:
-    literals:
-      - "internal.corp.example.com"
+    - { match: literal, value: "internal.corp.example.com" }

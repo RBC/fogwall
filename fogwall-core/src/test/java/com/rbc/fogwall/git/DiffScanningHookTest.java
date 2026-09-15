@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.rbc.fogwall.config.BlockConfig;
 import com.rbc.fogwall.config.DiffScanConfig;
+import com.rbc.fogwall.config.MatchRule;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -48,7 +49,9 @@ class DiffScanningHookTest {
 
     private DiffScanConfig configWithLiteral(String literal) {
         return DiffScanConfig.builder()
-                .block(BlockConfig.builder().literals(List.of(literal)).build())
+                .block(BlockConfig.builder()
+                        .rules(List.of(MatchRule.literal(literal)))
+                        .build())
                 .build();
     }
 

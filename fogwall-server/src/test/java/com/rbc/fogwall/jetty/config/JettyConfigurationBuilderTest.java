@@ -556,7 +556,7 @@ class JettyConfigurationBuilderTest {
         allow.setField("domain");
         allow.setMatch("regex");
         allow.setValue("corp\\.com$");
-        config.getCommit().getCommitter().getEmail().setRules(List.of(allow));
+        config.getCommit().getCommitter().getEmail().setMatches(List.of(allow));
 
         var commitConfig = new JettyConfigurationBuilder(config).buildCommitConfig();
         var email = commitConfig.getCommitter().getEmail();
@@ -587,7 +587,7 @@ class JettyConfigurationBuilderTest {
         bad.setAction("permit"); // not allow|block
         bad.setField("domain");
         bad.setValue("corp\\.com$");
-        config.getCommit().getAuthor().getEmail().setRules(List.of(bad));
+        config.getCommit().getAuthor().getEmail().setMatches(List.of(bad));
 
         var builder = new JettyConfigurationBuilder(config);
         var ex = assertThrows(IllegalArgumentException.class, builder::buildCommitConfig);
@@ -716,5 +716,43 @@ class JettyConfigurationBuilderTest {
         internalGitHub.setUri("https://github.internal.example.com");
         config.setProviders(Map.of("github", publicGitHub, "internal-github", internalGitHub));
         return config;
+    }
+
+    // ---- content block: BlockSetting -> compiled matchers ----
+
+    @Test
+    void buildDiffScanConfig_listShape_compilesMatchersInOrder() {
+        var config = new FogwallConfig();
+        config.getDiffScan()
+                .setBlock(new BlockSetting(
+                        List.of(
+                                new MatchRuleSettings("regex", "(?i)secret"),
+                                new MatchRuleSettings("literal", "internal.example.com")),
+                        false));
+
+        var rules = new JettyConfigurationBuilder(config)
+                .buildDiffScanConfig()
+                .getBlock()
+                .getRules();
+
+        assertEquals(2, rules.size());
+        assertEquals(MatchRule.Match.REGEX, rules.get(0).getMatch());
+        assertEquals("(?i)secret", rules.get(0).getValue());
+        assertEquals(MatchRule.Match.LITERAL, rules.get(1).getMatch());
+        assertEquals("internal.example.com", rules.get(1).getValue());
+    }
+
+    @Test
+    void buildScmApiBlockConfig_deprecatedShape_stillCompiles() {
+        var config = new FogwallConfig();
+        // The { literals, patterns } object, as the decoder folds it: matchers + deprecatedShape=true.
+        config.getScmApi().setBlock(new BlockSetting(List.of(new MatchRuleSettings("literal", "TOP SECRET")), true));
+
+        var rules =
+                new JettyConfigurationBuilder(config).buildScmApiBlockConfig().getRules();
+
+        assertEquals(1, rules.size());
+        assertEquals(MatchRule.Match.LITERAL, rules.get(0).getMatch());
+        assertEquals("TOP SECRET", rules.get(0).getValue());
     }
 }

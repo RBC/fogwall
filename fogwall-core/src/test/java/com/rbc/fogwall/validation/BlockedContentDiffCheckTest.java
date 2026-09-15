@@ -3,22 +3,22 @@ package com.rbc.fogwall.validation;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.rbc.fogwall.config.BlockConfig;
+import com.rbc.fogwall.config.MatchRule;
 import java.util.List;
 import java.util.Optional;
-import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
 class BlockedContentDiffCheckTest {
 
     private static BlockedContentDiffCheck checkWithLiterals(String... literals) {
-        return new BlockedContentDiffCheck(
-                BlockConfig.builder().literals(List.of(literals)).build());
+        return new BlockedContentDiffCheck(BlockConfig.builder()
+                .rules(List.of(literals).stream().map(MatchRule::literal).toList())
+                .build());
     }
 
     private static BlockedContentDiffCheck checkWithPattern(String pattern) {
-        return new BlockedContentDiffCheck(BlockConfig.builder()
-                .patterns(List.of(Pattern.compile(pattern)))
-                .build());
+        return new BlockedContentDiffCheck(
+                BlockConfig.builder().rules(List.of(MatchRule.regex(pattern))).build());
     }
 
     private static final String SAMPLE_DIFF = """
@@ -51,8 +51,16 @@ class BlockedContentDiffCheckTest {
     }
 
     @Test
-    void blockedLiteral_caseInsensitiveMatch() {
+    void blockedLiteral_caseMismatch_noMatch() {
+        // The added line carries lowercase "secret"; a literal "SECRET" is case-sensitive and must not match.
         BlockedContentDiffCheck check = checkWithLiterals("SECRET");
+        List<Violation> violations = check.check(SAMPLE_DIFF).orElseThrow();
+        assertTrue(violations.isEmpty());
+    }
+
+    @Test
+    void blockedLiteral_exactCase_match() {
+        BlockedContentDiffCheck check = checkWithLiterals("secret");
         List<Violation> violations = check.check(SAMPLE_DIFF).orElseThrow();
         assertFalse(violations.isEmpty());
     }

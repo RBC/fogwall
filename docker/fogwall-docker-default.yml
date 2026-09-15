@@ -157,24 +157,20 @@ commit:
       local:
         block: "^(noreply|no-reply|bot|nobody)$"
   message:
+    # Commit messages matching any of these matchers are rejected. A bare string is a regex;
+    # use { match: literal, value: "..." } for a literal. Matching is case-sensitive; add (?i) to a regex.
     block:
-      # Commit messages containing any of these strings (case-insensitive) are rejected.
-      literals:
-        - "WIP"
-        - "DO NOT MERGE"
-        - "fixup!"
-        - "squash!"
-      # Commit messages matching any of these patterns are rejected.
-      patterns:
-        - '(?i)(password|secret|token)\s*[=:]\s*\S+'
+      - { match: literal, value: "WIP" }
+      - { match: literal, value: "DO NOT MERGE" }
+      - { match: literal, value: "fixup!" }
+      - { match: literal, value: "squash!" }
+      - '(?i)(password|secret|token)\s*[=:]\s*\S+'
 
 diff-scan:
+  # Example: block internal hostnames/URLs from leaking into public repos.
   block:
-    # Example: block internal hostnames/URLs from leaking into public repos.
-    literals:
-      - "internal.corp.example.com"
-    patterns:
-      - '(?i)https?://[a-z0-9.-]*\.corp\.example\.com\b'
+    - { match: literal, value: "internal.corp.example.com" }
+    - '(?i)https?://[a-z0-9.-]*\.corp\.example\.com\b'
 
 # Enables Gitleaks secret scanning. Full configuration reference: docs/configuration/secret-scanning.md
 secret-scan:

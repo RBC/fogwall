@@ -4,13 +4,13 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.rbc.fogwall.config.BlockConfig;
 import com.rbc.fogwall.config.CommitConfig;
+import com.rbc.fogwall.config.MatchRule;
 import com.rbc.fogwall.db.model.StepStatus;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
-import java.util.regex.Pattern;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.PersonIdent;
@@ -57,8 +57,12 @@ class CommitMessageValidationHookTest {
         return CommitConfig.builder()
                 .message(CommitConfig.MessageConfig.builder()
                         .block(BlockConfig.builder()
-                                .literals(List.of("WIP", "DO NOT MERGE", "fixup!", "squash!"))
-                                .patterns(List.of(Pattern.compile("(?i)(password|secret)\\s*[=:]\\s*\\S+")))
+                                .rules(List.of(
+                                        MatchRule.literal("WIP"),
+                                        MatchRule.literal("DO NOT MERGE"),
+                                        MatchRule.literal("fixup!"),
+                                        MatchRule.literal("squash!"),
+                                        MatchRule.regex("(?i)(password|secret)\\s*[=:]\\s*\\S+")))
                                 .build())
                         .build())
                 .build();
@@ -115,9 +119,9 @@ class CommitMessageValidationHookTest {
     }
 
     @Test
-    void wipCaseInsensitive_addsIssue() throws Exception {
+    void wipCaseMismatch_noIssue() throws Exception {
         Git git = Git.open(tempDir.toFile());
-        // lowercase "wip" - the literal check is case-insensitive
+        // lowercase "wip" against a literal "WIP" — literal matching is case-sensitive, so this does not match.
         ObjectId wipCommit = createCommit(git, "wip: something", "Dev", "dev@example.com");
 
         ValidationContext ctx = new ValidationContext();
@@ -127,7 +131,7 @@ class CommitMessageValidationHookTest {
 
         hook.onPreReceive(rp, List.of(newBranchCommand(wipCommit)));
 
-        assertTrue(ctx.hasIssues(), "Case-insensitive WIP match must produce an issue");
+        assertFalse(ctx.hasIssues(), "a differently-cased literal must not match; use (?i) in a regex for that");
     }
 
     @Test

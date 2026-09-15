@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.rbc.fogwall.config.BlockConfig;
 import com.rbc.fogwall.config.ContentPatternConfig;
+import com.rbc.fogwall.config.MatchRule;
 import com.rbc.fogwall.config.SecretScanConfig;
 import com.rbc.fogwall.validation.SecretScanCheck;
 import java.nio.charset.StandardCharsets;
@@ -12,7 +13,6 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -21,10 +21,10 @@ class ScmContentInspectorTest {
     private static final JsonMapper MAPPER = new JsonMapper();
 
     private static BlockConfig blocking(List<String> literals, List<String> patterns) {
-        return BlockConfig.builder()
-                .literals(literals)
-                .patterns(patterns.stream().map(Pattern::compile).toList())
-                .build();
+        List<MatchRule> rules = new ArrayList<>();
+        literals.forEach(literal -> rules.add(MatchRule.literal(literal)));
+        patterns.forEach(pattern -> rules.add(MatchRule.regex(pattern)));
+        return BlockConfig.builder().rules(rules).build();
     }
 
     private static ScmContentInspector inspector(BlockConfig block, SecretScanConfig secretScan) {

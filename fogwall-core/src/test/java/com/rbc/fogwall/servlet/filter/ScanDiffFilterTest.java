@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 
 import com.rbc.fogwall.config.BlockConfig;
 import com.rbc.fogwall.config.DiffScanConfig;
+import com.rbc.fogwall.config.MatchRule;
 import com.rbc.fogwall.db.model.PushStep;
 import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.git.GitRequestDetails;
@@ -151,7 +152,9 @@ class ScanDiffFilterTest {
 
     private ScanDiffFilter filterWithLiteral(String literal) {
         DiffScanConfig config = DiffScanConfig.builder()
-                .block(BlockConfig.builder().literals(List.of(literal)).build())
+                .block(BlockConfig.builder()
+                        .rules(List.of(MatchRule.literal(literal)))
+                        .build())
                 .build();
         return new ScanDiffFilter(config);
     }

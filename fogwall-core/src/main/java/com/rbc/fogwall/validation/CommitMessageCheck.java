@@ -4,10 +4,10 @@ import static com.rbc.fogwall.git.GitClientUtils.SymbolCodes.*;
 import static com.rbc.fogwall.git.GitClientUtils.sym;
 
 import com.rbc.fogwall.config.CommitConfig;
+import com.rbc.fogwall.config.MatchRule;
 import com.rbc.fogwall.git.Commit;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 
 /** Validates that no commit message contains blocked literals or patterns. */
@@ -37,15 +37,11 @@ public class CommitMessageCheck implements CommitCheck {
             return "empty commit message";
         }
 
-        for (String literal : config.getMessage().getBlock().getLiterals()) {
-            if (message.toLowerCase().contains(literal.toLowerCase())) {
-                return "contains blocked term: \"" + literal + "\"";
-            }
-        }
-
-        for (Pattern pattern : config.getMessage().getBlock().getPatterns()) {
-            if (pattern.matcher(message).find()) {
-                return "matches blocked pattern: " + pattern.pattern();
+        for (MatchRule rule : config.getMessage().getBlock().getRules()) {
+            if (rule.matches(message)) {
+                return rule.getMatch() == MatchRule.Match.LITERAL
+                        ? "contains blocked term: \"" + rule.getValue() + "\""
+                        : "matches blocked pattern: " + rule.getValue();
             }
         }
 

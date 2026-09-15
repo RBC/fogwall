@@ -4,10 +4,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.rbc.fogwall.config.BlockConfig;
 import com.rbc.fogwall.config.CommitConfig;
+import com.rbc.fogwall.config.MatchRule;
 import com.rbc.fogwall.git.Commit;
 import com.rbc.fogwall.git.Contributor;
 import java.util.List;
-import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -17,7 +17,11 @@ class CommitMessageCheckTest {
     private static CommitConfig configWithBlockedLiterals(String... literals) {
         return CommitConfig.builder()
                 .message(CommitConfig.MessageConfig.builder()
-                        .block(BlockConfig.builder().literals(List.of(literals)).build())
+                        .block(BlockConfig.builder()
+                                .rules(List.of(literals).stream()
+                                        .map(MatchRule::literal)
+                                        .toList())
+                                .build())
                         .build())
                 .build();
     }
@@ -26,7 +30,7 @@ class CommitMessageCheckTest {
         return CommitConfig.builder()
                 .message(CommitConfig.MessageConfig.builder()
                         .block(BlockConfig.builder()
-                                .patterns(List.of(Pattern.compile(pattern)))
+                                .rules(List.of(MatchRule.regex(pattern)))
                                 .build())
                         .build())
                 .build();
@@ -55,11 +59,11 @@ class CommitMessageCheckTest {
     }
 
     @Test
-    void blockedLiteral_caseInsensitiveMatch_returnsViolation() {
+    void blockedLiteral_caseMismatch_noViolation() {
+        // Literal matching is case-sensitive: lowercase "wip" does not match the literal "WIP".
         CommitMessageCheck check = new CommitMessageCheck(configWithBlockedLiterals("WIP"));
         List<Violation> violations = check.check(List.of(commitWithMessage("wip: still in progress")));
-        assertFalse(violations.isEmpty());
-        assertTrue(violations.get(0).reason().contains("WIP"));
+        assertTrue(violations.isEmpty());
     }
 
     @Test
