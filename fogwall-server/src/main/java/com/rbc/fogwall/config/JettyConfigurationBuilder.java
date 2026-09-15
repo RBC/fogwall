@@ -74,7 +74,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
@@ -384,7 +383,7 @@ public class JettyConfigurationBuilder {
                 buildCommitterConfig(cs.getCommitter().getEmail());
 
         CommitConfig.MessageConfig messageConfig = CommitConfig.MessageConfig.builder()
-                .block(buildBlockConfig(cs.getMessage().getBlock()))
+                .block(buildBlockConfig(cs.getMessage().getBlock(), "commit.message"))
                 .build();
 
         if (cs.getIdentityVerification() != null) {
@@ -407,11 +406,10 @@ public class JettyConfigurationBuilder {
                 .build();
 
         log.info(
-                "Loaded commit config: committer.domain.allow={}, committer.local.block={}, message.literals={}, message.patterns={}",
+                "Loaded commit config: committer.domain.allow={}, committer.local.block={}, message.block={}",
                 cs.getCommitter().getEmail().getDomain().getAllow(),
                 cs.getCommitter().getEmail().getLocal().getBlock(),
-                commitConfig.getMessage().getBlock().getLiterals().size(),
-                commitConfig.getMessage().getBlock().getPatterns().size());
+                commitConfig.getMessage().getBlock().getRules().size());
 
         return commitConfig;
     }
@@ -441,8 +439,8 @@ public class JettyConfigurationBuilder {
     private CommitConfig.EmailConfig buildEmailConfig(CommitSettings.EmailSettings email) {
         List<EmailRule> rules = new ArrayList<>();
 
-        // Current shape: explicit allow/block rules.
-        for (CommitSettings.RuleSettings r : email.getRules()) {
+        // Current shape: explicit allow/block matchers.
+        for (CommitSettings.RuleSettings r : email.getMatches()) {
             rules.add(new EmailRule(
                     EmailRule.Action.fromString(r.getAction()),
                     EmailRule.Field.fromString(r.getField()),
@@ -467,8 +465,8 @@ public class JettyConfigurationBuilder {
 
     private void warnDeprecatedEmailKey(String oldKey, String replacement) {
         log.warn(
-                "Config key 'commit...email.{}' is deprecated — express it as a 'rules' entry instead "
-                        + "({}). The old key is still applied for now; migrate to the unified rules list "
+                "Config key 'commit...email.{}' is deprecated — express it as a 'matches' entry instead "
+                        + "({}). The old key is still applied for now; migrate to the unified matches list "
                         + "(see the configuration reference).",
                 oldKey,
                 replacement);
@@ -495,12 +493,10 @@ public class JettyConfigurationBuilder {
      */
     public DiffScanConfig buildDiffScanConfig() {
         DiffScanConfig cfg = DiffScanConfig.builder()
-                .block(buildBlockConfig(config.getDiffScan().getBlock()))
+                .block(buildBlockConfig(config.getDiffScan().getBlock(), "diff-scan"))
                 .build();
         log.info(
-                "Loaded diff-scan config: literals={}, patterns={}",
-                cfg.getBlock().getLiterals().size(),
-                cfg.getBlock().getPatterns().size());
+                "Loaded diff-scan config: matches={}", cfg.getBlock().getRules().size());
         return cfg;
     }
 
@@ -1500,15 +1496,26 @@ public class JettyConfigurationBuilder {
 
     /** Blocked literals and patterns for SCM API content ({@code scm-api.block}). */
     public BlockConfig buildScmApiBlockConfig() {
-        return buildBlockConfig(config.getScmApi().getBlock());
+        return buildBlockConfig(config.getScmApi().getBlock(), "scm-api");
     }
 
-    private static BlockConfig buildBlockConfig(BlockSettings block) {
-        List<Pattern> patterns =
-                block.getPatterns().stream().map(Pattern::compile).collect(Collectors.toList());
-        return BlockConfig.builder()
-                .literals(new ArrayList<>(block.getLiterals()))
-                .patterns(patterns)
-                .build();
+    /**
+     * Compiles a content-block policy from a {@link BlockSetting}, whichever shape configured it. When the deprecated
+     * {@code { literals, patterns }} object shape was used, logs a one-time migration warning naming {@code keyPath}
+     * (e.g. {@code diff-scan}).
+     */
+    private BlockConfig buildBlockConfig(BlockSetting block, String keyPath) {
+        List<MatchRule> matchRules = new ArrayList<>();
+        for (MatchRuleSettings r : block.getMatchers()) {
+            matchRules.add(new MatchRule(MatchRule.Match.fromString(r.getMatch()), r.getValue()));
+        }
+        if (block.isDeprecatedShape()) {
+            log.warn(
+                    "Config key '{}.block' uses the deprecated {{ literals, patterns }} object — express it as a list "
+                            + "of matchers instead (a bare string is a regex; use {{match: literal, value: ...}} for a "
+                            + "literal). The old shape is still accepted for now (see the configuration reference).",
+                    keyPath);
+        }
+        return BlockConfig.builder().rules(matchRules).build();
     }
 }

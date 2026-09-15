@@ -33,15 +33,15 @@ credentials. For token-only auth (GitHub, GitLab, Gitea PATs) the username can b
 
 ## Reloadable sections
 
-| Section        | YAML key        | What changes take effect                                                |
-| -------------- | --------------- | ----------------------------------------------------------------------- |
-| `commit`       | `commit:`       | Author email rules, message block lists, commit attribution policy mode |
-| `diff-scan`    | `diff-scan:`    | Diff content block literals and patterns                                |
-| `secret-scan`  | `secret-scan:`  | All gitleaks settings including `inline-config`                         |
-| `binary-blob`  | `binary-blob:`  | Blob size limit and denied MIME types                                   |
-| `rules`        | `rules:`        | URL access control allow/deny rules                                     |
-| `permissions`  | `permissions:`  | Config-sourced user→repo permission grants                              |
-| `attestations` | `attestations:` | Dashboard approval form questions                                       |
+| Section        | YAML key        | What changes take effect                                                       |
+| -------------- | --------------- | ------------------------------------------------------------------------------ |
+| `commit`       | `commit:`       | Author/committer email matchers, message block, commit attribution policy mode |
+| `diff-scan`    | `diff-scan:`    | Diff content block matchers                                                    |
+| `secret-scan`  | `secret-scan:`  | All gitleaks settings including `inline-config`                                |
+| `binary-blob`  | `binary-blob:`  | Blob size limit and denied MIME types                                          |
+| `rules`        | `rules:`        | URL access control allow/deny rules                                            |
+| `permissions`  | `permissions:`  | Config-sourced user→repo permission grants                                     |
+| `attestations` | `attestations:` | Dashboard approval form questions                                              |
 
 Provider, server, database and `scm-oauth` sections always require a restart — they describe how the deployment is set
 up rather than policy that changes over time.

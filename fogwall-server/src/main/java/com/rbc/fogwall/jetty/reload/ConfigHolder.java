@@ -96,9 +96,8 @@ public class ConfigHolder {
     public void update(DiffScanConfig newDiffScanConfig) {
         DiffScanConfig old = diffScanConfig.getAndSet(newDiffScanConfig);
         log.info(
-                "DiffScanConfig reloaded: literals={}, patterns={}",
-                newDiffScanConfig.getBlock().getLiterals().size(),
-                newDiffScanConfig.getBlock().getPatterns().size());
+                "DiffScanConfig reloaded: rules={}",
+                newDiffScanConfig.getBlock().getRules().size());
         log.debug("Previous DiffScanConfig replaced: {}", old);
     }
 

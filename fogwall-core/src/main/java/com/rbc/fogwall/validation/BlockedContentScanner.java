@@ -1,13 +1,12 @@
 package com.rbc.fogwall.validation;
 
 import com.rbc.fogwall.config.BlockConfig;
+import com.rbc.fogwall.config.MatchRule;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
-import java.util.regex.Pattern;
 
 /**
- * Matches text against the configured blocked literals and patterns.
+ * Matches text against the configured block rules.
  *
  * <p>Separate from {@link BlockedContentDiffCheck} because the rules are about content, not about diffs: the same
  * blocked term is equally unwelcome in a pushed line and in the body of a pull request opened through the SCM API
@@ -29,8 +28,7 @@ public final class BlockedContentScanner {
 
     /** Whether {@code block} would match anything at all — lets a caller skip the work entirely. */
     public static boolean isConfigured(BlockConfig block) {
-        return block != null
-                && !(block.getLiterals().isEmpty() && block.getPatterns().isEmpty());
+        return block != null && !block.getRules().isEmpty();
     }
 
     /**
@@ -42,17 +40,18 @@ public final class BlockedContentScanner {
             return List.of();
         }
         List<Match> matches = new ArrayList<>();
-        String lowered = text.toLowerCase(Locale.ROOT);
-        for (String literal : block.getLiterals()) {
-            if (lowered.contains(literal.toLowerCase(Locale.ROOT))) {
-                matches.add(new Match("blocked term: \"" + literal + "\"", location, text.strip()));
-            }
-        }
-        for (Pattern pattern : block.getPatterns()) {
-            if (pattern.matcher(text).find()) {
-                matches.add(new Match("blocked pattern: " + pattern.pattern(), location, text.strip()));
+        for (MatchRule rule : block.getRules()) {
+            if (rule.matches(text)) {
+                matches.add(new Match(describe(rule), location, text.strip()));
             }
         }
         return matches;
+    }
+
+    /** Rule label for the violation message, distinguishing a literal term from a regex pattern. */
+    private static String describe(MatchRule rule) {
+        return rule.getMatch() == MatchRule.Match.LITERAL
+                ? "blocked term: \"" + rule.getValue() + "\""
+                : "blocked pattern: " + rule.getValue();
     }
 }

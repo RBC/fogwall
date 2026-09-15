@@ -149,7 +149,8 @@ class FogwallConfigLoaderTest {
     }
 
     @Test
-    void loadWithOverride_diffScan_blockLiterals() throws GestaltException, IOException {
+    void loadWithOverride_diffScan_deprecatedObjectShape_foldsToMatchers() throws GestaltException, IOException {
+        // The old { literals, patterns } object still loads, folded into matchers and flagged deprecated.
         Path override = writeYaml("""
                 diff-scan:
                   block:
@@ -157,13 +158,15 @@ class FogwallConfigLoaderTest {
                       - "CANARY_STRING"
                 """);
         var config = FogwallConfigLoader.loadWithOverride(override);
-        assertTrue(
-                config.getDiffScan().getBlock().getLiterals().contains("CANARY_STRING"),
-                "override file diff-scan.block.literals should be present");
+        var block = config.getDiffScan().getBlock();
+        assertTrue(block.isDeprecatedShape(), "the { literals, patterns } object is the deprecated shape");
+        assertEquals(1, block.getMatchers().size());
+        assertEquals("literal", block.getMatchers().get(0).getMatch());
+        assertEquals("CANARY_STRING", block.getMatchers().get(0).getValue());
     }
 
     @Test
-    void loadWithOverride_commit_messageBlockLiteral() throws GestaltException, IOException {
+    void loadWithOverride_commitMessage_deprecatedObjectShape_foldsToMatchers() throws GestaltException, IOException {
         Path override = writeYaml("""
                 commit:
                   message:
@@ -172,9 +175,45 @@ class FogwallConfigLoaderTest {
                         - "DO_NOT_PUSH"
                 """);
         var config = FogwallConfigLoader.loadWithOverride(override);
-        assertTrue(
-                config.getCommit().getMessage().getBlock().getLiterals().contains("DO_NOT_PUSH"),
-                "override file commit.message.block.literals should be present");
+        var block = config.getCommit().getMessage().getBlock();
+        assertTrue(block.isDeprecatedShape());
+        assertEquals("DO_NOT_PUSH", block.getMatchers().get(0).getValue());
+    }
+
+    @Test
+    void loadWithOverride_diffScan_listShape_scalarAndObject() throws GestaltException, IOException {
+        // The current shape: a scalar entry binds as regex, a mapping sets match explicitly.
+        Path override = writeYaml("""
+                diff-scan:
+                  block:
+                    - '(?i)secret'
+                    - { match: literal, value: "CANARY_STRING" }
+                """);
+        var config = FogwallConfigLoader.loadWithOverride(override);
+        var block = config.getDiffScan().getBlock();
+        assertFalse(block.isDeprecatedShape());
+        var matchers = block.getMatchers();
+        assertEquals(2, matchers.size());
+        assertEquals("regex", matchers.get(0).getMatch());
+        assertEquals("(?i)secret", matchers.get(0).getValue());
+        assertEquals("literal", matchers.get(1).getMatch());
+        assertEquals("CANARY_STRING", matchers.get(1).getValue());
+    }
+
+    @Test
+    void loadWithOverride_commitMessage_listShape_scalar() throws GestaltException, IOException {
+        Path override = writeYaml("""
+                commit:
+                  message:
+                    block:
+                      - '(?i)do not merge'
+                """);
+        var config = FogwallConfigLoader.loadWithOverride(override);
+        var block = config.getCommit().getMessage().getBlock();
+        assertFalse(block.isDeprecatedShape());
+        assertEquals(1, block.getMatchers().size());
+        assertEquals("regex", block.getMatchers().get(0).getMatch());
+        assertEquals("(?i)do not merge", block.getMatchers().get(0).getValue());
     }
 
     @Test

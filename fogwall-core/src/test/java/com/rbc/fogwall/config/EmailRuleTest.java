@@ -68,7 +68,7 @@ class EmailRuleTest {
         var ex = assertThrows(
                 IllegalArgumentException.class,
                 () -> new EmailRule(EmailRule.Action.BLOCK, EmailRule.Field.LOCAL, EmailRule.Match.REGEX, "("));
-        assertTrue(ex.getMessage().contains("invalid email rule regex"));
+        assertTrue(ex.getMessage().contains("invalid rule regex"));
     }
 
     // --- matches() across fields and match types ---

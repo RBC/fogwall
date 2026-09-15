@@ -3,7 +3,6 @@ package com.rbc.fogwall.config;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
-import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
 class ConfigTest {
@@ -21,8 +20,7 @@ class ConfigTest {
         assertNull(config.getAuthor().getEmail().violationReason("anyone@anywhere.io"));
         assertNotNull(config.getMessage());
         assertNotNull(config.getMessage().getBlock());
-        assertTrue(config.getMessage().getBlock().getLiterals().isEmpty());
-        assertTrue(config.getMessage().getBlock().getPatterns().isEmpty());
+        assertTrue(config.getMessage().getBlock().getRules().isEmpty());
         assertTrue(config.getTrailers().isEffectivelyOff());
     }
 
@@ -116,24 +114,30 @@ class ConfigTest {
         CommitConfig config = CommitConfig.builder()
                 .message(CommitConfig.MessageConfig.builder()
                         .block(BlockConfig.builder()
-                                .literals(List.of("WIP", "DO NOT MERGE"))
+                                .rules(List.of(MatchRule.literal("WIP"), MatchRule.literal("DO NOT MERGE")))
                                 .build())
                         .build())
                 .build();
-        assertEquals(
-                List.of("WIP", "DO NOT MERGE"), config.getMessage().getBlock().getLiterals());
+        List<MatchRule> rules = config.getMessage().getBlock().getRules();
+        assertEquals(2, rules.size());
+        assertEquals(MatchRule.Match.LITERAL, rules.get(0).getMatch());
+        assertEquals("WIP", rules.get(0).getValue());
+        assertEquals("DO NOT MERGE", rules.get(1).getValue());
     }
 
     @Test
     void commitConfig_builder_setsMessageBlockPatterns() {
-        Pattern p = Pattern.compile("password\\s*=");
         CommitConfig config = CommitConfig.builder()
                 .message(CommitConfig.MessageConfig.builder()
-                        .block(BlockConfig.builder().patterns(List.of(p)).build())
+                        .block(BlockConfig.builder()
+                                .rules(List.of(MatchRule.regex("password\\s*=")))
+                                .build())
                         .build())
                 .build();
-        assertEquals(1, config.getMessage().getBlock().getPatterns().size());
-        assertSame(p, config.getMessage().getBlock().getPatterns().get(0));
+        List<MatchRule> rules = config.getMessage().getBlock().getRules();
+        assertEquals(1, rules.size());
+        assertEquals(MatchRule.Match.REGEX, rules.get(0).getMatch());
+        assertEquals("password\\s*=", rules.get(0).getValue());
     }
 
     // --- CommitConfig.CommitAttributionPolicyMode ---

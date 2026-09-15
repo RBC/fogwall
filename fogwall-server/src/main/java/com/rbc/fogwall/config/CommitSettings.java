@@ -55,24 +55,24 @@ public class CommitSettings {
     }
 
     /**
-     * Email-match policy. The {@link #rules} list is the current shape: symmetric allow/block across every dimension.
-     * The legacy {@link #domain} allow / {@link #local} block keys are still accepted and folded into the rule list
+     * Email-match policy. The {@link #matches} list is the current shape: symmetric allow/block across every dimension.
+     * The legacy {@link #domain} allow / {@link #local} block keys are still accepted and folded into the matcher list
      * (with a deprecation warning) by {@link JettyConfigurationBuilder}, so existing configs keep working.
      */
     @Data
     public static class EmailSettings {
-        /** Unified allow/block rules (domain/local/address, literal/regex). */
-        private List<RuleSettings> rules = new ArrayList<>();
+        /** Unified allow/block matchers (domain/local/address, literal/regex). */
+        private List<RuleSettings> matches = new ArrayList<>();
 
         /**
-         * @deprecated use a {@code rules} entry {@code {action: allow, field: domain, match: regex, value: ...}}. The
+         * @deprecated use a {@code matches} entry {@code {action: allow, field: domain, match: regex, value: ...}}. The
          *     old {@code domain.allow} key is still honoured for one minor release.
          */
         @Deprecated
         private DomainSettings domain = new DomainSettings();
 
         /**
-         * @deprecated use a {@code rules} entry {@code {action: block, field: local, match: regex, value: ...}}. The
+         * @deprecated use a {@code matches} entry {@code {action: block, field: local, match: regex, value: ...}}. The
          *     old {@code local.block} key is still honoured for one minor release.
          */
         @Deprecated
@@ -106,7 +106,12 @@ public class CommitSettings {
 
     @Data
     public static class MessageSettings {
-        private BlockSettings block = new BlockSettings();
+
+        /**
+         * Content block: a list of matchers, or the deprecated {@code { literals, patterns }} object. Every match
+         * blocks.
+         */
+        private BlockSetting block = new BlockSetting();
     }
 
     /** Commit-trailer policy: DCO {@code Signed-off-by} and {@code Co-authored-by} rules (fogwall#146). */
