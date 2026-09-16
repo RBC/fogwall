@@ -1,14 +1,21 @@
 name: Cleanup Interim Images
 
-# Deletes GHCR package versions whose tags are exclusively build-* (ephemeral
-# per-commit images). Versions carrying any other tag (v*, edge, latest, etc.)
-# are never touched. Runs weekly and can be triggered manually. Logic lives in
-# scripts/cleanup-interim-images.sh so it can also be run locally.
+# Deletes GHCR package versions that no release, edge or latest image needs:
+# build-* indexes, their platform/attestation children and referrers, and
+# manifests orphaned by earlier deletions. Everything reachable from any other
+# tag is never touched. Runs weekly and can be triggered manually (optionally
+# as a dry run). Logic lives in scripts/cleanup_interim_images.py (standard
+# library only) so it can also be run locally; its unit tests run first.
 
 on:
   schedule:
     - cron: '0 8 * * 1' # Monday 08:00 UTC
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Print the plan without deleting anything
+        type: boolean
+        default: false
 
 # Serialise with docker-publish to avoid deleting a build-* image that a
 # concurrent release promotion is about to resolve. cancel-in-progress: false
@@ -28,7 +35,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v7.0.1
 
-      - name: Delete stale build-* package versions
+      - name: Unit-test the cleanup logic
+        run: python3 -m unittest scripts/test_cleanup_interim_images.py
+
+      - name: Delete package versions no protected tag needs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./scripts/cleanup-interim-images.sh
+          DRY_RUN: ${{ inputs.dry_run == true && '1' || '0' }}
+        run: ./scripts/cleanup_interim_images.py
