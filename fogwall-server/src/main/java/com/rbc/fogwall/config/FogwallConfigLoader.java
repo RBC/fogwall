@@ -88,7 +88,12 @@ public final class FogwallConfigLoader {
 
         var builder = new GestaltBuilder()
                 .setTreatMissingValuesAsErrors(false)
-                .setTreatMissingDiscretionaryValuesAsErrors(false);
+                .setTreatMissingDiscretionaryValuesAsErrors(false)
+                // Registering a custom decoder suppresses Gestalt's auto-added default decoders, so add them back
+                // explicitly alongside the one for the content-block rule shorthand.
+                .addDefaultDecoders()
+                .addDecoder(new MatchRuleSettingsDecoder())
+                .addDecoder(new BlockSettingDecoder());
 
         builder.addSource(
                 ClassPathConfigSourceBuilder.builder().setResource(BASE_CONFIG).build());
@@ -148,7 +153,12 @@ public final class FogwallConfigLoader {
 
         var builder = new GestaltBuilder()
                 .setTreatMissingValuesAsErrors(false)
-                .setTreatMissingDiscretionaryValuesAsErrors(false);
+                .setTreatMissingDiscretionaryValuesAsErrors(false)
+                // Registering a custom decoder suppresses Gestalt's auto-added default decoders, so add them back
+                // explicitly alongside the one for the content-block rule shorthand.
+                .addDefaultDecoders()
+                .addDecoder(new MatchRuleSettingsDecoder())
+                .addDecoder(new BlockSettingDecoder());
 
         builder.addSource(
                 ClassPathConfigSourceBuilder.builder().setResource(BASE_CONFIG).build());

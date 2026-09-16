@@ -1,302 +1,55 @@
+# fogwall base configuration — shipped defaults only.
+# See docs/configuration for the full reference, every optional section, and per-key guidance.
+
 server:
   port: 8080
-  # Approval mode for server mode pushes. Options:
-  #   auto        — immediately approves every clean push; no dashboard required (default)
-  #   ui          — polls the push store waiting for a human reviewer via the REST API
-  #   servicenow  — delegates to a ServiceNow approval workflow
-  # Note: when running FogwallDashboardApplication, 'ui' mode is always used regardless of this setting.
   approval-mode: auto
-  # Heartbeat interval in seconds for server mode sideband keepalives.
-  # Sends a "." progress packet periodically to prevent idle-timeout disconnects during long validation steps
-  # (e.g. secret scanning, approval polling). Set to 0 to disable.
   heartbeat-interval-seconds: 10
-  # Maximum time in seconds a server mode push waits for human review before the record is marked
-  # timed out (and canceled). Only applies to 'ui'/'servicenow' approval modes.
   approval-timeout-seconds: 1800
-  # Maximum number of requests handled concurrently on virtual threads. Requests over the limit wait for a
-  # slot. Each in-flight push holds its buffered pack data in memory until the request completes, so size this
-  # to heap capacity and typical pack size — prefer adding instances over raising this limit when scaling out.
-  # Set to 0 to disable virtual-thread dispatch (requests then run directly on the platform thread pool).
   max-concurrent-requests: 512
-  # Largest request body fogwall will accept, in bytes (default 64MiB). Applies to both proxy modes. An
-  # over-size push is rejected with a git error before the body is read, so it costs no memory. Content this
-  # large is almost always binaries or generated output that shouldn't be in git history; a genuine one-off
-  # import is better seeded directly upstream than pushed through the proxy.
-  # Raising this needs a matching increase in container memory — see max-concurrent-requests above, since the
-  # real bound is heap divided by concurrent pushes. Set to 0 to disable the check (still bounded by heap).
-  max-push-bytes: 67108864
-  # Largest decompressed size of any single object in a pushed pack, in bytes (default 128MiB). Applies to both
-  # proxy modes and both server mode transports (HTTP and SSH). max-push-bytes caps the compressed wire
-  # size; a crafted pack can inflate to roughly 1000x that, and this is the bound on the inflated side. It sits
-  # deliberately far above the binary-blob filter's 50MiB policy ceiling — this limit exists only to stop
-  # decompression bombs and should never be the check a legitimate push runs into. Set to 0 to disable.
-  max-object-size-bytes: 134217728
-  # HTTP session persistence backend. Options:
-  #   none   — in-memory sessions (default); sessions are lost on restart and not shared across instances
-  #   jdbc   — persisted to the configured JDBC database (h2-file or postgres);
-  #   redis  — persisted to a Redis or Valkey instance; configure connection via server.redis.*
-  # Use jdbc or redis when running multiple instances sharing a database so that authenticated sessions
-  # survive pod restarts and remain valid across all pods.
-  # session-store: none
+  max-push-bytes: 67108864 # 64MiB
+  max-object-size-bytes: 134217728 # 128MiB
 
-  # Redis connection — required when session-store: redis
-  # redis:
-  #   host: redis.cluster.local
-  #   port: 6379
-  #   password: ""
-  #   ssl: false
-
-  # Origins allowed to make cross-origin requests to the dashboard REST API.
-  # Required when the frontend is served from a different hostname than the backend (e.g. behind a load balancer).
-  # Default (empty): same-origin only. Override per-deployment in fogwall-local.yml or via
-  # FOGWALL_SERVER_ALLOWEDORIGINS env var (comma-separated list treated as a single value — use the YAML key for
-  # multiple origins).
-  # allowed-origins:
-  #   - https://dashboard.example.com
-
-  # Whether the dashboard trusts Forwarded / X-Forwarded-* headers to resolve the external scheme, host and port.
-  # These drive OIDC login redirects, other absolute URLs, and the session cookie's Secure flag.
-  # Default true: existing deployments run behind a TLS-terminating ingress and depend on this. Only the dashboard
-  # reads these headers — the git and SCM API listeners read none.
-  # Precondition when true: the dashboard listener must be reachable ONLY through the ingress that sets the headers,
-  # or a client reaching the port directly could spoof them. Set false when TLS terminates at fogwall, or whenever
-  # the listener is directly reachable — then also set service-url so generated links use the external address.
-  # trust-forwarded-headers: true
-
-# SSH transport (server mode push over SSH).
-# Disabled by default. Enable with server.ssh.enabled: true.
-#
-# When enabled, fogwall listens on an SSH port and accepts `git push` connections authenticated by
-# public key. The push is processed through the same validation and approval hook chain as HTTP
-# server mode. Upstream forwarding uses SSH key auth; the upstream provider must therefore
-# have an SSH URI (e.g. ssh://git@github.com or git@gitea-host).
-#
-#  ssh:
-#    enabled: true
-#    port: 2222
-#    host-key-path: .ssh/fogwall_host_key    # generated on first start if absent
-#    # Upstream host-key verification is fail-closed by default. fogwall ships pinned keys for its built-in hosts
-#    # (github.com, gitlab.com, codeberg.org, bitbucket.org, gitea.com); regenerate with scripts/pin-ssh-host-keys.sh.
-#    known-hosts-path: /etc/fogwall/known_hosts   # mount/override to add or rotate host keys without upgrading fogwall
-#    extra-known-hosts:                            # pin a custom/internal provider's host key (most secure option)
-#      - "git.internal.example.com ssh-ed25519 AAAA..."
-#    trust-on-first-use: false                     # true = pin an unknown host on first connect (logged); trusted networks only
-
-# Outbound proxy for connections fogwall itself makes: server mode upstream pushes,
-# transparent-proxy forwarding, and provider REST API calls (identity resolution, SSH key listing).
-#
-# Unset here, http-proxy/https-proxy/no-proxy fall back to the HTTP_PROXY/HTTPS_PROXY/NO_PROXY env vars.
-# Leave auth.type at "none" (the default) when the configured proxy doesn't require fogwall to
-# authenticate itself.
-#
-# outbound-proxy:
-#   https-proxy: http://proxy.example.com:8080
-#   no-proxy: localhost,*.internal.example.com
-#   auth:
-#     type: none        # none (default) | basic | kerberos
-#     # basic:
-#     # username: ${PROXY_USER}
-#     # password: ${PROXY_PASS}
-#     # kerberos: omit keytab-path to use the existing OS ticket cache (e.g. from domain/SSO login);
-#     # set it only when fogwall should authenticate as its own service identity.
-#     # keytab-path: /etc/fogwall/proxy.keytab
-#     # principal: fogwall/host@CORP.EXAMPLE.COM
-
-# Database configuration for push audit storage.
-# Supported types: h2-mem, h2-file, postgres, mongo
-# h2-file persists to ./.data/fogwall.mv.db relative to the working directory.
-# Use h2-mem for ephemeral/CI environments, or override with FOGWALL_DATABASE_TYPE=h2-mem.
 database:
-  type: h2-file
-  # Connection pool tuning — applies to all JDBC backends (h2-mem, h2-file, postgres).
-  # Default pool size is 3: git pushes are sequential per-user so a small pool is sufficient,
-  # and a low default keeps aggregate connections manageable when multiple instances share a database.
-  # Raise maximum-pool-size only if you observe connection-wait pressure under load.
-  # pool:
-  #   maximum-pool-size: 3      # default: 3 (raise for high-concurrency dashboard workloads)
-  #   minimum-idle: 1           # default: matches maximum-pool-size; set lower to release idle connections
-  #   connection-timeout: 30000 # ms — fail fast if the pool is exhausted (default: 30000)
-  #   idle-timeout: 600000      # ms — retire idle connections after this period (default: 600000)
-  #   max-lifetime: 1800000     # ms — rotate connections to avoid stale TCP/auth state (default: 1800000)
+  type: h2-file # h2-mem | h2-file | postgres | mongo
 
-# By default, the app supports proxying to GitHub, GitLab, codeberg.org & gitea.com out of the box
-# Private or alternative providers can be added (e.g. internal GitHub Enterprise or GitLab EE) by adding a new entry
 providers:
-  # Enabled by default: the three FOSS-friendly public hosts. fogwall ships pinned SSH host keys for every built-in
-  # host below (see the server.ssh notes above) whether or not it is enabled here.
   github:
     enabled: true
   gitlab:
     enabled: true
   codeberg:
     enabled: true
-  # ---- built-in exemplars (disabled by default — set enabled: true to allow) ----
-  # gitea.com — off by default because Codeberg hosts more FOSS projects; enable to allow pushes to gitea.com.
   gitea:
     enabled: false
-  # bitbucket.org — FOSS access needs an Atlassian-reviewed license request, so it's off by default. Self-hosted or
-  # enterprise-cloud Bitbucket is fully supported.
   bitbucket:
     enabled: false
-  # ---- custom-provider exemplars (uncomment and adapt for a private / self-hosted SCM) ----
-  # sourcehut:                       # generic git host
-  #   enabled: true
-  #   type: generic
-  #   uri: https://git.sr.ht/
-  # debian-gitlab:                   # custom GitLab instance with a custom servlet path
-  #   enabled: true
-  #   type: gitlab
-  #   path-suffix: /debian           # servlet path becomes /{push,proxy}/debian/...
-  #   uri: https://salsa.debian.org/
-  # internal-github:                 # self-hosted GitHub Enterprise
-  #   enabled: true
-  #   type: github
-  #   uri: https://github.internal.example.com
 
-
-# Global attestation questions shown to reviewers in the dashboard approval form before they can
-# approve a push. Applies to all providers — per-provider variants are a future enhancement.
-# Supported types: checkbox (default), text, dropdown. Required questions block submission until answered.
-# Hot-reloadable via POST /api/config/reload?section=attestations.
-attestations: []
-#  - id: reviewed-content
-#    type: checkbox
-#    label: "I have reviewed the diff and it contains no sensitive or proprietary information"
-#    required: true
-#  - id: policy-compliance
-#    type: checkbox
-#    label: "This push complies with our open source contribution policy"
-#    required: true
-#  - id: ticket-ref
-#    type: text
-#    label: "Internal ticket or justification reference"
-#    required: false
-
-# Per-commit validation rules applied by both the server mode and transparent proxy pipelines.
-# These checks run once per commit in a push (author email, commit message content).
-commit:
-  author:
-    email:
-      # Regex that the email domain must match. Omit (or leave blank) to allow all domains.
-      # Example: "(corp\\.example\\.com|contractors\\.example\\.com)$"
-      domain:
-        allow: ""
-      # Regex that blocks matching local-parts (the part before @).
-      local:
-        block: "^(noreply|no-reply|bot|nobody)$"
-  message:
-    block:
-      # Block commit messages containing any of these strings (case-insensitive).
-      literals: []
-#        - "WIP"
-      # Block commit messages matching any of these regex patterns.
-      patterns: []
-#        - '(?i)(password|secret|token)\s*[=:]\s*\S+'
-
-  # Independent identity checks for committer and author emails. Each can be set to:
-  #   strict — block the push on mismatch
-  #   warn   — allow the push but emit a sideband warning
-  #   off    — skip this check entirely
-  #
-  # committer: who last touched the commit object (or the rebaser/amender).
-  #            Primary mechanism for linking commit data back to a fogwall identity. Default: warn.
-  # author:    who originally wrote the commit (preserved across rebase/cherry-pick).
-  #            Should not gate push access in most workflows. Default: off.
-  #
-  # NOTE: 'warn' is not a security control — pushes succeed regardless of outcome.
-  # See the configuration reference for token scope requirements and rollout guidance.
-  # attribution-policy:
-  #   committer: warn
-  #   author: off
-
-# Push-level diff content scanning. Runs once per push against the aggregate diff (all commits combined).
-# Blocks pushes that introduce lines matching any configured literal or regex pattern.
-diff-scan:
-  block:
-    # Literals and patterns scanned against added lines (+) in the push diff.
-    # Add entries here to block internal hostnames, hardcoded strings, etc.
-    literals: []
-#      - "internal.corp.example.com"
-    patterns: []
-#      - '(?i)https?://[a-z0-9.-]*\.corp\.example\.com\b'
-
-# Secret scanning via gitleaks (https://github.com/gitleaks/gitleaks).
-# Runs once per push. The JAR ships with a bundled gitleaks binary so scanning works out of the box.
-# Binary resolution order:
-#   1. scanner-path — explicit path, bypasses everything else
-#   2. version-pinned download — if version + auto-install: true, downloads it on startup
-#   3. bundled JAR binary — always present (DEFAULT_VERSION)
-#   4. system PATH — gitleaks already installed on host/container
+# Secret scanning via gitleaks — a scanner binary ships in the jar, so this works out of the box.
 secret-scan:
   enabled: true
-  # version: 8.22.0        # pin a specific version; combined with auto-install: true, downloads it on startup
-  # auto-install: true     # allow downloading the version above (default: true); set false to use bundled or PATH only
-  # install-dir: ~/.cache/fogwall/gitleaks  # where to cache downloaded versions
-  # scanner-path: /usr/local/bin/gitleaks       # skip all resolution, use this binary directly
-  # config-file: /app/conf/.gitleaks.toml       # external TOML rules; ignored when inline-config is set
-  # inline-config: |                            # inline TOML (wins over config-file); hot-reloadable
-  #   title = "my-org"
-  #   [extend]
-  #   useDefault = true
-  #   [[rules]]
-  #   id = "my-org-api-key"
-  #   regex = '''MY_ORG_[A-Z0-9]{32}'''
-  # timeout-seconds: 30
 
-# Binary blob detection — flags added/modified blobs that exceed a size threshold or match a denied MIME type.
-# Runs once per push against the aggregate diff, same scope as diff-scan above. ENFORCE-only: a match always
-# blocks the push. MIME type is content-sniffed from magic bytes, not guessed from the file extension — see
-# the configuration reference for the full signature table and why extensions aren't used.
-# Enabled by default with a 50MiB size ceiling and PDF/ZIP-family denied — a reasonable safety net out of the
-# box. Further content types are a policy choice; see the configuration reference for the full
-# list of detectable MIME types and uncomment/add your own below.
+# Binary blob detection (opt-in; ENFORCE-only). See docs/configuration/binary-blob-detection.md.
 binary-blob:
-  enabled: true
-  max-size-bytes: 52428800 # 50MiB; 0 = no size limit
+  enabled: false
+  max-size-bytes: 52428800 # 50MiB
   deny-mime-types:
     - application/pdf
     - application/zip
-#      - application/x-executable
-#      - application/x-msdownload
 
-# Content-pattern scanning — flags structured national ID/identifier numbers in both the push diff and commit
-# messages, using fogwall's built-in pattern bundles (hand-ported from data-privacy-stack/presidio, see
-# PROVENANCE.md alongside the bundle resources). WARN-only: a match is recorded as a WARN step for the reviewer
-# to see, it never blocks the push — these patterns have a real false-positive rate and there's no override path
-# for a wrongly-blocked push yet. Enabled by default with every jurisdiction fogwall currently ships a bundle
-# for — remove entries below to scope this down. See the configuration reference for what
-# each bundle detects.
-# generic-* bundles are grouped by checksum strength rather than all-or-nothing:
-#   - generic-iban (mod-97) and generic-crypto-wallet (SHA-256d/BCH/Keccak-256 checksums, all far stronger than a
-#     mod-10 check) are enabled below - false-positive risk is low enough to be on by default alongside the
-#     national-ID bundles.
-#   - generic-credit-card and generic-us-bank-routing use Luhn-strength mod-10 checksums (~1-in-10 chance a random
-#     digit string passes by coincidence) - noisier, so they're opt-in only. Add them here, or use the generic-all
-#     alias for all four.
+# Content-pattern scanning (opt-in; PII/identifier bundles) — WARN on push, block on the SCM API path.
+# See docs/configuration/content-pattern-scanning.md.
 content-patterns:
-  enabled: true
+  enabled: false
   bundles:
     - national-id-all-geos
     - generic-iban
     - generic-crypto-wallet
-  # scan-diff / scan-commit-messages / scan-scm-api independently gate the three content sources - all default
-  # true. Set any to false to skip that surface without touching the others (e.g. skip commit-message scanning if
-  # it's noisy). A match warns on the push path, where a reviewer sees it, and blocks on the SCM API path, which
-  # has no reviewer and nothing held for one to look at.
   scan-diff: true
   scan-commit-messages: true
   scan-scm-api: true
 
-# User accounts for authentication and push authorization.
-# When this list is non-empty, only listed users may authenticate to the dashboard
-# and only commits whose author email matches a registered user are permitted.
-# When empty (default), the proxy runs in open/permissive mode (legacy behaviour).
-#
-# password-hash supports Spring Security encoding prefixes:
-#   {noop}plaintext   — no hashing, for local dev only
-#   {bcrypt}$2a$12$.. — bcrypt; generate with: htpasswd -bnBC 12 "" yourpassword | tr -d ':\n'
-#
-# Enable local auth with a single admin user. Not recommended for production!
+# Local single-admin auth for first run. Use OIDC/LDAP in production — see docs/configuration/authentication.md.
 auth:
   provider: local
 
@@ -306,54 +59,3 @@ users:
     roles: [ADMIN]
     emails:
       - admin@example.com
-#  - username: alice
-#    # Below is an example of securing setting static passwords using bcrypt. In production, using external auth
-#    # (OIDC, LDAP) offers better security and avoids storing passwords in the config file.
-#    # hashed password=SecretPass123! (https://bcrypt-generator.com/)
-#    password-hash: "{bcrypt}$2a$12$AYykcU/nc4UnpwP7e9zkeOso/YHXJW0AxMl6u3DFwXJtMdXYsFCc6"
-#    emails:
-#     - alice@example.com
-#    scm-identities:
-#     - provider: github
-#       username: alice-gh
-
-# Live config reload. Allows hot-reloading commit rules and auth config without restarting the server.
-# Provider, server, and database changes always require a restart.
-#
-# reload:
-#   file:
-#     # Watch a local filesystem path and reload on modification.
-#     # Relative paths are resolved from the working directory.
-#     enabled: false
-#     path: /app/conf/fogwall-local.yml
-#   git:
-#     # Periodically clone / pull a git repository and read a YAML file from it.
-#     enabled: false
-#     url: https://github.com/myorg/config.git
-#     branch: main
-#     file-path: fogwall.yml
-#     # Polling interval in seconds. Set to 0 to disable polling (manual reload only via POST /api/config/reload).
-#     interval-seconds: 300
-
-# Dashboard UI feature flags. All features default to disabled — opt in per deployment.
-#
-# dashboard:
-#   # bulk-review: enable checkboxes on the push list so reviewers can approve/reject multiple
-#   # PENDING pushes at once. Disable (default) when your audit policy requires individual sign-off.
-#   bulk-review: false
-
-# OpenTelemetry observability. Off by default — enable to export traces and metrics to an OTLP collector
-# (Grafana/Tempo, Jaeger, Datadog, etc.). service.version is filled from the build automatically.
-#
-# otel:
-#   enabled: false
-#   # OTLP collector endpoint. Left blank, the exporter's default is used (gRPC :4317, HTTP :4318).
-#   endpoint: http://otel-collector:4317
-#   protocol: grpc          # grpc | http
-#   service-name: fogwall
-#   tracing:
-#     enabled: true
-#   metrics:
-#     enabled: true
-#   resource-attributes:
-#     deployment.environment: prod

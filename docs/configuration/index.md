@@ -22,7 +22,7 @@ environment variable overrides are applied on top in a defined order.
 - [SCM API](scm-api.md) — proxying PR/MR traffic from `gh`, `glab`, `tea` and `fj`
 - [SSH transport](ssh-transport.md) — serving `git-receive-pack`/`git-upload-pack` over SSH
 - [Commit validation](commit-validation.md) — author email policy and required commit trailers
-- [Diff scan](diff-scan.md) — blocking literals and patterns in added lines
+- [Diff scan](diff-scan.md) — content block matchers for added lines
 - [Secret scanning](secret-scanning.md) — gitleaks configuration and binary resolution
 - [Binary blob detection](binary-blob-detection.md) — size and MIME-type limits on added blobs
 - [Content-pattern scanning](content-pattern-scanning.md) — bundled recognizers for structured sensitive data

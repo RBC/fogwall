@@ -221,7 +221,7 @@ commit:
     email:
       # Unified email-policy rules (the deprecated domain.allow / local.block keys are intentionally NOT used here).
       # example.org stands in for the developer's real email domain during capture (capture.py swaps it).
-      rules:
+      matches:
         - {
             action: allow,
             field: domain,
@@ -239,34 +239,28 @@ commit:
     co-authored-by:
       policy: allowlist
       email:
-        rules:
+        matches:
           - { action: allow, field: domain, match: regex, value: "example\\.com$" }
           - { action: allow, field: address, match: literal, value: 'noreply@anthropic.com' }
   message:
     block:
-      literals:
-        - 'WIP'
-        - 'DO NOT MERGE'
-        - 'fixup!'
-        - 'squash!'
-      patterns:
-        - '(?i)(password|secret|token)\s*[=:]\s*\S+'
+      - { match: literal, value: 'WIP' }
+      - { match: literal, value: 'DO NOT MERGE' }
+      - { match: literal, value: 'fixup!' }
+      - { match: literal, value: 'squash!' }
+      - '(?i)(password|secret|token)\s*[=:]\s*\S+'
 
 # SCM API content (titles, descriptions, comments) is refused on these, plus secret scanning and the content-pattern
 # bundles, which are on by default. The rejected contributions scenarios in capture.py trip one rule each.
 scm-api:
   block:
-    literals:
-      - 'internal.corp.example.com'
-    patterns:
-      - '(?i)https?://[a-z0-9.-]*\.corp\.example\.com\b'
+    - { match: literal, value: 'internal.corp.example.com' }
+    - '(?i)https?://[a-z0-9.-]*\.corp\.example\.com\b'
 
 diff-scan:
   block:
-    literals:
-      - 'internal.corp.example.com'
-    patterns:
-      - '(?i)https?://[a-z0-9.-]*\.corp\.example\.com\b'
+    - { match: literal, value: 'internal.corp.example.com' }
+    - '(?i)https?://[a-z0-9.-]*\.corp\.example\.com\b'
 
 secret-scan:
   enabled: true

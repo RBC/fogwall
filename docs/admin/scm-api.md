@@ -161,7 +161,7 @@ nothing upstream would otherwise allow, except on provenance.
 ## Content inspection
 
 The prose an SCM API entity carries — a pull/merge request title and description, a comment body — is inspected before
-it is forwarded, against three sets of rules: the blocked literals and patterns in `scm-api.block`; gitleaks, when
+it is forwarded, against three sets of rules: the content matchers in `scm-api.block`; gitleaks, when
 `secret-scan.enabled` is on; and the built-in PII/identifier bundles, when `content-patterns.enabled` is on with at
 least one bundle selected. `scm-api.block` is separate from `diff-scan.block`: one governs pushed diffs, the other SCM
 API content. Secret scanning and the pattern bundles are shared with the push path — neither is diff-specific.
@@ -182,13 +182,13 @@ holds no `PROPOSE` grant for.
 ```yaml
 scm-api:
   block:
-    literals:
-      - "internal.corp.example.com"
-    patterns:
-      - '(?i)https?://[a-z0-9.-]*\.corp\.example\.com\b'
+    - '(?i)https?://[a-z0-9.-]*\.corp\.example\.com\b'
+    - { match: literal, value: "internal.corp.example.com" }
 ```
 
-With no `scm-api.block` entries configured, only secret scanning applies.
+Content matchers use the same shape as `diff-scan.block` — see
+[Content matchers](../configuration/diff-scan.md#content-matchers). With no `scm-api.block` entries configured, only
+secret scanning applies.
 
 Secret scanning **fails closed here**, unlike the push path: if scanning is enabled but the scanner cannot run, the
 request is refused. A push that slips through is still recorded and reviewable afterwards, whereas a forwarded request
@@ -282,7 +282,6 @@ provider is offered in the form only when it is both `issues-enabled` and linked
 
 Two grants permit it: the narrow `ISSUE` grant (issues only) or `PROPOSE`, which is a superset — so someone can be
 permitted to file bugs while holding no ability to push code or open a pull request. The issue title and body pass
-through the same content inspection as any SCM API entity (secret scanning, blocked literals and patterns,
-content-pattern bundles) before they leave, and every attempt writes one record to the audit trail above, marked with
-the `dashboard` client type. Fail-closed throughout: no grant, no linked account, or a content match, and the operation
-is refused.
+through the same content inspection as any SCM API entity (secret scanning, content block matchers, content-pattern
+bundles) before they leave, and every attempt writes one record to the audit trail above, marked with the `dashboard`
+client type. Fail-closed throughout: no grant, no linked account, or a content match, and the operation is refused.

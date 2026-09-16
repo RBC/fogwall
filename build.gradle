@@ -63,7 +63,7 @@ ext {
     snakeyamlVersion = '2.6'
 
     // Gestalt config
-    gestaltVersion = '0.38.0'
+    gestaltVersion = '0.38.1'
 
     // BouncyCastle
     bouncyCastleVersion = '1.86'
@@ -180,11 +180,10 @@ subprojects {
                 details.useVersion '4.1.137.Final'
                 details.because 'CVE fix: GHSA-3qp7-7mw8-wx86, GHSA-x4gw-5cx5-pgmh, GHSA-5pvg-856g-cp85, GHSA-676x-f7gg-47vc, GHSA-xmv7-r254-6q78, GHSA-558v-64gr-wgg4, GHSA-c4c3-7fpv-j4q5, GHSA-fccg-mwvh-qqg4'
             }
-            // Jackson 2.x core/databind — pulled in by gestalt-yaml (server); the app itself is on the
-            // Jackson 3.x line (group tools.jackson), untouched here. Only these two artifacts get 2.22.1
-            // patch releases — sibling modules (annotations, dataformats) stay on 2.22.0 and are compatible.
-            if (r.group == 'com.fasterxml.jackson.core' && r.name in ['jackson-core', 'jackson-databind']) {
-                details.useVersion '2.22.1'
+            // Jackson 2.x — pulled in by various plugins & swagger-core; fogwall itself is on the Jackson 3.x
+            // com.fasterxml.jackson.core:jackson-annotations is the only one which doesn't follow the usual jackson bom
+            if (r.group.startsWith('com.fasterxml.jackson') && r.name != 'jackson-annotations') {
+                details.useVersion '2.22.2'
                 details.because 'CVE fix: GHSA-r7wm-3cxj-wff9, GHSA-5gvw-p9qm-jgwh, GHSA-5jmj-h7xm-6q6v'
             }
         }

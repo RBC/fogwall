@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 
 import com.rbc.fogwall.config.BlockConfig;
 import com.rbc.fogwall.config.CommitConfig;
+import com.rbc.fogwall.config.MatchRule;
 import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.git.Commit;
 import com.rbc.fogwall.git.Contributor;
@@ -22,7 +23,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
 class CheckCommitMessagesFilterTest {
@@ -98,8 +98,12 @@ class CheckCommitMessagesFilterTest {
         return CommitConfig.builder()
                 .message(CommitConfig.MessageConfig.builder()
                         .block(BlockConfig.builder()
-                                .literals(List.of("WIP", "DO NOT MERGE", "fixup!", "squash!"))
-                                .patterns(List.of(Pattern.compile("(?i)(password|secret|token)\\s*[=:]\\s*\\S+")))
+                                .rules(List.of(
+                                        MatchRule.literal("WIP"),
+                                        MatchRule.literal("DO NOT MERGE"),
+                                        MatchRule.literal("fixup!"),
+                                        MatchRule.literal("squash!"),
+                                        MatchRule.regex("(?i)(password|secret|token)\\s*[=:]\\s*\\S+")))
                                 .build())
                         .build())
                 .build();
@@ -189,15 +193,15 @@ class CheckCommitMessagesFilterTest {
     }
 
     @Test
-    void wipCaseInsensitive_blocks() throws Exception {
-        // The literal check is case-insensitive per isMessageAllowed()
+    void wipCaseMismatch_notBlocked() throws Exception {
+        // Literal matching is case-sensitive: lowercase "wip" does not match the literal "WIP".
         GitRequestDetails details = makeRequestDetails(List.of(commitWithMessage("wip: adding feature")));
         CheckCommitMessagesFilter filter = new CheckCommitMessagesFilter(testConfig());
         FakeResponse fakeResponse = new FakeResponse();
 
         filter.doHttpFilter(mockPushRequest(details), fakeResponse.mock);
 
-        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+        assertNotEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
     }
 
     @Test

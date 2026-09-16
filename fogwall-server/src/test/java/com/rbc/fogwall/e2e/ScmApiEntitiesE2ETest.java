@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.rbc.fogwall.config.BlockConfig;
 import com.rbc.fogwall.config.ContentPatternConfig;
+import com.rbc.fogwall.config.MatchRule;
 import com.rbc.fogwall.config.SecretScanConfig;
 import com.rbc.fogwall.db.ScmApiActionStore;
 import com.rbc.fogwall.db.ScmApiEntityStore;
@@ -202,8 +203,7 @@ class ScmApiEntitiesE2ETest {
         var permissionService = new RepoPermissionService(permissionStore);
 
         var block = BlockConfig.builder()
-                .literals(List.of(BLOCKED_TERM))
-                .patterns(List.of())
+                .rules(List.of(MatchRule.literal(BLOCKED_TERM)))
                 .build();
         var secretScan = SecretScanConfig.builder().enabled(false).build();
         var contentPatterns = ContentPatternConfig.builder()

@@ -19,9 +19,9 @@ public class ScmApiSettings {
     private String nodeIdCacheTtl = "PT5M";
 
     /**
-     * Literals and patterns refused in the prose an SCM API entity carries — a pull/merge request or issue title or
-     * description, a comment body. Empty by default. Secret scanning is separate, keying off the global
-     * {@code secret-scan} settings.
+     * Content block refused in the prose an SCM API entity carries — a pull/merge request or issue title or
+     * description, a comment body. A list of matchers, or the deprecated {@code { literals, patterns }} object. Every
+     * match blocks. Empty by default. Secret scanning is separate, keying off the global {@code secret-scan} settings.
      */
-    private BlockSettings block = new BlockSettings();
+    private BlockSetting block = new BlockSetting();
 }
