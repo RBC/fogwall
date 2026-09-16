@@ -71,10 +71,10 @@ dependencies {
     implementation "org.apache.sshd:sshd-core:${minaSshdVersion}"
     implementation "org.eclipse.jgit:org.eclipse.jgit.ssh.apache:${jgitVersion}"
 
-    // Gestalt config (YAML source brings SnakeYAML transitively; also pulls Jackson 2.x — CVE-pinned in the
-    // root build.gradle)
+    // Gestalt config (YAML source brings SnakeYAML & Jackson 3 transitively)
     implementation "com.github.gestalt-config:gestalt-core:${gestaltVersion}"
-    implementation "com.github.gestalt-config:gestalt-yaml:${gestaltVersion}"
+    implementation "com.github.gestalt-config:gestalt-json-jackson3:${gestaltVersion}"
+    implementation "com.github.gestalt-config:gestalt-yaml-jackson3:${gestaltVersion}"
 
     // Jackson YAML — validates config structure before Gestalt loads it; BOM pins the version
     implementation "tools.jackson.dataformat:jackson-dataformat-yaml"
