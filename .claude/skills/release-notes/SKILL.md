@@ -99,6 +99,11 @@ not imitate those.
 - **Bold lead-in, then plain language.**
   `- **Fetch toggle for server mode** — an operator can now run a push-only gateway…`. Lead with what a developer or
   operator sees change, then why, then the PR refs.
+- **For `New features`, `Bug fixes`, `Performance`, and `Dependencies`, rephrase the PR title into the bold lead-in and
+  stop.** Add a trailing clause only when the title alone leaves an operator unsure whether the change affects them
+  (e.g. which proxy mode, which provider). `Security` and `Breaking changes & upgrade notes` are the sections that carry
+  real explanation: what was exposed or what breaks, what closed or replaced it, and any action required — enough for a
+  reader to judge severity on the page itself, without opening the PR.
 - **Link the docs page for anything configurable**, pinned to the docs site:
   `https://rbc.github.io/fogwall/configuration/<page>.html`. Page names come from `docs/SUMMARY.md`.
 - **No narrative.** No "we discovered", no rejected alternatives, no test plans, no session history. What is in the
