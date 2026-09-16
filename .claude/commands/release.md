@@ -1,6 +1,8 @@
 ---
 name: release
-description: Bump the project version in build.gradle and create a matching annotated git tag.
+description:
+  Phase 1 of a release — strip the -SNAPSHOT suffix (or set an explicit version) in build.gradle and the Helm chart, and
+  open the version-bump PR against the current base branch (main or release/*).
 user-invocable: true
 allowed-tools:
   - Bash
@@ -9,82 +11,84 @@ allowed-tools:
   - Glob
 ---
 
-# /release — Bump the project version and create a matching git tag.
+# /release — Prepare a release: set the version and open the bump PR.
 
-You are modifying this project's Gradle build scripts to increment the version as well as create a new git tag to push &
-initiate a release process (GitHub Actions workflow).
+`main` and every `release/X.Y.x` branch sit at a `-SNAPSHOT` version between releases (`1.5.0-SNAPSHOT`,
+`1.4.3-SNAPSHOT`). A release is the commit where that suffix is stripped. This command makes that commit and opens the
+PR; `/release-tag` tags it once merged and then starts the next `-SNAPSHOT` iteration.
 
-Examples: `/release 1.0.0-alpha.3`, `/release 1.0.0-beta.1`, `/release 1.0.0`
+Examples: `/release` (strips the suffix), `/release 1.5.0`, `/release 1.5.0-rc.1`
 
 Arguments passed: `$ARGUMENTS`
 
-`$ARGUMENTS` is an optional semantic version string (without the `v` prefix). If omitted, the next version is inferred
-automatically by incrementing the last numeric component of the current version:
+`$ARGUMENTS` is an optional version string without the `v` prefix. If omitted, the version is inferred from
+`build.gradle`:
 
-- `1.0.0-alpha.9` → `1.0.0-alpha.10`
-- `1.0.0-beta.2` → `1.0.0-beta.3`
-- `1.0.0-rc.1` → `1.0.0-rc.2`
-- `1.2.3` → `1.2.4` (patch)
+- `1.5.0-SNAPSHOT` → `1.5.0` (the normal case)
+- `1.5.0-rc.1` → `1.5.0-rc.2`, `1.5.0-beta.2` → `1.5.0-beta.3` (pre-release trains increment)
+- a version with no suffix at all → stop and ask; the branch is not at a snapshot, so the intended next version is not
+  inferable.
 
 ---
 
 ## Steps
 
-1. **Determine the new version.**
-   - Read the current version from `build.gradle` (line containing `version = '...'` in the `allprojects` block).
-   - If `$ARGUMENTS` is provided and looks like a valid semver/semver-pre string, use it as-is.
-   - If `$ARGUMENTS` is blank, auto-increment: for pre-release suffixes (`-alpha.N`, `-beta.N`, `-rc.N`) increment N;
-     otherwise increment the patch component. Show the user the inferred version and confirm before proceeding.
-   - If `$ARGUMENTS` is provided but doesn't look like a valid version string, stop and ask the user to correct it.
+1. **Identify the base branch.** Run `git branch --show-current`.
+   - `main` → the release is a minor (or major). Main never produces a patch: once a minor-worthy change has merged, the
+     next release from main is that minor.
+   - `release/X.Y.x` → the release is a patch on the `X.Y` line.
+   - Anything else → stop. Releases are cut from `main` or a `release/*` branch only.
 
-2. **Show the current state.** Run `git tag --sort=-version:refname | head -5` and show the user the current version and
-   the inferred/provided new version alongside the most recent tags.
+   Then `git fetch origin <base>` and confirm the local branch is at `origin/<base>`; if not, stop and say so.
 
-3. **Ensure a release branch exists.** Run `git branch --show-current` to check the current branch.
-   - If already on a branch named `chore/bump-<new-version>`, continue.
-   - If on `main` (or any other branch), create and switch to `chore/bump-<new-version>`:
-     ```
-     git checkout -b chore/bump-<new-version>
-     ```
+2. **Determine the new version.** Read the `version = '...'` line in the `allprojects` block of `build.gradle`.
+   - If `$ARGUMENTS` is a valid semver / semver-pre string, use it as-is.
+   - If blank, infer as described above. Show the inferred version and confirm before proceeding.
+   - Sanity-check against the base: on `release/1.4.x` the version must be `1.4.Z`; on `main` it must be greater than
+     the newest tag's minor. If it is not, stop and ask.
+   - If `$ARGUMENTS` is present but not a version string, stop and ask.
 
-4. **Update `build.gradle`.** In the `allprojects { ... }` block, replace the existing `version = '...'` line with
-   `version = '<new-version>'`. Use the Edit tool.
+3. **Show the current state.** Run `git tag --sort=-version:refname | head -5` and show the current version, the new
+   version, and the most recent tags.
 
-5. **Run `./gradlew spotlessApply`** to ensure formatting is clean before committing.
+4. **Create the bump branch.** From the base branch: `git switch -c chore/bump-<new-version>`.
 
-6. **Ask about additional changes.** Run `git diff --stat` and show the output to the user, then ask: "Any other changes
-   to include in this commit?" Wait for their response. If they say yes, apply those changes before staging. If no,
-   proceed.
+5. **Set the version in both places.** Use the Edit tool:
+   - `build.gradle`, `allprojects` block: `version = '<new-version>'`
+   - `charts/fogwall/Chart.yaml`: `appVersion: "<new-version>"` — the chart's `appVersion` tracks the released
+     application version. Leave the chart's own `version:` alone; it is the chart's version, not fogwall's.
 
-7. **Commit the version bump.** Stage `build.gradle` plus any additional files the user specified and commit:
+6. **Run `./gradlew spotlessApply`** so formatting is clean before committing.
+
+7. **Ask about additional changes.** Run `git diff --stat`, show it, and ask: "Any other changes to include in this
+   commit?" Apply them if so.
+
+8. **Commit.** Stage `build.gradle`, `charts/fogwall/Chart.yaml`, and any files the user named — explicit paths, never
+   `-A`:
 
    ```
-   chore: bump version to <new-version>
+   chore: release <new-version>
    ```
 
-   No `closes #N`, no co-author trailer needed for version bumps.
+   No `closes #N` and no co-author trailer on version bumps.
 
-8. **Push and open a PR with auto-merge.** Run:
+9. **Push and open the PR against the base branch, with auto-merge.**
 
    ```
    git push -u origin chore/bump-<new-version>
+   gh pr create --base <base> --title "chore: release <new-version>" --body ""
+   gh pr merge --auto --merge
    ```
 
-   Then create the PR and enable auto-merge:
-
-   ```
-   gh pr create --base main --title "chore: bump version to <new-version>" --body ""
-   gh pr merge --auto --squash
-   ```
+   Always `--merge` — never squash or rebase merges on this repo.
 
    Tell the user:
 
-   > PR created for `chore/bump-<new-version>` with auto-merge enabled. It will merge into main automatically once all
-   > checks pass.
+   > PR opened for `chore/bump-<new-version>` against `<base>` with auto-merge enabled. It merges once checks pass.
    >
-   > **Once merged**, run `/release-tag <new-version>` to create and push the tag.
+   > **Once merged**, run `/release-tag <new-version>` from `<base>` to tag, publish, and start the next snapshot.
    >
-   > Monitor check status: `gh run list --branch chore/bump-<new-version> --limit 4`
+   > Watch checks: `gh run list --branch chore/bump-<new-version> --limit 4`
 
-   **Stop here.** Do NOT create a tag or push tags. The tag ruleset on GitHub will reject the tag push if the required
-   status checks haven't passed yet.
+   **Stop here.** Do not create or push a tag. The tag ruleset rejects a tag whose commit has not passed the required
+   checks, and those run on the merged commit, not on this branch.
