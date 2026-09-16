@@ -1,8 +1,8 @@
 ---
 name: release
 description:
-  Phase 1 of a release — strip the -SNAPSHOT suffix (or set an explicit version) in build.gradle and the Helm chart, and
-  open the version-bump PR against the current base branch (main or release/*).
+  Phase 1 of a release — strip the -SNAPSHOT suffix (or set an explicit version) in build.gradle and the Helm chart,
+  then open the bump PR (main) or push the bump straight to the release branch (release/*).
 user-invocable: true
 allowed-tools:
   - Bash
@@ -11,11 +11,18 @@ allowed-tools:
   - Glob
 ---
 
-# /release — Prepare a release: set the version and open the bump PR.
+# /release — Prepare a release: set the version and land the bump commit.
 
 `main` and every `release/X.Y.x` branch sit at a `-SNAPSHOT` version between releases (`1.5.0-SNAPSHOT`,
-`1.4.3-SNAPSHOT`). A release is the commit where that suffix is stripped. This command makes that commit and opens the
-PR; `/release-tag` tags it once merged and then starts the next `-SNAPSHOT` iteration.
+`1.4.3-SNAPSHOT`). A release is the commit where that suffix is stripped. This command makes that commit and lands it;
+`/release-tag` tags it once it is on the base branch and then starts the next `-SNAPSHOT` iteration.
+
+How the commit lands depends on the base branch:
+
+- **`main`** requires a PR (branch ruleset), so the bump goes up as a PR with auto-merge.
+- **`release/X.Y.x`** takes direct pushes — the release-branch ruleset is non-fast-forward and no-delete only, because
+  patches are cherry-picked from already-reviewed main commits. The bump is committed on the release branch and pushed.
+  The tag ruleset is the gate: `/release-tag` cannot tag a commit whose checks have not passed.
 
 Examples: `/release` (strips the suffix), `/release 1.5.0`, `/release 1.5.0-rc.1`
 
@@ -39,7 +46,8 @@ Arguments passed: `$ARGUMENTS`
    - `release/X.Y.x` → the release is a patch on the `X.Y` line.
    - Anything else → stop. Releases are cut from `main` or a `release/*` branch only.
 
-   Then `git fetch origin <base>` and confirm the local branch is at `origin/<base>`; if not, stop and say so.
+   Then `git fetch origin <base>` and confirm the local branch is at `origin/<base>`; if not, stop and say so. On a
+   release branch this also confirms every cherry-pick meant for the patch has been pushed.
 
 2. **Determine the new version.** Read the `version = '...'` line in the `allprojects` block of `build.gradle`.
    - If `$ARGUMENTS` is a valid semver / semver-pre string, use it as-is.
@@ -51,7 +59,8 @@ Arguments passed: `$ARGUMENTS`
 3. **Show the current state.** Run `git tag --sort=-version:refname | head -5` and show the current version, the new
    version, and the most recent tags.
 
-4. **Create the bump branch.** From the base branch: `git switch -c chore/bump-<new-version>`.
+4. **On `main` only, create the bump branch:** `git switch -c chore/bump-<new-version>`. On a release branch, stay on it
+   — the commit lands there directly.
 
 5. **Set the version in both places.** Use the Edit tool:
    - `build.gradle`, `allprojects` block: `version = '<new-version>'`
@@ -72,23 +81,38 @@ Arguments passed: `$ARGUMENTS`
 
    No `closes #N` and no co-author trailer on version bumps.
 
-9. **Push and open the PR against the base branch, with auto-merge.**
+9. **Land it.**
+
+   **On `main` — PR with auto-merge:**
 
    ```
    git push -u origin chore/bump-<new-version>
-   gh pr create --base <base> --title "chore: release <new-version>" --body ""
+   gh pr create --base main --title "chore: release <new-version>" --body ""
    gh pr merge --auto --merge
    ```
 
-   Always `--merge` — never squash or rebase merges on this repo.
+   Always `--merge` — never squash or rebase merges on this repo. Tell the user:
 
-   Tell the user:
-
-   > PR opened for `chore/bump-<new-version>` against `<base>` with auto-merge enabled. It merges once checks pass.
+   > PR opened for `chore/bump-<new-version>` with auto-merge enabled. It merges once checks pass.
    >
-   > **Once merged**, run `/release-tag <new-version>` from `<base>` to tag, publish, and start the next snapshot.
+   > **Once merged**, run `/release-tag <new-version>` from `main` to tag, publish, and start the next snapshot.
    >
    > Watch checks: `gh run list --branch chore/bump-<new-version> --limit 4`
 
-   **Stop here.** Do not create or push a tag. The tag ruleset rejects a tag whose commit has not passed the required
-   checks, and those run on the merged commit, not on this branch.
+   **On `release/X.Y.x` — direct push:**
+
+   ```
+   git push origin release/X.Y.x
+   ```
+
+   Tell the user:
+
+   > Pushed `chore: release <new-version>` to `release/X.Y.x`. CI runs on the push; the tag ruleset will not accept
+   > `v<new-version>` until those checks are green on this commit.
+   >
+   > **Once green**, run `/release-tag <new-version>` from `release/X.Y.x`.
+   >
+   > Watch checks: `gh run list --branch release/X.Y.x --limit 6`
+
+   **Stop here in both cases.** Do not create or push a tag. The tag ruleset rejects a tag whose commit has not passed
+   the required checks.
