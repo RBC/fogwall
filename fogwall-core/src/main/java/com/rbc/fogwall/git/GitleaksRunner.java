@@ -20,7 +20,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -77,6 +79,10 @@ public class GitleaksRunner {
 
     private static final Object EXTRACT_LOCK = new Object();
 
+    /** Env vars gitleaks (and the {@code git} child it spawns) need; nothing else from fogwall's environment. */
+    private static final List<String> SCAN_ENV_ALLOWLIST =
+            List.of("PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "LANGUAGE");
+
     // -------------------------------------------------------------------------
     // Public API
     // -------------------------------------------------------------------------
@@ -113,6 +119,7 @@ public class GitleaksRunner {
             pb.redirectErrorStream(false);
             // Run in /tmp so gitleaks doesn't walk the server's working directory
             pb.directory(reportFile.getParent().toFile());
+            restrictEnvironment(pb);
             Process process = pb.start();
 
             // Write diff to stdin in a daemon thread; closing stdin signals EOF to gitleaks
@@ -238,6 +245,7 @@ public class GitleaksRunner {
             pb.redirectErrorStream(false);
             // Run inside the repo so gitleaks can traverse the git object graph
             pb.directory(repoDir.toFile());
+            restrictEnvironment(pb);
             // Expose the quarantine's objects to the git gitleaks spawns; inherited by that child process.
             if (alternateObjectDir != null) {
                 pb.environment().put("GIT_ALTERNATE_OBJECT_DIRECTORIES", alternateObjectDir.toString());
@@ -297,6 +305,7 @@ public class GitleaksRunner {
             ProcessBuilder pb = new ProcessBuilder("git", "cat-file", "-e", commitTo);
             pb.directory(repoDir.toFile());
             pb.redirectErrorStream(true);
+            restrictEnvironment(pb);
             if (alternateObjectDir != null) {
                 pb.environment().put("GIT_ALTERNATE_OBJECT_DIRECTORIES", alternateObjectDir.toString());
             }
@@ -360,9 +369,9 @@ public class GitleaksRunner {
     /** Returns {@code Path.of("gitleaks")} if gitleaks is available on the system PATH, else null. */
     private static Path findOnPath() {
         try {
-            Process p = new ProcessBuilder("gitleaks", "version")
-                    .redirectErrorStream(true)
-                    .start();
+            ProcessBuilder pb = new ProcessBuilder("gitleaks", "version").redirectErrorStream(true);
+            restrictEnvironment(pb);
+            Process p = pb.start();
             // Drain output to avoid blocking
             p.getInputStream().transferTo(OutputStream.nullOutputStream());
             if (p.waitFor(5, TimeUnit.SECONDS) && p.exitValue() == 0) {
@@ -646,6 +655,27 @@ public class GitleaksRunner {
         String cf = config.getConfigFile();
         if (cf != null && !cf.isBlank()) return Path.of(cf);
         return null;
+    }
+
+    /**
+     * Builds an explicit environment for a gitleaks/git subprocess from {@link #SCAN_ENV_ALLOWLIST}, rather than
+     * inheriting fogwall's full process environment (which carries every env-sourced secret in its configuration).
+     */
+    private static Map<String, String> scanEnvironment() {
+        Map<String, String> env = new LinkedHashMap<>();
+        for (String key : SCAN_ENV_ALLOWLIST) {
+            String value = System.getenv(key);
+            if (value != null) {
+                env.put(key, value);
+            }
+        }
+        return env;
+    }
+
+    /** Replaces {@code pb}'s inherited environment with {@link #scanEnvironment()}. */
+    private static void restrictEnvironment(ProcessBuilder pb) {
+        pb.environment().clear();
+        pb.environment().putAll(scanEnvironment());
     }
 
     private static void deleteQuietly(Path path) {
