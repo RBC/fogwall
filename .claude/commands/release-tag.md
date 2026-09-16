@@ -1,8 +1,8 @@
 ---
 name: release-tag
 description:
-  Phase 2 of a release — tag the merged release commit on main or a release/* branch, publish the GitHub release, then
-  open the PR that moves the branch to the next -SNAPSHOT version.
+  Phase 2 of a release — tag the release commit on main or a release/* branch, publish the GitHub release, then move the
+  branch to the next -SNAPSHOT version (PR on main, direct push on release/*).
 user-invocable: true
 allowed-tools:
   - Bash
@@ -11,14 +11,18 @@ allowed-tools:
 
 # /release-tag — Tag, publish, and start the next development iteration.
 
-Phase 1 (`/release`) merged the commit that sets the exact release version. This command tags that commit, which
-triggers the Docker publish workflow, then moves the branch back to a `-SNAPSHOT` version so it is never mistaken for a
-released build.
+Phase 1 (`/release`) landed the commit that sets the exact release version on the base branch. This command tags that
+commit, which triggers the Docker publish workflow, then moves the branch back to a `-SNAPSHOT` version so it is never
+mistaken for a released build.
 
 Pushing the tag makes the publish workflow promote the **commit-pinned `build-<sha>` image** for the tagged commit to
 the release tags (`:<version>`, `:X.Y`, `:X`, `:latest`) — it does not rebuild, and it does not use `:edge`, so the
 image released is exactly the one CI built and scanned for that commit. This works the same on `main` and on `release/*`
 branches; both build `build-<sha>` images.
+
+The tag ruleset is the release gate on both kinds of branch: it refuses a tag whose commit has not passed the required
+checks. On `main` those checks also ran on the PR; on `release/*` — direct-push branches — the push itself is what
+triggers them, so the tag ruleset is the only gate, and it is sufficient.
 
 Arguments passed: `$ARGUMENTS`
 
@@ -35,7 +39,7 @@ Arguments passed: `$ARGUMENTS`
 
 3. **Verify the version — and that it is not a snapshot.** Read `build.gradle` and confirm the `version` in
    `allprojects` equals the argument exactly. If it still carries `-SNAPSHOT`, **stop**: the release commit has not
-   merged (or you are on the wrong branch). A snapshot is never tagged.
+   landed (or you are on the wrong branch). A snapshot is never tagged.
 
 4. **Verify checks passed on the base branch.** Run:
 
@@ -43,7 +47,7 @@ Arguments passed: `$ARGUMENTS`
    gh run list --branch <base> --limit 8 --json name,status,conclusion,headSha
    ```
 
-   For the run set whose `headSha` is the merged release commit, all of these must show `conclusion: "success"`:
+   For the run set whose `headSha` is the release commit, all of these must show `conclusion: "success"`:
    - `CI / Build & Test`
    - `CI / E2E Test`
    - `CodeQL / java-kotlin`
@@ -103,12 +107,6 @@ Arguments passed: `$ARGUMENTS`
     - `main` → next **minor**: `1.5.0` → `1.6.0-SNAPSHOT`
     - `release/X.Y.x` → next **patch**: `1.4.2` → `1.4.3-SNAPSHOT`
 
-    Then:
-
-    ```
-    git switch -c chore/next-<next-version>
-    ```
-
     Set `version = '<next-version>'` in `build.gradle` (Edit tool). Leave `Chart.yaml`'s `appVersion` at the released
     version — it tracks what is released, not what is in development. Run `./gradlew spotlessApply`, then commit
     `build.gradle` only:
@@ -117,13 +115,22 @@ Arguments passed: `$ARGUMENTS`
     chore: start <next-version> development
     ```
 
-    Push and open the PR against the base with auto-merge — always `--merge`:
+    **On `main` — PR with auto-merge** (do this from a branch, `git switch -c chore/next-<next-version>`, before
+    committing):
 
     ```
     git push -u origin chore/next-<next-version>
-    gh pr create --base <base> --title "chore: start <next-version> development" --body ""
+    gh pr create --base main --title "chore: start <next-version> development" --body ""
     gh pr merge --auto --merge
     ```
 
-    Tell the user the release URL, the image tags that will be promoted, and that `<base>` moves to `<next-version>`
-    when the PR merges.
+    Always `--merge`.
+
+    **On `release/X.Y.x` — direct push** (commit on the release branch itself):
+
+    ```
+    git push origin release/X.Y.x
+    ```
+
+    Tell the user the release URL, the image tags that will be promoted, and that `<base>` is now (or, on `main`, will
+    be once the PR merges) at `<next-version>`.
