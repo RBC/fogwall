@@ -23,6 +23,7 @@ import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 import tools.jackson.core.type.TypeReference;
+import tools.jackson.dataformat.yaml.YAMLAnchorReplayingFactory;
 import tools.jackson.dataformat.yaml.YAMLMapper;
 
 /**
@@ -76,7 +77,8 @@ public class LiveConfigLoader {
         }
     }
 
-    private static final YAMLMapper YAML = new YAMLMapper();
+    private static final YAMLMapper YAML =
+            YAMLMapper.builder(new YAMLAnchorReplayingFactory()).build();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
     /** Top-level YAML key to the reloadable section it configures. Keys absent here are not hot-reloadable sections. */
