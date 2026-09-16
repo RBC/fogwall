@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.exc.UnrecognizedPropertyException;
+import tools.jackson.dataformat.yaml.YAMLAnchorReplayingFactory;
 import tools.jackson.dataformat.yaml.YAMLMapper;
 
 /**
@@ -21,7 +22,7 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
 @Slf4j
 final class YamlStructureValidator {
 
-    private static final YAMLMapper MAPPER = YAMLMapper.builder()
+    private static final YAMLMapper MAPPER = YAMLMapper.builder(new YAMLAnchorReplayingFactory())
             .propertyNamingStrategy(PropertyNamingStrategies.KEBAB_CASE)
             .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
             .build();
