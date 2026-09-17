@@ -12,6 +12,9 @@ import org.github.gestalt.config.exceptions.GestaltException;
 import org.github.gestalt.config.source.ClassPathConfigSourceBuilder;
 import org.github.gestalt.config.source.FileConfigSourceBuilder;
 import org.github.gestalt.config.source.MapConfigSourceBuilder;
+import org.github.gestalt.config.yaml.YamlModuleConfigBuilder;
+import tools.jackson.dataformat.yaml.YAMLAnchorReplayingFactory;
+import tools.jackson.dataformat.yaml.YAMLMapper;
 
 /**
  * Loads {@link FogwallConfig} from YAML files and environment variable overrides using Gestalt.
@@ -60,6 +63,14 @@ public final class FogwallConfigLoader {
     private static final String ENV_PREFIX = "FOGWALL_";
     private static final String PROFILES_ENV_VAR = "FOGWALL_CONFIG_PROFILES";
 
+    // Gestalt's own YamlLoader defaults to a plain YAMLMapper, which doesn't expand a YAML alias resolving to a
+    // collection before the POJO binder sees it (FasterXML/jackson-dataformats-text#98). Registering this module
+    // config replaces it with one built on YAMLAnchorReplayingFactory, same fix as YamlStructureValidator and
+    // LiveConfigLoader, so an anchored list shared across config sections resolves instead of landing as the literal
+    // alias name.
+    private static final YAMLMapper ANCHOR_AWARE_YAML_MAPPER =
+            YAMLMapper.builder(new YAMLAnchorReplayingFactory()).build();
+
     private FogwallConfigLoader() {}
 
     /**
@@ -93,7 +104,10 @@ public final class FogwallConfigLoader {
                 // explicitly alongside the one for the content-block rule shorthand.
                 .addDefaultDecoders()
                 .addDecoder(new MatchRuleSettingsDecoder())
-                .addDecoder(new BlockSettingDecoder());
+                .addDecoder(new BlockSettingDecoder())
+                .addModuleConfig(YamlModuleConfigBuilder.builder()
+                        .setObjectMapper(ANCHOR_AWARE_YAML_MAPPER)
+                        .build());
 
         builder.addSource(
                 ClassPathConfigSourceBuilder.builder().setResource(BASE_CONFIG).build());
@@ -158,7 +172,10 @@ public final class FogwallConfigLoader {
                 // explicitly alongside the one for the content-block rule shorthand.
                 .addDefaultDecoders()
                 .addDecoder(new MatchRuleSettingsDecoder())
-                .addDecoder(new BlockSettingDecoder());
+                .addDecoder(new BlockSettingDecoder())
+                .addModuleConfig(YamlModuleConfigBuilder.builder()
+                        .setObjectMapper(ANCHOR_AWARE_YAML_MAPPER)
+                        .build());
 
         builder.addSource(
                 ClassPathConfigSourceBuilder.builder().setResource(BASE_CONFIG).build());

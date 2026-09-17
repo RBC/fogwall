@@ -325,6 +325,41 @@ class FogwallConfigLoaderTest {
         assertTrue(config.getSecretScan().isEnabled());
     }
 
+    // --- YAML anchors ---
+
+    @Test
+    void loadWithOverride_yamlAnchor_resolvesSharedBlockList() throws GestaltException, IOException {
+        // A shared matcher list anchored once on diff-scan.block and aliased into commit.message.block and
+        // scm-api.block. The Jackson YAMLMapper Gestalt's own YamlLoader builds internally must expand the alias
+        // before the POJO binder sees it — an alias resolving to a list must not land as the literal string
+        // "*shared-block".
+        Path override = writeYaml("""
+                diff-scan:
+                  block: &shared-block
+                    - { match: literal, value: "SHARED_SECRET" }
+                commit:
+                  message:
+                    block: *shared-block
+                scm-api:
+                  block: *shared-block
+                """);
+        var config = FogwallConfigLoader.loadWithOverride(override);
+
+        var diffScanBlock = config.getDiffScan().getBlock().getMatchers();
+        var commitMessageBlock = config.getCommit().getMessage().getBlock().getMatchers();
+        var scmApiBlock = config.getScmApi().getBlock().getMatchers();
+
+        assertEquals(1, diffScanBlock.size());
+        assertEquals("literal", diffScanBlock.get(0).getMatch());
+        assertEquals("SHARED_SECRET", diffScanBlock.get(0).getValue());
+
+        assertEquals(1, commitMessageBlock.size(), "aliased list should resolve the same as the anchored original");
+        assertEquals("SHARED_SECRET", commitMessageBlock.get(0).getValue());
+
+        assertEquals(1, scmApiBlock.size(), "aliased list should resolve the same as the anchored original");
+        assertEquals("SHARED_SECRET", scmApiBlock.get(0).getValue());
+    }
+
     // --- unknown-key validation ---
 
     @Test
