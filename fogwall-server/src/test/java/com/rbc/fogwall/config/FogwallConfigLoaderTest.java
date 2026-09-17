@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import org.github.gestalt.config.builder.GestaltBuilder;
 import org.github.gestalt.config.exceptions.GestaltException;
 import org.junit.jupiter.api.Test;
@@ -284,6 +285,40 @@ class FogwallConfigLoaderTest {
         assertTrue(config.getProviders().containsKey("github"));
         assertTrue(config.getProviders().get("github").isEnabled());
         assertTrue(config.getSecretScan().isEnabled());
+    }
+
+    // --- YAML anchors ---
+
+    @Test
+    void loadWithOverride_yamlAnchor_resolvesSharedBlockLiterals() throws GestaltException, IOException {
+        // A shared literal list anchored once on diff-scan.block and aliased into commit.message.block and
+        // scm-api.block. The Jackson YAMLMapper Gestalt's own YamlLoader builds internally must expand the alias
+        // before the POJO binder sees it — an alias resolving to a list must not land as the literal string
+        // "*shared-block".
+        Path override = writeYaml("""
+                diff-scan:
+                  block:
+                    literals: &shared-block
+                      - "SHARED_SECRET"
+                commit:
+                  message:
+                    block:
+                      literals: *shared-block
+                scm-api:
+                  block:
+                    literals: *shared-block
+                """);
+        var config = FogwallConfigLoader.loadWithOverride(override);
+
+        assertEquals(List.of("SHARED_SECRET"), config.getDiffScan().getBlock().getLiterals());
+        assertEquals(
+                List.of("SHARED_SECRET"),
+                config.getCommit().getMessage().getBlock().getLiterals(),
+                "aliased list should resolve the same as the anchored original");
+        assertEquals(
+                List.of("SHARED_SECRET"),
+                config.getScmApi().getBlock().getLiterals(),
+                "aliased list should resolve the same as the anchored original");
     }
 
     // --- unknown-key validation ---
