@@ -8,6 +8,7 @@ import com.rbc.fogwall.config.ReloadConfig;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.permission.RepoPermissionService;
+import com.rbc.fogwall.user.UserStore;
 import java.io.IOException;
 import java.nio.file.*;
 import java.util.Comparator;
@@ -96,6 +97,7 @@ public class LiveConfigLoader {
     private final ReloadConfig reloadConfig;
     private final UrlRuleRegistry urlRuleRegistry;
     private final RepoPermissionService repoPermissionService;
+    private final UserStore userStore;
 
     /**
      * Serializes reloads. An explicit {@link #reload(Section)} blocks on this and always applies; the background
@@ -113,12 +115,14 @@ public class LiveConfigLoader {
             LoadedConfig startup,
             ReloadConfig reloadConfig,
             UrlRuleRegistry urlRuleRegistry,
-            RepoPermissionService repoPermissionService) {
+            RepoPermissionService repoPermissionService,
+            UserStore userStore) {
         this.configHolder = configHolder;
         this.startup = startup;
         this.reloadConfig = reloadConfig;
         this.urlRuleRegistry = urlRuleRegistry;
         this.repoPermissionService = repoPermissionService;
+        this.userStore = userStore;
     }
 
     /** Starts file-watch and/or git-poll threads based on {@link ReloadConfig}. */
@@ -467,12 +471,11 @@ public class LiveConfigLoader {
     }
 
     private void reloadPermissions(JettyConfigurationBuilder builder, FogwallConfig newConfig) {
-        if (repoPermissionService == null) {
-            log.warn("repoPermissionService not available — permissions reload skipped");
+        if (repoPermissionService == null || userStore == null) {
+            log.warn("repoPermissionService or userStore not available — permissions reload skipped");
             return;
         }
         var configPerms = builder.buildConfigPermissions(newConfig);
-        var userStore = builder.buildUserStore();
         configPerms.stream().map(RepoPermission::getUsername).distinct().forEach(userStore::upsertUser);
         repoPermissionService.seedFromConfig(configPerms);
         log.info("Permissions reloaded from config");
