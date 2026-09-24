@@ -212,7 +212,7 @@ public final class FogwallServletRegistrar {
         Supplier<SecretScanConfig> secretScanConfigSupplier = configHolder::getSecretScanConfig;
         Supplier<BinaryBlobConfig> binaryBlobConfigSupplier = configHolder::getBinaryBlobConfig;
         ScmOAuthConfig scmOAuthConfig = configBuilder.buildScmOAuthConfig();
-        ContentPatternConfig contentPatternConfig = configBuilder.buildContentPatternConfig();
+        Supplier<ContentPatternConfig> contentPatternConfigSupplier = configHolder::getContentPatternConfig;
 
         // Seed config rules once — registry is the single source of truth for all rule evaluation
         fogwallContext.urlRuleRegistry().seedFromConfig(configBuilder.buildConfigRules());
@@ -229,7 +229,7 @@ public final class FogwallServletRegistrar {
                         secretScanConfigSupplier,
                         binaryBlobConfigSupplier,
                         scmOAuthConfig,
-                        contentPatternConfig,
+                        contentPatternConfigSupplier,
                         fogwallContext.pushStore(),
                         fogwallContext.serviceUrl(),
                         fogwallContext.approvalGateway(),
@@ -259,7 +259,7 @@ public final class FogwallServletRegistrar {
                         diffScanConfigSupplier,
                         secretScanConfigSupplier,
                         binaryBlobConfigSupplier,
-                        contentPatternConfig,
+                        contentPatternConfigSupplier,
                         fogwallContext.pushStore(),
                         fogwallContext.serviceUrl(),
                         fogwallContext.approvalGateway(),
@@ -296,7 +296,7 @@ public final class FogwallServletRegistrar {
                 configHolder::getDiffScanConfig,
                 configHolder::getSecretScanConfig,
                 configHolder::getBinaryBlobConfig,
-                configBuilder.buildContentPatternConfig(),
+                configHolder::getContentPatternConfig,
                 GpgConfig.defaultConfig(),
                 fogwallContext.repoPermissionService(),
                 fogwallContext.pushIdentityResolver(),
@@ -325,7 +325,7 @@ public final class FogwallServletRegistrar {
             Supplier<SecretScanConfig> secretScanConfigSupplier,
             Supplier<BinaryBlobConfig> binaryBlobConfigSupplier,
             ScmOAuthConfig scmOAuthConfig,
-            ContentPatternConfig contentPatternConfig,
+            Supplier<ContentPatternConfig> contentPatternConfigSupplier,
             PushStore pushStore,
             String serviceUrl,
             ApprovalGateway approvalGateway,
@@ -350,7 +350,7 @@ public final class FogwallServletRegistrar {
                     diffScanConfigSupplier,
                     secretScanConfigSupplier,
                     binaryBlobConfigSupplier,
-                    contentPatternConfig,
+                    contentPatternConfigSupplier,
                     GpgConfig.defaultConfig(),
                     repoPermissionService,
                     pushIdentityResolver,
@@ -705,13 +705,11 @@ public final class FogwallServletRegistrar {
         boolean serveTls = tls.isServerTlsConfigured();
         // The same content rules that guard a push, applied to the prose an SCM API entity publishes upstream.
         ConfigHolder scmApiConfigHolder = configBuilder.buildConfigHolder();
-        var scmApiBlock = configBuilder.buildScmApiBlockConfig();
-        var scmApiContentPatterns = configBuilder.buildContentPatternConfig();
         var contentInspector = new ScmContentInspector(
-                () -> scmApiBlock,
+                scmApiConfigHolder::getScmApiBlockConfig,
                 scmApiConfigHolder::getSecretScanConfig,
                 new SecretScanCheck(scmApiConfigHolder.getSecretScanConfig()),
-                () -> scmApiContentPatterns);
+                scmApiConfigHolder::getContentPatternConfig);
         var plaintextListeners = new ArrayList<String>();
 
         for (FogwallProvider provider : providers) {
@@ -857,7 +855,7 @@ public final class FogwallServletRegistrar {
             Supplier<DiffScanConfig> diffScanConfigSupplier,
             Supplier<SecretScanConfig> secretScanConfigSupplier,
             Supplier<BinaryBlobConfig> binaryBlobConfigSupplier,
-            ContentPatternConfig contentPatternConfig,
+            Supplier<ContentPatternConfig> contentPatternConfigSupplier,
             PushStore pushStore,
             String serviceUrl,
             ApprovalGateway approvalGateway,
@@ -889,7 +887,7 @@ public final class FogwallServletRegistrar {
                 diffScanConfigSupplier,
                 secretScanConfigSupplier,
                 binaryBlobConfigSupplier,
-                contentPatternConfig,
+                contentPatternConfigSupplier,
                 pushStore,
                 serviceUrl,
                 approvalGateway,
@@ -921,7 +919,7 @@ public final class FogwallServletRegistrar {
             Supplier<DiffScanConfig> diffScanConfigSupplier,
             Supplier<SecretScanConfig> secretScanConfigSupplier,
             Supplier<BinaryBlobConfig> binaryBlobConfigSupplier,
-            ContentPatternConfig contentPatternConfig,
+            Supplier<ContentPatternConfig> contentPatternConfigSupplier,
             PushStore pushStore,
             String serviceUrl,
             ApprovalGateway approvalGateway,
@@ -951,12 +949,12 @@ public final class FogwallServletRegistrar {
         filters.add(new CheckAuthorEmailsFilter(commitConfigSupplier));
         filters.add(new CheckTrailersFilter(commitConfigSupplier));
         filters.add(new CheckCommitMessagesFilter(commitConfigSupplier));
-        filters.add(new ContentPatternMessageFilter(contentPatternConfig));
+        filters.add(new ContentPatternMessageFilter(contentPatternConfigSupplier));
         filters.add(new BinaryBlobFilter(binaryBlobConfigSupplier));
         filters.add(new ScanDiffFilter(diffScanConfigSupplier));
         filters.add(new GpgSignatureFilter(GpgConfig.defaultConfig()));
         filters.add(new SecretScanningFilter(secretScanConfigSupplier));
-        filters.add(new ContentPatternDiffFilter(contentPatternConfig));
+        filters.add(new ContentPatternDiffFilter(contentPatternConfigSupplier));
         // --- MANDATORY_POST: summary, finalizers, audit ---
         filters.add(new ValidationSummaryFilter());
         filters.add(new FetchFinalizerFilter());

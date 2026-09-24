@@ -218,6 +218,8 @@ public class JettyConfigurationBuilder {
                     buildDiffScanConfig(),
                     buildSecretScanConfig(),
                     buildBinaryBlobConfig(),
+                    buildContentPatternConfig(),
+                    buildScmApiBlockConfig(),
                     buildAttestations(config));
         }
         return cachedConfigHolder;

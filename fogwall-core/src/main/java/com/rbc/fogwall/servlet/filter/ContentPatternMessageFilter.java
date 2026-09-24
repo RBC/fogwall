@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
@@ -32,11 +33,17 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public final class ContentPatternMessageFilter extends AbstractFogwallFilter {
 
-    private final ContentPatternConfig config;
+    private final Supplier<ContentPatternConfig> configSupplier;
 
-    public ContentPatternMessageFilter(ContentPatternConfig config) {
+    /** Live-reload constructor — config is read from the supplier on every request. */
+    public ContentPatternMessageFilter(Supplier<ContentPatternConfig> configSupplier) {
         super(LifecycleStage.MANDATORY_PROCESSING, Set.of(HttpOperation.PUSH));
-        this.config = config != null ? config : ContentPatternConfig.defaultConfig();
+        this.configSupplier = configSupplier != null ? configSupplier : ContentPatternConfig::defaultConfig;
+    }
+
+    /** Fixed-config constructor. Useful in tests; wraps the value in a constant supplier. */
+    public ContentPatternMessageFilter(ContentPatternConfig config) {
+        this(config != null ? () -> config : null);
     }
 
     @Override
@@ -46,6 +53,7 @@ public final class ContentPatternMessageFilter extends AbstractFogwallFilter {
 
     @Override
     public void doHttpFilter(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        ContentPatternConfig config = configSupplier.get();
         if (!config.isEnabled() || !config.isScanCommitMessages()) {
             log.debug("Content pattern message scanning disabled - skipping");
             return;

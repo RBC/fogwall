@@ -59,7 +59,7 @@ class ServerPathAliasTest {
                 SecretScanConfig::defaultConfig,
                 BinaryBlobConfig::defaultConfig,
                 ScmOAuthConfig.defaultConfig(),
-                ContentPatternConfig.defaultConfig(),
+                ContentPatternConfig::defaultConfig,
                 mock(PushStore.class), // the factory requires its control dependencies even at registration time
                 null, // serviceUrl
                 mock(ApprovalGateway.class),
@@ -99,7 +99,7 @@ class ServerPathAliasTest {
                 SecretScanConfig::defaultConfig,
                 BinaryBlobConfig::defaultConfig,
                 ScmOAuthConfig.defaultConfig(),
-                ContentPatternConfig.defaultConfig(),
+                ContentPatternConfig::defaultConfig,
                 mock(PushStore.class),
                 null,
                 mock(ApprovalGateway.class),

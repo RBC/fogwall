@@ -123,6 +123,43 @@ class LiveConfigLoaderTest {
     }
 
     @Test
+    void reload_scmApiBlock_appliesAndRestartOnlyScmApiKeysAreIgnored() throws IOException {
+        Files.writeString(reloadFile, """
+                scm-api:
+                  node-id-cache-ttl: PT1H
+                  block:
+                    - { match: literal, value: "RELOADED_SCM_API" }
+                """);
+
+        String result = loader.reload(Section.SCM_API);
+
+        assertTrue(result.startsWith("Reloaded"), result);
+        assertEquals(
+                List.of("RELOADED_SCM_API"),
+                configHolder.getScmApiBlockConfig().getRules().stream()
+                        .map(MatchRule::getValue)
+                        .toList());
+    }
+
+    @Test
+    void reload_contentPatterns_replacesLiveConfig() throws IOException {
+        Files.writeString(reloadFile, """
+                content-patterns:
+                  enabled: true
+                  bundles: [national-id-ca]
+                  scan-scm-api: false
+                """);
+
+        String result = loader.reload(Section.CONTENT_PATTERNS);
+
+        assertTrue(result.startsWith("Reloaded"), result);
+        var contentPatterns = configHolder.getContentPatternConfig();
+        assertTrue(contentPatterns.isEnabled());
+        assertEquals(List.of("national-id-ca"), contentPatterns.getBundles());
+        assertFalse(contentPatterns.isScanScmApi());
+    }
+
+    @Test
     void reload_unknownProviderReference_refusesWholeReload() throws IOException {
         var diffScanBefore = configHolder.getDiffScanConfig();
         Files.writeString(reloadFile, """
@@ -168,7 +205,9 @@ class LiveConfigLoaderTest {
                 configHolder.getCommitConfig(),
                 configHolder.getDiffScanConfig(),
                 configHolder.getSecretScanConfig(),
-                configHolder.getBinaryBlobConfig());
+                configHolder.getBinaryBlobConfig(),
+                configHolder.getScmApiBlockConfig(),
+                configHolder.getContentPatternConfig());
         Files.writeString(reloadFile, """
                 commit:
                   message:
@@ -179,6 +218,11 @@ class LiveConfigLoaderTest {
                 secret-scan:
                   enabled: false
                 binary-blob:
+                  enabled: false
+                scm-api:
+                  block:
+                    - { match: literal, value: "RELOADED_SCM_API" }
+                content-patterns:
                   enabled: false
                 rules:
                   allow:
@@ -207,7 +251,9 @@ class LiveConfigLoaderTest {
                 configHolder.getCommitConfig(),
                 configHolder.getDiffScanConfig(),
                 configHolder.getSecretScanConfig(),
-                configHolder.getBinaryBlobConfig());
+                configHolder.getBinaryBlobConfig(),
+                configHolder.getScmApiBlockConfig(),
+                configHolder.getContentPatternConfig());
         for (int i = 0; i < before.size(); i++) {
             assertNotSame(before.get(i), after.get(i), "section " + i + " was declared, so it must be rebuilt");
         }

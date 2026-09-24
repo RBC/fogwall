@@ -167,13 +167,11 @@ public class FogwallDashboardApplication {
         ScmOAuthConfig scmOAuthConfig = configBuilder.buildScmOAuthConfig();
         // Content inspector for the dashboard issue path, built the same way the SCM API proxy builds its own:
         // SCM API block + content-pattern config, and secret scanning off the reloadable config holder.
-        var scmApiBlock = configBuilder.buildScmApiBlockConfig();
-        var scmApiContentPatterns = configBuilder.buildContentPatternConfig();
         var scmContentInspector = new ScmContentInspector(
-                () -> scmApiBlock,
+                configHolder::getScmApiBlockConfig,
                 configHolder::getSecretScanConfig,
                 new SecretScanCheck(configHolder.getSecretScanConfig()),
-                () -> scmApiContentPatterns);
+                configHolder::getContentPatternConfig);
         registerSpringServlet(
                 context,
                 ctx,

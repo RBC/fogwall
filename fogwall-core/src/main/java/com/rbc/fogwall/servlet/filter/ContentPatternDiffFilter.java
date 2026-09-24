@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.lib.Repository;
@@ -36,11 +37,17 @@ import org.eclipse.jgit.lib.Repository;
 @Slf4j
 public final class ContentPatternDiffFilter extends AbstractFogwallFilter {
 
-    private final ContentPatternConfig config;
+    private final Supplier<ContentPatternConfig> configSupplier;
 
-    public ContentPatternDiffFilter(ContentPatternConfig config) {
+    /** Live-reload constructor — config is read from the supplier on every request. */
+    public ContentPatternDiffFilter(Supplier<ContentPatternConfig> configSupplier) {
         super(LifecycleStage.MANDATORY_PROCESSING, Set.of(HttpOperation.PUSH));
-        this.config = config != null ? config : ContentPatternConfig.defaultConfig();
+        this.configSupplier = configSupplier != null ? configSupplier : ContentPatternConfig::defaultConfig;
+    }
+
+    /** Fixed-config constructor. Useful in tests; wraps the value in a constant supplier. */
+    public ContentPatternDiffFilter(ContentPatternConfig config) {
+        this(config != null ? () -> config : null);
     }
 
     @Override
@@ -50,6 +57,7 @@ public final class ContentPatternDiffFilter extends AbstractFogwallFilter {
 
     @Override
     public void doHttpFilter(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        ContentPatternConfig config = configSupplier.get();
         if (!config.isEnabled() || !config.isScanDiff()) {
             log.debug("Content pattern diff scanning disabled - skipping");
             return;

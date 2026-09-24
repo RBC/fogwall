@@ -33,15 +33,17 @@ credentials. For token-only auth (GitHub, GitLab, Gitea PATs) the username can b
 
 ## Reloadable sections
 
-| Section        | YAML key        | What changes take effect                                                       |
-| -------------- | --------------- | ------------------------------------------------------------------------------ |
-| `commit`       | `commit:`       | Author/committer email matchers, message block, commit attribution policy mode |
-| `diff-scan`    | `diff-scan:`    | Diff content block matchers                                                    |
-| `secret-scan`  | `secret-scan:`  | All gitleaks settings including `inline-config`                                |
-| `binary-blob`  | `binary-blob:`  | Blob size limit and denied MIME types                                          |
-| `rules`        | `rules:`        | URL access control allow/deny rules                                            |
-| `permissions`  | `permissions:`  | Config-sourced user→repo permission grants                                     |
-| `attestations` | `attestations:` | Dashboard approval form questions                                              |
+| Section            | YAML key            | What changes take effect                                                       |
+| ------------------ | ------------------- | ------------------------------------------------------------------------------ |
+| `commit`           | `commit:`           | Author/committer email matchers, message block, commit attribution policy mode |
+| `diff-scan`        | `diff-scan:`        | Diff content block matchers                                                    |
+| `secret-scan`      | `secret-scan:`      | All gitleaks settings including `inline-config`                                |
+| `binary-blob`      | `binary-blob:`      | Blob size limit and denied MIME types                                          |
+| `scm-api`          | `scm-api:`          | `scm-api.block` matchers only; the rest of `scm-api` requires a restart        |
+| `content-patterns` | `content-patterns:` | Enabled bundles and which content each scans                                   |
+| `rules`            | `rules:`            | URL access control allow/deny rules                                            |
+| `permissions`      | `permissions:`      | Config-sourced user→repo permission grants                                     |
+| `attestations`     | `attestations:`     | Dashboard approval form questions                                              |
 
 Every other section — providers, server, database, users, `scm-oauth` and the rest — requires a restart. A reload
 document may still contain them; they are ignored, with a warning naming them.
@@ -91,6 +93,8 @@ POST /api/config/reload?section=commit          # commit rules only
 POST /api/config/reload?section=diff-scan       # diff scan only
 POST /api/config/reload?section=secret-scan     # gitleaks config only
 POST /api/config/reload?section=binary-blob     # binary blob detection only
+POST /api/config/reload?section=scm-api         # scm-api.block only
+POST /api/config/reload?section=content-patterns # content pattern bundles only
 POST /api/config/reload?section=rules           # URL rules only
 POST /api/config/reload?section=permissions     # permissions only
 POST /api/config/reload?section=attestations    # attestation questions only
