@@ -1,7 +1,7 @@
 # Configuration Reference
 
-fogwall uses layered YAML configuration merged at startup. A base file ships with the jar; additional profile files and
-environment variable overrides are applied on top in a defined order.
+fogwall uses layered YAML configuration merged at startup. Defaults ship inside the jar; the default config file
+`fogwall.yml`, profile files and environment variable overrides are applied on top in a defined order.
 
 > A section introducing a new config surface is tagged with the release it first shipped in, e.g.
 > `_Available since v1.3.0._`, right under the heading. Untagged sections predate this convention — it isn't backfilled

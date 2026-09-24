@@ -7,8 +7,8 @@ import java.util.Map;
 import lombok.Data;
 
 /**
- * Root configuration POJO. Bound from {@code fogwall.yml} (and optional {@code fogwall-local.yml} overrides) via
- * Gestalt.
+ * Root configuration POJO. Bound by {@link FogwallConfigLoader} from the bundled defaults, the default config file
+ * {@code fogwall.yml}, profile files and environment variable overrides.
  *
  * <p>Top-level structure:
  *

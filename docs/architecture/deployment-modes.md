@@ -2,9 +2,10 @@
 
 ## Proxy only (`fogwall-server`)
 
-`FogwallJettyApplication` boots a plain Jetty server. It loads YAML config (base `fogwall.yml` + profile overlays +
-environment variable overrides), builds the `FogwallContext`, and registers both proxy modes for every provider. There
-is no Spring context, no dashboard, and no REST API — just the git servlets on `/server/*` and `/proxy/*`.
+`FogwallJettyApplication` boots a plain Jetty server. It loads YAML config (bundled defaults + the default config file
+`fogwall.yml` + profile overlays + environment variable overrides), builds the `FogwallContext`, and registers both
+proxy modes for every provider. There is no Spring context, no dashboard, and no REST API — just the git servlets on
+`/server/*` and `/proxy/*`.
 
 The approval gateway defaults to `AutoApprovalGateway` — clean pushes go straight through with no human review. A
 `LiveConfigLoader` watches the config file and hot-reloads commit validation rules (email patterns, message patterns,

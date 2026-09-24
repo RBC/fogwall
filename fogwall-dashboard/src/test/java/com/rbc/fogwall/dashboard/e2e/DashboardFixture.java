@@ -1,6 +1,7 @@
 package com.rbc.fogwall.dashboard.e2e;
 
 import com.rbc.fogwall.config.FogwallConfig;
+import com.rbc.fogwall.config.LoadedConfig;
 import com.rbc.fogwall.config.UserConfig;
 import com.rbc.fogwall.dashboard.FogwallDashboardApplication;
 import com.rbc.fogwall.jetty.FogwallJettyApplication;
@@ -33,7 +34,7 @@ class DashboardFixture implements AutoCloseable {
     /** Starts a dashboard on the given config, with whatever users that config declares. */
     DashboardFixture(FogwallConfig config) throws Exception {
         config.getServer().setPort(0);
-        running = FogwallDashboardApplication.start(config);
+        running = FogwallDashboardApplication.start(LoadedConfig.of(config));
     }
 
     /**
@@ -43,7 +44,7 @@ class DashboardFixture implements AutoCloseable {
     DashboardFixture(FogwallConfig config, List<UserEntry> users) throws Exception {
         config.setUsers(users.stream().map(DashboardFixture::toUserConfig).toList());
         config.getServer().setPort(0);
-        running = FogwallDashboardApplication.start(config);
+        running = FogwallDashboardApplication.start(LoadedConfig.of(config));
     }
 
     private static UserConfig toUserConfig(UserEntry entry) {

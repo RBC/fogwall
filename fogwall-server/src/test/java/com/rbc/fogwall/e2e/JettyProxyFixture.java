@@ -124,7 +124,7 @@ class JettyProxyFixture implements AutoCloseable {
         Path override = writeOverride(
                 giteaUri, approvalMode, configRules, serveFetch, users, committerAttributionPolicy, grantAll);
         try {
-            running = FogwallJettyApplication.start(FogwallConfigLoader.loadWithOverride("test-e2e", override));
+            running = FogwallJettyApplication.start(FogwallConfigLoader.loadLayers("test-e2e", List.of(override)));
         } finally {
             Files.deleteIfExists(override);
         }

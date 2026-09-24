@@ -4,6 +4,7 @@ import com.rbc.fogwall.build.BuildInfo;
 import com.rbc.fogwall.config.FogwallConfig;
 import com.rbc.fogwall.config.FogwallConfigLoader;
 import com.rbc.fogwall.config.JettyConfigurationBuilder;
+import com.rbc.fogwall.config.LoadedConfig;
 import com.rbc.fogwall.config.ScmOAuthConfig;
 import com.rbc.fogwall.config.ServerConfig;
 import com.rbc.fogwall.config.TlsConfig;
@@ -39,8 +40,9 @@ import org.eclipse.jetty.util.thread.VirtualThreadPool;
  * <p>This entry point runs the proxy only - no dashboard, no REST API. For the full stack including the approval
  * workflow UI, use {@code fogwallWithDashboardApplication} from the {@code fogwall-dashboard} module.
  *
- * <p>Configuration is loaded from {@code fogwall.yml}, then each profile named in {@code FOGWALL_CONFIG_PROFILES},
- * overridable with {@code fogwall_} environment variables.
+ * <p>Configuration is loaded by {@link FogwallConfigLoader}: the bundled defaults, then the default config file
+ * {@code fogwall.yml}, then each profile named in {@code FOGWALL_CONFIG_PROFILES}, overridable with {@code FOGWALL_}
+ * environment variables.
  */
 @Slf4j
 public class FogwallJettyApplication {
@@ -51,10 +53,10 @@ public class FogwallJettyApplication {
                 BuildInfo.get().display());
         writePidFile();
 
-        var fogwallConfig = FogwallConfigLoader.load();
+        var loaded = FogwallConfigLoader.loadLayers();
         // A property of this distribution, not of the assembly: the dashboard reuses start() and can satisfy both.
-        rejectDashboardOnlyConfig(new JettyConfigurationBuilder(fogwallConfig));
-        start(fogwallConfig).server().join();
+        rejectDashboardOnlyConfig(new JettyConfigurationBuilder(loaded.getConfig()));
+        start(loaded).server().join();
     }
 
     /**
@@ -81,7 +83,8 @@ public class FogwallJettyApplication {
      * caller assembling the same server for a test drives the real {@link JettyConfigurationBuilder} and
      * {@link FogwallServletRegistrar} rather than a second copy of this wiring that can drift from it.
      */
-    public static Running start(FogwallConfig fogwallConfig) throws Exception {
+    public static Running start(LoadedConfig loaded) throws Exception {
+        FogwallConfig fogwallConfig = loaded.getConfig();
         var configBuilder = new JettyConfigurationBuilder(fogwallConfig);
         configBuilder.validateProviderReferences(); // fail fast before any DB or port setup
         configBuilder.applyOutboundProxySystemWiring(); // before any outbound connection is made
@@ -125,7 +128,7 @@ public class FogwallJettyApplication {
         final SshGitServer finalSshGitServer = sshGitServer;
         var liveConfigLoader = new LiveConfigLoader(
                 configBuilder.buildConfigHolder(),
-                fogwallConfig,
+                loaded,
                 configBuilder.getReloadConfig(),
                 ctx.urlRuleRegistry(),
                 ctx.repoPermissionService());

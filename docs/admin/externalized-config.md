@@ -18,12 +18,15 @@ Sources are merged in priority order (lowest → highest):
 
 | Priority    | Source                                                  | Mechanism                                |
 | ----------- | ------------------------------------------------------- | ---------------------------------------- |
-| 1 (lowest)  | `fogwall.yml`                                           | Bundled in the JAR — base defaults       |
-| 2           | Profile YAMLs named in `FOGWALL_CONFIG_PROFILES`        | Classpath lookup (see below)             |
-| 3           | `FOGWALL_*` environment variables                       | Strip prefix, lowercase, `_` → `.`       |
-| 4 (highest) | Hot-reload overlay (`reload.file.path` or `reload.git`) | Filesystem path; applied on every reload |
+| 1 (lowest)  | Bundled defaults                                        | Inside the JAR                           |
+| 2           | `fogwall.yml`                                           | Classpath lookup, optional (see below)   |
+| 3           | Profile YAMLs named in `FOGWALL_CONFIG_PROFILES`        | Classpath lookup (see below)             |
+| 4           | `FOGWALL_*` environment variables                       | Strip prefix, lowercase, `_` → `.`       |
+| 5 (highest) | Hot-reload overlay (`reload.file.path` or `reload.git`) | Filesystem path; applied on every reload |
 
-A higher-priority source only overrides the specific keys it defines — other base values are preserved.
+A higher-priority source only overrides the specific keys it defines — other base values are preserved. A list is the
+exception: a source that sets one replaces it entirely. See
+[How layers merge](../configuration/files-and-profiles.md#how-layers-merge).
 
 ## Profile-based config files — the `/app/conf/` pattern
 
@@ -53,7 +56,7 @@ first.
 
 <!-- prettier-ignore-start -->
 > [!IMPORTANT]
-> A file mounted at `/app/conf/` is silently ignored unless the matching profile name is set in `FOGWALL_CONFIG_PROFILES`. There is no auto-discovery — the profile name is the activation key.
+> A profile file mounted at `/app/conf/` is silently ignored unless the matching profile name is set in `FOGWALL_CONFIG_PROFILES`. The profile name is the activation key. The one file loaded without a profile name is `fogwall.yml`: mounted at `/app/conf/fogwall.yml`, it is merged over the bundled defaults and under every profile.
 <!-- prettier-ignore-end -->
 
 **Multiple profiles** are comma-separated; later profiles take priority over earlier ones:
@@ -66,7 +69,7 @@ This loads `fogwall-docker-default.yml` then `fogwall-ldap.yml`; `ldap` wins on 
 
 <!-- prettier-ignore-start -->
 > [!WARNING]
-> **List merge caveat:** Gestalt replaces lists at the key level — it does not append. If two profile files both define `permissions:`, the later file's list replaces the earlier one entirely. Keep all entries for a given list key in a single profile file. A common split that avoids this: one profile for organizational config (users, permissions, rules) and a second for environment-specific connectivity (auth provider URL, database, TLS) which never defines list keys.
+> **Lists are replaced, not appended.** If two profile files both define `permissions:`, the later file's list replaces the earlier one entirely. Keep all entries for a given list key in a single profile file. A common split that avoids this: one profile for organizational config (users, permissions, rules) and a second for environment-specific connectivity (auth provider URL, database, TLS) which never defines list keys.
 <!-- prettier-ignore-end -->
 
 ## Environment variable overrides

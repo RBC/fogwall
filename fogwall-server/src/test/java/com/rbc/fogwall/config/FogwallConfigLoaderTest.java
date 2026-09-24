@@ -5,16 +5,16 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import org.github.gestalt.config.builder.GestaltBuilder;
+import java.util.List;
+import java.util.Map;
 import org.github.gestalt.config.exceptions.GestaltException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.node.JsonNodeFactory;
 
 /**
- * Tests for {@link FogwallConfigLoader}.
- *
- * <p>Verifies that the base config ({@code fogwall.yml}) is loaded and that profiles resolve, or fail, the way they
- * should. Environment variable overrides are exercised in the e2e suite.
+ * Tests for {@link FogwallConfigLoader}: the bundled defaults, how layers merge, profile resolution, environment
+ * overrides, and hot reload composition.
  */
 class FogwallConfigLoaderTest {
 
@@ -448,17 +448,292 @@ class FogwallConfigLoaderTest {
     // --- profile resolution ---
 
     @Test
-    void addProfileSources_profileNotOnClasspath_failsNamingTheFile() {
-        GestaltException e = assertThrows(
-                GestaltException.class,
-                () -> FogwallConfigLoader.addProfileSources(new GestaltBuilder(), "nonexistent", false));
+    void profileResources_profileNotOnClasspath_failsNamingTheFile() {
+        GestaltException e =
+                assertThrows(GestaltException.class, () -> FogwallConfigLoader.profileResources("nonexistent"));
         assertTrue(e.getMessage().contains("fogwall-nonexistent.yml"), e.getMessage());
     }
 
     @Test
-    void addProfileSources_noProfiles_isNoOp() {
-        assertDoesNotThrow(() -> FogwallConfigLoader.addProfileSources(new GestaltBuilder(), null, false));
-        assertDoesNotThrow(() -> FogwallConfigLoader.addProfileSources(new GestaltBuilder(), "  ", false));
+    void profileResources_noProfileNameResolvesToTheBundledDefaults() {
+        assertThrows(GestaltException.class, () -> FogwallConfigLoader.profileResources("defaults"));
+    }
+
+    @Test
+    void profileResources_noProfiles_isEmpty() throws GestaltException {
+        assertTrue(FogwallConfigLoader.profileResources(null).isEmpty());
+        assertTrue(FogwallConfigLoader.profileResources("  ").isEmpty());
+    }
+
+    // --- layering ---
+
+    @Test
+    void loadLayers_defaultConfigFile_mergesOverBundledDefaultsAndUnderProfiles() throws GestaltException {
+        // fogwall-order-a.yml stands in for the default config file fogwall.yml; fogwall-order-b.yml is a profile.
+        assertEquals(
+                9001,
+                FogwallConfigLoader.loadLayers("fogwall-order-a.yml", null, List.of(), Map.of())
+                        .getConfig()
+                        .getServer()
+                        .getPort());
+        assertEquals(
+                9002,
+                FogwallConfigLoader.loadLayers("fogwall-order-a.yml", "order-b", List.of(), Map.of())
+                        .getConfig()
+                        .getServer()
+                        .getPort());
+    }
+
+    @Test
+    void loadLayers_noDefaultConfigFile_runsOnBundledDefaults() throws GestaltException {
+        var config = FogwallConfigLoader.loadLayers("fogwall-absent.yml", null, List.of(), Map.of())
+                .getConfig();
+        assertEquals(8080, config.getServer().getPort());
+        assertTrue(config.getProviders().get("github").isEnabled());
+    }
+
+    @Test
+    void loadLayers_list_isReplacedByHigherLayerNotMergedByPosition() throws GestaltException, IOException {
+        Path lower = writeYaml("""
+                diff-scan:
+                  block:
+                    - 'LOWER_0'
+                    - 'LOWER_1'
+                """);
+        Path higher = writeYaml("""
+                diff-scan:
+                  block:
+                    - 'HIGHER_0'
+                """);
+        var matchers = FogwallConfigLoader.loadLayers(null, List.of(lower, higher), Map.of())
+                .getConfig()
+                .getDiffScan()
+                .getBlock()
+                .getMatchers();
+        assertEquals(
+                List.of("HIGHER_0"),
+                matchers.stream().map(MatchRuleSettings::getValue).toList());
+    }
+
+    @Test
+    void loadLayers_emptyList_clearsLowerLayer() throws GestaltException, IOException {
+        Path lower = writeYaml("""
+                diff-scan:
+                  block:
+                    - 'LOWER_0'
+                """);
+        Path higher = writeYaml("""
+                diff-scan:
+                  block: []
+                """);
+        var matchers = FogwallConfigLoader.loadLayers(null, List.of(lower, higher), Map.of())
+                .getConfig()
+                .getDiffScan()
+                .getBlock()
+                .getMatchers();
+        assertTrue(matchers.isEmpty(), "an explicit empty list must clear the lower layer's entries");
+    }
+
+    @Test
+    void loadLayers_listEntry_doesNotInheritFieldsFromLowerLayerEntry() throws GestaltException, IOException {
+        // The bundled defaults already declare a users list; a higher layer's entries replace it rather than being
+        // combined with the entry at the same position.
+        Path users = writeYaml("""
+                users:
+                  - username: dev
+                    emails:
+                      - dev@example.com
+                """);
+        var loaded = FogwallConfigLoader.loadLayers(null, List.of(users), Map.of())
+                .getConfig()
+                .getUsers();
+        assertEquals(1, loaded.size());
+        assertEquals("dev", loaded.get(0).getUsername());
+        assertTrue(loaded.get(0).getRoles().isEmpty(), "fields the entry doesn't set keep their own defaults");
+        assertTrue(loaded.get(0).getPasswordHash().isEmpty(), "fields the entry doesn't set keep their own defaults");
+    }
+
+    @Test
+    void loadLayers_mapping_mergesByKey() throws GestaltException, IOException {
+        Path override = writeYaml("""
+                providers:
+                  gitlab:
+                    enabled: false
+                """);
+        var providers = FogwallConfigLoader.loadLayers(null, List.of(override), Map.of())
+                .getConfig()
+                .getProviders();
+        assertFalse(providers.get("gitlab").isEnabled());
+        assertTrue(providers.get("github").isEnabled(), "a provider the higher layer doesn't mention is untouched");
+    }
+
+    @Test
+    void loadLayers_nullValue_leavesLowerLayerValue() throws GestaltException, IOException {
+        Path lower = writeYaml("""
+                server:
+                  service-url: https://lower.example.com
+                """);
+        Path higher = writeYaml("""
+                server:
+                  service-url:
+                """);
+        assertEquals(
+                "https://lower.example.com",
+                FogwallConfigLoader.loadLayers(null, List.of(lower, higher), Map.of())
+                        .getConfig()
+                        .getServer()
+                        .getServiceUrl());
+    }
+
+    @Test
+    void loadLayers_environmentOverride_winsOverFiles() throws GestaltException {
+        var config = FogwallConfigLoader.loadLayers(null, List.of(), Map.of("FOGWALL_SERVER_PORT", "9999"))
+                .getConfig();
+        assertEquals(9999, config.getServer().getPort());
+    }
+
+    // --- hot reload composition ---
+
+    @Test
+    void composeReload_keyInsideSection_replacesOnlyThatKey() throws GestaltException, IOException {
+        Path startupFile = writeYaml("""
+                commit:
+                  committer:
+                    email:
+                      matches:
+                        - { action: block, field: local, match: literal, value: noreply }
+                  message:
+                    block:
+                      - 'STARTUP'
+                """);
+        var startup = FogwallConfigLoader.loadLayers(null, List.of(startupFile), Map.of());
+        var reload = FogwallConfigLoader.readReloadDocument(writeYaml("""
+                commit:
+                  message:
+                    block:
+                      - 'RELOADED'
+                """));
+
+        var commit = FogwallConfigLoader.composeReload(startup, reload).getCommit();
+
+        assertEquals(
+                List.of("RELOADED"),
+                commit.getMessage().getBlock().getMatchers().stream()
+                        .map(MatchRuleSettings::getValue)
+                        .toList());
+        assertEquals(
+                1,
+                commit.getCommitter().getEmail().getMatches().size(),
+                "a key the reload document leaves out keeps its startup value");
+    }
+
+    @Test
+    void composeReload_startsFromStartupNotFromPreviousReload() throws GestaltException, IOException {
+        var startup = FogwallConfigLoader.loadLayers(null, List.of(), Map.of());
+        FogwallConfigLoader.composeReload(
+                startup, FogwallConfigLoader.readReloadDocument(writeYaml("secret-scan:\n  enabled: false\n")));
+
+        var second = FogwallConfigLoader.composeReload(
+                startup, FogwallConfigLoader.readReloadDocument(writeYaml("binary-blob:\n  enabled: true\n")));
+
+        assertTrue(second.getSecretScan().isEnabled(), "an earlier reload's value must not carry into a later one");
+        assertTrue(second.getBinaryBlob().isEnabled());
+    }
+
+    @Test
+    void composeReload_winsOverEnvironmentForPathsItSets() throws GestaltException, IOException {
+        var startup = FogwallConfigLoader.loadLayers(
+                null,
+                List.of(),
+                Map.of(
+                        "FOGWALL_SECRET_SCAN__ENABLED", "true",
+                        "FOGWALL_SECRET_SCAN__TIMEOUT_SECONDS", "77"));
+        var reload = FogwallConfigLoader.readReloadDocument(writeYaml("secret-scan:\n  enabled: false\n"));
+
+        var secretScan = FogwallConfigLoader.composeReload(startup, reload).getSecretScan();
+
+        assertFalse(secretScan.isEnabled(), "the reload document's value applies over the environment variable");
+        assertEquals(77L, secretScan.getTimeoutSeconds(), "an environment override the reload doesn't touch applies");
+    }
+
+    @Test
+    void load_profileOrder_rightmostProfileWins() throws GestaltException {
+        // fogwall-order-a.yml sets server.port: 9001, fogwall-order-b.yml sets server.port: 9002 — same key, two
+        // different values, so whichever profile is named last in FOGWALL_CONFIG_PROFILES determines the result.
+        assertEquals(
+                9002, FogwallConfigLoader.load("order-a,order-b").getServer().getPort());
+        assertEquals(
+                9001, FogwallConfigLoader.load("order-b,order-a").getServer().getPort());
+    }
+
+    @Test
+    void profileResources_emptyNamesAreSkipped() throws GestaltException {
+        assertEquals(
+                List.of("fogwall-order-a.yml", "fogwall-order-b.yml"),
+                FogwallConfigLoader.profileResources("order-a,, order-b,"));
+    }
+
+    // --- merge and setsPath ---
+
+    @Test
+    void merge_listOverMapping_replacesTheMapping() {
+        var base = JsonNodeFactory.instance.objectNode();
+        base.putObject("rules").putArray("allow").add("a");
+        var overlay = JsonNodeFactory.instance.objectNode();
+        overlay.putArray("rules");
+
+        var merged = FogwallConfigLoader.merge(base, overlay);
+
+        assertTrue(merged.get("rules").isArray());
+        assertTrue(merged.get("rules").isEmpty());
+        assertTrue(base.get("rules").isObject(), "merge must not modify its inputs");
+    }
+
+    @Test
+    void setsPath_valueAtPath_isSet() throws GestaltException, IOException {
+        var tree = FogwallConfigLoader.readReloadDocument(writeYaml("secret-scan:\n  enabled: false\n"));
+        assertTrue(FogwallConfigLoader.setsPath(tree, "secret-scan.enabled"));
+    }
+
+    @Test
+    void setsPath_nonMappingAtAncestor_isSet() throws GestaltException, IOException {
+        // A list at diff-scan.block replaces everything beneath it, so an override below it is superseded too.
+        var tree = FogwallConfigLoader.readReloadDocument(writeYaml("diff-scan:\n  block: []\n"));
+        assertTrue(FogwallConfigLoader.setsPath(tree, "diff-scan.block.0.value"));
+    }
+
+    @Test
+    void setsPath_absentOrNull_isNotSet() throws GestaltException, IOException {
+        var tree = FogwallConfigLoader.readReloadDocument(writeYaml("server:\n  service-url:\n"));
+        assertFalse(FogwallConfigLoader.setsPath(tree, "server.service-url"), "a null leaves the key unset");
+        assertFalse(FogwallConfigLoader.setsPath(tree, "server.port"));
+        assertFalse(FogwallConfigLoader.setsPath(tree, "binary-blob.enabled"));
+    }
+
+    // --- reading a reload document ---
+
+    @Test
+    void readReloadDocument_missingFile_throws() {
+        assertThrows(
+                GestaltException.class, () -> FogwallConfigLoader.readReloadDocument(tempDir.resolve("absent.yml")));
+    }
+
+    @Test
+    void readReloadDocument_malformedYaml_throws() throws IOException {
+        Path file = writeYaml("diff-scan:\n  block: [unclosed\n");
+        assertThrows(RuntimeException.class, () -> FogwallConfigLoader.readReloadDocument(file));
+    }
+
+    @Test
+    void readReloadDocument_topLevelNotAMapping_throws() throws IOException {
+        Path file = writeYaml("- diff-scan\n- commit\n");
+        assertThrows(RuntimeException.class, () -> FogwallConfigLoader.readReloadDocument(file));
+    }
+
+    @Test
+    void readReloadDocument_emptyFile_throws() throws IOException {
+        Path file = writeYaml("");
+        assertThrows(RuntimeException.class, () -> FogwallConfigLoader.readReloadDocument(file));
     }
 
     private Path writeYaml(String yaml) throws IOException {

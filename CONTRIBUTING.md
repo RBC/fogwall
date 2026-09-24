@@ -97,7 +97,7 @@ profiles resolve from there.
 `fogwall-local.yml` holds providers, rules, permissions, users and scanning — the things a standalone proxy also needs.
 Settings only the dashboard reads (session store, Vite CORS, issue filing, attestation questions) live in
 `fogwall-dashboard.yml`; the dashboard's `run` task loads both, `local` then `dashboard`, and both take priority over
-the `fogwall.yml` baked into the jar.
+the defaults baked into the jar.
 
 Two things to change before your first push: add your own SCM login under the `dev` user's `scm-identities`, and set the
 email your commits are authored with. Without the first, identity does not resolve; without the second, the author check
