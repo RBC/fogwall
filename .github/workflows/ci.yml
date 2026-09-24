@@ -26,6 +26,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v7.0.1
 
+      # release-publish and cleanup-interim-images run these scripts against the registry. Build &
+      # Test is a required check for merges and release tags, so a broken script fails here rather
+      # than after a release tag is pushed.
+      - name: Unit-test the CI scripts
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # ratchet:actions/setup-java@v6.0.1
         with:
           distribution: temurin

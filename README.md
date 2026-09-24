@@ -35,8 +35,9 @@ Spring) — swap the image name to use it instead.
 
 | Tag       | What it is                                                                            |
 | --------- | ------------------------------------------------------------------------------------- |
-| `:latest` | The most recent tagged release. Use this unless you have a reason not to.             |
-| `:vX.Y.Z` | A specific pinned release.                                                            |
+| `:latest` | The newest stable release. Use this unless you have a reason not to.                  |
+| `:X.Y`    | The newest patch release on the `X.Y` line.                                           |
+| `:X.Y.Z`  | A specific pinned release.                                                            |
 | `:edge`   | Built from `main` on every merge — newer, less battle-tested. Not for production use. |
 
 For Kubernetes, there is a [Helm chart](charts/fogwall/README.md). If you'd rather build and run from source (or need
