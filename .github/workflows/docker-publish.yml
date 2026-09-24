@@ -3,7 +3,6 @@ name: Docker Build & Publish
 on:
   push:
     branches: ["main", "release/*"]
-    tags: ["v*"]
   pull_request:
     branches: ["main"]
   workflow_dispatch:
@@ -17,8 +16,8 @@ permissions:
   contents: read
 
 # On main, give every commit its own concurrency group (via SHA) so build+scan runs never
-# cancel each other — each landed commit is fully built and scanned in parallel. Tags never
-# cancel (release builds). PR/other refs cancel superseded runs on new pushes.
+# cancel each other — each landed commit is fully built and scanned in parallel. PR/other refs
+# cancel superseded runs on new pushes.
 concurrency:
   group: docker-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') && github.ref != 'refs/heads/main' }}
@@ -26,7 +25,7 @@ concurrency:
 jobs:
   build-and-push:
     name: Build & Push
-    # Tags are released by promoting the already-built build image — no rebuild needed.
+    # Release tags are published by release-publish.yml, which promotes the already-built image.
     if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
     strategy:
@@ -68,11 +67,26 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # The image's version label is the project version this commit builds (X.Y.Z on a release
+      # commit, X.Y.Z-SNAPSHOT otherwise). release-publish.yml relies on it to refuse a mismatched
+      # promotion and to decide which convenience tags a release moves.
+      - name: Read project version
+        id: version
+        run: |
+          VERSION=$(sed -n "s/^[[:space:]]*version = '\([^']*\)'.*$/\1/p" build.gradle)
+          if [[ -z "${VERSION}" || "${VERSION}" == *$'\n'* ]]; then
+            echo "::error::expected exactly one version = '...' line in build.gradle, found: ${VERSION:-none}"
+            exit 1
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # ratchet:docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE }}
+          labels: |
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
           tags: |
             type=ref,event=pr
             type=raw,value=edge,enable={{is_default_branch}}
@@ -159,76 +173,3 @@ jobs:
             grype-report.txt
             grype-report.json
           retention-days: 30
-
-  publish-release:
-    name: Publish Release
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: dashboard
-          - name: server
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v7.0.1
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # ratchet:docker/setup-buildx-action@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # ratchet:docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set image name
-        run: |
-          SUFFIX="${{ matrix.name == 'server' && '-server' || '' }}"
-          echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')${SUFFIX}" >> "$GITHUB_ENV"
-
-      # Resolve the digest of the build-{sha} image produced when this commit landed on main.
-      # The tag ruleset enforces Container Scan (per image) passed on this commit before the tag
-      # could be pushed, so the build image is guaranteed scanned. Using the commit-pinned build
-      # tag (not :edge) ensures we promote the exact image for this release regardless of how many
-      # commits have landed on main since.
-      - name: Resolve build image digest
-        id: build
-        run: |
-          TAG="build-${GITHUB_SHA::7}"
-          DIGEST=$(docker buildx imagetools inspect \
-            "${IMAGE}:${TAG}" \
-            --format '{{.Manifest.Digest}}')
-          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "Promoting ${TAG} @ ${DIGEST}"
-
-      - name: Promote build image to release tags
-        run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          SOURCE="${IMAGE}@${{ steps.build.outputs.digest }}"
-
-          if [[ "${VERSION}" == *-* ]]; then
-            # Pre-release (contains -): push the explicit version tag only.
-            # Major/minor/latest convenience tags must not point at a pre-release.
-            echo "Pre-release detected (${VERSION}) — skipping major/minor/latest tags"
-            docker buildx imagetools create \
-              --tag "${IMAGE}:${VERSION}" \
-              ${SOURCE}
-          else
-            # Stable release: push all convenience tags.
-            MAJOR=$(echo ${VERSION} | cut -d. -f1)
-            MINOR=$(echo ${VERSION} | cut -d. -f1-2)
-            docker buildx imagetools create \
-              --tag "${IMAGE}:${VERSION}" \
-              --tag "${IMAGE}:${MINOR}" \
-              --tag "${IMAGE}:${MAJOR}" \
-              --tag "${IMAGE}:latest" \
-              ${SOURCE}
-          fi

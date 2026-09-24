@@ -12,13 +12,16 @@ allowed-tools:
 # /release-tag — Tag, publish, and start the next development iteration.
 
 Phase 1 (`/release`) landed the commit that sets the exact release version on the base branch. This command tags that
-commit, which triggers the Docker publish workflow, then moves the branch back to a `-SNAPSHOT` version so it is never
+commit, which triggers the Release Publish workflow, then moves the branch back to a `-SNAPSHOT` version so it is never
 mistaken for a released build.
 
-Pushing the tag makes the publish workflow promote the **commit-pinned `build-<sha>` image** for the tagged commit to
-the release tags (`:<version>`, `:X.Y`, `:X`, `:latest`) — it does not rebuild, and it does not use `:edge`, so the
-image released is exactly the one CI built and scanned for that commit. This works the same on `main` and on `release/*`
-branches; both build `build-<sha>` images.
+Pushing the tag makes `release-publish.yml` promote the **commit-pinned `build-<sha>` image** for the tagged commit to
+the release tags — it does not rebuild, and it does not use `:edge`, so the image released is exactly the one CI built
+and scanned for that commit. This works the same on `main` and on `release/*` branches; both build `build-<sha>` images.
+The image must carry `org.opencontainers.image.version=<version>` (set from `build.gradle` at build time) or the
+promotion is refused. The release always gets `:<version>`; `:X.Y`, `:X` and `:latest` move only when it is at least as
+new as the image each points at now (`scripts/release_image_tags.py`), so a patch on an older line leaves `:latest` on
+the newer minor.
 
 The tag ruleset is the release gate on both kinds of branch: it refuses a tag whose commit has not passed the required
 checks. On `main` those checks also ran on the PR; on `release/*` — direct-push branches — the push itself is what
@@ -83,7 +86,7 @@ Arguments passed: `$ARGUMENTS`
    If signing hangs, it is the passphrase prompt — wait for the user. Do not disable signing. Only if no signing key is
    configured at all, fall back to `git tag -a` and say that signing was skipped.
 
-8. **Show and confirm.** `git show v<version> --stat`, then ask: "Push the tag? This triggers the Docker publish
+8. **Show and confirm.** `git show v<version> --stat`, then ask: "Push the tag? This triggers the Release Publish
    workflow." On yes, `git push origin v<version>`. On no, remind them to push manually and stop.
 
 9. **Publish the GitHub release.** The `release-notes` skill may already have left a curated draft under a placeholder
