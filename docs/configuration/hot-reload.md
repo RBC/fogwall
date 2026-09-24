@@ -43,8 +43,8 @@ credentials. For token-only auth (GitHub, GitLab, Gitea PATs) the username can b
 | `permissions`  | `permissions:`  | Config-sourced user→repo permission grants                                     |
 | `attestations` | `attestations:` | Dashboard approval form questions                                              |
 
-Provider, server, database and `scm-oauth` sections always require a restart — they describe how the deployment is set
-up rather than policy that changes over time.
+Every other section — providers, server, database, users, `scm-oauth` and the rest — requires a restart. A reload
+document may still contain them; they are ignored, with a warning naming them.
 
 ## Partial reload files
 
@@ -56,12 +56,32 @@ secret-scan:
   enabled: false
 ```
 
-reloads secret scanning and leaves rules, commit checks and everything else as they are.
+This file reloads secret scanning and leaves rules, commit checks and everything else as they are.
+
+Within a declared section, the reload document is merged onto the configuration the server started with, by the same
+rule as [the file layers](files-and-profiles.md#how-layers-merge): a key the document sets replaces the startup value, a
+key it leaves out keeps it, and a list it sets replaces the startup list entirely.
+
+```yaml
+commit:
+  message:
+    block:
+      - "(?i)do not merge"
+```
+
+This file replaces `commit.message.block` and leaves the startup `commit.committer`, `commit.author` and
+`commit.attribution-policy` in effect.
+
+Each reload is applied to the startup configuration, not to the previous reload. Removing a key from a section the file
+still declares returns that key to its startup value; removing the whole section from the file leaves its last reloaded
+value in effect until the next restart.
+
+A value in the reload document takes priority over an environment variable setting the same key. The server logs a
+warning naming each such key.
 
 The file must still be structurally valid on its own: keys are checked against the config schema, and cross-references
-are validated against the composed config. A user or permission entry that names a provider requires that provider to
-exist and be enabled in the base config — even though providers are not themselves hot-reloadable — or the whole reload
-is refused.
+(a `permissions:`/`rules:` entry naming a provider) are validated before anything is applied — a bad reference refuses
+the whole reload, not just the section it appears in.
 
 ## Manual trigger
 

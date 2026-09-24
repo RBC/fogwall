@@ -9,6 +9,7 @@ import java.net.ServerSocket;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 /**
  * Starts a real fogwall SSH server for {@code @Tag("e2e")} tests, through the same path production takes:
@@ -60,7 +61,7 @@ class SshProxyFixture implements AutoCloseable {
         Path hostKey = Files.createTempDirectory("fogwall-ssh-e2e-hostkey-").resolve("host_key");
         Path override = writeOverride(gitea, giteaSshUri, publicKeyLine, giteaApiToken, hostKey);
         try {
-            running = FogwallJettyApplication.start(FogwallConfigLoader.loadWithOverride("test-e2e", override));
+            running = FogwallJettyApplication.start(FogwallConfigLoader.loadLayers("test-e2e", List.of(override)));
         } finally {
             Files.deleteIfExists(override);
         }

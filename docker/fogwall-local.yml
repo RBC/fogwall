@@ -1,6 +1,6 @@
 # fogwall configuration for Docker Compose.
 # This file is mounted into the container at /app/conf/fogwall-local.yml
-# and overrides the defaults in fogwall.yml.
+# and overrides fogwall's bundled defaults.
 
 # API key for the REST approval endpoints (X-Api-Key header).
 # Set FOGWALL_API_KEY=<strong-secret> in your environment or docker-compose env section.

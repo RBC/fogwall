@@ -281,8 +281,8 @@ class ConfigHotReloadE2ETest {
      * <p>Distinct from every other test here, which stages a file on disk. This one puts the config where an operator
      * would — in a repository — and is the only coverage the clone path has.
      *
-     * <p>The repository carries the whole hot-reloadable picture, not just the rule under test, because that is what
-     * the feature does: a reload applies every section from the repo, so anything it omits reverts to base defaults.
+     * <p>The repository carries the policy it wants in force alongside the rule under test, as an operator's config
+     * repository would.
      */
     @Test
     void gitSourceReload() throws Exception {
@@ -321,23 +321,11 @@ class ConfigHotReloadE2ETest {
     }
 
     /**
-     * What a config repository holds: the hot-reloadable policy, and nothing that names a provider.
-     *
-     * <p>A reload composes the base config with this file alone — the fixture's own override is not in the picture — so
-     * the provider set is whatever the base config ships. Anything here referencing {@code gitea-e2e} would fail
-     * validation, which is why there are no users or permissions: those are not the repository's to carry.
-     *
-     * <p>The access rule is, though: the repository carries the policy it wants in force, and this test asserts on the
-     * commit rule it reloads, so it declares the allow rule the push needs alongside it.
+     * What a config repository holds: hot-reloadable policy only. A reload composes onto the fixture's startup
+     * configuration, so the {@code gitea} provider and the admin user the permission below names already exist there.
      */
     private static String repoConfig(String blockedLiterals) {
         return """
-                # A reload file has to be a valid config in its own right. Providers are not hot-reloadable, so this
-                # changes nothing at runtime — but without it the users below reference a provider the base config
-                # ships disabled, and validation refuses the whole file.
-                providers:
-                  gitea:
-                    enabled: true
                 commit:
                   message:
                     block:
@@ -354,13 +342,6 @@ class ConfigHotReloadE2ETest {
                         target: OWNER
                         value: "*"
                         type: GLOB
-                users:
-                  - username: %s
-                    emails:
-                      - %s
-                    scm-identities:
-                      - provider: gitea
-                        username: %s
                 permissions:
                   - username: %s
                     provider: gitea
@@ -369,12 +350,7 @@ class ConfigHotReloadE2ETest {
                       value: ".*"
                       type: REGEX
                     grant: MAINTAIN
-                """.formatted(
-                        blockedLiterals,
-                        GiteaContainer.ADMIN_USER,
-                        GiteaContainer.VALID_AUTHOR_EMAIL,
-                        GiteaContainer.ADMIN_USER,
-                        GiteaContainer.ADMIN_USER);
+                """.formatted(blockedLiterals, GiteaContainer.ADMIN_USER);
     }
 
     /** Commits {@code fogwall.yml} to the config repository, straight to Gitea rather than through the proxy. */

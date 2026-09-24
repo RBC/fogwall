@@ -1,0 +1,4 @@
+# Profile-order precedence fixture for FogwallConfigLoaderTest — sets a distinct value from fogwall-order-a.yml so a
+# test can prove which profile wins when both are named in FOGWALL_CONFIG_PROFILES.
+server:
+  port: 9002

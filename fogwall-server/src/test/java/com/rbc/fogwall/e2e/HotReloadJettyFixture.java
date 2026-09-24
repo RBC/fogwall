@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 /**
  * A {@link JettyProxyFixture} with a reload source attached, for tests that change configuration mid-run and assert the
@@ -49,7 +50,7 @@ class HotReloadJettyFixture implements AutoCloseable {
 
         Path override = writeOverride(giteaUri, reloadFile, configRepoUrl);
         try {
-            running = FogwallJettyApplication.start(FogwallConfigLoader.loadWithOverride("test-e2e", override));
+            running = FogwallJettyApplication.start(FogwallConfigLoader.loadLayers("test-e2e", List.of(override)));
         } finally {
             Files.deleteIfExists(override);
         }

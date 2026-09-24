@@ -3,6 +3,7 @@ package com.rbc.fogwall.jetty.reload;
 import com.rbc.fogwall.config.FogwallConfig;
 import com.rbc.fogwall.config.FogwallConfigLoader;
 import com.rbc.fogwall.config.JettyConfigurationBuilder;
+import com.rbc.fogwall.config.LoadedConfig;
 import com.rbc.fogwall.config.ReloadConfig;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.permission.RepoPermission;
@@ -13,6 +14,7 @@ import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -22,9 +24,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
-import tools.jackson.core.type.TypeReference;
-import tools.jackson.dataformat.yaml.YAMLAnchorReplayingFactory;
-import tools.jackson.dataformat.yaml.YAMLMapper;
+import org.github.gestalt.config.exceptions.GestaltException;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Manages hot-reloading of {@link ConfigHolder} at runtime, without restarting the server.
@@ -40,7 +41,10 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
  *
  * <p>Each reload can target a specific {@link Section} or {@link Section#ALL}. Either way it applies only the sections
  * the source document actually declares — a section the document is silent about keeps its current live value rather
- * than reverting to the base default. Provider, server, and database changes log a WARNING — those require a restart.
+ * than reverting to the base default. Within a declared section the document is merged key by key onto the
+ * configuration the process started with ({@link FogwallConfigLoader#composeReload}): a key it sets replaces the
+ * startup value, and a key it leaves out keeps it. Any top-level key that isn't a reloadable section is ignored with a
+ * warning.
  *
  * <p>A concurrent reload guard prevents overlapping reloads.
  */
@@ -77,10 +81,6 @@ public class LiveConfigLoader {
         }
     }
 
-    private static final YAMLMapper YAML =
-            YAMLMapper.builder(new YAMLAnchorReplayingFactory()).build();
-    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
-
     /** Top-level YAML key to the reloadable section it configures. Keys absent here are not hot-reloadable sections. */
     private static final Map<String, Section> SECTION_KEYS = Map.of(
             "commit", Section.COMMIT,
@@ -92,7 +92,7 @@ public class LiveConfigLoader {
             "attestations", Section.ATTESTATIONS);
 
     private final ConfigHolder configHolder;
-    private final FogwallConfig startupConfig;
+    private final LoadedConfig startup;
     private final ReloadConfig reloadConfig;
     private final UrlRuleRegistry urlRuleRegistry;
     private final RepoPermissionService repoPermissionService;
@@ -110,12 +110,12 @@ public class LiveConfigLoader {
 
     public LiveConfigLoader(
             ConfigHolder configHolder,
-            FogwallConfig startupConfig,
+            LoadedConfig startup,
             ReloadConfig reloadConfig,
             UrlRuleRegistry urlRuleRegistry,
             RepoPermissionService repoPermissionService) {
         this.configHolder = configHolder;
-        this.startupConfig = startupConfig;
+        this.startup = startup;
         this.reloadConfig = reloadConfig;
         this.urlRuleRegistry = urlRuleRegistry;
         this.repoPermissionService = repoPermissionService;
@@ -245,8 +245,7 @@ public class LiveConfigLoader {
             return false;
         }
         try {
-            FogwallConfig newConfig = FogwallConfigLoader.loadWithOverride(overrideFile);
-            applyReload(newConfig, sectionsToApply(section, overrideFile));
+            applyReload(FogwallConfigLoader.readReloadDocument(overrideFile), section);
             return true;
         } catch (Exception e) {
             log.error("Config reload from file {} failed: {}", overrideFile, e.getMessage(), e);
@@ -297,8 +296,7 @@ public class LiveConfigLoader {
             cloneDir = Files.createTempDirectory("fogwall-config-git-");
             Path yamlFile = fetchGitConfig(cloneDir);
             if (yamlFile != null) {
-                FogwallConfig newConfig = FogwallConfigLoader.loadWithOverride(yamlFile);
-                applyReload(newConfig, sectionsToApply(section, yamlFile));
+                applyReload(FogwallConfigLoader.readReloadDocument(yamlFile), section);
                 return true;
             }
             return false;
@@ -390,33 +388,35 @@ public class LiveConfigLoader {
     // -----------------------------------------------------------------------
 
     /**
-     * The reloadable sections a source document actually declares, keyed by their top-level YAML key. A reload applies
-     * only these — a section the document is silent about keeps its current live value rather than reverting to the
-     * base default, so a partial reload file patches the sections it names and leaves the rest alone.
+     * Applies the sections {@code document} declares, narrowed to {@code requested} when a specific section was asked
+     * for. A section the document is silent about keeps its current live value rather than reverting to the base
+     * default, so a partial reload file patches the sections it names and leaves the rest alone.
      */
-    private Set<Section> declaredSections(Path source) throws IOException {
-        Map<String, Object> tree;
-        try (var in = Files.newInputStream(source)) {
-            tree = YAML.readValue(in, MAP_TYPE);
-        }
-        if (tree == null) return EnumSet.noneOf(Section.class);
-        Set<Section> declared = EnumSet.noneOf(Section.class);
-        for (String key : tree.keySet()) {
+    private void applyReload(ObjectNode document, Section requested) throws GestaltException {
+        warnOnIgnoredKeys(document);
+
+        Set<Section> sections = EnumSet.noneOf(Section.class);
+        ObjectNode applied = document.objectNode();
+        for (String key : document.propertyNames()) {
             Section section = SECTION_KEYS.get(key);
-            if (section != null) declared.add(section);
+            if (section != null && (requested == Section.ALL || requested == section)) {
+                sections.add(section);
+                applied.set(key, document.get(key));
+            }
         }
-        return declared;
+
+        applyReload(FogwallConfigLoader.composeReload(startup, applied), sections);
     }
 
-    /**
-     * The concrete sections to apply for a reload: those declared in {@code source}, narrowed to {@code requested} when
-     * a specific section was asked for. {@link Section#ALL} means every declared section.
-     */
-    private Set<Section> sectionsToApply(Section requested, Path source) throws IOException {
-        Set<Section> declared = declaredSections(source);
-        if (requested == Section.ALL) return declared;
-        declared.retainAll(EnumSet.of(requested));
-        return declared;
+    /** Warns about top-level keys a reload never applies — anything that isn't a reloadable section. */
+    private static void warnOnIgnoredKeys(ObjectNode document) {
+        Set<String> ignored = new TreeSet<>();
+        for (String key : document.propertyNames()) {
+            if (!SECTION_KEYS.containsKey(key)) ignored.add(key);
+        }
+        if (!ignored.isEmpty()) {
+            log.warn("Config reload: {} not hot-reloadable — ignored; these take effect only on restart", ignored);
+        }
     }
 
     private void applyReload(FogwallConfig newConfig, Set<Section> sections) {
@@ -438,7 +438,6 @@ public class LiveConfigLoader {
             }
         }
 
-        warnOnRestartRequired(newConfig);
         log.info("Config reload complete — sections: {}", sections);
     }
 
@@ -481,28 +480,5 @@ public class LiveConfigLoader {
 
     private void reloadAttestations(JettyConfigurationBuilder builder, FogwallConfig newConfig) {
         configHolder.update(builder.buildAttestations(newConfig));
-    }
-
-    /**
-     * Compares the new config against the startup config and warns about sections that changed but require a restart to
-     * take effect.
-     */
-    private void warnOnRestartRequired(FogwallConfig newConfig) {
-        if (!newConfig
-                .getProviders()
-                .keySet()
-                .equals(startupConfig.getProviders().keySet())) {
-            log.warn(
-                    "Config reload: providers section changed — restart required for the new providers to take effect");
-        }
-        if (newConfig.getServer().getPort() != startupConfig.getServer().getPort()) {
-            log.warn("Config reload: server.port changed — restart required");
-        }
-        if (!newConfig
-                .getDatabase()
-                .getType()
-                .equals(startupConfig.getDatabase().getType())) {
-            log.warn("Config reload: database.type changed — restart required");
-        }
     }
 }

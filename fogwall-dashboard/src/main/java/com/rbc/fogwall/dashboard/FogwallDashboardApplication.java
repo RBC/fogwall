@@ -5,6 +5,7 @@ import com.rbc.fogwall.build.BuildInfo;
 import com.rbc.fogwall.config.FogwallConfig;
 import com.rbc.fogwall.config.FogwallConfigLoader;
 import com.rbc.fogwall.config.JettyConfigurationBuilder;
+import com.rbc.fogwall.config.LoadedConfig;
 import com.rbc.fogwall.config.ScmOAuthConfig;
 import com.rbc.fogwall.crypto.TokenCipherProvider;
 import com.rbc.fogwall.dashboard.issues.DashboardIssueClient;
@@ -70,7 +71,7 @@ public class FogwallDashboardApplication {
         log.info("Starting fogwall with dashboard {}...", BuildInfo.get().display());
         FogwallJettyApplication.writePidFile();
 
-        start(FogwallConfigLoader.load()).server().join();
+        start(FogwallConfigLoader.loadLayers()).server().join();
     }
 
     /**
@@ -81,7 +82,8 @@ public class FogwallDashboardApplication {
      * drives the real {@link JettyConfigurationBuilder}, {@link FogwallServletRegistrar} and Spring registration
      * instead of a second copy of this wiring.
      */
-    public static FogwallJettyApplication.Running start(FogwallConfig fogwallConfig) throws Exception {
+    public static FogwallJettyApplication.Running start(LoadedConfig loaded) throws Exception {
+        FogwallConfig fogwallConfig = loaded.getConfig();
         var configBuilder = new JettyConfigurationBuilder(fogwallConfig);
         configBuilder.validateProviderReferences(); // fail fast before any DB or port setup
         configBuilder.applyOutboundProxySystemWiring(); // before any outbound connection is made
@@ -139,7 +141,7 @@ public class FogwallDashboardApplication {
         ConfigHolder configHolder = configBuilder.buildConfigHolder();
         var liveConfigLoader = new LiveConfigLoader(
                 configHolder,
-                fogwallConfig,
+                loaded,
                 configBuilder.getReloadConfig(),
                 ctx.urlRuleRegistry(),
                 ctx.repoPermissionService());
