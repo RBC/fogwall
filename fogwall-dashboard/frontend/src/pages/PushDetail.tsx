@@ -1030,7 +1030,7 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
                 !!record.resolvedUser &&
                 currentUser.username === record.resolvedUser
               const isSelfReview = isPusher && !canSelfCertify
-              const canCancel = isAdmin || isPusher
+              const canCancel = record.canCurrentUserCancel ?? false
               const attestationsComplete = attestationQuestions
                 .filter((q) => q.required)
                 .every((q) => {

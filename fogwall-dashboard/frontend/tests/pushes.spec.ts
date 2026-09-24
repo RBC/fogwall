@@ -167,8 +167,8 @@ test.describe('review panel by role', () => {
     // Buttons exist but are disabled until reason + required attestations are filled
     await expect(page.getByRole('button', { name: '✓ Approve' })).toBeDisabled()
     await expect(page.getByRole('button', { name: '✗ Reject' })).toBeDisabled()
-    // Not the pusher, not admin → no cancel
-    await expect(page.getByRole('button', { name: 'Cancel push' })).toHaveCount(0)
+    // Not the pusher, but holds a grant on the repo → can cancel
+    await expect(page.getByRole('button', { name: 'Cancel push' })).toBeVisible()
   })
 
   test('pusher with SELF_CERTIFY sees the self-certify banner and can cancel', async ({

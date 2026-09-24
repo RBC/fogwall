@@ -47,6 +47,24 @@ class RepoPermissionServiceTest {
                 .build();
     }
 
+    // ---- hasAnyGrant ----
+
+    @Test
+    void hasAnyGrant_anyGrantOnTheRepo_counts() {
+        svc.save(grant("alice", "github", "/owner/repo", MatchType.LITERAL, RepoPermission.Grant.ISSUE));
+
+        assertTrue(svc.hasAnyGrant("alice", "github", "/owner/repo"));
+    }
+
+    @Test
+    void hasAnyGrant_grantOnAnotherRepoOrForAnotherUser_doesNotCount() {
+        svc.save(grant("alice", "github", "/owner/repo"));
+
+        assertFalse(svc.hasAnyGrant("alice", "github", "/owner/other"));
+        assertFalse(svc.hasAnyGrant("alice", "gitlab", "/owner/repo"));
+        assertFalse(svc.hasAnyGrant("bob", "github", "/owner/repo"));
+    }
+
     // ---- fail-closed: no grants ----
 
     @Test

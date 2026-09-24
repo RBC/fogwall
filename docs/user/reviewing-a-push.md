@@ -5,15 +5,15 @@ page. Pushes awaiting review have status **PENDING**.
 
 ## Push record states
 
-| State       | Meaning                                                        |
-| ----------- | -------------------------------------------------------------- |
-| `RECEIVED`  | Push has arrived and is being processed                        |
-| `PENDING`   | Validation passed; awaiting a reviewer's decision              |
-| `APPROVED`  | Approved by a reviewer (or self-certified) — will be forwarded |
-| `FORWARDED` | Successfully sent to the upstream SCM                          |
-| `REJECTED`  | Reviewer declined the push                                     |
-| `BLOCKED`   | Validation failed — push will not be forwarded                 |
-| `CANCELED`  | Canceled by the pusher or an administrator                     |
+| State       | Meaning                                                                                 |
+| ----------- | --------------------------------------------------------------------------------------- |
+| `RECEIVED`  | Push has arrived and is being processed                                                 |
+| `PENDING`   | Validation passed; awaiting a reviewer's decision                                       |
+| `APPROVED`  | Approved by a reviewer (or self-certified) — will be forwarded                          |
+| `FORWARDED` | Successfully sent to the upstream SCM                                                   |
+| `REJECTED`  | Reviewer declined the push                                                              |
+| `BLOCKED`   | Validation failed — push will not be forwarded                                          |
+| `CANCELED`  | Canceled by the pusher, an administrator, or anyone with a permission on the repository |
 
 ## Approving or rejecting
 

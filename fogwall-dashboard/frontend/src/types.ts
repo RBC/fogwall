@@ -130,6 +130,7 @@ export interface PushRecord {
    * banner and approve button in the UI.
    */
   canCurrentUserSelfCertify?: boolean
+  canCurrentUserCancel?: boolean
 }
 
 /** One cached local mirror, from GET /api/admin/cache (#340). */

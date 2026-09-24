@@ -86,6 +86,13 @@ class PushControllerTest {
         return PushRecord.builder().id(id).status(PushStatus.APPROVED).build();
     }
 
+    private void injectRepoPermissionService() throws Exception {
+        repoPermissionService = mock(RepoPermissionService.class);
+        var field = PushController.class.getDeclaredField("repoPermissionService");
+        field.setAccessible(true);
+        field.set(controller, repoPermissionService);
+    }
+
     private void loginAs(String username, boolean admin) {
         loginAs(username, admin, false);
     }
@@ -359,9 +366,10 @@ class PushControllerTest {
         }
 
         @Test
-        void canCurrentUserSelfCertify_falseWhenViewerIsNotPusher() {
+        void canCurrentUserSelfCertify_falseWhenViewerIsNotPusher() throws Exception {
             var push = blockedPush("p1", "alice");
             when(pushStore.findById("p1")).thenReturn(Optional.of(push));
+            injectRepoPermissionService();
             loginAs("bob", false, true); // role granted, but bob is not the pusher
             var resp = controller.getById("p1");
             assertEquals(false, resp.getBody().isCanCurrentUserSelfCertify());
@@ -397,6 +405,29 @@ class PushControllerTest {
 
             var resp = controller.getById("p1");
             assertEquals(false, resp.getBody().isCanCurrentUserSelfCertify());
+        }
+
+        @Test
+        void canCurrentUserCancel_trueForPusher() {
+            when(pushStore.findById("p1")).thenReturn(Optional.of(blockedPush("p1", "alice")));
+            loginAs("alice", false);
+
+            assertEquals(true, controller.getById("p1").getBody().isCanCurrentUserCancel());
+        }
+
+        @Test
+        void canCurrentUserCancel_followsRepoGrantForOtherUsers() throws Exception {
+            when(pushStore.findById("p1")).thenReturn(Optional.of(blockedPush("p1", "alice")));
+            injectRepoPermissionService();
+            when(repoPermissionService.hasAnyGrant("bob", "github", "github.com/acme/repo.git"))
+                    .thenReturn(true);
+            when(repoPermissionService.hasAnyGrant("carol", "github", "github.com/acme/repo.git"))
+                    .thenReturn(false);
+
+            loginAs("bob", false);
+            assertEquals(true, controller.getById("p1").getBody().isCanCurrentUserCancel());
+            loginAs("carol", false);
+            assertEquals(false, controller.getById("p1").getBody().isCanCurrentUserCancel());
         }
 
         @Test
@@ -719,10 +750,49 @@ class PushControllerTest {
         }
 
         @Test
-        void otherUser_cannotCancel() {
+        void userWithoutAGrantOnTheRepo_cannotCancel() throws Exception {
             when(pushStore.findById("p1")).thenReturn(Optional.of(blockedPush("p1", "alice")));
+            injectRepoPermissionService();
+            when(repoPermissionService.hasAnyGrant("bob", "github", "github.com/acme/repo.git"))
+                    .thenReturn(false);
             loginAs("bob", false);
+
             assertEquals(HttpStatus.FORBIDDEN, controller.cancel("p1", null).getStatusCode());
+            verify(pushStore, never()).cancel(any(), any());
+        }
+
+        @Test
+        void collaboratorWithAGrantOnTheRepo_canCancel() throws Exception {
+            when(pushStore.findById("p1")).thenReturn(Optional.of(blockedPush("p1", "alice")));
+            when(pushStore.cancel(eq("p1"), any()))
+                    .thenReturn(PushRecord.builder()
+                            .id("p1")
+                            .status(PushStatus.CANCELED)
+                            .build());
+            injectRepoPermissionService();
+            when(repoPermissionService.hasAnyGrant("bob", "github", "github.com/acme/repo.git"))
+                    .thenReturn(true);
+            loginAs("bob", false);
+
+            assertEquals(HttpStatus.OK, controller.cancel("p1", null).getStatusCode());
+            verify(pushStore).cancel(eq("p1"), argThat(a -> "bob".equals(a.getReviewerUsername())));
+        }
+
+        @Test
+        void unresolvedPusher_collaboratorCanCancel() throws Exception {
+            var push = blockedPush("p1", null);
+            when(pushStore.findById("p1")).thenReturn(Optional.of(push));
+            when(pushStore.cancel(eq("p1"), any()))
+                    .thenReturn(PushRecord.builder()
+                            .id("p1")
+                            .status(PushStatus.CANCELED)
+                            .build());
+            injectRepoPermissionService();
+            when(repoPermissionService.hasAnyGrant("bob", "github", "github.com/acme/repo.git"))
+                    .thenReturn(true);
+            loginAs("bob", false);
+
+            assertEquals(HttpStatus.OK, controller.cancel("p1", null).getStatusCode());
         }
 
         @Test
