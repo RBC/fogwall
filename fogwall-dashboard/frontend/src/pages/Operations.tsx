@@ -334,8 +334,12 @@ export function Operations() {
             <option value="commit">Commit rules</option>
             <option value="diff-scan">Diff scan</option>
             <option value="secret-scan">Secret scan</option>
+            <option value="binary-blob">Binary blobs</option>
+            <option value="scm-api">SCM API block rules</option>
+            <option value="content-patterns">Content patterns</option>
             <option value="rules">Rules</option>
             <option value="permissions">Permissions</option>
+            <option value="attestations">Attestations</option>
           </select>
 
           <button

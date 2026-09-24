@@ -45,7 +45,7 @@ import tools.jackson.databind.node.ObjectNode;
  * than reverting to the base default. Within a declared section the document is merged key by key onto the
  * configuration the process started with ({@link FogwallConfigLoader#composeReload}): a key it sets replaces the
  * startup value, and a key it leaves out keeps it. Any top-level key that isn't a reloadable section is ignored with a
- * warning.
+ * warning, as is any key under {@code scm-api} other than {@code block}.
  *
  * <p>A concurrent reload guard prevents overlapping reloads.
  */
@@ -61,6 +61,8 @@ public class LiveConfigLoader {
         DIFF_SCAN,
         SECRET_SCAN,
         BINARY_BLOB,
+        SCM_API,
+        CONTENT_PATTERNS,
         RULES,
         PERMISSIONS,
         ATTESTATIONS,
@@ -74,6 +76,8 @@ public class LiveConfigLoader {
                 case "diff_scan" -> DIFF_SCAN;
                 case "secret_scan" -> SECRET_SCAN;
                 case "binary_blob" -> BINARY_BLOB;
+                case "scm_api" -> SCM_API;
+                case "content_patterns" -> CONTENT_PATTERNS;
                 case "rules" -> RULES;
                 case "permissions" -> PERMISSIONS;
                 case "attestations" -> ATTESTATIONS;
@@ -88,6 +92,8 @@ public class LiveConfigLoader {
             "diff-scan", Section.DIFF_SCAN,
             "secret-scan", Section.SECRET_SCAN,
             "binary-blob", Section.BINARY_BLOB,
+            "scm-api", Section.SCM_API,
+            "content-patterns", Section.CONTENT_PATTERNS,
             "rules", Section.RULES,
             "permissions", Section.PERMISSIONS,
             "attestations", Section.ATTESTATIONS);
@@ -412,11 +418,23 @@ public class LiveConfigLoader {
         applyReload(FogwallConfigLoader.composeReload(startup, applied), sections);
     }
 
-    /** Warns about top-level keys a reload never applies — anything that isn't a reloadable section. */
+    /**
+     * Reloadable sections where only some keys are reloadable, mapped to those keys. The rest of such a section is
+     * restart-only.
+     */
+    private static final Map<String, Set<String>> PARTIAL_SECTION_KEYS = Map.of("scm-api", Set.of("block"));
+
+    /** Warns about keys a reload never applies — anything that isn't a reloadable section or reloadable key. */
     private static void warnOnIgnoredKeys(ObjectNode document) {
         Set<String> ignored = new TreeSet<>();
         for (String key : document.propertyNames()) {
-            if (!SECTION_KEYS.containsKey(key)) ignored.add(key);
+            if (!SECTION_KEYS.containsKey(key)) {
+                ignored.add(key);
+            } else if (PARTIAL_SECTION_KEYS.containsKey(key) && document.get(key) instanceof ObjectNode section) {
+                for (String subKey : section.propertyNames()) {
+                    if (!PARTIAL_SECTION_KEYS.get(key).contains(subKey)) ignored.add(key + "." + subKey);
+                }
+            }
         }
         if (!ignored.isEmpty()) {
             log.warn("Config reload: {} not hot-reloadable — ignored; these take effect only on restart", ignored);
@@ -435,6 +453,8 @@ public class LiveConfigLoader {
                 case DIFF_SCAN -> reloadDiffScan(builder);
                 case SECRET_SCAN -> reloadSecretScanning(builder);
                 case BINARY_BLOB -> reloadBinaryBlob(builder);
+                case SCM_API -> reloadScmApi(builder);
+                case CONTENT_PATTERNS -> reloadContentPatterns(builder);
                 case RULES -> reloadRules(builder, newConfig);
                 case PERMISSIONS -> reloadPermissions(builder, newConfig);
                 case ATTESTATIONS -> reloadAttestations(builder, newConfig);
@@ -459,6 +479,14 @@ public class LiveConfigLoader {
 
     private void reloadBinaryBlob(JettyConfigurationBuilder builder) {
         configHolder.update(builder.buildBinaryBlobConfig());
+    }
+
+    private void reloadScmApi(JettyConfigurationBuilder builder) {
+        configHolder.updateScmApiBlock(builder.buildScmApiBlockConfig());
+    }
+
+    private void reloadContentPatterns(JettyConfigurationBuilder builder) {
+        configHolder.update(builder.buildContentPatternConfig());
     }
 
     private void reloadRules(JettyConfigurationBuilder builder, FogwallConfig newConfig) {

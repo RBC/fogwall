@@ -57,7 +57,7 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
     private final Supplier<BinaryBlobConfig> binaryBlobConfigSupplier;
     private ScmOAuthConfig scmOAuthConfig = ScmOAuthConfig.defaultConfig();
 
-    private final ContentPatternConfig contentPatternConfig;
+    private final Supplier<ContentPatternConfig> contentPatternConfigSupplier;
     private final GpgConfig gpgConfig;
     private final RepoPermissionService repoPermissionService;
     private final PushIdentityResolver pushIdentityResolver;
@@ -135,7 +135,7 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
                 DiffScanConfig::defaultConfig,
                 SecretScanConfig::defaultConfig,
                 BinaryBlobConfig::defaultConfig,
-                ContentPatternConfig.defaultConfig(),
+                ContentPatternConfig::defaultConfig,
                 GpgConfig.defaultConfig(),
                 null,
                 null,
@@ -162,7 +162,7 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
                 DiffScanConfig::defaultConfig,
                 SecretScanConfig::defaultConfig,
                 BinaryBlobConfig::defaultConfig,
-                ContentPatternConfig.defaultConfig(),
+                ContentPatternConfig::defaultConfig,
                 gpgConfig,
                 repoPermissionService,
                 pushIdentityResolver,
@@ -179,7 +179,7 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
             Supplier<DiffScanConfig> diffScanConfigSupplier,
             Supplier<SecretScanConfig> secretScanConfigSupplier,
             Supplier<BinaryBlobConfig> binaryBlobConfigSupplier,
-            ContentPatternConfig contentPatternConfig,
+            Supplier<ContentPatternConfig> contentPatternConfigSupplier,
             GpgConfig gpgConfig,
             RepoPermissionService repoPermissionService,
             PushIdentityResolver pushIdentityResolver,
@@ -196,8 +196,9 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
                 secretScanConfigSupplier != null ? secretScanConfigSupplier : SecretScanConfig::defaultConfig;
         this.binaryBlobConfigSupplier =
                 binaryBlobConfigSupplier != null ? binaryBlobConfigSupplier : BinaryBlobConfig::defaultConfig;
-        this.contentPatternConfig =
-                contentPatternConfig != null ? contentPatternConfig : ContentPatternConfig.defaultConfig();
+        this.contentPatternConfigSupplier = contentPatternConfigSupplier != null
+                ? contentPatternConfigSupplier
+                : ContentPatternConfig::defaultConfig;
         this.gpgConfig = gpgConfig != null ? gpgConfig : GpgConfig.defaultConfig();
         this.repoPermissionService = repoPermissionService;
         this.pushIdentityResolver = pushIdentityResolver;
@@ -356,9 +357,16 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
         DiffScanConfig diffScanConfig = diffScanConfigSupplier.get();
         SecretScanConfig secretScanConfig = secretScanConfigSupplier.get();
         BinaryBlobConfig binaryBlobConfig = binaryBlobConfigSupplier.get();
+        ContentPatternConfig contentPatternConfig = contentPatternConfigSupplier.get();
 
         List<FogwallHook> validationHooks = buildValidationHooks(
-                commitConfig, diffScanConfig, secretScanConfig, binaryBlobConfig, validationContext, pushContext);
+                commitConfig,
+                diffScanConfig,
+                secretScanConfig,
+                binaryBlobConfig,
+                contentPatternConfig,
+                validationContext,
+                pushContext);
 
         List<PreReceiveHook> hooks = new ArrayList<>(validationHooks);
         hooks.add(persistenceHook.validationResultHook(validationContext));
@@ -404,6 +412,7 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
             DiffScanConfig diffScanConfig,
             SecretScanConfig secretScanConfig,
             BinaryBlobConfig binaryBlobConfig,
+            ContentPatternConfig contentPatternConfig,
             ValidationContext validationContext,
             PushContext pushContext) {
         SshScmLoginResolver sshLoginResolver = scmOAuthConfig.getIdentityMode() == ScmOAuthConfig.IdentityMode.STRICT

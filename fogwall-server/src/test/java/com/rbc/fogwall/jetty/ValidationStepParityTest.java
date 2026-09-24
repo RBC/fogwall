@@ -212,6 +212,7 @@ class ValidationStepParityTest {
                 DiffScanConfig.defaultConfig(),
                 SecretScanConfig.defaultConfig(),
                 BinaryBlobConfig.defaultConfig(),
+                ContentPatternConfig.defaultConfig(),
                 new ValidationContext(),
                 new PushContext());
     }
@@ -226,7 +227,7 @@ class ValidationStepParityTest {
                 DiffScanConfig::defaultConfig,
                 SecretScanConfig::defaultConfig,
                 BinaryBlobConfig::defaultConfig,
-                ContentPatternConfig.defaultConfig(),
+                ContentPatternConfig::defaultConfig,
                 mock(PushStore.class),
                 "https://fogwall.example.com",
                 mock(ApprovalGateway.class),

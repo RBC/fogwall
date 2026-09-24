@@ -2,7 +2,9 @@ package com.rbc.fogwall.jetty.reload;
 
 import com.rbc.fogwall.config.AttestationQuestion;
 import com.rbc.fogwall.config.BinaryBlobConfig;
+import com.rbc.fogwall.config.BlockConfig;
 import com.rbc.fogwall.config.CommitConfig;
+import com.rbc.fogwall.config.ContentPatternConfig;
 import com.rbc.fogwall.config.DiffScanConfig;
 import com.rbc.fogwall.config.SecretScanConfig;
 import java.util.List;
@@ -14,13 +16,15 @@ import lombok.extern.slf4j.Slf4j;
  * filters, hooks, and controllers that read from it automatically pick up the latest config on the next request — no
  * servlet re-registration required.
  *
- * <p>Holds four independent config objects, each reloadable separately:
+ * <p>Holds these independent config objects, each reloadable separately:
  *
  * <ul>
  *   <li>{@link CommitConfig} — per-commit checks: identity verification, author email, commit message
  *   <li>{@link DiffScanConfig} — push-level diff content blocking
  *   <li>{@link SecretScanConfig} — push-level gitleaks secret scanning
  *   <li>{@link BinaryBlobConfig} — push-level binary blob size / extension / MIME denylist
+ *   <li>{@link ContentPatternConfig} — PII/identifier pattern bundles, for pushes and SCM API content
+ *   <li>SCM API block rules — {@code scm-api.block}, content blocked from SCM API entities
  *   <li>Attestation questions — global reviewer prompts (applies to all providers in this release)
  * </ul>
  *
@@ -36,6 +40,8 @@ public class ConfigHolder {
     private final AtomicReference<DiffScanConfig> diffScanConfig;
     private final AtomicReference<SecretScanConfig> secretScanConfig;
     private final AtomicReference<BinaryBlobConfig> binaryBlobConfig;
+    private final AtomicReference<ContentPatternConfig> contentPatternConfig;
+    private final AtomicReference<BlockConfig> scmApiBlockConfig;
     private final AtomicReference<List<AttestationQuestion>> attestations;
 
     public ConfigHolder(
@@ -43,11 +49,15 @@ public class ConfigHolder {
             DiffScanConfig diffScanConfig,
             SecretScanConfig secretScanConfig,
             BinaryBlobConfig binaryBlobConfig,
+            ContentPatternConfig contentPatternConfig,
+            BlockConfig scmApiBlockConfig,
             List<AttestationQuestion> attestations) {
         this.commitConfig = new AtomicReference<>(commitConfig);
         this.diffScanConfig = new AtomicReference<>(diffScanConfig);
         this.secretScanConfig = new AtomicReference<>(secretScanConfig);
         this.binaryBlobConfig = new AtomicReference<>(binaryBlobConfig);
+        this.contentPatternConfig = new AtomicReference<>(contentPatternConfig);
+        this.scmApiBlockConfig = new AtomicReference<>(scmApiBlockConfig);
         this.attestations = new AtomicReference<>(attestations);
     }
 
@@ -69,6 +79,16 @@ public class ConfigHolder {
     /** Returns the current live {@link BinaryBlobConfig}. Reads are always atomic and never block. */
     public BinaryBlobConfig getBinaryBlobConfig() {
         return binaryBlobConfig.get();
+    }
+
+    /** Returns the current live {@link ContentPatternConfig}. Reads are always atomic and never block. */
+    public ContentPatternConfig getContentPatternConfig() {
+        return contentPatternConfig.get();
+    }
+
+    /** Returns the current live {@code scm-api.block} rules. Reads are always atomic and never block. */
+    public BlockConfig getScmApiBlockConfig() {
+        return scmApiBlockConfig.get();
     }
 
     /**
@@ -122,6 +142,31 @@ public class ConfigHolder {
                 newBinaryBlobConfig.isEnabled(),
                 newBinaryBlobConfig.getMaxSizeBytes());
         log.debug("Previous BinaryBlobConfig replaced: {}", old);
+    }
+
+    /**
+     * Atomically replaces the live content-pattern config. Called by {@link LiveConfigLoader} when a
+     * {@code content-patterns} section reload is triggered.
+     */
+    public void update(ContentPatternConfig newContentPatternConfig) {
+        ContentPatternConfig old = contentPatternConfig.getAndSet(newContentPatternConfig);
+        log.info(
+                "ContentPatternConfig reloaded: enabled={}, bundles={}",
+                newContentPatternConfig.isEnabled(),
+                newContentPatternConfig.getBundles());
+        log.debug("Previous ContentPatternConfig replaced: {}", old);
+    }
+
+    /**
+     * Atomically replaces the live {@code scm-api.block} rules. Called by {@link LiveConfigLoader} when an
+     * {@code scm-api} section reload is triggered.
+     */
+    public void updateScmApiBlock(BlockConfig newScmApiBlockConfig) {
+        BlockConfig old = scmApiBlockConfig.getAndSet(newScmApiBlockConfig);
+        log.info(
+                "SCM API block rules reloaded: rules={}",
+                newScmApiBlockConfig.getRules().size());
+        log.debug("Previous SCM API block rules replaced: {}", old);
     }
 
     /**
