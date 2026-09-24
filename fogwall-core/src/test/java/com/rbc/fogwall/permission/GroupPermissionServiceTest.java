@@ -52,6 +52,18 @@ class GroupPermissionServiceTest {
         return r;
     }
 
+    // ---- hasAnyGrant via group ----
+
+    @Test
+    void hasAnyGrant_groupMember_counts() {
+        PermissionGroup g = group("reporters");
+        rule(g.getId(), "github", "/acme/repo", RepoPermission.Grant.ISSUE);
+        groupStore.addMember(g.getId(), "alice");
+
+        assertTrue(svc.hasAnyGrant("alice", "github", "/acme/repo"));
+        assertFalse(svc.hasAnyGrant("bob", "github", "/acme/repo"));
+    }
+
     // ---- group member can push via group rule ----
 
     @Test

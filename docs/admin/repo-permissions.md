@@ -23,6 +23,8 @@ permissions:
 | `MERGE`           | User can merge a pull/merge request on this repo through the SCM API proxy's maintainer path. Independent of PUSH, REVIEW and PROPOSE; implies none of them.                                                                                                                                                                                   |
 | `MAINTAIN`        | Sole-maintainer bundle: `PUSH` + `PROPOSE` + `MERGE` in one entry, so a trusted maintainer is one permission instead of three. Deliberately **excludes** `SELF_CERTIFY` — bypassing peer review stays a separate, explicit grant.                                                                                                              |
 
+Any of these, held directly or through a group, also lets the user cancel a pending push to the repository.
+
 ## SELF_CERTIFY — for solo contributors
 
 `SELF_CERTIFY` is the right choice for a developer who works independently and does not have a team reviewer. Without

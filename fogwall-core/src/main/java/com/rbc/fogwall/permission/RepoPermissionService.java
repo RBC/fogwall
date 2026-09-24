@@ -136,6 +136,23 @@ public class RepoPermissionService {
     }
 
     /**
+     * Returns {@code true} when {@code username} holds any grant for {@code path} at {@code provider}, directly or
+     * through a group. Marks a collaborator on the repository regardless of which operations the grant permits.
+     */
+    public boolean hasAnyGrant(String username, String provider, String path) {
+        boolean direct = store.findByProvider(provider).stream()
+                .filter(p -> username.equals(p.getUsername()))
+                .anyMatch(p -> matchesPath(p, path));
+        if (direct || groupStore == null) {
+            return direct;
+        }
+        Set<String> userGroupIds = Set.copyOf(groupStore.findGroupIdsForUser(username));
+        return groupStore.findRulesByProvider(provider).stream()
+                .filter(r -> userGroupIds.contains(r.getGroupId()))
+                .anyMatch(r -> matchesPathRule(r, path));
+    }
+
+    /**
      * Returns the first existing permission that would conflict with {@code incoming}, or empty if none.
      *
      * <p>Two permissions conflict when they share the same username and provider, their paths overlap (exact string

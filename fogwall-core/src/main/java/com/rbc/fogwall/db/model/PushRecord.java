@@ -135,4 +135,12 @@ public class PushRecord {
      */
     @Builder.Default
     private boolean canCurrentUserSelfCertify = false;
+
+    /**
+     * Transient flag computed by the dashboard {@code PushController#getById} endpoint indicating whether the currently
+     * authenticated user may cancel this push: an admin, the resolved pusher, or a user holding any permission on the
+     * push's repository. Not persisted to the database. Used by the frontend to gate the cancel button.
+     */
+    @Builder.Default
+    private boolean canCurrentUserCancel = false;
 }

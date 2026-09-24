@@ -257,6 +257,8 @@ public class PushController {
                 .map(record -> {
                     stripDiffContent(record);
                     record.setCanCurrentUserSelfCertify(computeCanCurrentUserSelfCertify(record));
+                    record.setCanCurrentUserCancel(
+                            canCancel(record, SecurityContextHolder.getContext().getAuthentication()));
                     enrichUrls(record);
                     return ResponseEntity.ok(record);
                 })
@@ -503,7 +505,10 @@ public class PushController {
         return null;
     }
 
-    /** Cancel a push. Only the pusher or an admin may cancel. Body: { "reviewerUsername": "..." } */
+    /**
+     * Cancel a push. The pusher, an admin, or a collaborator holding any grant on the push's repository may cancel.
+     * Body: { "reviewerUsername": "..." }
+     */
     @Operation(operationId = "cancelPush", summary = "Cancel a push")
     @PostMapping("/{id}/cancel")
     public ResponseEntity<?> cancel(@PathVariable String id, @RequestBody(required = false) Map<String, String> body) {
@@ -515,13 +520,12 @@ public class PushController {
                                 .body(Map.of("error", "Push is not in PENDING status: " + record.getStatus()));
                     }
                     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-                    if (!isAdmin(auth)) {
-                        String pusherProxyUser = record.getResolvedUser();
-                        String reviewer = auth != null ? auth.getName() : null;
-                        if (pusherProxyUser == null || !pusherProxyUser.equals(reviewer)) {
-                            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                                    .body(Map.of("error", "Only the pusher or an admin can cancel a push"));
-                        }
+                    if (!canCancel(record, auth)) {
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                                .body(Map.of(
+                                        "error",
+                                        "Only the pusher, an admin, or a user with a permission on this repository"
+                                                + " can cancel a push"));
                     }
                     var attestation = Attestation.builder()
                             .pushId(id)
@@ -532,6 +536,22 @@ public class PushController {
                     return ResponseEntity.ok(updated);
                 })
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Whether {@code auth} may cancel {@code record}: an admin, the resolved pusher, or a collaborator holding any
+     * grant on the push's repository. Cancel withdraws a push and never forwards one, so the bar is a stake in the
+     * repository, not a review grant. A push with no resolved pusher is still cancelable by a collaborator.
+     */
+    private boolean canCancel(PushRecord record, Authentication auth) {
+        if (auth == null) return false;
+        if (isAdmin(auth)) return true;
+        String user = auth.getName();
+        if (user == null) return false;
+        if (user.equals(record.getResolvedUser())) return true;
+        return record.getProvider() != null
+                && record.getUrl() != null
+                && repoPermissionService.hasAnyGrant(user, record.getProvider(), record.getUrl());
     }
 
     private static boolean isAdmin(Authentication auth) {
