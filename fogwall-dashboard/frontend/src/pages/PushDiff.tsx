@@ -136,7 +136,7 @@ export function PushDiff({ dark = false }: { dark?: boolean }) {
       {/* Diff body */}
       <div className="flex-1 overflow-auto">
         {loading && (
-          <div className="flex items-center justify-center h-64 text-gray-400 text-sm dark:text-gray-500">
+          <div className="flex items-center justify-center h-64 text-gray-500 text-sm dark:text-gray-400">
             Loading diff…
           </div>
         )}

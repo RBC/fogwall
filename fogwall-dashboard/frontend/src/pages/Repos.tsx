@@ -102,7 +102,7 @@ function CloneButton({ httpsUrl, sshUrl }: { httpsUrl: string; sshUrl?: string |
             <span className="flex-1 truncate">{cloneUrl}</span>
             <button
               onClick={copy}
-              className="shrink-0 text-gray-400 hover:text-gray-700 transition-colors dark:text-gray-500 dark:hover:text-gray-300"
+              className="shrink-0 text-gray-500 hover:text-gray-700 transition-colors dark:text-gray-400 dark:hover:text-gray-300"
             >
               {copied ? (
                 <svg
@@ -120,7 +120,7 @@ function CloneButton({ httpsUrl, sshUrl }: { httpsUrl: string; sshUrl?: string |
               )}
             </button>
           </div>
-          <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
             Use Git or run this in your terminal 👍
           </p>
         </div>
@@ -247,7 +247,7 @@ function AddRuleModal({
           <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Add Rule</h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-xl leading-none dark:text-gray-500 dark:hover:text-gray-300"
+            className="text-gray-500 hover:text-gray-600 text-xl leading-none dark:text-gray-400 dark:hover:text-gray-300"
           >
             ×
           </button>
@@ -340,7 +340,7 @@ function AddRuleModal({
               <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">⚠ {regexError}</p>
             )}
             {form.targetType === 'slug' && (
-              <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 Slug rules match the full URL path — must start with{' '}
                 <code className="font-mono">/</code>, e.g.{' '}
                 <code className="font-mono">/myorg/myrepo</code>.
@@ -386,7 +386,7 @@ function AddRuleModal({
               min={1}
               className={inputClass}
             />
-            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
               Lower numbers are evaluated first. Default is 100. Deny rules always override allow
               rules regardless of order.
             </p>
@@ -488,13 +488,13 @@ function TestRuleModal({ onClose }: { onClose: () => void }) {
           <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Test a rule</h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-xl leading-none dark:text-gray-500 dark:hover:text-gray-300"
+            className="text-gray-500 hover:text-gray-600 text-xl leading-none dark:text-gray-400 dark:hover:text-gray-300"
           >
             ×
           </button>
         </div>
 
-        <p className="text-xs text-gray-400 dark:text-gray-500">
+        <p className="text-xs text-gray-500 dark:text-gray-400">
           Read-only evaluation against the live ruleset. Shows which rule matches first and the full
           ordered trail of rules considered.
         </p>
@@ -567,7 +567,7 @@ function TestRuleModal({ onClose }: { onClose: () => void }) {
               )}
             </div>
             {result.steps.length === 0 ? (
-              <p className="text-xs text-gray-400 dark:text-gray-500">No rules considered.</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">No rules considered.</p>
             ) : (
               <div className="border border-gray-200 rounded divide-y divide-gray-100 dark:border-slate-700 dark:divide-slate-700">
                 {result.steps.map((step, i) => (
@@ -578,7 +578,7 @@ function TestRuleModal({ onClose }: { onClose: () => void }) {
                     }`}
                   >
                     <span className="w-4 text-center">{step.matched ? '✓' : '·'}</span>
-                    <span className="w-8 text-gray-400 font-mono dark:text-gray-500">#{i + 1}</span>
+                    <span className="w-8 text-gray-500 font-mono dark:text-gray-400">#{i + 1}</span>
                     <span
                       className={`px-1.5 py-0.5 rounded font-medium ${
                         step.access === 'ALLOW'
@@ -588,13 +588,13 @@ function TestRuleModal({ onClose }: { onClose: () => void }) {
                     >
                       {step.access}
                     </span>
-                    <span className="text-gray-400 dark:text-gray-500">order {step.order}</span>
+                    <span className="text-gray-500 dark:text-gray-400">order {step.order}</span>
                     {step.description && (
                       <span className="text-gray-500 truncate dark:text-gray-400">
                         — {step.description}
                       </span>
                     )}
-                    <span className="ml-auto text-gray-400 dark:text-gray-500">
+                    <span className="ml-auto text-gray-500 dark:text-gray-400">
                       {step.matched ? 'matched' : 'no match'}
                     </span>
                   </div>
@@ -724,13 +724,13 @@ export function Repos({ currentUser }: { currentUser: CurrentUser | null }) {
         )}
       </div>
 
-      {loading && <div className="text-sm text-gray-400 dark:text-gray-500">Loading…</div>}
+      {loading && <div className="text-sm text-gray-500 dark:text-gray-400">Loading…</div>}
 
       {/* Active repos tab */}
       {!loading && tab === 'active' && (
         <>
           {activeRepos.length === 0 ? (
-            <p className="text-sm text-gray-400 dark:text-gray-500">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
               No repo activity recorded yet. Push or fetch through the proxy to populate this view.
             </p>
           ) : (
@@ -741,7 +741,7 @@ export function Repos({ currentUser }: { currentUser: CurrentUser | null }) {
                   className="bg-white rounded-lg shadow border border-gray-200 px-6 py-4 flex items-center justify-between dark:bg-slate-800 dark:border-slate-700"
                 >
                   <div>
-                    <div className="text-xs text-gray-400 mb-0.5 dark:text-gray-500">
+                    <div className="text-xs text-gray-500 mb-0.5 dark:text-gray-400">
                       {providers.find((p) => p.id === repo.provider)?.name ?? repo.provider}
                     </div>
                     <div className="font-semibold text-gray-800 dark:text-gray-200">
@@ -754,13 +754,13 @@ export function Repos({ currentUser }: { currentUser: CurrentUser | null }) {
                         <div className="font-semibold text-gray-900 dark:text-gray-100">
                           {repo.pushCount}
                         </div>
-                        <div className="text-xs text-gray-400 dark:text-gray-500">pushes</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">pushes</div>
                       </div>
                       <div className="text-center">
                         <div className="font-semibold text-gray-900 dark:text-gray-100">
                           {repo.fetchCount}
                         </div>
-                        <div className="text-xs text-gray-400 dark:text-gray-500">fetches</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">fetches</div>
                       </div>
                       {repo.blockedFetchCount > 0 && (
                         <div className="text-center">
@@ -793,7 +793,7 @@ export function Repos({ currentUser }: { currentUser: CurrentUser | null }) {
       {!loading && tab === 'rules' && (
         <>
           {rules.length === 0 ? (
-            <p className="text-sm text-gray-400 dark:text-gray-500">No rules configured.</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">No rules configured.</p>
           ) : (
             <div className="space-y-2">
               {rules.map((rule) => (
@@ -803,7 +803,7 @@ export function Repos({ currentUser }: { currentUser: CurrentUser | null }) {
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <span
-                      className="text-xs w-8 text-center text-gray-400 font-mono shrink-0 dark:text-gray-500"
+                      className="text-xs w-8 text-center text-gray-500 font-mono shrink-0 dark:text-gray-400"
                       title="Priority order — lower runs first"
                     >
                       #{rule.ruleOrder}
@@ -819,7 +819,7 @@ export function Repos({ currentUser }: { currentUser: CurrentUser | null }) {
                     </span>
                     <div className="flex flex-col min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-gray-400 shrink-0 dark:text-gray-500">
+                        <span className="text-xs text-gray-500 shrink-0 dark:text-gray-400">
                           {(rule.target ?? 'SLUG').toLowerCase()}:
                         </span>
                         <span className="font-mono text-sm text-gray-800 truncate dark:text-gray-200">
@@ -827,11 +827,11 @@ export function Repos({ currentUser }: { currentUser: CurrentUser | null }) {
                         </span>
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
                           {(rule.matchType ?? 'GLOB').toLowerCase()}
                         </span>
                         <span className="text-xs text-gray-300 dark:text-gray-600">·</span>
-                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
                           provider:{' '}
                           <span className="text-gray-600 dark:text-gray-300">
                             {rule.provider
@@ -841,7 +841,7 @@ export function Repos({ currentUser }: { currentUser: CurrentUser | null }) {
                           </span>
                         </span>
                         {rule.description && (
-                          <span className="text-xs text-gray-400 dark:text-gray-500">
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
                             — {rule.description}
                           </span>
                         )}
@@ -861,7 +861,7 @@ export function Repos({ currentUser }: { currentUser: CurrentUser | null }) {
                     >
                       {rule.operation === 'BOTH' ? 'PUSH & FETCH' : rule.operation}
                     </span>
-                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
                       {rule.source === 'CONFIG' ? 'config' : 'local'}
                     </span>
                     {!rule.enabled && (

@@ -136,7 +136,7 @@ function ConnectivityRow({ result }: { name: string; result: ProviderConnectivit
           <TlsBadge tls={result.tls} />
           <HttpBadge http={result.http} />
         </div>
-        <span className="text-xs text-gray-400 font-mono text-right break-all dark:text-gray-500">
+        <span className="text-xs text-gray-500 font-mono text-right break-all dark:text-gray-400">
           {result.uri}
         </span>
       </div>
@@ -201,26 +201,26 @@ function ConnectivityRow({ result }: { name: string; result: ProviderConnectivit
 
       {/* Success details */}
       {tcpOk && tlsOk && result.tls && result.tls.status === 'ok' && (
-        <div className="text-xs text-gray-400 font-mono dark:text-gray-500">
+        <div className="text-xs text-gray-500 font-mono dark:text-gray-400">
           {result.tls.protocol} · {result.tls.cipher}
           {result.tls.peerCn && <span className="ml-2">· CN={result.tls.peerCn}</span>}
         </div>
       )}
       {result.http && typeof result.http.status === 'number' && result.http.location && (
-        <div className="text-xs text-gray-400 font-mono dark:text-gray-500">
+        <div className="text-xs text-gray-500 font-mono dark:text-gray-400">
           → {result.http.location}
         </div>
       )}
       {result.gitProbe && (
         <>
           {result.gitProbe.uploadPack.status === 'ok' && result.gitProbe.uploadPack.contentType && (
-            <div className="text-xs text-gray-400 font-mono dark:text-gray-500">
+            <div className="text-xs text-gray-500 font-mono dark:text-gray-400">
               fetch content-type: {result.gitProbe.uploadPack.contentType}
             </div>
           )}
           {result.gitProbe.receivePack.status === 'ok' &&
             result.gitProbe.receivePack.contentType && (
-              <div className="text-xs text-gray-400 font-mono dark:text-gray-500">
+              <div className="text-xs text-gray-500 font-mono dark:text-gray-400">
                 push content-type: {result.gitProbe.receivePack.contentType}
               </div>
             )}
@@ -384,7 +384,7 @@ export function Operations() {
             {connStatus === 'loading' ? 'Checking…' : 'Run connectivity check'}
           </button>
           {connCheckedAt && (
-            <span className="text-xs text-gray-400 dark:text-gray-500">
+            <span className="text-xs text-gray-500 dark:text-gray-400">
               checked at {new Date(connCheckedAt).toLocaleTimeString()}
             </span>
           )}
@@ -438,12 +438,12 @@ export function Operations() {
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-gray-600 dark:text-gray-400">
                 Repo path{' '}
-                <span className="font-normal text-gray-400 dark:text-gray-500">
+                <span className="font-normal text-gray-500 dark:text-gray-400">
                   (optional — skips git probe if blank)
                 </span>
               </label>
               <div className="flex items-stretch">
-                <span className="inline-flex items-center px-3 rounded-l border border-r-0 border-gray-300 bg-gray-50 text-gray-400 text-xs font-mono select-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-500">
+                <span className="inline-flex items-center px-3 rounded-l border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-xs font-mono select-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-400">
                   {providerList.find((p) => p.name === selectedProvider)?.uri ?? ''}
                 </span>
                 <input
@@ -466,7 +466,7 @@ export function Operations() {
               {targetStatus === 'loading' ? 'Checking…' : 'Run targeted check'}
             </button>
             {targetCheckedAt && (
-              <span className="text-xs text-gray-400 dark:text-gray-500">
+              <span className="text-xs text-gray-500 dark:text-gray-400">
                 checked at {new Date(targetCheckedAt).toLocaleTimeString()}
               </span>
             )}

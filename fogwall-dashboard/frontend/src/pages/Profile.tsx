@@ -301,7 +301,7 @@ export function Profile() {
 
   if (loading)
     return (
-      <div className="max-w-2xl mx-auto px-4 py-16 text-center text-gray-400 dark:text-gray-500">
+      <div className="max-w-2xl mx-auto px-4 py-16 text-center text-gray-500 dark:text-gray-400">
         Loading…
       </div>
     )
@@ -376,13 +376,13 @@ export function Profile() {
                     {linked ? (
                       <span className="text-gray-800 dark:text-gray-200">{linked.username}</span>
                     ) : (
-                      <span className="text-gray-400 italic dark:text-gray-500">Not linked</span>
+                      <span className="text-gray-500 italic dark:text-gray-400">Not linked</span>
                     )}
                   </span>
                   {linked ? (
                     <button
                       onClick={() => handleUnlinkOAuth(p.id)}
-                      className="text-gray-400 hover:text-red-500 transition-colors text-xs dark:text-gray-500 dark:hover:text-red-400"
+                      className="text-gray-500 hover:text-red-500 transition-colors text-xs dark:text-gray-400 dark:hover:text-red-400"
                       title="Unlink OAuth account"
                     >
                       Unlink
@@ -436,7 +436,7 @@ export function Profile() {
           </p>
 
           {profile.emails.length === 0 ? (
-            <p className="text-sm text-gray-400 italic dark:text-gray-500">
+            <p className="text-sm text-gray-500 italic dark:text-gray-400">
               No email addresses registered.
             </p>
           ) : (
@@ -457,7 +457,7 @@ export function Profile() {
                   {!entry.locked && (
                     <button
                       onClick={() => handleRemoveEmail(entry)}
-                      className="text-gray-400 hover:text-red-500 transition-colors text-xs dark:text-gray-500 dark:hover:text-red-400"
+                      className="text-gray-500 hover:text-red-500 transition-colors text-xs dark:text-gray-400 dark:hover:text-red-400"
                       title="Remove"
                     >
                       Remove
@@ -505,7 +505,7 @@ export function Profile() {
           )}
 
           {sshKeys.length === 0 ? (
-            <p className="text-sm text-gray-400 italic dark:text-gray-500">
+            <p className="text-sm text-gray-500 italic dark:text-gray-400">
               No SSH keys registered.
             </p>
           ) : (
@@ -515,7 +515,7 @@ export function Profile() {
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-gray-800 dark:text-gray-200 flex items-center gap-2">
                       {key.label || (
-                        <span className="italic text-gray-400 dark:text-gray-500">unlabelled</span>
+                        <span className="italic text-gray-500 dark:text-gray-400">unlabelled</span>
                       )}
                       {key.locked &&
                         (key.source === 'config' ? (
@@ -527,7 +527,7 @@ export function Profile() {
                     {!key.locked && (
                       <button
                         onClick={() => handleRemoveSshKey(key)}
-                        className="text-gray-400 hover:text-red-500 transition-colors text-xs dark:text-gray-500 dark:hover:text-red-400"
+                        className="text-gray-500 hover:text-red-500 transition-colors text-xs dark:text-gray-400 dark:hover:text-red-400"
                       >
                         Remove
                       </button>
@@ -536,7 +536,7 @@ export function Profile() {
                   <p className="font-mono text-xs text-gray-500 dark:text-gray-400 break-all">
                     {key.fingerprint}
                   </p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
                     {key.locked
                       ? key.source === 'config'
                         ? 'Defined in server configuration'
@@ -593,9 +593,9 @@ export function Profile() {
             Repository access permissions granted to your account.
           </p>
           {loading ? (
-            <p className="text-sm text-gray-400 dark:text-gray-500">Loading…</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>
           ) : permissions.length === 0 ? (
-            <p className="text-sm text-gray-400 italic dark:text-gray-500">
+            <p className="text-sm text-gray-500 italic dark:text-gray-400">
               No permissions configured.
             </p>
           ) : (
@@ -634,7 +634,7 @@ export function Profile() {
                         {p.source === 'CONFIG' ? (
                           <LockedBadge source="config" />
                         ) : (
-                          <span className="text-xs text-gray-400 dark:text-gray-500">local</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">local</span>
                         )}
                       </td>
                     </tr>
@@ -667,7 +667,7 @@ export function Profile() {
                     )}
                   </div>
                   {g.rules.length === 0 ? (
-                    <p className="px-4 py-3 text-xs text-gray-400 italic">
+                    <p className="px-4 py-3 text-xs text-gray-500 italic">
                       No rules in this group.
                     </p>
                   ) : (
@@ -716,7 +716,7 @@ export function Profile() {
           </p>
 
           {profile.scmIdentities.length === 0 ? (
-            <p className="text-sm text-gray-400 italic dark:text-gray-500">
+            <p className="text-sm text-gray-500 italic dark:text-gray-400">
               No SCM identities registered.
             </p>
           ) : (
@@ -737,7 +737,7 @@ export function Profile() {
                   {!id.verified && id.source !== 'config' && (
                     <button
                       onClick={() => handleRemoveIdentity(id)}
-                      className="text-gray-400 hover:text-red-500 transition-colors text-xs dark:text-gray-500 dark:hover:text-red-400"
+                      className="text-gray-500 hover:text-red-500 transition-colors text-xs dark:text-gray-400 dark:hover:text-red-400"
                       title="Remove"
                     >
                       Remove
@@ -749,7 +749,7 @@ export function Profile() {
           )}
 
           {scmIdentityMode === 'strict' ? (
-            <p className="text-xs text-gray-400 italic dark:text-gray-500">
+            <p className="text-xs text-gray-500 italic dark:text-gray-400">
               This deployment requires an OAuth-verified SCM identity — manual entry is disabled.
               Use the "Link via OAuth" button above.
             </p>

@@ -235,7 +235,7 @@ function PushTimeline({ record }: { record: PushRecord }) {
           ? 'text-green-600 dark:text-green-400'
           : att.type === 'REJECTION'
             ? 'text-red-600 dark:text-red-400'
-            : 'text-gray-400 dark:text-gray-500',
+            : 'text-gray-500 dark:text-gray-400',
     })
   }
 
@@ -299,7 +299,7 @@ function PushTimeline({ record }: { record: PushRecord }) {
               </a>
             )}
             {ev.time && (
-              <div className="text-xs text-gray-400 mt-0.5 dark:text-gray-500">
+              <div className="text-xs text-gray-500 mt-0.5 dark:text-gray-400">
                 {formatTime(ev.time)}
               </div>
             )}
@@ -661,7 +661,7 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
   return (
     <div className="max-w-6xl px-6 py-6 space-y-6">
       {loading && (
-        <div className="text-center text-gray-400 py-16 dark:text-gray-500">Loading…</div>
+        <div className="text-center text-gray-500 py-16 dark:text-gray-400">Loading…</div>
       )}
       {error && <div className="text-red-600 py-8 text-center dark:text-red-400">{error}</div>}
 
@@ -693,7 +693,7 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
                 <div className="text-xs text-gray-500 font-mono dark:text-gray-400">
                   {record.branch}
                 </div>
-                <div className="text-xs font-mono text-gray-400 break-all dark:text-gray-500">
+                <div className="text-xs font-mono text-gray-500 break-all dark:text-gray-400">
                   {record.commitTo}
                   {record.commitUrl && (
                     <a
@@ -717,13 +717,13 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
               <div className="text-right text-xs text-gray-500 shrink-0 space-y-1 dark:text-gray-400">
                 {record.author && (
                   <div>
-                    <span className="text-gray-400 dark:text-gray-500">author: </span>
+                    <span className="text-gray-500 dark:text-gray-400">author: </span>
                     <span className="text-gray-600 dark:text-gray-300">{record.author}</span>
                   </div>
                 )}
                 {record.committer && record.committer !== record.author && (
                   <div>
-                    <span className="text-gray-400 dark:text-gray-500">committer: </span>
+                    <span className="text-gray-500 dark:text-gray-400">committer: </span>
                     <span className="text-gray-600 dark:text-gray-300">{record.committer}</span>
                   </div>
                 )}
@@ -739,7 +739,7 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
                       <div className="space-y-0.5">
                         {displayHandle && (
                           <div className="flex items-center justify-end gap-1">
-                            <span className="text-gray-400 dark:text-gray-500">pusher</span>
+                            <span className="text-gray-500 dark:text-gray-400">pusher</span>
                             {upstreamHost && record.scmUsername && (
                               <img
                                 src={`https://${upstreamHost}/favicon.ico`}
@@ -766,7 +766,7 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
                           </div>
                         )}
                         {record.resolvedUser && record.resolvedUser !== record.scmUsername && (
-                          <div className="text-gray-400 dark:text-gray-500">
+                          <div className="text-gray-500 dark:text-gray-400">
                             user: {record.resolvedUser}
                           </div>
                         )}
@@ -778,7 +778,7 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
                   return null
                 })()}
                 <IdentityBadge record={record} />
-                <div className="text-gray-400 dark:text-gray-500">
+                <div className="text-gray-500 dark:text-gray-400">
                   {formatTime(record.timestamp)}
                 </div>
               </div>
@@ -814,7 +814,7 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
                       key={c.sha}
                       className="border border-gray-100 rounded p-3 space-y-1 dark:border-slate-700"
                     >
-                      <div className="font-mono text-xs text-gray-400 dark:text-gray-500">
+                      <div className="font-mono text-xs text-gray-500 dark:text-gray-400">
                         {c.sha}
                       </div>
                       <div className="text-sm text-gray-800 whitespace-pre-wrap dark:text-gray-200">
@@ -903,7 +903,7 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
                                   ? 'text-amber-500 dark:text-amber-400'
                                   : isSkipped
                                     ? 'text-yellow-500 dark:text-yellow-400'
-                                    : 'text-gray-400 dark:text-gray-500'
+                                    : 'text-gray-500 dark:text-gray-400'
                           }
                         >
                           {s.status === 'PASS'
@@ -925,7 +925,7 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
                         </span>
                         {(isFailed || isWarn || isSkipped) &&
                           (s.content || s.errorMessage || s.blockedMessage) && (
-                            <span className="text-xs text-gray-400 shrink-0 dark:text-gray-500">
+                            <span className="text-xs text-gray-500 shrink-0 dark:text-gray-400">
                               {isOpen ? '▲ hide' : '▼ details'}
                             </span>
                           )}
@@ -953,7 +953,7 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
               {!diffLoading && diffContent && diffLines < DIFF_INLINE_THRESHOLD && (
                 <div className="flex items-center gap-2 ml-auto">
                   {diffRendering && (
-                    <span className="text-xs text-gray-400 italic dark:text-gray-500">
+                    <span className="text-xs text-gray-500 italic dark:text-gray-400">
                       Rendering…
                     </span>
                   )}
@@ -987,10 +987,10 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
               )}
             </div>
             {diffLoading && (
-              <div className="text-gray-400 text-sm dark:text-gray-500">Loading diff…</div>
+              <div className="text-gray-500 text-sm dark:text-gray-400">Loading diff…</div>
             )}
             {!diffLoading && !diffContent && (
-              <div className="text-gray-400 text-sm dark:text-gray-500">No diff available.</div>
+              <div className="text-gray-500 text-sm dark:text-gray-400">No diff available.</div>
             )}
             {!diffLoading && diffContent && diffLines >= DIFF_INLINE_THRESHOLD && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-center justify-between gap-4 dark:bg-amber-900/20 dark:border-amber-700">
@@ -1044,7 +1044,7 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
                   <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 dark:text-gray-400">
                     Review
                   </h2>
-                  <div className="text-xs text-gray-400 mb-3 dark:text-gray-500">
+                  <div className="text-xs text-gray-500 mb-3 dark:text-gray-400">
                     Reviewing as{' '}
                     <strong>
                       {currentUser
@@ -1129,14 +1129,14 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
                         !reviewReason.trim() ||
                         !attestationsComplete
                       }
-                      className="px-4 py-2 text-sm font-medium rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-gray-400"
+                      className="px-4 py-2 text-sm font-medium rounded bg-affirm text-white hover:bg-affirm-pressed disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-gray-400"
                     >
                       ✓ Approve
                     </button>
                     <button
                       onClick={handleReject}
                       disabled={isSelfReview || saving || canceling || !reviewReason.trim()}
-                      className="px-4 py-2 text-sm font-medium rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-gray-400"
+                      className="px-4 py-2 text-sm font-medium rounded bg-refuse text-white hover:bg-refuse-pressed disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-gray-400"
                     >
                       ✗ Reject
                     </button>

@@ -108,7 +108,7 @@ function CacheRow({
           <td colSpan={6} className="py-2 px-3">
             {refsError && <p className="text-xs text-red-600 dark:text-red-400">{refsError}</p>}
             {refs && refs.length === 0 && (
-              <p className="text-xs text-gray-400 dark:text-gray-500">No refs.</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">No refs.</p>
             )}
             {refs && refs.length > 0 && (
               <ul className="space-y-0.5">
@@ -128,7 +128,7 @@ function CacheRow({
                       {r.type}
                     </span>
                     {r.name}
-                    <span className="ml-2 text-gray-400 dark:text-gray-500">
+                    <span className="ml-2 text-gray-500 dark:text-gray-400">
                       {r.objectId.slice(0, 10)}
                     </span>
                   </li>
@@ -176,7 +176,7 @@ function CacheModeTable({
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
           {MODE_LABELS[mode] ?? mode}{' '}
-          <span className="font-normal text-gray-400 dark:text-gray-500">
+          <span className="font-normal text-gray-500 dark:text-gray-400">
             ({entries.length} mirror{entries.length === 1 ? '' : 's'})
           </span>
         </h2>
@@ -191,12 +191,12 @@ function CacheModeTable({
         )}
       </div>
       {entries.length === 0 ? (
-        <p className="text-xs text-gray-400 dark:text-gray-500">No mirrors cached.</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400">No mirrors cached.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-xs text-gray-400 dark:text-gray-500">
+              <tr className="text-left text-xs text-gray-500 dark:text-gray-400">
                 <th className="py-1 pr-3 font-medium">Repository</th>
                 <th className="py-1 pr-3 font-medium text-right">Refs</th>
                 <th className="py-1 pr-3 font-medium text-right">Size</th>

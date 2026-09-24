@@ -49,7 +49,7 @@ export function Setup() {
       </header>
 
       {loading && (
-        <div className="text-center text-gray-400 dark:text-gray-500 py-16">Loading…</div>
+        <div className="text-center text-gray-500 dark:text-gray-400 py-16">Loading…</div>
       )}
 
       {error && (
@@ -69,7 +69,7 @@ export function Setup() {
       )}
 
       {setup && setup.providers.length === 0 && (
-        <div className="text-center text-gray-400 dark:text-gray-500 py-16">
+        <div className="text-center text-gray-500 dark:text-gray-400 py-16">
           No providers configured.
         </div>
       )}
@@ -163,7 +163,7 @@ function Accordion({ header, children }: { header: ReactNode; children: ReactNod
       >
         <svg
           className={
-            'h-4 w-4 shrink-0 text-gray-400 transition-transform ' + (open ? 'rotate-90' : '')
+            'h-4 w-4 shrink-0 text-gray-500 transition-transform ' + (open ? 'rotate-90' : '')
           }
           fill="none"
           viewBox="0 0 20 20"
@@ -240,7 +240,7 @@ function ProviderAccordion({ provider }: { provider: SetupProvider }) {
       {/* Global push-only — the one-paste recommendation. */}
       <SectionLabel>
         Global — reroutes your {provider.host} pushes{' '}
-        <span className="font-normal text-gray-400 dark:text-gray-500">
+        <span className="font-normal text-gray-500 dark:text-gray-400">
           (one paste in ~/.gitconfig)
         </span>
       </SectionLabel>
@@ -257,7 +257,7 @@ function ProviderAccordion({ provider }: { provider: SetupProvider }) {
       {/* Per-repo — explicit, isolated. */}
       <SectionLabel>
         Per repository{' '}
-        <span className="font-normal text-gray-400 dark:text-gray-500">
+        <span className="font-normal text-gray-500 dark:text-gray-400">
           (touches only the repo you run it in)
         </span>
       </SectionLabel>
@@ -268,7 +268,7 @@ function ProviderAccordion({ provider }: { provider: SetupProvider }) {
 
       {/* Optional read routing — de-emphasized. */}
       <SectionLabel muted>Optional — also route reads through fogwall</SectionLabel>
-      <p className="text-xs text-gray-500 dark:text-gray-500 leading-relaxed">
+      <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
         Only if your deployment wants fetches audited by fogwall too. Otherwise leave clones and
         fetches going straight to {provider.host}. Add this alongside the global block above.
       </p>
@@ -283,7 +283,7 @@ function SectionLabel({ children, muted = false }: { children: ReactNode; muted?
     <h4
       className={
         'text-xs font-semibold uppercase tracking-wide pt-1 ' +
-        (muted ? 'text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-300')
+        (muted ? 'text-gray-500 dark:text-gray-400' : 'text-gray-600 dark:text-gray-300')
       }
     >
       {children}

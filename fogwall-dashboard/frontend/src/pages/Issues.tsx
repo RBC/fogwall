@@ -225,7 +225,7 @@ export function Issues() {
 
   if (loading) {
     return (
-      <div className="max-w-6xl px-6 py-16 text-center text-gray-400 dark:text-gray-500">
+      <div className="max-w-6xl px-6 py-16 text-center text-gray-500 dark:text-gray-400">
         Loading…
       </div>
     )
@@ -272,7 +272,7 @@ export function Issues() {
               </button>
             ))}
           </div>
-          <p className="text-xs text-gray-400 dark:text-gray-500">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
             {MODES.find((m) => m.id === mode)?.hint}
           </p>
 
@@ -376,7 +376,7 @@ export function Issues() {
                   {current.state === 'closed' ? 'Closed' : 'Open'}
                 </span>
               ) : (
-                <span className="text-xs text-gray-400 dark:text-gray-500">
+                <span className="text-xs text-gray-500 dark:text-gray-400">
                   Load the issue before editing or closing it.
                 </span>
               )}
@@ -388,7 +388,7 @@ export function Issues() {
               <div className="space-y-4">
                 <div>
                   <label className={labelClass}>
-                    Title <span className="text-gray-400">(your change)</span>
+                    Title <span className="text-gray-500">(your change)</span>
                   </label>
                   <input
                     value={title}
@@ -399,7 +399,7 @@ export function Issues() {
                 </div>
                 <div>
                   <label className={labelClass}>
-                    Body <span className="text-gray-400">(your change)</span>
+                    Body <span className="text-gray-500">(your change)</span>
                   </label>
                   <textarea
                     value={body}
@@ -415,14 +415,14 @@ export function Issues() {
                 {loaded && current ? (
                   <>
                     <div className="rounded border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-700 dark:border-slate-600 dark:bg-slate-900/40 dark:text-gray-300">
-                      {current.title || <span className="text-gray-400">(no title)</span>}
+                      {current.title || <span className="text-gray-500">(no title)</span>}
                     </div>
                     <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded border border-gray-200 bg-gray-50 px-3 py-2 font-mono text-xs text-gray-700 dark:border-slate-600 dark:bg-slate-900/40 dark:text-gray-300">
                       {current.body || '(no description)'}
                     </pre>
                   </>
                 ) : (
-                  <div className="rounded border border-dashed border-gray-300 px-3 py-10 text-center text-xs text-gray-400 dark:border-slate-600 dark:text-gray-500">
+                  <div className="rounded border border-dashed border-gray-300 px-3 py-10 text-center text-xs text-gray-500 dark:border-slate-600 dark:text-gray-400">
                     Load the issue to see its current title and body.
                   </div>
                 )}

@@ -123,7 +123,7 @@ function AddUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-400">
-              Email <span className="text-gray-400 dark:text-gray-500">(optional)</span>
+              Email <span className="text-gray-500 dark:text-gray-400">(optional)</span>
             </label>
             <input
               type="email"
@@ -201,7 +201,7 @@ export function Users({ authProvider }: UsersProps) {
 
   if (loading)
     return (
-      <div className="max-w-6xl px-6 py-16 text-center text-gray-400 dark:text-gray-500">
+      <div className="max-w-6xl px-6 py-16 text-center text-gray-500 dark:text-gray-400">
         Loading…
       </div>
     )
@@ -236,7 +236,7 @@ export function Users({ authProvider }: UsersProps) {
       />
 
       {filtered.length === 0 ? (
-        <p className="text-sm text-gray-400 italic py-8 text-center dark:text-gray-500">
+        <p className="text-sm text-gray-500 italic py-8 text-center dark:text-gray-400">
           No users found.
         </p>
       ) : (
@@ -298,7 +298,7 @@ export function Users({ authProvider }: UsersProps) {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <span className="text-gray-400 text-xs dark:text-gray-500">›</span>
+                    <span className="text-gray-500 text-xs dark:text-gray-400">›</span>
                   </td>
                 </tr>
               ))}

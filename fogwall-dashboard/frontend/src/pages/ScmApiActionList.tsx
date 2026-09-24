@@ -230,7 +230,7 @@ export function ScmApiActionList({ currentUser }: ScmApiActionListProps) {
           {newestFirst ? '↓ Newest first' : '↑ Oldest first'}
         </button>
 
-        <div className="ml-auto flex items-center gap-4 text-sm text-gray-400 dark:text-gray-500">
+        <div className="ml-auto flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
           <span>
             {actions.length} record{actions.length !== 1 ? 's' : ''}
             {page > 0 ? ` (page ${page + 1})` : ''}
@@ -250,7 +250,7 @@ export function ScmApiActionList({ currentUser }: ScmApiActionListProps) {
       {/* List */}
       <div className="max-w-6xl px-6 space-y-2 py-4 pb-12">
         {actions.length === 0 && (
-          <div className="text-center text-gray-400 dark:text-gray-500 py-16">
+          <div className="text-center text-gray-500 dark:text-gray-400 py-16">
             No SCM API action records found.
           </div>
         )}
@@ -284,18 +284,18 @@ export function ScmApiActionList({ currentUser }: ScmApiActionListProps) {
                   </div>
                 )}
                 {action.reason && (
-                  <div className="text-xs text-gray-400 truncate dark:text-gray-500">
+                  <div className="text-xs text-gray-500 truncate dark:text-gray-400">
                     {action.reason}
                   </div>
                 )}
               </div>
               <div className="text-right text-sm text-gray-500 shrink-0 dark:text-gray-400">
                 <div>{action.resolvedUser ?? action.scmUsername ?? '—'}</div>
-                <div className="text-xs text-gray-400 mt-0.5 dark:text-gray-500">
+                <div className="text-xs text-gray-500 mt-0.5 dark:text-gray-400">
                   {formatTime(action.timestamp)}
                 </div>
                 {action.upstreamStatus !== undefined && action.upstreamStatus !== null && (
-                  <div className="text-xs text-gray-400 mt-0.5 dark:text-gray-500">
+                  <div className="text-xs text-gray-500 mt-0.5 dark:text-gray-400">
                     upstream {action.upstreamStatus}
                   </div>
                 )}

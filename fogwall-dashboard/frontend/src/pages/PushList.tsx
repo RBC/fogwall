@@ -491,7 +491,7 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
           {filters.newestFirst ? '↓ Newest first' : '↑ Oldest first'}
         </button>
 
-        <div className="ml-auto flex items-center gap-4 text-sm text-gray-400 dark:text-gray-500">
+        <div className="ml-auto flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
           <span>
             {pushes.length} record{pushes.length !== 1 ? 's' : ''}
             {page > 0 ? ` (page ${page + 1})` : ''}
@@ -514,12 +514,12 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
               key={c.key}
               className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 pl-2.5 pr-1.5 py-1 text-xs text-gray-600 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-300"
             >
-              <span className="text-gray-400 dark:text-gray-500">{c.label}:</span>
+              <span className="text-gray-500 dark:text-gray-400">{c.label}:</span>
               <span className="font-medium">{c.value}</span>
               <button
                 onClick={c.clear}
                 aria-label={`Remove ${c.label} filter`}
-                className="ml-0.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-100"
+                className="ml-0.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-100"
               >
                 ✕
               </button>
@@ -538,7 +538,7 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
       {showAdvanced && (
         <div className="max-w-6xl px-6 pt-3">
           <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-slate-700 dark:bg-slate-800/40">
-            <div className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-3 dark:text-gray-500">
+            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3 dark:text-gray-400">
               Advanced filters
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -652,7 +652,7 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
       {/* List */}
       <div className="max-w-6xl px-6 space-y-2 py-4 pb-12">
         {pushes.length === 0 && (
-          <div className="text-center text-gray-400 dark:text-gray-500 py-16">
+          <div className="text-center text-gray-500 dark:text-gray-400 py-16">
             No push records found.
           </div>
         )}
@@ -699,7 +699,7 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
                 <div className="text-xs text-gray-500 truncate dark:text-gray-400">
                   {push.branch ?? '—'}
                 </div>
-                <div className="font-mono text-xs text-gray-400 break-all dark:text-gray-500">
+                <div className="font-mono text-xs text-gray-500 break-all dark:text-gray-400">
                   {push.commitTo ?? '—'}
                   {push.commitUrl && (
                     <a
@@ -722,11 +722,11 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
                     ● identity resolved
                   </span>
                 ) : push.user ? (
-                  <span className="inline-flex items-center gap-0.5 text-xs text-gray-400 font-medium dark:text-gray-500">
+                  <span className="inline-flex items-center gap-0.5 text-xs text-gray-500 font-medium dark:text-gray-400">
                     ● identity unresolved
                   </span>
                 ) : null}
-                <div className="text-xs text-gray-400 mt-0.5 dark:text-gray-500">
+                <div className="text-xs text-gray-500 mt-0.5 dark:text-gray-400">
                   {formatTime(push.timestamp)}
                 </div>
               </div>

@@ -11,8 +11,8 @@ function ModuleRow({ module }: { module: ThirdPartyNoticeModule }) {
         <span className="font-mono text-sm text-gray-800 dark:text-gray-200 truncate">
           {module.name}
         </span>
-        <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">{module.version}</span>
-        <span className="text-xs uppercase text-gray-400 dark:text-gray-500 shrink-0">
+        <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">{module.version}</span>
+        <span className="text-xs uppercase text-gray-500 dark:text-gray-400 shrink-0">
           {module.ecosystem}
         </span>
         <span className="flex-1" />
@@ -242,7 +242,7 @@ export function Legal() {
       </div>
 
       {!loading && notices && (
-        <p className="text-xs text-gray-400 dark:text-gray-500">
+        <p className="text-xs text-gray-500 dark:text-gray-400">
           Third-party notices for the {notices.variant ?? 'unknown'} image
           {notices.generatedAt && ` — generated ${new Date(notices.generatedAt).toLocaleString()}`}.
           Entries marked <span className="font-semibold">declared only</span> have no license/notice
@@ -252,11 +252,11 @@ export function Legal() {
       )}
 
       {loading && (
-        <div className="text-center text-gray-400 dark:text-gray-500 py-16">Loading…</div>
+        <div className="text-center text-gray-500 dark:text-gray-400 py-16">Loading…</div>
       )}
 
       {!loading && !notices?.modules?.length && (
-        <div className="text-center text-gray-400 dark:text-gray-500 py-16">
+        <div className="text-center text-gray-500 dark:text-gray-400 py-16">
           Third-party notices are not available for this build.
         </div>
       )}
@@ -270,7 +270,7 @@ export function Legal() {
             placeholder="Filter by package name or license…"
             className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-gray-800 dark:text-gray-200"
           />
-          <p className="text-xs text-gray-400 dark:text-gray-500">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
             {filtered.length} of {notices!.modules.length} dependencies
           </p>
           <div className="space-y-2">

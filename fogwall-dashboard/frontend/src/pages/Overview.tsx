@@ -40,7 +40,7 @@ export function Overview({ currentUser }: OverviewProps) {
         through.
       </p>
 
-      <div className="mb-3 mt-8 text-xs font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+      <div className="mb-3 mt-8 text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">
         Your activity
       </div>
       <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
@@ -55,7 +55,7 @@ export function Overview({ currentUser }: OverviewProps) {
             <div className="my-1 text-3xl font-bold tracking-tight text-gray-300 dark:text-slate-600">
               —
             </div>
-            <div className="text-xs text-gray-400 dark:text-gray-500">{a.hint}</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">{a.hint}</div>
           </div>
         ))}
       </div>
@@ -74,7 +74,7 @@ export function Overview({ currentUser }: OverviewProps) {
         <span>Metrics not yet available.</span>
       </div>
 
-      <div className="mb-3 mt-8 text-xs font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+      <div className="mb-3 mt-8 text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">
         Jump to
       </div>
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">

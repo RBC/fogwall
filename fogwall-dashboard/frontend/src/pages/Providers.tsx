@@ -66,11 +66,11 @@ export function Providers() {
       <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-200">Providers</h1>
 
       {loading && (
-        <div className="text-center text-gray-400 dark:text-gray-500 py-16">Loading…</div>
+        <div className="text-center text-gray-500 dark:text-gray-400 py-16">Loading…</div>
       )}
 
       {!loading && providers.length === 0 && (
-        <div className="text-center text-gray-400 dark:text-gray-500 py-16">
+        <div className="text-center text-gray-500 dark:text-gray-400 py-16">
           No providers configured.
         </div>
       )}

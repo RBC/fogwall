@@ -37,7 +37,7 @@
       "affirm": {
         "role": "secondary",
         "displayName": "Consequence Green",
-        "canonical": "oklch(62.7% 0.194 149.214)",
+        "canonical": "oklch(52.7% 0.154 150.069)",
         "tonalRamp": [
           "oklch(39.3% 0.095 152.535)",
           "oklch(44.8% 0.119 151.328)",

@@ -389,7 +389,7 @@ function OverviewTab({
           )}
         </div>
         {user.emails.length === 0 ? (
-          <p className="text-sm text-gray-400 italic dark:text-gray-500">
+          <p className="text-sm text-gray-500 italic dark:text-gray-400">
             No email addresses registered.
           </p>
         ) : (
@@ -430,7 +430,7 @@ function OverviewTab({
           )}
         </div>
         {user.scmIdentities.length === 0 ? (
-          <p className="text-sm text-gray-400 italic dark:text-gray-500">
+          <p className="text-sm text-gray-500 italic dark:text-gray-400">
             No SCM identities registered.
           </p>
         ) : (
@@ -468,7 +468,7 @@ function OverviewTab({
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Push Summary</h3>
         <div className="flex flex-wrap gap-3">
           {Object.entries(user.pushCounts).length === 0 ? (
-            <p className="text-sm text-gray-400 italic dark:text-gray-500">
+            <p className="text-sm text-gray-500 italic dark:text-gray-400">
               No push activity recorded.
             </p>
           ) : (
@@ -527,11 +527,11 @@ function PushesTab({ username }: { username: string }) {
   }, [username, toast])
 
   if (loading)
-    return <div className="py-8 text-center text-gray-400 text-sm dark:text-gray-500">Loading…</div>
+    return <div className="py-8 text-center text-gray-500 text-sm dark:text-gray-400">Loading…</div>
 
   if (pushes.length === 0)
     return (
-      <p className="text-sm text-gray-400 italic py-8 text-center dark:text-gray-500">
+      <p className="text-sm text-gray-500 italic py-8 text-center dark:text-gray-400">
         No push records found for this user.
       </p>
     )
@@ -561,7 +561,7 @@ function PushesTab({ username }: { username: string }) {
                 {p.project && p.repoName ? `${p.project}/${p.repoName}` : (p.repoName ?? '—')}
               </td>
               <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{p.branch ?? '—'}</td>
-              <td className="px-4 py-3 text-gray-400 dark:text-gray-500">
+              <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
                 {p.timestamp ? new Date(p.timestamp).toLocaleString() : '—'}
               </td>
             </tr>
@@ -805,7 +805,7 @@ function TestPermissionModal({ username, onClose }: { username: string; onClose:
     <div className={modalClass}>
       <div className={modalPanelClass}>
         <h3 className={modalTitleClass}>Test Permission</h3>
-        <p className="text-xs text-gray-400 mb-3 dark:text-gray-500">
+        <p className="text-xs text-gray-500 mb-3 dark:text-gray-400">
           Read-only evaluation of whether <span className="font-mono">{username}</span> has this
           grant, and whether it comes from a direct permission or an inherited group rule.
         </p>
@@ -943,7 +943,7 @@ function PermissionsTab({ username, isAdmin }: { username: string; isAdmin: bool
   }
 
   if (loading)
-    return <div className="py-8 text-center text-gray-400 text-sm dark:text-gray-500">Loading…</div>
+    return <div className="py-8 text-center text-gray-500 text-sm dark:text-gray-400">Loading…</div>
 
   return (
     <div className="space-y-4">
@@ -957,7 +957,7 @@ function PermissionsTab({ username, isAdmin }: { username: string; isAdmin: bool
       {showTest && <TestPermissionModal username={username} onClose={() => setShowTest(false)} />}
 
       {permissions.length === 0 ? (
-        <p className="text-sm text-gray-400 italic py-4 dark:text-gray-500">
+        <p className="text-sm text-gray-500 italic py-4 dark:text-gray-400">
           No permissions configured for this user.
         </p>
       ) : (
@@ -997,7 +997,7 @@ function PermissionsTab({ username, isAdmin }: { username: string; isAdmin: bool
                     {p.source === 'CONFIG' ? (
                       <LockedBadge source="config" />
                     ) : (
-                      <span className="text-xs text-gray-400 dark:text-gray-500">local</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">local</span>
                     )}
                   </td>
                   {isAdmin && (
@@ -1039,11 +1039,11 @@ function PermissionsTab({ username, isAdmin }: { username: string; isAdmin: bool
 
       {/* group memberships */}
       <div className="pt-2 space-y-2">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide dark:text-gray-500">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide dark:text-gray-400">
           Group memberships
         </p>
         {groups.length === 0 ? (
-          <p className="text-sm text-gray-400 italic dark:text-gray-500">
+          <p className="text-sm text-gray-500 italic dark:text-gray-400">
             Not a member of any groups.
           </p>
         ) : (
@@ -1063,19 +1063,19 @@ function PermissionsTab({ username, isAdmin }: { username: string; isAdmin: bool
                     </span>
                   )}
                   {g.description && (
-                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
                       {g.description}
                     </span>
                   )}
                 </div>
                 {g.rules.length === 0 ? (
-                  <p className="px-4 py-2 text-xs text-gray-400 italic dark:text-gray-500">
+                  <p className="px-4 py-2 text-xs text-gray-500 italic dark:text-gray-400">
                     No rules defined.
                   </p>
                 ) : (
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="text-left text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-slate-700">
+                      <tr className="text-left text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-slate-700">
                         <th className="px-4 py-2">Provider</th>
                         <th className="px-4 py-2">Type</th>
                         <th className="px-4 py-2">Path</th>
@@ -1136,7 +1136,7 @@ export function UserDetail({ authProvider, currentUser }: UserDetailProps) {
 
   if (loading)
     return (
-      <div className="max-w-3xl mx-auto px-4 py-16 text-center text-gray-400 dark:text-gray-500">
+      <div className="max-w-3xl mx-auto px-4 py-16 text-center text-gray-500 dark:text-gray-400">
         Loading…
       </div>
     )
@@ -1159,7 +1159,7 @@ export function UserDetail({ authProvider, currentUser }: UserDetailProps) {
       <div className="flex items-center gap-3">
         <button
           onClick={() => navigate('/users')}
-          className="text-xs text-gray-400 hover:text-gray-600 transition-colors dark:text-gray-500 dark:hover:text-gray-300"
+          className="text-xs text-gray-500 hover:text-gray-600 transition-colors dark:text-gray-400 dark:hover:text-gray-300"
         >
           ← Users
         </button>

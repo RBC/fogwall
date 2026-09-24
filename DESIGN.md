@@ -7,8 +7,10 @@ colors:
   rail-hover: "oklch(37.2% 0.044 257.287)"
   accent: "oklch(54.6% 0.245 262.881)"
   accent-pressed: "oklch(48.8% 0.243 264.376)"
-  affirm: "oklch(62.7% 0.194 149.214)"
+  affirm: "oklch(52.7% 0.154 150.069)"
+  affirm-pressed: "oklch(44.8% 0.119 151.328)"
   refuse: "oklch(57.7% 0.245 27.325)"
+  refuse-pressed: "oklch(50.5% 0.213 27.518)"
   surface: "#ffffff"
   surface-sunken: "oklch(98.5% 0.002 247.839)"
   surface-dark: "oklch(27.9% 0.041 260.031)"
@@ -184,7 +186,7 @@ consequence must be unmistakable.
 
 ### Secondary
 
-- **Consequence Green** (`{colors.affirm}`, green-600) and **Consequence Red** (`{colors.refuse}`, red-600): reserved
+- **Consequence Green** (`{colors.affirm}`, green-700) and **Consequence Red** (`{colors.refuse}`, red-600): reserved
   for the two irreversible decisions — approve and reject. These two colors appear on solid-filled buttons and nowhere
   else at full saturation; seeing them means a decision is available right now.
 
@@ -326,9 +328,10 @@ mistake.
 - **Shape:** 4.5px radius (`rounded`), no border on filled variants.
 - **Primary:** Gate Blue fill, white text, `0.25rem 0.75rem` padding at Body size. Hover shifts to Gate Blue Pressed
   over a `transition-colors`.
-- **Approve / Reject:** Consequence Green / Consequence Red fill, white text, `0.5rem 1rem` padding, Label weight.
-  Disabled drops to a gray fill with `not-allowed` cursor and 40% opacity — deliberately unmistakable, because these are
-  the consequential controls.
+- **Approve / Reject:** Consequence Green / Consequence Red fill, white text, `0.5rem 1rem` padding, Label weight. White
+  on Consequence Green measures 4.94:1 and on Consequence Red 4.76:1 — both clear AA, which is why green is the 700 step
+  rather than the 600 the rest of the palette would suggest. Disabled drops to a gray fill with `not-allowed` cursor and
+  40% opacity — deliberately unmistakable, because these are the consequential controls.
 - **Secondary:** white surface, gray-300 border, muted ink, hover to the sunken surface.
 - **Focus:** Gate Blue focus ring, 2px, offset from the control. Every `focus:outline-none` in the code does supply a
   replacement, but 12 of them replace it with a 1px border-colour change alone, which is too thin and too low-contrast
