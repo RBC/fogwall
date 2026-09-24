@@ -144,7 +144,8 @@ public class FogwallDashboardApplication {
                 loaded,
                 configBuilder.getReloadConfig(),
                 ctx.urlRuleRegistry(),
-                ctx.repoPermissionService());
+                ctx.repoPermissionService(),
+                ctx.userStore());
         liveConfigLoader.start();
 
         var pendingPushExpiryTask =

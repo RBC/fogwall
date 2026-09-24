@@ -13,6 +13,9 @@ import com.rbc.fogwall.config.MatchRule;
 import com.rbc.fogwall.config.ReloadConfig;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.jetty.reload.LiveConfigLoader.Section;
+import com.rbc.fogwall.permission.RepoPermission;
+import com.rbc.fogwall.permission.RepoPermissionService;
+import com.rbc.fogwall.user.UserStore;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -52,7 +55,7 @@ class LiveConfigLoaderTest {
         startup = FogwallConfigLoader.loadLayers(null, List.of(startupFile), Map.of());
         configHolder = new JettyConfigurationBuilder(startup.getConfig()).buildConfigHolder();
         reloadFile = tempDir.resolve("reload.yml");
-        loader = new LiveConfigLoader(configHolder, startup, fileReloadConfig(reloadFile), null, null);
+        loader = new LiveConfigLoader(configHolder, startup, fileReloadConfig(reloadFile), null, null, null);
     }
 
     @Test
@@ -160,7 +163,7 @@ class LiveConfigLoaderTest {
     void reload_everySection_isRebuiltFromTheDocument() throws IOException {
         var urlRuleRegistry = mock(UrlRuleRegistry.class);
         var allSections =
-                new LiveConfigLoader(configHolder, startup, fileReloadConfig(reloadFile), urlRuleRegistry, null);
+                new LiveConfigLoader(configHolder, startup, fileReloadConfig(reloadFile), urlRuleRegistry, null, null);
         List<Object> before = List.of(
                 configHolder.getCommitConfig(),
                 configHolder.getDiffScanConfig(),
@@ -214,6 +217,31 @@ class LiveConfigLoaderTest {
                         .map(AttestationQuestion::getId)
                         .toList());
         verify(urlRuleRegistry).seedFromConfig(argThat(rules -> !rules.isEmpty()));
+    }
+
+    @Test
+    void reload_permissions_seedsThroughTheRunningUserStore() throws IOException {
+        var repoPermissionService = mock(RepoPermissionService.class);
+        var userStore = mock(UserStore.class);
+        var permissionsLoader = new LiveConfigLoader(
+                configHolder, startup, fileReloadConfig(reloadFile), null, repoPermissionService, userStore);
+        Files.writeString(reloadFile, """
+                permissions:
+                  - username: someone
+                    provider: github
+                    match:
+                      target: SLUG
+                      value: /owner/repo
+                    grant: PUSH
+                """);
+
+        String result = permissionsLoader.reload(Section.PERMISSIONS);
+
+        assertTrue(result.startsWith("Reloaded"), result);
+        verify(userStore).upsertUser("someone");
+        verify(repoPermissionService)
+                .seedFromConfig(argThat(perms ->
+                        perms.stream().map(RepoPermission::getUsername).toList().equals(List.of("someone"))));
     }
 
     private Path write(String yaml) throws IOException {
