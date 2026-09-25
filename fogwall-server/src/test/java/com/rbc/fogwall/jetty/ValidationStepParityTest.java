@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 import com.rbc.fogwall.approval.ApprovalGateway;
+import com.rbc.fogwall.approval.SelfApprovalPolicy;
 import com.rbc.fogwall.config.BinaryBlobConfig;
 import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.config.ContentPatternConfig;
@@ -206,7 +207,11 @@ class ValidationStepParityTest {
 
     private static List<FogwallHook> buildServerHooks(FogwallProvider provider) {
         var factory = new ServerReceivePackFactory(
-                provider, CommitConfig.defaultConfig(), mock(PushStore.class), mock(ApprovalGateway.class));
+                provider,
+                CommitConfig.defaultConfig(),
+                mock(PushStore.class),
+                mock(ApprovalGateway.class),
+                mock(SelfApprovalPolicy.class));
         return factory.buildValidationHooks(
                 CommitConfig.defaultConfig(),
                 DiffScanConfig.defaultConfig(),
@@ -233,6 +238,7 @@ class ValidationStepParityTest {
                 mock(ApprovalGateway.class),
                 mock(PushIdentityResolver.class),
                 mock(RepoPermissionService.class),
+                mock(SelfApprovalPolicy.class),
                 mock(FetchStore.class),
                 mock(UrlRuleRegistry.class),
                 ScmOAuthConfig.defaultConfig());

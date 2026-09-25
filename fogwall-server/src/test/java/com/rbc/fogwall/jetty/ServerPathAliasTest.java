@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 
 import com.rbc.fogwall.approval.ApprovalGateway;
+import com.rbc.fogwall.approval.SelfApprovalPolicy;
 import com.rbc.fogwall.config.BinaryBlobConfig;
 import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.config.ContentPatternConfig;
@@ -65,6 +66,7 @@ class ServerPathAliasTest {
                 mock(ApprovalGateway.class),
                 null, // pushIdentityResolver
                 null, // repoPermissionService
+                mock(SelfApprovalPolicy.class),
                 10,
                 30,
                 false,
@@ -105,6 +107,7 @@ class ServerPathAliasTest {
                 mock(ApprovalGateway.class),
                 null,
                 null,
+                mock(SelfApprovalPolicy.class),
                 10,
                 30,
                 false,

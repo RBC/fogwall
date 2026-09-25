@@ -3,6 +3,7 @@ package com.rbc.fogwall.jetty;
 import static org.eclipse.jgit.transport.HttpTransport.setConnectionFactory;
 
 import com.rbc.fogwall.approval.ApprovalGateway;
+import com.rbc.fogwall.approval.SelfApprovalPolicy;
 import com.rbc.fogwall.config.BinaryBlobConfig;
 import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.config.ContentPatternConfig;
@@ -235,6 +236,7 @@ public final class FogwallServletRegistrar {
                         fogwallContext.approvalGateway(),
                         fogwallContext.pushIdentityResolver(),
                         fogwallContext.repoPermissionService(),
+                        fogwallContext.selfApprovalPolicy(),
                         fogwallContext.heartbeatIntervalSeconds(),
                         fogwallContext.approvalTimeoutSeconds(),
                         fogwallContext.failFast(),
@@ -265,6 +267,7 @@ public final class FogwallServletRegistrar {
                         fogwallContext.approvalGateway(),
                         fogwallContext.pushIdentityResolver(),
                         fogwallContext.repoPermissionService(),
+                        fogwallContext.selfApprovalPolicy(),
                         fogwallContext.fetchStore(),
                         fogwallContext.urlRuleRegistry(),
                         scmOAuthConfig);
@@ -302,6 +305,7 @@ public final class FogwallServletRegistrar {
                 fogwallContext.pushIdentityResolver(),
                 fogwallContext.pushStore(),
                 fogwallContext.approvalGateway(),
+                fogwallContext.selfApprovalPolicy(),
                 fogwallContext.serviceUrl(),
                 Duration.ofSeconds(fogwallContext.heartbeatIntervalSeconds()),
                 fogwallContext.urlRuleRegistry());
@@ -331,6 +335,7 @@ public final class FogwallServletRegistrar {
             ApprovalGateway approvalGateway,
             PushIdentityResolver pushIdentityResolver,
             RepoPermissionService repoPermissionService,
+            SelfApprovalPolicy selfApprovalPolicy,
             int heartbeatIntervalSeconds,
             int approvalTimeoutSeconds,
             boolean failFast,
@@ -356,6 +361,7 @@ public final class FogwallServletRegistrar {
                     pushIdentityResolver,
                     pushStore,
                     approvalGateway,
+                    selfApprovalPolicy,
                     serviceUrl,
                     Duration.ofSeconds(heartbeatIntervalSeconds),
                     urlRuleRegistry);
@@ -861,6 +867,7 @@ public final class FogwallServletRegistrar {
             ApprovalGateway approvalGateway,
             PushIdentityResolver pushIdentityResolver,
             RepoPermissionService repoPermissionService,
+            SelfApprovalPolicy selfApprovalPolicy,
             FetchStore fetchStore,
             UrlRuleRegistry urlRuleRegistry,
             ScmOAuthConfig scmOAuthConfig) {
@@ -893,6 +900,7 @@ public final class FogwallServletRegistrar {
                 approvalGateway,
                 pushIdentityResolver,
                 repoPermissionService,
+                selfApprovalPolicy,
                 fetchStore,
                 urlRuleRegistry,
                 scmOAuthConfig);
@@ -925,6 +933,7 @@ public final class FogwallServletRegistrar {
             ApprovalGateway approvalGateway,
             PushIdentityResolver pushIdentityResolver,
             RepoPermissionService repoPermissionService,
+            SelfApprovalPolicy selfApprovalPolicy,
             FetchStore fetchStore,
             UrlRuleRegistry urlRuleRegistry,
             ScmOAuthConfig scmOAuthConfig) {
@@ -934,7 +943,7 @@ public final class FogwallServletRegistrar {
         List<FogwallFilter> filters = new ArrayList<>();
         // --- MANDATORY_PRE: parse, pre-approval short-circuit, enrichment ---
         filters.add(new ParseGitRequestFilter(provider, configBuilder.getMaxPushBytes()));
-        filters.add(new AllowApprovedPushFilter(pushStore, serviceUrl, repoPermissionService));
+        filters.add(new AllowApprovedPushFilter(pushStore, serviceUrl, selfApprovalPolicy));
         filters.add(new EnrichPushCommitsFilter(provider, repositoryCache, configBuilder.getMaxObjectSizeBytes()));
         // --- MANDATORY_PROCESSING: URL rules, permissions, content/commit checks ---
         filters.add(new UrlRuleAggregateFilter(provider, fetchStore, urlRuleRegistry));
