@@ -6,11 +6,12 @@ import static org.mockito.Mockito.*;
 
 import com.rbc.fogwall.approval.ApprovalGateway;
 import com.rbc.fogwall.approval.ApprovalResult;
+import com.rbc.fogwall.approval.SelfApprovalPolicy;
+import com.rbc.fogwall.approval.SelfApprovalPolicy.Verdict;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.model.Attestation;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
-import com.rbc.fogwall.permission.RepoPermissionService;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -37,6 +38,7 @@ class ApprovalPreReceiveHookTest {
     Repository repo;
     PushStore pushStore;
     ApprovalGateway approvalGateway;
+    SelfApprovalPolicy selfApprovalPolicy;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -46,6 +48,12 @@ class ApprovalPreReceiveHookTest {
         repo.getConfig().save();
         pushStore = mock(PushStore.class);
         approvalGateway = mock(ApprovalGateway.class);
+        selfApprovalPolicy = mock(SelfApprovalPolicy.class);
+        when(selfApprovalPolicy.evaluate(any())).thenReturn(Verdict.NOT_SELF_APPROVAL);
+    }
+
+    private ApprovalPreReceiveHook hook(Duration timeout, PushContext pushContext) {
+        return new ApprovalPreReceiveHook(pushStore, approvalGateway, timeout, null, selfApprovalPolicy, pushContext);
     }
 
     private RevCommit createCommit(String msg) throws Exception {
@@ -72,7 +80,7 @@ class ApprovalPreReceiveHookTest {
         ReceivePack rp = new ReceivePack(repo);
         ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
 
-        new ApprovalPreReceiveHook(pushStore, approvalGateway).onPreReceive(rp, List.of(cmd));
+        hook(Duration.ofMinutes(30), null).onPreReceive(rp, List.of(cmd));
 
         assertEquals(
                 ReceiveCommand.Result.REJECTED_OTHER_REASON,
@@ -94,8 +102,7 @@ class ApprovalPreReceiveHookTest {
         ReceivePack rp = new ReceivePack(repo);
         ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
 
-        new ApprovalPreReceiveHook(pushStore, approvalGateway, Duration.ofMinutes(30), null, null, pushContext)
-                .onPreReceive(rp, List.of(cmd));
+        hook(Duration.ofMinutes(30), pushContext).onPreReceive(rp, List.of(cmd));
 
         assertEquals(
                 ReceiveCommand.Result.REJECTED_OTHER_REASON,
@@ -118,8 +125,7 @@ class ApprovalPreReceiveHookTest {
         ReceivePack rp = new ReceivePack(repo);
         ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
 
-        new ApprovalPreReceiveHook(pushStore, approvalGateway, Duration.ofMinutes(30), null, null, pushContext)
-                .onPreReceive(rp, List.of(cmd));
+        hook(Duration.ofMinutes(30), pushContext).onPreReceive(rp, List.of(cmd));
 
         assertEquals(ReceiveCommand.Result.NOT_ATTEMPTED, cmd.getResult());
         verifyNoInteractions(approvalGateway);
@@ -141,8 +147,7 @@ class ApprovalPreReceiveHookTest {
         ReceivePack rp = new ReceivePack(repo);
         ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
 
-        new ApprovalPreReceiveHook(pushStore, approvalGateway, Duration.ofSeconds(5), null, null, pushContext)
-                .onPreReceive(rp, List.of(cmd));
+        hook(Duration.ofSeconds(5), pushContext).onPreReceive(rp, List.of(cmd));
 
         assertEquals(ReceiveCommand.Result.NOT_ATTEMPTED, cmd.getResult());
     }
@@ -165,8 +170,7 @@ class ApprovalPreReceiveHookTest {
         ReceivePack rp = new ReceivePack(repo);
         ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
 
-        new ApprovalPreReceiveHook(pushStore, approvalGateway, Duration.ofSeconds(5), null, null, pushContext)
-                .onPreReceive(rp, List.of(cmd));
+        hook(Duration.ofSeconds(5), pushContext).onPreReceive(rp, List.of(cmd));
 
         assertEquals(ReceiveCommand.Result.REJECTED_OTHER_REASON, cmd.getResult());
     }
@@ -174,186 +178,84 @@ class ApprovalPreReceiveHookTest {
     // ── Defense-in-depth: hook re-verifies SELF_CERTIFY perm when approver == pusher ─────────────
 
     @Test
-    void selfApproved_alreadyApprovedAtHookStart_noPerm_rejected() throws Exception {
+    void alreadyApproved_policyRefuses_rejectedAndDemoted() throws Exception {
         String recordId = UUID.randomUUID().toString();
         PushContext pushContext = new PushContext();
         pushContext.setValidationRecordId(recordId);
-        Attestation att = Attestation.builder()
-                .pushId(recordId)
-                .type(Attestation.Type.APPROVAL)
-                .reviewerUsername("alice")
-                .build();
-        PushRecord record = PushRecord.builder()
-                .id(recordId)
-                .status(PushStatus.APPROVED)
-                .resolvedUser("alice")
-                .provider("github")
-                .url("/owner/repo")
-                .attestation(att)
-                .build();
+        PushRecord record =
+                PushRecord.builder().id(recordId).status(PushStatus.APPROVED).build();
         when(pushStore.findById(recordId)).thenReturn(Optional.of(record));
-        RepoPermissionService perms = mock(RepoPermissionService.class);
-        when(perms.isBypassReviewAllowed("alice", "github", "/owner/repo")).thenReturn(false);
+        when(selfApprovalPolicy.evaluate(record)).thenReturn(Verdict.MISSING_PERMISSION);
 
         RevCommit c1 = createCommit("init");
         RevCommit c2 = createCommit("second");
         ReceivePack rp = new ReceivePack(repo);
         ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
 
-        new ApprovalPreReceiveHook(pushStore, approvalGateway, Duration.ofSeconds(5), null, perms, pushContext)
-                .onPreReceive(rp, List.of(cmd));
+        hook(Duration.ofSeconds(5), pushContext).onPreReceive(rp, List.of(cmd));
 
         assertEquals(ReceiveCommand.Result.REJECTED_OTHER_REASON, cmd.getResult());
-        verify(perms).isBypassReviewAllowed("alice", "github", "/owner/repo");
-        // The invalid self-approval must not linger as APPROVED — it is demoted to ERROR (never forwards).
-        verify(pushStore).updateForwardStatus(eq(recordId), eq(PushStatus.ERROR), anyString());
+        assertEquals(Verdict.MISSING_PERMISSION.getReason(), cmd.getMessage());
+        // A refused self-approval must not linger as APPROVED — it is demoted to ERROR (never forwards).
+        verify(pushStore).updateForwardStatus(recordId, PushStatus.ERROR, Verdict.MISSING_PERMISSION.getReason());
+        verifyNoInteractions(approvalGateway);
     }
 
     @Test
-    void selfApproved_noPermissionServiceWired_rejected() throws Exception {
-        // Fail closed: a self-approval whose entitlement cannot be verified (no RepoPermissionService in the
-        // wiring) must be rejected, not waved through.
+    void alreadyApproved_policyHonors_passes() throws Exception {
         String recordId = UUID.randomUUID().toString();
         PushContext pushContext = new PushContext();
         pushContext.setValidationRecordId(recordId);
-        Attestation att = Attestation.builder()
-                .pushId(recordId)
-                .type(Attestation.Type.APPROVAL)
-                .reviewerUsername("alice")
-                .build();
-        PushRecord record = PushRecord.builder()
-                .id(recordId)
-                .status(PushStatus.APPROVED)
-                .resolvedUser("alice")
-                .provider("github")
-                .url("/owner/repo")
-                .attestation(att)
-                .build();
+        PushRecord record =
+                PushRecord.builder().id(recordId).status(PushStatus.APPROVED).build();
         when(pushStore.findById(recordId)).thenReturn(Optional.of(record));
+        when(selfApprovalPolicy.evaluate(record)).thenReturn(Verdict.ENTITLED);
 
         RevCommit c1 = createCommit("init");
         RevCommit c2 = createCommit("second");
         ReceivePack rp = new ReceivePack(repo);
         ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
 
-        new ApprovalPreReceiveHook(pushStore, approvalGateway, Duration.ofSeconds(5), null, null, pushContext)
-                .onPreReceive(rp, List.of(cmd));
-
-        assertEquals(ReceiveCommand.Result.REJECTED_OTHER_REASON, cmd.getResult());
-    }
-
-    @Test
-    void selfApproved_alreadyApprovedAtHookStart_withPerm_passes() throws Exception {
-        String recordId = UUID.randomUUID().toString();
-        PushContext pushContext = new PushContext();
-        pushContext.setValidationRecordId(recordId);
-        Attestation att = Attestation.builder()
-                .pushId(recordId)
-                .type(Attestation.Type.APPROVAL)
-                .reviewerUsername("alice")
-                .build();
-        PushRecord record = PushRecord.builder()
-                .id(recordId)
-                .status(PushStatus.APPROVED)
-                .resolvedUser("alice")
-                .provider("github")
-                .url("/owner/repo")
-                .attestation(att)
-                .build();
-        when(pushStore.findById(recordId)).thenReturn(Optional.of(record));
-        RepoPermissionService perms = mock(RepoPermissionService.class);
-        when(perms.isBypassReviewAllowed("alice", "github", "/owner/repo")).thenReturn(true);
-
-        RevCommit c1 = createCommit("init");
-        RevCommit c2 = createCommit("second");
-        ReceivePack rp = new ReceivePack(repo);
-        ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
-
-        new ApprovalPreReceiveHook(pushStore, approvalGateway, Duration.ofSeconds(5), null, perms, pushContext)
-                .onPreReceive(rp, List.of(cmd));
+        hook(Duration.ofSeconds(5), pushContext).onPreReceive(rp, List.of(cmd));
 
         assertEquals(ReceiveCommand.Result.NOT_ATTEMPTED, cmd.getResult());
+        verify(selfApprovalPolicy).evaluate(record);
     }
 
     @Test
-    void selfApproved_viaWaitForApproval_noPerm_rejected() throws Exception {
+    void approvedWhileWaiting_policyRefuses_rejectedAndDemoted() throws Exception {
         String recordId = UUID.randomUUID().toString();
         PushContext pushContext = new PushContext();
         pushContext.setValidationRecordId(recordId);
-        // Initial fetch returns PENDING (no attestation yet); after approval, returns APPROVED with attestation
-        // showing the pusher self-approved.
-        PushRecord pending = PushRecord.builder()
-                .id(recordId)
-                .status(PushStatus.PENDING)
-                .resolvedUser("alice")
-                .provider("github")
-                .url("/owner/repo")
-                .build();
-        Attestation att = Attestation.builder()
-                .pushId(recordId)
-                .type(Attestation.Type.APPROVAL)
-                .reviewerUsername("alice")
-                .build();
-        PushRecord approved = PushRecord.builder()
-                .id(recordId)
-                .status(PushStatus.APPROVED)
-                .resolvedUser("alice")
-                .provider("github")
-                .url("/owner/repo")
-                .attestation(att)
-                .build();
+        // The hook starts on a PENDING record and re-reads it once the gateway reports approval; the policy is
+        // consulted on the re-read record, which carries the approval.
+        PushRecord pending =
+                PushRecord.builder().id(recordId).status(PushStatus.PENDING).build();
+        PushRecord approved =
+                PushRecord.builder().id(recordId).status(PushStatus.APPROVED).build();
         when(pushStore.findById(recordId)).thenReturn(Optional.of(pending)).thenReturn(Optional.of(approved));
         when(approvalGateway.waitForApproval(eq(recordId), any(), any(), any(Duration.class)))
                 .thenReturn(ApprovalResult.APPROVED);
-        RepoPermissionService perms = mock(RepoPermissionService.class);
-        when(perms.isBypassReviewAllowed("alice", "github", "/owner/repo")).thenReturn(false);
+        when(selfApprovalPolicy.evaluate(approved)).thenReturn(Verdict.MISSING_ROLE);
 
         RevCommit c1 = createCommit("init");
         RevCommit c2 = createCommit("second");
         ReceivePack rp = new ReceivePack(repo);
         ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
 
-        new ApprovalPreReceiveHook(pushStore, approvalGateway, Duration.ofSeconds(5), null, perms, pushContext)
-                .onPreReceive(rp, List.of(cmd));
+        hook(Duration.ofSeconds(5), pushContext).onPreReceive(rp, List.of(cmd));
 
         assertEquals(ReceiveCommand.Result.REJECTED_OTHER_REASON, cmd.getResult());
-        verify(perms).isBypassReviewAllowed("alice", "github", "/owner/repo");
-        // The invalid self-approval must not linger as APPROVED — it is demoted to ERROR (never forwards).
-        verify(pushStore).updateForwardStatus(eq(recordId), eq(PushStatus.ERROR), anyString());
+        assertEquals(Verdict.MISSING_ROLE.getReason(), cmd.getMessage());
+        verify(pushStore).updateForwardStatus(recordId, PushStatus.ERROR, Verdict.MISSING_ROLE.getReason());
     }
 
     @Test
-    void differentApproverThanPusher_noReVerifyNeeded() throws Exception {
-        // Approver != pusher → defense-in-depth check skipped; push is forwarded.
-        String recordId = UUID.randomUUID().toString();
-        PushContext pushContext = new PushContext();
-        pushContext.setValidationRecordId(recordId);
-        Attestation att = Attestation.builder()
-                .pushId(recordId)
-                .type(Attestation.Type.APPROVAL)
-                .reviewerUsername("bob")
-                .build();
-        PushRecord record = PushRecord.builder()
-                .id(recordId)
-                .status(PushStatus.APPROVED)
-                .resolvedUser("alice")
-                .provider("github")
-                .url("/owner/repo")
-                .attestation(att)
-                .build();
-        when(pushStore.findById(recordId)).thenReturn(Optional.of(record));
-        RepoPermissionService perms = mock(RepoPermissionService.class);
-
-        RevCommit c1 = createCommit("init");
-        RevCommit c2 = createCommit("second");
-        ReceivePack rp = new ReceivePack(repo);
-        ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
-
-        new ApprovalPreReceiveHook(pushStore, approvalGateway, Duration.ofSeconds(5), null, perms, pushContext)
-                .onPreReceive(rp, List.of(cmd));
-
-        assertEquals(ReceiveCommand.Result.NOT_ATTEMPTED, cmd.getResult());
-        verifyNoInteractions(perms);
+    void nullPolicy_refusedAtConstruction() {
+        assertThrows(
+                NullPointerException.class,
+                () -> new ApprovalPreReceiveHook(
+                        pushStore, approvalGateway, Duration.ofSeconds(5), null, null, new PushContext()));
     }
 
     @Test
@@ -372,8 +274,7 @@ class ApprovalPreReceiveHookTest {
         ReceivePack rp = new ReceivePack(repo);
         ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
 
-        new ApprovalPreReceiveHook(pushStore, approvalGateway, Duration.ofSeconds(5), null, null, pushContext)
-                .onPreReceive(rp, List.of(cmd));
+        hook(Duration.ofSeconds(5), pushContext).onPreReceive(rp, List.of(cmd));
 
         assertEquals(ReceiveCommand.Result.REJECTED_OTHER_REASON, cmd.getResult());
         verify(pushStore).cancel(eq(recordId), any(Attestation.class));
@@ -396,8 +297,7 @@ class ApprovalPreReceiveHookTest {
         ReceivePack rp = new ReceivePack(repo);
         ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
 
-        new ApprovalPreReceiveHook(pushStore, approvalGateway, Duration.ofSeconds(5), null, null, pushContext)
-                .onPreReceive(rp, List.of(cmd));
+        hook(Duration.ofSeconds(5), pushContext).onPreReceive(rp, List.of(cmd));
 
         assertEquals(ReceiveCommand.Result.REJECTED_OTHER_REASON, cmd.getResult());
         verify(pushStore).cancel(eq(recordId), any(Attestation.class));
@@ -422,8 +322,7 @@ class ApprovalPreReceiveHookTest {
         ReceivePack rp = new ReceivePack(repo);
         ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
 
-        new ApprovalPreReceiveHook(pushStore, approvalGateway, Duration.ofSeconds(5), null, null, pushContext)
-                .onPreReceive(rp, List.of(cmd));
+        hook(Duration.ofSeconds(5), pushContext).onPreReceive(rp, List.of(cmd));
 
         assertEquals(ReceiveCommand.Result.REJECTED_OTHER_REASON, cmd.getResult());
         verify(pushStore, never()).cancel(any(), any());

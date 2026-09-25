@@ -1,5 +1,6 @@
 package com.rbc.fogwall.dashboard.controller;
 
+import com.rbc.fogwall.approval.SelfApprovalPolicy;
 import com.rbc.fogwall.config.AttestationQuestion;
 import com.rbc.fogwall.config.FogwallConfig;
 import com.rbc.fogwall.db.PushStore;
@@ -445,6 +446,10 @@ public class PushController {
      *       authenticated user may review. When {@code server.require-review-permission: true}, the user must have a
      *       REVIEW (or PUSH_AND_REVIEW) permission for the repo.
      * </ol>
+     *
+     * <p>The self-review case reads the role from the session's authorities, which match the roles stored for the user
+     * at login. {@link SelfApprovalPolicy} reads those stored roles when either proxy mode forwards the approved push,
+     * so a self-approval recorded here is refused at forwarding time if either grant has since been removed.
      *
      * @param adminOverride {@code true} when an admin has explicitly activated the break-glass override; only applies
      *     to another user's push (never one's own), and ignored for non-admins
