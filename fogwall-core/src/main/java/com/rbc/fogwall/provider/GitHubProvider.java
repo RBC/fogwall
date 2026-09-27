@@ -17,7 +17,8 @@ import org.apache.hc.core5.util.Timeout;
 import tools.jackson.databind.json.JsonMapper;
 
 @Slf4j
-public class GitHubProvider extends AbstractFogwallProvider implements HttpTokenUserLookup, SshKeyFingerprintLookup {
+public class GitHubProvider extends AbstractFogwallProvider
+        implements HttpTokenUserLookup, SshKeyFingerprintLookup, ScmOAuthProvider {
 
     public static final String NAME = "github";
     public static final URI DEFAULT_URI = URI.create("https://github.com");
@@ -74,11 +75,13 @@ public class GitHubProvider extends AbstractFogwallProvider implements HttpToken
      * OAuth authorize endpoint for account linking (#40) — always the web host (github.com, a {@code .ghe.com} tenant,
      * or a self-hosted GHES host), unlike {@link #getApiUrl()} which differs by shape.
      */
+    @Override
     public String getOAuthAuthorizeUrl() {
         return selfHostedHttpsBase() + "/login/oauth/authorize";
     }
 
     /** OAuth token exchange endpoint for account linking (#40). See {@link #getOAuthAuthorizeUrl()}. */
+    @Override
     public String getOAuthTokenUrl() {
         return selfHostedHttpsBase() + "/login/oauth/access_token";
     }

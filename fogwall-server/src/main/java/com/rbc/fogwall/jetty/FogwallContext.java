@@ -5,6 +5,7 @@ import com.rbc.fogwall.approval.SelfApprovalPolicy;
 import com.rbc.fogwall.approval.UiApprovalGateway;
 import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.config.JettyConfigurationBuilder;
+import com.rbc.fogwall.crypto.TokenCipherProvider;
 import com.rbc.fogwall.db.FetchStore;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.ScmApiActionStore;
@@ -17,8 +18,10 @@ import com.rbc.fogwall.provider.ProviderRegistry;
 import com.rbc.fogwall.scmapi.GitHubNodeIdCache;
 import com.rbc.fogwall.scmapi.GitLabProjectIdCache;
 import com.rbc.fogwall.service.PushIdentityResolver;
+import com.rbc.fogwall.service.ScmOAuthTokenService;
 import com.rbc.fogwall.service.SshScmIdentityEnricher;
 import com.rbc.fogwall.tls.SslUtil;
+import com.rbc.fogwall.user.ScmOAuthTokenStore;
 import com.rbc.fogwall.user.UserStore;
 
 /**
@@ -56,4 +59,7 @@ public record FogwallContext(
         GitLabProjectIdCache gitLabProjectIdCache,
         ScmApiActionStore scmApiActionStore,
         ScmApiEntityStore scmApiEntityStore,
+        ScmOAuthTokenStore scmOAuthTokenStore,
+        TokenCipherProvider tokenCipherProvider,
+        ScmOAuthTokenService scmOAuthTokenService,
         FogwallTelemetry telemetry) {}

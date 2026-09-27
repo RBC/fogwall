@@ -54,6 +54,11 @@ public class TokenCipherProvider {
         }
     }
 
+    /** A provider with no cipher, for a deployment in which no provider offers account linking. */
+    public static TokenCipherProvider unavailable() {
+        return new TokenCipherProvider(null, false);
+    }
+
     public Optional<TokenCipher> cipher() {
         return Optional.ofNullable(cipher);
     }

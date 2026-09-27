@@ -26,9 +26,24 @@ public interface ScmOAuthTokenStore {
 
     /**
      * Returns the stored encrypted access token for {@code (username, provider)}, if any. The caller decrypts it — for
-     * revoking the grant upstream, or for reading the account's registered SSH keys.
+     * revoking the token upstream, or for reading the account's registered SSH keys.
      */
     Optional<byte[]> findAccessToken(String username, String provider);
+
+    /** Returns the whole stored token for {@code (username, provider)}, if any. */
+    Optional<ScmOAuthToken> findToken(String username, String provider);
+
+    /**
+     * Replaces the access and refresh tokens of an existing entry after a refresh. The scopes and the time the user
+     * authorized the link are left as they were: a refresh renews the token, it does not re-authorize it. No-ops when
+     * no entry exists, so a refresh racing an unlink cannot bring the token back.
+     */
+    void replaceTokens(
+            String username,
+            String provider,
+            byte[] encryptedAccessToken,
+            byte[] encryptedRefreshToken,
+            Instant expiresAt);
 
     /** Removes the stored token for {@code (username, provider)}, if any. No-ops when none exists. */
     void remove(String username, String provider);

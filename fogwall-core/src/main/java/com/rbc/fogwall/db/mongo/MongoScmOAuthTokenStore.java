@@ -7,6 +7,8 @@ import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.IndexOptions;
 import com.mongodb.client.model.Indexes;
 import com.mongodb.client.model.ReplaceOptions;
+import com.mongodb.client.model.Updates;
+import com.rbc.fogwall.user.ScmOAuthToken;
 import com.rbc.fogwall.user.ScmOAuthTokenStore;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -73,6 +75,45 @@ public class MongoScmOAuthTokenStore implements ScmOAuthTokenStore {
         }
         Binary token = doc.get("access_token", Binary.class);
         return Optional.ofNullable(token).map(Binary::getData);
+    }
+
+    @Override
+    public Optional<ScmOAuthToken> findToken(String username, String provider) {
+        Document doc = getCollection()
+                .find(Filters.and(Filters.eq("username", username), Filters.eq("provider", provider)))
+                .first();
+        if (doc == null) {
+            return Optional.empty();
+        }
+        Binary accessToken = doc.get("access_token", Binary.class);
+        Binary refreshToken = doc.get("refresh_token", Binary.class);
+        Date expiresAt = doc.getDate("expires_at");
+        return Optional.of(new ScmOAuthToken(
+                accessToken != null ? accessToken.getData() : null,
+                refreshToken != null ? refreshToken.getData() : null,
+                doc.getString("scopes"),
+                expiresAt != null ? expiresAt.toInstant() : null));
+    }
+
+    @Override
+    public void replaceTokens(
+            String username,
+            String provider,
+            byte[] encryptedAccessToken,
+            byte[] encryptedRefreshToken,
+            Instant expiresAt) {
+        getCollection()
+                .updateOne(
+                        Filters.and(Filters.eq("username", username), Filters.eq("provider", provider)),
+                        Updates.combine(
+                                Updates.set(
+                                        "access_token",
+                                        encryptedAccessToken != null ? new Binary(encryptedAccessToken) : null),
+                                Updates.set(
+                                        "refresh_token",
+                                        encryptedRefreshToken != null ? new Binary(encryptedRefreshToken) : null),
+                                Updates.set("expires_at", expiresAt != null ? Date.from(expiresAt) : null)));
+        log.debug("Replaced refreshed OAuth token for user '{}' / provider '{}'", username, provider);
     }
 
     @Override

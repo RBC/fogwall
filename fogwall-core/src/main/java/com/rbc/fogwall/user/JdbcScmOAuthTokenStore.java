@@ -68,6 +68,45 @@ public class JdbcScmOAuthTokenStore implements ScmOAuthTokenStore {
                 .findFirst();
     }
 
+    @Override
+    public Optional<ScmOAuthToken> findToken(String username, String provider) {
+        return jdbc
+                .query(
+                        "SELECT access_token, refresh_token, scopes, expires_at FROM user_scm_tokens "
+                                + "WHERE username = :u AND provider = :provider",
+                        Map.of("u", username, "provider", provider),
+                        (rs, rowNum) -> {
+                            Timestamp expiresAt = rs.getTimestamp("expires_at");
+                            return new ScmOAuthToken(
+                                    rs.getBytes("access_token"),
+                                    rs.getBytes("refresh_token"),
+                                    rs.getString("scopes"),
+                                    expiresAt != null ? expiresAt.toInstant() : null);
+                        })
+                .stream()
+                .findFirst();
+    }
+
+    @Override
+    public void replaceTokens(
+            String username,
+            String provider,
+            byte[] encryptedAccessToken,
+            byte[] encryptedRefreshToken,
+            Instant expiresAt) {
+        var params = new HashMap<String, Object>();
+        params.put("u", username);
+        params.put("provider", provider);
+        params.put("accessToken", encryptedAccessToken);
+        params.put("refreshToken", encryptedRefreshToken);
+        params.put("expiresAt", expiresAt != null ? Timestamp.from(expiresAt) : null);
+        jdbc.update(
+                "UPDATE user_scm_tokens SET access_token = :accessToken, refresh_token = :refreshToken, "
+                        + "expires_at = :expiresAt WHERE username = :u AND provider = :provider",
+                params);
+        log.debug("Replaced refreshed OAuth token for user '{}' / provider '{}'", username, provider);
+    }
+
     /** Returns the providers {@code username} has a linked OAuth token for. */
     @Override
     public List<String> findLinkedProviders(String username) {

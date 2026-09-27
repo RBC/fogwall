@@ -2,8 +2,6 @@ package com.rbc.fogwall.dashboard.issues;
 
 import com.rbc.fogwall.config.FogwallConfig;
 import com.rbc.fogwall.config.ProviderConfig;
-import com.rbc.fogwall.crypto.TokenCipher;
-import com.rbc.fogwall.crypto.TokenCipherProvider;
 import com.rbc.fogwall.db.ScmApiActionStore;
 import com.rbc.fogwall.db.ScmApiEntityStore;
 import com.rbc.fogwall.db.model.ScmApiActionOrigin;
@@ -19,7 +17,7 @@ import com.rbc.fogwall.provider.ProviderRegistry;
 import com.rbc.fogwall.scmapi.EntityContent;
 import com.rbc.fogwall.scmapi.EntityPayload;
 import com.rbc.fogwall.scmapi.ScmContentInspector;
-import com.rbc.fogwall.user.ScmOAuthTokenStore;
+import com.rbc.fogwall.service.ScmOAuthTokenService;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -41,8 +39,7 @@ public class DashboardIssueService {
     private final ProviderRegistry providers;
     private final RepoPermissionService permissions;
     private final ScmContentInspector contentInspector;
-    private final Optional<ScmOAuthTokenStore> tokenStore;
-    private final TokenCipherProvider cipherProvider;
+    private final ScmOAuthTokenService oauthTokens;
     private final ScmApiActionStore auditStore;
     private final ScmApiEntityStore entityStore;
     private final FogwallConfig fogwallConfig;
@@ -52,8 +49,7 @@ public class DashboardIssueService {
             ProviderRegistry providers,
             RepoPermissionService permissions,
             ScmContentInspector contentInspector,
-            Optional<ScmOAuthTokenStore> tokenStore,
-            TokenCipherProvider cipherProvider,
+            ScmOAuthTokenService oauthTokens,
             ScmApiActionStore auditStore,
             ScmApiEntityStore entityStore,
             FogwallConfig fogwallConfig,
@@ -61,8 +57,7 @@ public class DashboardIssueService {
         this.providers = providers;
         this.permissions = permissions;
         this.contentInspector = contentInspector;
-        this.tokenStore = tokenStore;
-        this.cipherProvider = cipherProvider;
+        this.oauthTokens = oauthTokens;
         this.auditStore = auditStore;
         this.entityStore = entityStore;
         this.fogwallConfig = fogwallConfig;
@@ -105,8 +100,7 @@ public class DashboardIssueService {
      * OAuth. Whether any grant matches a given repo is decided per operation, since grants are path patterns.
      */
     public List<String> eligibleProviders(String username) {
-        List<String> linked =
-                tokenStore.map(s -> s.findLinkedProviders(username)).orElse(List.of());
+        List<String> linked = oauthTokens.linkedProviders(username);
         List<String> result = new ArrayList<>();
         for (String provider : linked) {
             if (isSupportedAndEnabled(provider)) {
@@ -299,17 +293,9 @@ public class DashboardIssueService {
     }
 
     private Optional<String> accessToken(String username, String providerName) {
-        if (tokenStore.isEmpty()) {
-            return Optional.empty();
-        }
-        Optional<TokenCipher> cipher = cipherProvider.cipher();
-        if (cipher.isEmpty()) {
-            return Optional.empty();
-        }
-        return tokenStore
-                .get()
-                .findAccessToken(username, providerName)
-                .map(encrypted -> new String(cipher.get().decrypt(encrypted), StandardCharsets.UTF_8));
+        return oauthTokens.access(username, providerName) instanceof ScmOAuthTokenService.Access.Usable usable
+                ? Optional.of(usable.accessToken())
+                : Optional.empty();
     }
 
     private boolean isIssuesEnabled(String providerName) {

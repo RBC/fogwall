@@ -15,7 +15,8 @@ import org.apache.hc.core5.util.Timeout;
 import tools.jackson.databind.json.JsonMapper;
 
 @Slf4j
-public class GitLabProvider extends AbstractFogwallProvider implements HttpTokenUserLookup, SshKeyFingerprintLookup {
+public class GitLabProvider extends AbstractFogwallProvider
+        implements HttpTokenUserLookup, SshKeyFingerprintLookup, ScmOAuthProvider {
 
     public static final URI DEFAULT_URI = URI.create("https://gitlab.com");
     public static final String NAME = "gitlab";
@@ -44,6 +45,16 @@ public class GitLabProvider extends AbstractFogwallProvider implements HttpToken
 
     public String getOAuthUrl() {
         return String.format("%s/oauth", uri);
+    }
+
+    @Override
+    public String getOAuthAuthorizeUrl() {
+        return getOAuthUrl() + "/authorize";
+    }
+
+    @Override
+    public String getOAuthTokenUrl() {
+        return getOAuthUrl() + "/token";
     }
 
     @Override

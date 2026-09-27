@@ -89,6 +89,46 @@ class ScmOAuthTokenStoreTest {
     }
 
     @Test
+    void findToken_returnsEveryStoredField() {
+        Instant expiresAt = Instant.now().plus(1, ChronoUnit.HOURS).truncatedTo(ChronoUnit.MILLIS);
+        store.save("alice", "gitlab", bytes("access"), bytes("refresh"), "read_user", expiresAt);
+
+        ScmOAuthToken token = store.findToken("alice", "gitlab").orElseThrow();
+
+        assertArrayEquals(bytes("access"), token.encryptedAccessToken());
+        assertArrayEquals(bytes("refresh"), token.encryptedRefreshToken());
+        assertEquals("read_user", token.scopes());
+        assertEquals(expiresAt, token.expiresAt());
+        assertTrue(store.findToken("alice", "github").isEmpty());
+    }
+
+    @Test
+    void replaceTokens_replacesTheTokensAndExpiry_keepingTheScopes() {
+        store.save("alice", "gitlab", bytes("access-1"), bytes("refresh-1"), "read_user", Instant.now());
+        Instant expiresAt = Instant.now().plus(2, ChronoUnit.HOURS).truncatedTo(ChronoUnit.MILLIS);
+
+        store.replaceTokens("alice", "gitlab", bytes("access-2"), bytes("refresh-2"), expiresAt);
+
+        ScmOAuthToken token = store.findToken("alice", "gitlab").orElseThrow();
+        assertArrayEquals(bytes("access-2"), token.encryptedAccessToken());
+        assertArrayEquals(bytes("refresh-2"), token.encryptedRefreshToken());
+        assertEquals(expiresAt, token.expiresAt());
+        assertEquals("read_user", token.scopes());
+    }
+
+    @Test
+    void replaceTokens_withoutAStoredToken_doesNotCreateOne() {
+        // A refresh racing an unlink must not bring the token back.
+        store.replaceTokens("alice", "gitlab", bytes("access"), bytes("refresh"), Instant.now());
+
+        assertTrue(store.findToken("alice", "gitlab").isEmpty());
+    }
+
+    private static byte[] bytes(String s) {
+        return s.getBytes(StandardCharsets.UTF_8);
+    }
+
+    @Test
     void findAccessToken_noStoredToken_returnsEmpty() {
         assertTrue(store.findAccessToken("alice", "github").isEmpty());
     }
