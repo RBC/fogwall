@@ -13,8 +13,6 @@ import static org.mockito.Mockito.when;
 
 import com.rbc.fogwall.config.FogwallConfig;
 import com.rbc.fogwall.config.ProviderConfig;
-import com.rbc.fogwall.crypto.TokenCipher;
-import com.rbc.fogwall.crypto.TokenCipherProvider;
 import com.rbc.fogwall.db.ScmApiActionStore;
 import com.rbc.fogwall.db.ScmApiEntityStore;
 import com.rbc.fogwall.db.model.ScmApiActionOrigin;
@@ -25,8 +23,7 @@ import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.GitHubProvider;
 import com.rbc.fogwall.provider.ProviderRegistry;
 import com.rbc.fogwall.scmapi.ScmContentInspector;
-import com.rbc.fogwall.user.ScmOAuthTokenStore;
-import java.nio.charset.StandardCharsets;
+import com.rbc.fogwall.service.ScmOAuthTokenService;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -50,13 +47,7 @@ class DashboardIssueServiceTest {
     ScmContentInspector contentInspector;
 
     @Mock
-    ScmOAuthTokenStore tokenStore;
-
-    @Mock
-    TokenCipherProvider cipherProvider;
-
-    @Mock
-    TokenCipher cipher;
+    ScmOAuthTokenService oauthTokens;
 
     @Mock
     ScmApiActionStore auditStore;
@@ -77,15 +68,7 @@ class DashboardIssueServiceTest {
     @BeforeEach
     void setUp() {
         service = new DashboardIssueService(
-                providers,
-                permissions,
-                contentInspector,
-                Optional.of(tokenStore),
-                cipherProvider,
-                auditStore,
-                entityStore,
-                fogwallConfig,
-                client);
+                providers, permissions, contentInspector, oauthTokens, auditStore, entityStore, fogwallConfig, client);
     }
 
     private void providerEnabled() {
@@ -96,9 +79,7 @@ class DashboardIssueServiceTest {
     }
 
     private void tokenAvailable() {
-        when(tokenStore.findAccessToken("alice", "github")).thenReturn(Optional.of(new byte[] {1, 2, 3}));
-        when(cipherProvider.cipher()).thenReturn(Optional.of(cipher));
-        when(cipher.decrypt(any())).thenReturn("gho_token".getBytes(StandardCharsets.UTF_8));
+        when(oauthTokens.access("alice", "github")).thenReturn(new ScmOAuthTokenService.Access.Usable("gho_token"));
     }
 
     private ScmApiActionRecord savedRecord() {
@@ -199,8 +180,8 @@ class DashboardIssueServiceTest {
         when(permissions.isAllowedToFileIssue("alice", "github", "/octocat/hello"))
                 .thenReturn(true);
         when(contentInspector.inspect(anyList(), any())).thenReturn(List.of());
-        when(tokenStore.findAccessToken("alice", "github")).thenReturn(Optional.empty());
-        when(cipherProvider.cipher()).thenReturn(Optional.of(cipher));
+        when(oauthTokens.access("alice", "github"))
+                .thenReturn(new ScmOAuthTokenService.Access.Unusable(ScmOAuthTokenService.Reason.NOT_LINKED));
 
         var outcome = service.createIssue("alice", "github", "octocat", "hello", "Bug", "It broke");
 
@@ -275,7 +256,7 @@ class DashboardIssueServiceTest {
     void eligibleProviders_intersectsLinkedAndEnabled() {
         ProviderConfig enabled = new ProviderConfig();
         enabled.setIssuesEnabled(true);
-        when(tokenStore.findLinkedProviders("alice")).thenReturn(List.of("github", "gitlab"));
+        when(oauthTokens.linkedProviders("alice")).thenReturn(List.of("github", "gitlab"));
         when(providers.getProviders()).thenReturn(List.of(github));
         when(fogwallConfig.getProviders()).thenReturn(Map.of("github", enabled));
 

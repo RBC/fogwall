@@ -4,6 +4,7 @@ import com.rbc.fogwall.approval.ApprovalGateway;
 import com.rbc.fogwall.approval.AutoApprovalGateway;
 import com.rbc.fogwall.approval.SelfApprovalPolicy;
 import com.rbc.fogwall.approval.UiApprovalGateway;
+import com.rbc.fogwall.crypto.TokenCipherProvider;
 import com.rbc.fogwall.db.CompositeUrlRuleRegistry;
 import com.rbc.fogwall.db.FetchStore;
 import com.rbc.fogwall.db.MongoStoreFactory;
@@ -49,6 +50,7 @@ import com.rbc.fogwall.service.CachingTokenPushIdentityResolver;
 import com.rbc.fogwall.service.JdbcScmTokenCache;
 import com.rbc.fogwall.service.JdbcSshFingerprintCache;
 import com.rbc.fogwall.service.PushIdentityResolver;
+import com.rbc.fogwall.service.ScmOAuthTokenService;
 import com.rbc.fogwall.service.ScmTokenCache;
 import com.rbc.fogwall.service.SshFingerprintCache;
 import com.rbc.fogwall.service.SshScmIdentityEnricher;
@@ -56,9 +58,11 @@ import com.rbc.fogwall.service.TokenPushIdentityResolver;
 import com.rbc.fogwall.ssh.SshKeyUtils;
 import com.rbc.fogwall.tls.SslUtil;
 import com.rbc.fogwall.user.CompositeUserStore;
+import com.rbc.fogwall.user.JdbcScmOAuthTokenStore;
 import com.rbc.fogwall.user.JdbcUserStore;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
 import com.rbc.fogwall.user.ScmIdentity;
+import com.rbc.fogwall.user.ScmOAuthTokenStore;
 import com.rbc.fogwall.user.SshKeyEntry;
 import com.rbc.fogwall.user.StaticUserStore;
 import com.rbc.fogwall.user.UserEntry;
@@ -123,6 +127,9 @@ public class JettyConfigurationBuilder {
     private GitLabProjectIdCache cachedGitLabProjectIdCache;
     private ScmApiActionStore cachedScmApiActionStore;
     private ScmApiEntityStore cachedScmApiEntityStore;
+    private ScmOAuthTokenStore cachedScmOAuthTokenStore;
+    private TokenCipherProvider cachedTokenCipherProvider;
+    private ScmOAuthTokenService cachedScmOAuthTokenService;
 
     public JettyConfigurationBuilder(FogwallConfig config) {
         this.config = config;
@@ -663,6 +670,9 @@ public class JettyConfigurationBuilder {
                 buildGitLabProjectIdCache(),
                 buildScmApiActionStore(),
                 buildScmApiEntityStore(),
+                buildScmOAuthTokenStore(),
+                buildTokenCipherProvider(),
+                buildScmOAuthTokenService(),
                 telemetry);
     }
 
@@ -1132,6 +1142,53 @@ public class JettyConfigurationBuilder {
                 ? requireMongoStoreFactory().scmApiEntityStore()
                 : ScmApiEntityStoreFactory.fromDataSource(requireJdbcDataSource());
         return cachedScmApiEntityStore;
+    }
+
+    /** Builds the {@link ScmOAuthTokenStore} holding the OAuth tokens SCM account linking obtains. */
+    public ScmOAuthTokenStore buildScmOAuthTokenStore() {
+        if (cachedScmOAuthTokenStore != null) return cachedScmOAuthTokenStore;
+        cachedScmOAuthTokenStore = "mongo".equals(config.getDatabase().getType())
+                ? requireMongoStoreFactory().scmOAuthTokenStore()
+                : new JdbcScmOAuthTokenStore(requireJdbcDataSource());
+        return cachedScmOAuthTokenStore;
+    }
+
+    /**
+     * Builds the {@link TokenCipherProvider} that encrypts linked OAuth tokens at rest. The key is loaded, or generated
+     * for local development, only when some provider offers account linking; otherwise there is nothing to encrypt and
+     * no key file is touched.
+     */
+    public TokenCipherProvider buildTokenCipherProvider() {
+        if (cachedTokenCipherProvider != null) return cachedTokenCipherProvider;
+        boolean linkingOffered = config.getProviders().values().stream()
+                .anyMatch(p -> p.getOauth().isEnabled());
+        cachedTokenCipherProvider = linkingOffered
+                ? TokenCipherProvider.initialize(
+                        config.getScmOauth().getTokenEncryptionKeyPath(), Path.of("./.data/scm-oauth-token-key"))
+                : TokenCipherProvider.unavailable();
+        return cachedTokenCipherProvider;
+    }
+
+    /** Builds the {@link ScmOAuthTokenService} that hands out linked OAuth tokens' access tokens, refreshing them. */
+    public ScmOAuthTokenService buildScmOAuthTokenService() {
+        if (cachedScmOAuthTokenService != null) return cachedScmOAuthTokenService;
+        Map<String, ScmOAuthTokenService.OAuthClient> clients = new LinkedHashMap<>();
+        config.getProviders().forEach((name, providerConfig) -> {
+            OAuthProviderSettings oauth = providerConfig.getOauth();
+            if (oauth.isEnabled() && !oauth.getClientId().isBlank()) {
+                clients.put(
+                        name,
+                        new ScmOAuthTokenService.OAuthClient(
+                                oauth.getClientId(), Path.of(oauth.getClientSecretPath())));
+            }
+        });
+        cachedScmOAuthTokenService = new ScmOAuthTokenService(
+                buildScmOAuthTokenStore(),
+                buildTokenCipherProvider(),
+                buildProviderRegistry(),
+                clients,
+                getServiceUrl());
+        return cachedScmOAuthTokenService;
     }
 
     /**

@@ -25,7 +25,8 @@ import tools.jackson.databind.json.JsonMapper;
  * forgejo} (or {@code codeberg}/{@code gitea}) with an explicit {@code uri}.
  */
 @Slf4j
-public class ForgejoProvider extends AbstractFogwallProvider implements HttpTokenUserLookup, SshKeyFingerprintLookup {
+public class ForgejoProvider extends AbstractFogwallProvider
+        implements HttpTokenUserLookup, SshKeyFingerprintLookup, ScmOAuthProvider {
 
     public static final String TYPE = "forgejo";
 
@@ -59,11 +60,13 @@ public class ForgejoProvider extends AbstractFogwallProvider implements HttpToke
      * OAuth authorize endpoint for account linking (#40) — the web host (self-hosted Forgejo/Gitea, or Codeberg),
      * derived the same way {@link #getApiUrl()} derives its host from an {@code ssh://} uri.
      */
+    @Override
     public String getOAuthAuthorizeUrl() {
         return webHttpsBase() + "/login/oauth/authorize";
     }
 
     /** OAuth token exchange endpoint for account linking (#40). See {@link #getOAuthAuthorizeUrl()}. */
+    @Override
     public String getOAuthTokenUrl() {
         return webHttpsBase() + "/login/oauth/access_token";
     }

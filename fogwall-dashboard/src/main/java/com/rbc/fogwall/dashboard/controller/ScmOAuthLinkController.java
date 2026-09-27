@@ -342,6 +342,14 @@ public class ScmOAuthLinkController {
                     HttpStatus.NOT_FOUND.value(), "SCM OAuth linking does not support provider '" + providerId + "'");
             return null;
         }
+        OAuthProviderSettings providerSettings = oauthSettingsFor(providerId);
+        if (providerSettings == null
+                || !providerSettings.isEnabled()
+                || providerSettings.getClientId().isBlank()) {
+            response.sendError(
+                    HttpStatus.NOT_FOUND.value(), "Provider '" + providerId + "' is not configured for OAuth linking");
+            return null;
+        }
         if (!tokenCipherProvider.isAvailable()) {
             response.sendError(
                     HttpStatus.SERVICE_UNAVAILABLE.value(),
@@ -367,14 +375,6 @@ public class ScmOAuthLinkController {
             response.sendError(
                     HttpStatus.NOT_IMPLEMENTED.value(),
                     "SCM OAuth linking requires a database (JDBC or MongoDB); none is configured.");
-            return null;
-        }
-        OAuthProviderSettings providerSettings = oauthSettingsFor(providerId);
-        if (providerSettings == null
-                || !providerSettings.isEnabled()
-                || providerSettings.getClientId().isBlank()) {
-            response.sendError(
-                    HttpStatus.NOT_FOUND.value(), "Provider '" + providerId + "' is not configured for OAuth linking");
             return null;
         }
         return new Linkable(provider.get(), providerSettings);

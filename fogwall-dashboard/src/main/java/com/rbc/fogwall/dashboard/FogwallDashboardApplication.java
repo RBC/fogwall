@@ -7,7 +7,6 @@ import com.rbc.fogwall.config.FogwallConfigLoader;
 import com.rbc.fogwall.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.config.LoadedConfig;
 import com.rbc.fogwall.config.ScmOAuthConfig;
-import com.rbc.fogwall.crypto.TokenCipherProvider;
 import com.rbc.fogwall.dashboard.issues.DashboardIssueClient;
 import com.rbc.fogwall.dashboard.issues.DashboardIssueService;
 import com.rbc.fogwall.db.MongoStoreFactory;
@@ -26,18 +25,14 @@ import com.rbc.fogwall.provider.ProviderRegistry;
 import com.rbc.fogwall.scmapi.ScmContentInspector;
 import com.rbc.fogwall.ssh.SshGitServer;
 import com.rbc.fogwall.ssh.SshServerRegistrar;
-import com.rbc.fogwall.user.JdbcScmOAuthTokenStore;
-import com.rbc.fogwall.user.ScmOAuthTokenStore;
 import com.rbc.fogwall.validation.SecretScanCheck;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.ServletContextEvent;
 import jakarta.servlet.ServletContextListener;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jetty.ee11.servlet.FilterHolder;
 import org.eclipse.jetty.ee11.servlet.ServletContextHandler;
@@ -234,16 +229,9 @@ public class FogwallDashboardApplication {
             // always constructed by JettyConfigurationBuilder (server-mode and transparent-proxy mirrors).
             bf.registerSingleton("serverCache", ctx.serverCache());
             bf.registerSingleton("proxyCache", ctx.proxyCache());
-            // #40: OAuth token encryption never fails startup — see TokenCipherProvider javadoc. A missing/invalid
-            // key only disables the /api/scm-oauth/{provider}/link|callback endpoints, never push authorization.
-            TokenCipherProvider tokenCipherProvider = TokenCipherProvider.initialize(
-                    fogwallConfig.getScmOauth().getTokenEncryptionKeyPath(), Path.of("./.data/scm-oauth-token-key"));
-            bf.registerSingleton("tokenCipherProvider", tokenCipherProvider);
-            // Both database families provide one, so account linking, the SSH key refresh and strict identity mode
-            // behave the same on either.
-            ScmOAuthTokenStore oauthTokenStore = jdbcDataSource != null
-                    ? new JdbcScmOAuthTokenStore(jdbcDataSource)
-                    : (mongoFactory != null ? mongoFactory.scmOAuthTokenStore() : null);
+            // OAuth token encryption never fails startup — see TokenCipherProvider javadoc. A missing/invalid key only
+            // disables the /api/scm-oauth/{provider}/link|callback endpoints, never push authorization.
+            bf.registerSingleton("tokenCipherProvider", ctx.tokenCipherProvider());
             // The permission service is always constructed by JettyConfigurationBuilder; registering it
             // conditionally forced @Autowired(required = false) and use-site null-guards onto every
             // consumer for a case that cannot occur. Register unconditionally and fail loudly if the
@@ -257,12 +245,10 @@ public class FogwallDashboardApplication {
             if (jdbcDataSource != null) {
                 bf.registerSingleton("dataSource", jdbcDataSource);
             }
-            if (oauthTokenStore != null) {
-                bf.registerSingleton("scmOAuthTokenStore", oauthTokenStore);
-            }
+            bf.registerSingleton("scmOAuthTokenStore", ctx.scmOAuthTokenStore());
             // Dashboard issue path. Acts as the user via their linked OAuth token; enforces the ISSUE/PROPOSE
-            // grant, content inspection and auditing. Wired here since it composes the OAuth token store (which is
-            // resolved conditionally above) with the permission service and audit store.
+            // grant, content inspection and auditing. Wired here since it composes the linked OAuth token service with
+            // the permission service and audit store.
             bf.registerSingleton(
                     "dashboardIssueService",
                     new DashboardIssueService(
@@ -271,8 +257,7 @@ public class FogwallDashboardApplication {
                                     ctx.repoPermissionService(),
                                     "FogwallContext must always carry a RepoPermissionService"),
                             scmContentInspector,
-                            Optional.ofNullable(oauthTokenStore),
-                            tokenCipherProvider,
+                            ctx.scmOAuthTokenService(),
                             ctx.scmApiActionStore(),
                             ctx.scmApiEntityStore(),
                             fogwallConfig,

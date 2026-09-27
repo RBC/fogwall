@@ -84,6 +84,14 @@ authorization in this mode, so allowing it to be added would only create a confu
 it might sound: it does **not** affect `POST /api/me/emails` — commit-author-email verification is governed by the
 independent `commit.attribution-policy` setting, not `scm-oauth.identity-mode`.
 
+## Token expiry
+
+GitLab, Forgejo/Gitea and GitHub App user tokens expire, some within hours; a classic GitHub OAuth App token does not.
+When fogwall acts as a user with an expired token, it first renews it with the refresh token, using the provider's
+`oauth.client-id` and `client-secret-path`, and stores the renewed tokens in place of the old ones. A linked token the
+provider refuses to renew, because it was revoked upstream or its refresh token expired, stays unusable until the user
+links the account again.
+
 ## What happens on unlink
 
 `DELETE /api/scm-oauth/<provider>/unlink` (the "Unlink" button in the profile page's SCM Identities tab) removes:
@@ -112,6 +120,7 @@ scm-oauth:
   token-encryption-key-path: /run/secrets/fogwall-scm-oauth-key
 ```
 
-If this is left unset, fogwall auto-generates and persists a key under `./.data/` and logs a loud `WARN` on every
-startup — fine for local development, but that file may not survive a container restart/redeploy in production. If lost,
-every linked user simply needs to re-link (push authorization is never affected).
+If this is left unset while some provider has `oauth.enabled`, fogwall auto-generates and persists a key under
+`./.data/` and logs a loud `WARN` on every startup — fine for local development, but that file may not survive a
+container restart/redeploy in production. If lost, every linked user simply needs to re-link (push authorization is
+never affected).

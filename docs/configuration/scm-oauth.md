@@ -72,13 +72,13 @@ providers:
 
 ## SCM OAuth properties
 
-| Property                                    | Type    | Default      | Description                                                                                                      |
-| ------------------------------------------- | ------- | ------------ | ---------------------------------------------------------------------------------------------------------------- |
-| `identity-mode`                             | string  | `permissive` | `permissive` or `strict` — see above.                                                                            |
-| `token-encryption-key-path`                 | string  | _(none)_     | Path to the base64-encoded 32-byte AES-256-GCM key file. Auto-generated under `./.data/` for local dev if unset. |
-| `providers.<name>.oauth.enabled`            | boolean | `false`      | Whether "Link via OAuth" is offered for this provider.                                                           |
-| `providers.<name>.oauth.client-id`          | string  | `""`         | OAuth app/client ID.                                                                                             |
-| `providers.<name>.oauth.client-secret-path` | string  | `""`         | Path to a file holding the OAuth app/client secret.                                                              |
+| Property                                    | Type    | Default      | Description                                                                                                                                            |
+| ------------------------------------------- | ------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `identity-mode`                             | string  | `permissive` | `permissive` or `strict` — see above.                                                                                                                  |
+| `token-encryption-key-path`                 | string  | _(none)_     | Path to the base64-encoded 32-byte AES-256-GCM key file. Auto-generated under `./.data/` for local dev if unset and some provider has `oauth.enabled`. |
+| `providers.<name>.oauth.enabled`            | boolean | `false`      | Whether "Link via OAuth" is offered for this provider.                                                                                                 |
+| `providers.<name>.oauth.client-id`          | string  | `""`         | OAuth app/client ID.                                                                                                                                   |
+| `providers.<name>.oauth.client-secret-path` | string  | `""`         | Path to a file holding the OAuth app/client secret.                                                                                                    |
 
 **Registering a GitHub App:** account permissions needed are exactly **Email addresses (read-only)** and **Git SSH keys
 (read-only)** — no others, and no private key (a GitHub App's private key is for app/installation-level auth, which this
