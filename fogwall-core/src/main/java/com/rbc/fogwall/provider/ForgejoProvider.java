@@ -71,6 +71,12 @@ public class ForgejoProvider extends AbstractFogwallProvider
         return webHttpsBase() + "/login/oauth/access_token";
     }
 
+    /** {@code write:repository}, or the legacy {@code all}. */
+    @Override
+    public Set<String> getOAuthPushScopes() {
+        return Set.of("write:repository", "all");
+    }
+
     private String webHttpsBase() {
         if ("ssh".equals(uri.getScheme())) return "https://" + uri.getHost();
         return uri.toString();

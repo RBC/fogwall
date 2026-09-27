@@ -47,6 +47,7 @@ import com.rbc.fogwall.scmapi.GitLabProjectIdCache;
 import com.rbc.fogwall.scmapi.JdbcGitHubNodeIdCache;
 import com.rbc.fogwall.scmapi.JdbcGitLabProjectIdCache;
 import com.rbc.fogwall.service.CachingTokenPushIdentityResolver;
+import com.rbc.fogwall.service.GitCredentialService;
 import com.rbc.fogwall.service.JdbcScmTokenCache;
 import com.rbc.fogwall.service.JdbcSshFingerprintCache;
 import com.rbc.fogwall.service.PushIdentityResolver;
@@ -58,6 +59,8 @@ import com.rbc.fogwall.service.TokenPushIdentityResolver;
 import com.rbc.fogwall.ssh.SshKeyUtils;
 import com.rbc.fogwall.tls.SslUtil;
 import com.rbc.fogwall.user.CompositeUserStore;
+import com.rbc.fogwall.user.GitCredentialStore;
+import com.rbc.fogwall.user.JdbcGitCredentialStore;
 import com.rbc.fogwall.user.JdbcScmOAuthTokenStore;
 import com.rbc.fogwall.user.JdbcUserStore;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
@@ -130,6 +133,7 @@ public class JettyConfigurationBuilder {
     private ScmOAuthTokenStore cachedScmOAuthTokenStore;
     private TokenCipherProvider cachedTokenCipherProvider;
     private ScmOAuthTokenService cachedScmOAuthTokenService;
+    private GitCredentialService cachedGitCredentialService;
 
     public JettyConfigurationBuilder(FogwallConfig config) {
         this.config = config;
@@ -673,6 +677,7 @@ public class JettyConfigurationBuilder {
                 buildScmOAuthTokenStore(),
                 buildTokenCipherProvider(),
                 buildScmOAuthTokenService(),
+                buildGitCredentialService(),
                 telemetry);
     }
 
@@ -1167,6 +1172,42 @@ public class JettyConfigurationBuilder {
                         config.getScmOauth().getTokenEncryptionKeyPath(), Path.of("./.data/scm-oauth-token-key"))
                 : TokenCipherProvider.unavailable();
         return cachedTokenCipherProvider;
+    }
+
+    /** Builds the {@link GitCredentialService} that issues and verifies fogwall's git credentials. */
+    public GitCredentialService buildGitCredentialService() {
+        if (cachedGitCredentialService != null) return cachedGitCredentialService;
+        int maxLifetimeDays = config.getAuth().getGitCredentials().getMaxLifetimeDays();
+        if (maxLifetimeDays < 0) {
+            throw new IllegalStateException(
+                    "auth.git-credentials.max-lifetime-days must be 0 (no limit) or a positive number of days");
+        }
+        GitCredentialStore store = "mongo".equals(config.getDatabase().getType())
+                ? requireMongoStoreFactory().gitCredentialStore()
+                : new JdbcGitCredentialStore(requireJdbcDataSource());
+        cachedGitCredentialService = new GitCredentialService(
+                store, maxLifetimeDays > 0 ? Optional.of(Duration.ofDays(maxLifetimeDays)) : Optional.empty());
+        return cachedGitCredentialService;
+    }
+
+    /**
+     * Whether server-mode pushes to {@code providerName} authenticated by a fogwall credential are forwarded with the
+     * pusher's linked OAuth token.
+     *
+     * @throws IllegalStateException if brokered pushes are enabled on a provider that does not offer account linking
+     */
+    public boolean isBrokeredPush(String providerName) {
+        ProviderConfig providerConfig = config.getProviders().get(providerName);
+        if (providerConfig == null || !providerConfig.getOauth().isBrokeredPush()) {
+            return false;
+        }
+        OAuthProviderSettings oauth = providerConfig.getOauth();
+        if (!oauth.isEnabled() || oauth.getClientId().isBlank()) {
+            throw new IllegalStateException("providers." + providerName + ".oauth.brokered-push requires "
+                    + "providers." + providerName + ".oauth.enabled and a client-id: pushes are forwarded with the "
+                    + "OAuth token account linking obtains");
+        }
+        return true;
     }
 
     /** Builds the {@link ScmOAuthTokenService} that hands out linked OAuth tokens' access tokens, refreshing them. */

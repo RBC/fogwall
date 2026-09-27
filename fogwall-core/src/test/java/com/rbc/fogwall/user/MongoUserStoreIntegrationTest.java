@@ -4,8 +4,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
+import com.rbc.fogwall.db.mongo.MongoGitCredentialStore;
+import com.rbc.fogwall.db.mongo.MongoScmOAuthTokenStore;
 import com.rbc.fogwall.permission.MongoRepoPermissionStore;
 import com.rbc.fogwall.permission.RepoPermission;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -25,6 +29,8 @@ class MongoUserStoreIntegrationTest {
 
     MongoUserStore store;
     MongoRepoPermissionStore permissionStore;
+    MongoScmOAuthTokenStore tokenStore;
+    MongoGitCredentialStore credentialStore;
 
     @BeforeEach
     void setUp() {
@@ -34,6 +40,10 @@ class MongoUserStoreIntegrationTest {
         store.initialize();
         permissionStore = new MongoRepoPermissionStore(client, dbName);
         permissionStore.initialize();
+        tokenStore = new MongoScmOAuthTokenStore(client, dbName);
+        tokenStore.initialize();
+        credentialStore = new MongoGitCredentialStore(client, dbName);
+        credentialStore.initialize();
     }
 
     // ── basic CRUD ──────────────────────────────────────────────────────────────
@@ -433,5 +443,30 @@ class MongoUserStoreIntegrationTest {
 
         assertTrue(permissionStore.findByUsername("alice").isEmpty());
         assertEquals(1, permissionStore.findByUsername("bob").size());
+    }
+
+    // ── deleteUser cascades to linked OAuth tokens and git credentials ─────────
+
+    /** What the JDBC schema does by foreign-key cascade: a later user of the same name inherits neither. */
+    @Test
+    void deleteUser_removesTheirOAuthTokensAndGitCredentials_leavingOtherUsers() {
+        store.createUser("alice", null, "USER");
+        store.createUser("bob", null, "USER");
+        Instant now = Instant.parse("2026-09-27T12:00:00Z");
+        tokenStore.save("alice", "github", bytes("alice-access"), null, "repo", null);
+        tokenStore.save("bob", "github", bytes("bob-access"), null, "repo", null);
+        credentialStore.save(new GitCredential("id-alice", "alice", "laptop", "{sha256}h", now, null, null));
+        credentialStore.save(new GitCredential("id-bob", "bob", "laptop", "{sha256}h", now, null, null));
+
+        store.deleteUser("alice");
+
+        assertTrue(tokenStore.findToken("alice", "github").isEmpty());
+        assertTrue(credentialStore.findById("id-alice").isEmpty());
+        assertTrue(tokenStore.findToken("bob", "github").isPresent());
+        assertTrue(credentialStore.findById("id-bob").isPresent());
+    }
+
+    private static byte[] bytes(String s) {
+        return s.getBytes(StandardCharsets.UTF_8);
     }
 }

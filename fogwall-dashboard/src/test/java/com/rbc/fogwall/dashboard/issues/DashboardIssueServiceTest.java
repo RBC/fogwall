@@ -79,7 +79,8 @@ class DashboardIssueServiceTest {
     }
 
     private void tokenAvailable() {
-        when(oauthTokens.access("alice", "github")).thenReturn(new ScmOAuthTokenService.Access.Usable("gho_token"));
+        when(oauthTokens.access("alice", "github"))
+                .thenReturn(new ScmOAuthTokenService.Access.Usable("gho_token", null));
     }
 
     private ScmApiActionRecord savedRecord() {

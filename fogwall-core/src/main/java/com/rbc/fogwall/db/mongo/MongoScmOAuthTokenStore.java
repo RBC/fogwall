@@ -28,7 +28,7 @@ import org.bson.types.Binary;
 @Slf4j
 public class MongoScmOAuthTokenStore implements ScmOAuthTokenStore {
 
-    private static final String COLLECTION_NAME = "user_scm_tokens";
+    public static final String COLLECTION_NAME = "user_scm_tokens";
 
     private final MongoDatabase database;
 

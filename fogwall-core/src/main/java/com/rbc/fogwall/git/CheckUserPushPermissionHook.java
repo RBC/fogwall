@@ -17,6 +17,7 @@ import com.rbc.fogwall.servlet.filter.CheckUserPushPermissionFilter;
 import com.rbc.fogwall.user.ScmIdentity;
 import com.rbc.fogwall.user.UserEntry;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.transport.ReceiveCommand;
@@ -258,6 +259,16 @@ public final class CheckUserPushPermissionHook implements MandatoryFogwallHook {
         } else if (provider != null) {
             var httpScmIdentities = user.getScmIdentities().stream()
                     .filter(id -> provider.getProviderId().equalsIgnoreCase(id.getProvider()));
+            if (credentialAuthentication().isPresent()) {
+                // Forwarded with the user's linked OAuth token, so the account acting upstream is the one OAuth linking
+                // verified; an identity entered by hand does not name it.
+                var identities = user.getScmIdentities().stream()
+                        .filter(id -> provider.getProviderId().equalsIgnoreCase(id.getProvider()))
+                        .toList();
+                httpScmIdentities = identities.stream().anyMatch(ScmIdentity::isVerified)
+                        ? identities.stream().filter(ScmIdentity::isVerified)
+                        : identities.stream();
+            }
             if (identityMode == ScmOAuthConfig.IdentityMode.STRICT) {
                 // Strict mode admits the account the token belongs to only if OAuth linking proved that account. A
                 // verified sibling identity, or a user matched by email, does not vouch for it.
@@ -281,7 +292,22 @@ public final class CheckUserPushPermissionHook implements MandatoryFogwallHook {
                 .stepName(getStepName())
                 .stepOrder(displayOrder())
                 .status(StepStatus.PASS)
+                .logs(credentialAuthentication()
+                        .map(auth -> List.of(
+                                "Authenticated by fogwall credential '" + auth.credentialName() + "' ("
+                                        + auth.credentialId() + ") of "
+                                        + auth.user().getUsername(),
+                                "Forwarded with the linked " + (provider != null ? provider.getName() : "SCM")
+                                        + " OAuth token of " + auth.user().getUsername()
+                                        + ", not a client credential"))
+                        .orElse(List.of()))
                 .build());
+    }
+
+    private Optional<CredentialAuthentication> credentialAuthentication() {
+        return pushContext.getTransport() instanceof PushTransport.Http http
+                ? Optional.ofNullable(http.credentialAuthentication())
+                : Optional.empty();
     }
 
     /** Blocks the push in {@code scm-oauth.identity-mode: strict} when no OAuth-verified SCM identity is usable. */

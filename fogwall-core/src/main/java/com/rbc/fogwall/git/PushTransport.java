@@ -29,7 +29,8 @@ public sealed interface PushTransport permits PushTransport.Http, PushTransport.
 
     /**
      * The user pre-authenticated by the transport layer. Non-empty for SSH (resolved from the connecting public key at
-     * connection time); empty for HTTP (identity resolved later via token API call).
+     * connection time) and for HTTP authenticated by a fogwall-issued credential; empty for HTTP authenticated by the
+     * client's own SCM credential (identity resolved later via token API call).
      */
     Optional<UserEntry> preAuthenticatedUser();
 
@@ -51,8 +52,13 @@ public sealed interface PushTransport permits PushTransport.Http, PushTransport.
      */
     ClientLivenessCheck livenessCheck();
 
-    /** HTTP server mode: no pre-authenticated user, upstream auth via credentials. */
-    record Http() implements PushTransport {
+    /**
+     * HTTP server mode.
+     *
+     * @param credentialAuthentication the fogwall-issued credential the request authenticated with, which fixes the
+     *     user; null when the client presented its own SCM credential, which identifies the user through the provider
+     */
+    record Http(CredentialAuthentication credentialAuthentication) implements PushTransport {
         @Override
         public String name() {
             return HTTP;
@@ -65,7 +71,7 @@ public sealed interface PushTransport permits PushTransport.Http, PushTransport.
 
         @Override
         public Optional<UserEntry> preAuthenticatedUser() {
-            return Optional.empty();
+            return Optional.ofNullable(credentialAuthentication).map(CredentialAuthentication::user);
         }
 
         @Override
@@ -116,7 +122,11 @@ public sealed interface PushTransport permits PushTransport.Http, PushTransport.
     }
 
     static PushTransport http() {
-        return new Http();
+        return new Http(null);
+    }
+
+    static PushTransport http(CredentialAuthentication credentialAuthentication) {
+        return new Http(credentialAuthentication);
     }
 
     static PushTransport ssh(

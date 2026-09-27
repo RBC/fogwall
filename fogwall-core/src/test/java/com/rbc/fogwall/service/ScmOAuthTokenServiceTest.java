@@ -47,6 +47,7 @@ class ScmOAuthTokenServiceTest {
     private static final Instant NOW = Instant.parse("2026-09-27T12:00:00Z");
     private static final String USER = "alice";
     private static final String PROVIDER = "gitlab";
+    private static final String SCOPES = "read_user write_repository";
 
     @TempDir
     Path tempDir;
@@ -111,7 +112,7 @@ class ScmOAuthTokenServiceTest {
     void tokenWithoutExpiry_isHandedOutWithoutRefreshing() {
         link("access-1", "refresh-1", null);
 
-        assertEquals(new Access.Usable("access-1"), service.access(USER, PROVIDER));
+        assertEquals(new Access.Usable("access-1", SCOPES), service.access(USER, PROVIDER));
         assertEquals(0, requestCount.get());
     }
 
@@ -119,7 +120,7 @@ class ScmOAuthTokenServiceTest {
     void currentToken_isHandedOutWithoutRefreshing() {
         link("access-1", "refresh-1", NOW.plus(Duration.ofHours(1)));
 
-        assertEquals(new Access.Usable("access-1"), service.access(USER, PROVIDER));
+        assertEquals(new Access.Usable("access-1", SCOPES), service.access(USER, PROVIDER));
         assertEquals(0, requestCount.get());
     }
 
@@ -146,7 +147,7 @@ class ScmOAuthTokenServiceTest {
                 {"access_token":"access-2","refresh_token":"refresh-2","expires_in":7200,"token_type":"Bearer"}
                 """;
 
-        assertEquals(new Access.Usable("access-2"), service.access(USER, PROVIDER));
+        assertEquals(new Access.Usable("access-2", SCOPES), service.access(USER, PROVIDER));
 
         Map<String, String> form = requests.get(0);
         assertEquals("refresh_token", form.get("grant_type"));
@@ -169,7 +170,7 @@ class ScmOAuthTokenServiceTest {
                 {"access_token":"access-2","refresh_token":"refresh-2","expires_in":7200}
                 """;
 
-        assertEquals(new Access.Usable("access-2"), service.access(USER, PROVIDER));
+        assertEquals(new Access.Usable("access-2", SCOPES), service.access(USER, PROVIDER));
     }
 
     @Test
@@ -239,7 +240,7 @@ class ScmOAuthTokenServiceTest {
                 {"error":"invalid_grant"}
                 """;
 
-        assertEquals(new Access.Usable("access-other"), service.access(USER, PROVIDER));
+        assertEquals(new Access.Usable("access-other", SCOPES), service.access(USER, PROVIDER));
     }
 
     @Test
@@ -284,7 +285,7 @@ class ScmOAuthTokenServiceTest {
             requestSeen.await();
             release.countDown();
             for (Future<Access> result : results) {
-                assertEquals(new Access.Usable("access-2"), result.get());
+                assertEquals(new Access.Usable("access-2", SCOPES), result.get());
             }
         } finally {
             pool.shutdownNow();
@@ -307,7 +308,7 @@ class ScmOAuthTokenServiceTest {
                 PROVIDER,
                 encrypt(accessToken),
                 refreshToken != null ? encrypt(refreshToken) : null,
-                "read_user write_repository",
+                SCOPES,
                 expiresAt);
     }
 

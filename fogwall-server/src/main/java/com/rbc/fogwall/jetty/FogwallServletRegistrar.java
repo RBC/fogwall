@@ -56,6 +56,8 @@ import com.rbc.fogwall.servlet.ScmApiRestPath;
 import com.rbc.fogwall.servlet.ScmApiRestPathPolicy;
 import com.rbc.fogwall.servlet.ScmApiTokenExtractor;
 import com.rbc.fogwall.servlet.filter.*;
+import com.rbc.fogwall.servlet.filter.FogwallCredentialFilter;
+import com.rbc.fogwall.servlet.filter.FogwallCredentialRelayGuardFilter;
 import com.rbc.fogwall.tls.SslAwareHttpConnectionFactory;
 import com.rbc.fogwall.tls.SslUtil;
 import com.rbc.fogwall.validation.SecretScanCheck;
@@ -203,6 +205,10 @@ public final class FogwallServletRegistrar {
         var forceGitClientHolder = new FilterHolder(new ForceGitClientFilter());
         forceGitClientHolder.setAsyncSupported(true);
         context.addFilter(forceGitClientHolder, PROXY_PATH_PREFIX + "/*", EnumSet.of(DispatcherType.REQUEST));
+        // Ahead of every provider's chain, several of which send the client's credential to the provider's API.
+        var relayGuardHolder = new FilterHolder(new FogwallCredentialRelayGuardFilter());
+        relayGuardHolder.setAsyncSupported(true);
+        context.addFilter(relayGuardHolder, PROXY_PATH_PREFIX + "/*", EnumSet.of(DispatcherType.REQUEST));
         for (String serverPrefix : SERVER_PATH_PREFIXES) {
             context.addFilter(forceGitClientHolder, serverPrefix + "/*", EnumSet.of(DispatcherType.REQUEST));
         }
@@ -244,7 +250,14 @@ public final class FogwallServletRegistrar {
                         fogwallContext.maxObjectSizeBytes(),
                         fogwallContext.upstreamConnectTimeoutSeconds(),
                         fogwallContext.urlRuleRegistry(),
-                        fogwallContext.fetchStore());
+                        fogwallContext.fetchStore(),
+                        new FogwallCredentialFilter(
+                                provider,
+                                configBuilder.isBrokeredPush(provider.getName()),
+                                fogwallContext.gitCredentialService(),
+                                fogwallContext.scmOAuthTokenService(),
+                                fogwallContext.userStore(),
+                                fogwallContext.serviceUrl()));
                 registerProxyServlet(
                         context,
                         provider,
@@ -343,7 +356,8 @@ public final class FogwallServletRegistrar {
             long maxObjectSizeBytes,
             int connectTimeoutSeconds,
             UrlRuleRegistry urlRuleRegistry,
-            FetchStore fetchStore) {
+            FetchStore fetchStore,
+            FogwallCredentialFilter credentialFilter) {
         // A configured GitServlet is built fresh per path prefix rather than shared: mapping one servlet instance
         // under two holders would init() it twice. The resolver/factory are cheap, and both share the one repo cache.
         Supplier<GitServlet> gitServletFactory = () -> {
@@ -412,6 +426,9 @@ public final class FogwallServletRegistrar {
                     new FilterHolder(new UrlRuleAggregateFilter(provider, fetchStore, urlRuleRegistry)),
                     mapping,
                     EnumSet.of(DispatcherType.REQUEST));
+            // Last, so URL rules refuse a repository before a credential is hashed, and so the SmartHttpErrorFilter
+            // registered above turns this filter's refusals into messages git displays.
+            context.addFilter(new FilterHolder(credentialFilter), mapping, EnumSet.of(DispatcherType.REQUEST));
 
             log.info("Registered GitServlet for {} at {}", provider.getName(), mapping);
         }

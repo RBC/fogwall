@@ -42,6 +42,17 @@ public class ScmApiAuthenticateFilter implements Filter {
         HttpServletRequest httpRequest = (HttpServletRequest) request;
         HttpServletResponse httpResponse = (HttpServletResponse) response;
 
+        if (FogwallCredentialRelayGuardFilter.carriesFogwallCredential(httpRequest)) {
+            // Refused before identity resolution, which would send it to the provider.
+            log.warn("Refused a fogwall credential on the {} SCM API proxy", provider.getName());
+            ScmApiErrorResponse.write(
+                    httpResponse,
+                    HttpServletResponse.SC_UNAUTHORIZED,
+                    "fogwall credentials work only with server-mode git remotes, and this one was not sent upstream."
+                            + " Use your own " + provider.getName() + " token.");
+            return;
+        }
+
         String token = ScmApiTokenExtractor.extractToken(httpRequest);
         if (token == null || pushIdentityResolver == null) {
             unauthorized(httpResponse, "Missing or unsupported Authorization or PRIVATE-TOKEN header");

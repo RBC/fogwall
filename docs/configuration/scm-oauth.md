@@ -79,6 +79,7 @@ providers:
 | `providers.<name>.oauth.enabled`            | boolean | `false`      | Whether "Link via OAuth" is offered for this provider.                                                                                                 |
 | `providers.<name>.oauth.client-id`          | string  | `""`         | OAuth app/client ID.                                                                                                                                   |
 | `providers.<name>.oauth.client-secret-path` | string  | `""`         | Path to a file holding the OAuth app/client secret.                                                                                                    |
+| `providers.<name>.oauth.brokered-push`      | boolean | `false`      | Forward server-mode pushes made with a fogwall-issued git credential with the pusher's linked OAuth token. Requires `oauth.enabled`. See below.        |
 
 **Registering a GitHub App:** account permissions needed are exactly **Email addresses (read-only)** and **Git SSH keys
 (read-only)** — no others, and no private key (a GitHub App's private key is for app/installation-level auth, which this
@@ -89,3 +90,36 @@ user-to-server linking flow never uses). Callback URL:
 **Registering a Forgejo/Gitea OAuth application:** self-service OAuth2 application registration under the instance's own
 Settings → Applications page (works the same way on Codeberg, self-hosted Forgejo/Gitea, and org-owned applications),
 requesting the `read:user` scope. Callback URL is the same shape as above.
+
+## Brokered pushes
+
+With `providers.<name>.oauth.brokered-push: true`, a developer can push to that provider's server-mode remote with a git
+credential fogwall issues from their profile, instead of a credential of their own. fogwall authenticates the
+credential, runs its usual checks, and forwards the push with the OAuth token the developer linked for that provider.
+The developer then needs no write-scoped credential for the provider at all.
+
+```yaml
+providers:
+  github:
+    oauth:
+      enabled: true
+      client-id: Iv1.abc123
+      client-secret-path: /run/secrets/fogwall-github-oauth-secret
+      brokered-push: true
+
+auth:
+  git-credentials:
+    # Days a fogwall-issued git credential works after it is issued or rotated. 0 (default) for no limit. Lowering it
+    # also retires existing credentials older than the new limit.
+    max-lifetime-days: 90
+```
+
+- Server mode over HTTP only. The transparent proxy and SSH always use the client's own credential.
+- Linking requests the provider's repository write scope while this is on: `repo` on GitHub, `write_repository` on
+  GitLab, `write:repository` on Forgejo/Gitea. An account linked before the setting was turned on keeps the scopes it
+  was linked with. Its pushes are refused, and it cannot be issued a credential, until the developer links it again. A
+  GitHub App's tokens carry no scopes, so they are not checked; the app's own permissions apply.
+- Pushes made with the developer's own credential are forwarded with that credential, as before.
+- A fogwall credential presented for a provider without `brokered-push`, on a transparent-proxy remote, or to the SCM
+  API proxy is refused, and never sent upstream.
+- The push record names the credential that authenticated the push and the linked account it was forwarded with.

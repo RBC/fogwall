@@ -7,6 +7,7 @@ import static com.rbc.fogwall.git.GitClientUtils.sym;
 
 import com.rbc.fogwall.db.model.PushStep;
 import com.rbc.fogwall.db.model.StepStatus;
+import com.rbc.fogwall.service.ScmOAuthTokenService;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -100,9 +101,30 @@ public class ForwardingPostReceiveHook implements PostReceiveHook {
             return;
         }
 
+        List<String> logs = new ArrayList<>();
+        if (effectiveCreds instanceof ScmOAuthCredentialsProvider linked) {
+            // The push may have waited for review longer than the linked token lived; check it now, so a token that
+            // can no longer be used fails with its remedy rather than an upstream authentication error.
+            if (linked.access() instanceof ScmOAuthTokenService.Access.Unusable unusable) {
+                String reason = "The pusher's linked account could not be used to forward (" + unusable.reason()
+                        + "). They can link it again from their fogwall profile.";
+                rp.sendMessage(color(RED, sym(CROSS_MARK) + "  " + reason));
+                log.warn(
+                        "Cannot forward for user '{}': linked OAuth token unusable ({})",
+                        linked.username(),
+                        unusable.reason());
+                pushContext.addStep(PushStep.builder()
+                        .stepName("forward")
+                        .status(StepStatus.FAIL)
+                        .errorMessage(reason)
+                        .logs(List.of("ERROR: " + reason))
+                        .build());
+                return;
+            }
+        }
+
         rp.sendMessage(color(CYAN, sym(LINK) + "  Forwarding to " + upstreamUrl + "..."));
 
-        List<String> logs = new ArrayList<>();
         logs.add("Forwarding to " + upstreamUrl);
         boolean forwardFailed;
         String forwardError = null;

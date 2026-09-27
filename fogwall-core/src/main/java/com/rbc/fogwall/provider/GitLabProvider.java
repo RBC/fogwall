@@ -57,6 +57,12 @@ public class GitLabProvider extends AbstractFogwallProvider
         return getOAuthUrl() + "/token";
     }
 
+    /** {@code write_repository}, or {@code api}, which includes it. */
+    @Override
+    public Set<String> getOAuthPushScopes() {
+        return Set.of("write_repository", "api");
+    }
+
     @Override
     public Optional<String> buildRepoUrl(String owner, String repo) {
         return webBaseUrl().map(base -> base + "/" + owner + "/" + repo);

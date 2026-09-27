@@ -50,8 +50,11 @@ public class ScmOAuthTokenService {
     /** The outcome of asking for a linked token's access token. */
     public sealed interface Access permits Access.Usable, Access.Unusable {
 
-        /** A current access token, in plaintext. */
-        record Usable(String accessToken) implements Access {}
+        /**
+         * A current access token, in plaintext, with the scopes the provider reported when the account was linked; null
+         * when it reported none.
+         */
+        record Usable(String accessToken, String scopes) implements Access {}
 
         /** No usable token, and why. */
         record Unusable(Reason reason) implements Access {}
@@ -179,7 +182,7 @@ public class ScmOAuthTokenService {
                         encryptedRefreshToken,
                         expiresAt);
                 log.info("Refreshed OAuth token for user '{}' / provider '{}'", username, provider);
-                yield new Access.Usable(tokens.accessToken());
+                yield new Access.Usable(tokens.accessToken(), token.scopes());
             }
             case RefreshOutcome.Refused() -> {
                 // An instance sharing this database may have refreshed first, rotating the token we sent.
@@ -272,7 +275,8 @@ public class ScmOAuthTokenService {
     }
 
     private static Access usable(TokenCipher cipher, ScmOAuthToken token) {
-        return new Access.Usable(new String(cipher.decrypt(token.encryptedAccessToken()), StandardCharsets.UTF_8));
+        return new Access.Usable(
+                new String(cipher.decrypt(token.encryptedAccessToken()), StandardCharsets.UTF_8), token.scopes());
     }
 
     record TokenResponse(
