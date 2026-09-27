@@ -77,6 +77,39 @@ using your own token.
 > **Bitbucket only:** the username in the remote URL must be your Bitbucket account email address (e.g. `you@company.com`). This is required for identity resolution — see the [Configuration Reference](../configuration/providers.md#bitbucket-identity-resolution) for details.
 <!-- prettier-ignore-end -->
 
+## Pushing with a fogwall credential
+
+On providers your administrator has set up for it, you can push through server mode (`/server/…`) without a token of
+your own:
+
+1. On your dashboard profile, link your account for the provider on the SCM Identities tab.
+2. On the Git Credentials tab, create a credential, named for the machine you will use it from. Copy it: it is shown
+   once.
+3. Use it as the password of your server-mode remote. fogwall runs its checks, then forwards the push as your linked
+   account.
+
+The credential works only against fogwall; the provider does not recognise it, and fogwall refuses it anywhere but a
+server-mode remote. To keep git from offering it to other remotes on the fogwall host, such as a `/proxy/` fetch remote
+that carries your own token, key server-mode credentials by path:
+
+```shell
+git config --global credential.https://fogwall.corp.example.com/server.useHttpPath true
+```
+
+Git then asks for the credential on the first push to each repository, and your credential helper keeps it for that
+repository.
+
+Without a credential helper (`git config credential.helper` prints nothing), git asks on every push. Put the credential
+in the remote URL instead; git keeps it in the repository's `.git/config`, in plain text:
+
+```shell
+git remote add fogwall https://fogwall:fgw_…@fogwall.corp.example.com/server/github.com/myorg/myrepo.git
+```
+
+If a push is refused because your linked account is missing, can no longer be used, or was linked without permission to
+push, link it again from your profile. Rotate or revoke a credential from the same tab; a credential you revoke stops
+working at once.
+
 ## Required token scopes
 
 The proxy calls the SCM API to resolve your identity. Your PAT needs at least:

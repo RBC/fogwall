@@ -15,6 +15,7 @@ import {
 } from '../api'
 import type { UserGroupView } from '../api'
 import { OperationsBadge, PathTypeBadge } from '../components/PermissionBadges'
+import { GitCredentials } from '../components/GitCredentials'
 import { useToast } from '../components/Toast'
 import type {
   CurrentUser,
@@ -124,7 +125,9 @@ export function Profile() {
   const [error, setError] = useState<string | null>(null)
   const toast = useToast()
 
-  const [tab, setTab] = useState<'emails' | 'identities' | 'sshkeys' | 'permissions'>('emails')
+  const [tab, setTab] = useState<
+    'emails' | 'identities' | 'sshkeys' | 'credentials' | 'permissions'
+  >('emails')
   const [permissions, setPermissions] = useState<RepoPermission[]>([])
   const [groups, setGroups] = useState<UserGroupView[]>([])
 
@@ -145,6 +148,7 @@ export function Profile() {
   const [scmOAuthProviders, setScmOAuthProviders] = useState<ScmOAuthProviderInfo[]>([])
   const [scmOAuthLinkAvailable, setScmOAuthLinkAvailable] = useState(false)
   const [scmIdentityMode, setScmIdentityMode] = useState<string>('permissive')
+  const [brokeredPushProviders, setBrokeredPushProviders] = useState<string[]>([])
 
   // The OAuth callback redirects back here with a query param on both success and failure — read it once as
   // initial state (not in an effect — this derives from the URL present at mount, it isn't subscribing to
@@ -172,6 +176,7 @@ export function Profile() {
         setScmOAuthProviders(c.scmOAuthProviders ?? [])
         setScmOAuthLinkAvailable(c.scmOAuthLinkAvailable ?? false)
         setScmIdentityMode(c.scmIdentityMode ?? 'permissive')
+        setBrokeredPushProviders(c.brokeredPushProviders ?? [])
       })
       .catch(() => {})
   }, [])
@@ -405,7 +410,15 @@ export function Profile() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200 dark:border-slate-700">
-        {(['emails', 'identities', 'sshkeys', 'permissions'] as const).map((t) => (
+        {(
+          [
+            'emails',
+            'identities',
+            'sshkeys',
+            ...(brokeredPushProviders.length > 0 ? (['credentials'] as const) : []),
+            'permissions',
+          ] as const
+        ).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -422,7 +435,9 @@ export function Profile() {
                 ? 'SCM Identities'
                 : t === 'sshkeys'
                   ? 'SSH Keys'
-                  : 'Permissions'}
+                  : t === 'credentials'
+                    ? 'Git Credentials'
+                    : 'Permissions'}
           </button>
         ))}
       </div>
@@ -486,6 +501,9 @@ export function Profile() {
           </form>
         </div>
       )}
+
+      {/* Git credentials tab */}
+      {tab === 'credentials' && <GitCredentials providers={brokeredPushProviders} />}
 
       {/* SSH Keys tab */}
       {tab === 'sshkeys' && (

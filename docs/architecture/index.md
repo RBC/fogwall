@@ -16,6 +16,8 @@ distinct proxy modes with different tradeoffs.
 - [Request flow](request-flow.md) — what happens to a push, step by step, in each mode
 - [Validation pipeline](validation-pipeline.md) — the ordered chain of checks a push runs through
 - [Core abstractions](core-abstractions.md) — provider, push store, approval gateway, user store
+- [Identity and credentials](identity-and-credentials.md) — every identity and credential on both legs, and who holds
+  each
 - [Deployment modes](deployment-modes.md) — proxy only, proxy plus dashboard, and Docker
 - [Advanced use cases](advanced-use-cases.md) — private-to-private proxying and credential rewriting
 - [What this architecture enables](what-this-enables.md) — the use cases server mode's full pack ownership opens up

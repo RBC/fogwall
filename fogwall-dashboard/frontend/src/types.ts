@@ -273,6 +273,22 @@ export interface SshKeyEntry {
   source: string
 }
 
+/** A git credential fogwall issued to the user. Its value is only ever in the response that issues or rotates it. */
+export interface GitCredential {
+  id: string
+  name: string
+  createdAt: string
+  /** When it stops working under the current configuration; absent when it never does. */
+  expiresAt?: string
+  expired: boolean
+  lastUsedAt?: string
+}
+
+export interface IssuedGitCredential {
+  credential: GitCredential
+  value: string
+}
+
 export interface RepoPermission {
   id: string
   username: string
