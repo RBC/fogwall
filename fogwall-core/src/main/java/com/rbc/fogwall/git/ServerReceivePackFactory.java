@@ -1,6 +1,7 @@
 package com.rbc.fogwall.git;
 
 import com.rbc.fogwall.approval.ApprovalGateway;
+import com.rbc.fogwall.approval.SelfApprovalPolicy;
 import com.rbc.fogwall.config.BinaryBlobConfig;
 import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.config.ContentPatternConfig;
@@ -64,6 +65,7 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
     private SshScmIdentityEnricher sshScmIdentityEnricher;
     private final PushStore pushStore;
     private final ApprovalGateway approvalGateway;
+    private final SelfApprovalPolicy selfApprovalPolicy;
     private final String serviceUrl;
     private final Duration heartbeatInterval;
     private final UrlRuleRegistry urlRuleRegistry;
@@ -128,7 +130,11 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
 
     /** Fixed-config constructors for use in tests and simple setups (no URL rule enforcement). */
     public ServerReceivePackFactory(
-            FogwallProvider provider, CommitConfig commitConfig, PushStore pushStore, ApprovalGateway approvalGateway) {
+            FogwallProvider provider,
+            CommitConfig commitConfig,
+            PushStore pushStore,
+            ApprovalGateway approvalGateway,
+            SelfApprovalPolicy selfApprovalPolicy) {
         this(
                 provider,
                 () -> commitConfig,
@@ -141,35 +147,9 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
                 null,
                 pushStore,
                 approvalGateway,
+                selfApprovalPolicy,
                 null,
                 DEFAULT_HEARTBEAT_INTERVAL,
-                null);
-    }
-
-    public ServerReceivePackFactory(
-            FogwallProvider provider,
-            CommitConfig commitConfig,
-            GpgConfig gpgConfig,
-            RepoPermissionService repoPermissionService,
-            PushIdentityResolver pushIdentityResolver,
-            PushStore pushStore,
-            ApprovalGateway approvalGateway,
-            String serviceUrl,
-            Duration heartbeatInterval) {
-        this(
-                provider,
-                () -> commitConfig,
-                DiffScanConfig::defaultConfig,
-                SecretScanConfig::defaultConfig,
-                BinaryBlobConfig::defaultConfig,
-                ContentPatternConfig::defaultConfig,
-                gpgConfig,
-                repoPermissionService,
-                pushIdentityResolver,
-                pushStore,
-                approvalGateway,
-                serviceUrl,
-                heartbeatInterval,
                 null);
     }
 
@@ -185,6 +165,7 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
             PushIdentityResolver pushIdentityResolver,
             PushStore pushStore,
             ApprovalGateway approvalGateway,
+            SelfApprovalPolicy selfApprovalPolicy,
             String serviceUrl,
             Duration heartbeatInterval,
             UrlRuleRegistry urlRuleRegistry) {
@@ -210,6 +191,9 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
                 "pushStore is required: without it pushes would forward with no record and no approval gate");
         this.approvalGateway =
                 Objects.requireNonNull(approvalGateway, "approvalGateway is required: nothing else gates forwarding");
+        this.selfApprovalPolicy = Objects.requireNonNull(
+                selfApprovalPolicy,
+                "selfApprovalPolicy is required: without it a self-approval would forward unchecked");
         this.serviceUrl = serviceUrl;
         this.heartbeatInterval = heartbeatInterval != null ? heartbeatInterval : DEFAULT_HEARTBEAT_INTERVAL;
         this.urlRuleRegistry = urlRuleRegistry;
@@ -370,8 +354,7 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
 
         List<PreReceiveHook> hooks = new ArrayList<>(validationHooks);
         hooks.add(persistenceHook.validationResultHook(validationContext));
-        hooks.add(new ApprovalPreReceiveHook(
-                pushStore, approvalGateway, approvalTimeout, serviceUrl, repoPermissionService, pushContext));
+        hooks.add(buildApprovalHook(pushContext));
         if (quarantine != null) hooks.add(new QuarantinePromotionHook(quarantine));
         PreReceiveHook[] preHooks = hooks.toArray(PreReceiveHook[]::new);
 
@@ -401,6 +384,15 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
         log.debug("Created ReceivePack for {} with {} auth", provider.getName(), creds != null ? "credentials" : "no");
 
         return rp;
+    }
+
+    /**
+     * Builds the approval gate for one push. Public so a test can check the gate is wired with this factory's
+     * {@link SelfApprovalPolicy} without assembling a {@link ReceivePack}.
+     */
+    public ApprovalPreReceiveHook buildApprovalHook(PushContext pushContext) {
+        return new ApprovalPreReceiveHook(
+                pushStore, approvalGateway, approvalTimeout, serviceUrl, selfApprovalPolicy, pushContext);
     }
 
     /**

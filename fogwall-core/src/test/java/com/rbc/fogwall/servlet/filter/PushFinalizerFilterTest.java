@@ -206,10 +206,8 @@ class PushFinalizerFilterTest {
 
     @Test
     void selfCertify_perm_doesNotBypassReview() throws Exception {
-        // The push-time bypass for SELF_CERTIFY was removed: self-certify is enforced exclusively in the dashboard
-        // (PushController.checkReviewerIdentity). The pre-receive hook re-verifies the per-repo permission as defense
-        // in depth before forwarding an approved self-review. From the proxy filter chain's perspective, every clean
-        // push with no prior approval blocks pending review regardless of any SELF_CERTIFY grants.
+        // Self-approval is a review decision made in the dashboard, so every clean push with no prior approval blocks
+        // pending review regardless of any SELF_CERTIFY grants.
         GitRequestDetails details = pendingPushDetailsWithUser("alice", "github");
         PushFinalizerFilter filter = new PushFinalizerFilter("http://localhost:8080", mock(ApprovalGateway.class));
         FakeResponse fakeResponse = new FakeResponse();

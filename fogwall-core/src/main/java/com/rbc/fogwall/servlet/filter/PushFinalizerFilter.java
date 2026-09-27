@@ -138,11 +138,8 @@ public final class PushFinalizerFilter extends AbstractFogwallFilter {
         }
 
         // First push that passed validation - block pending review (dashboard/ServiceNow mode).
-        // Self-certify is intentionally NOT enforced here: the role check requires Spring Security context
-        // which the proxy filter chain does not have. Self-approval is gated entirely in the dashboard
-        // (PushController.checkReviewerIdentity), where both ROLE_SELF_CERTIFY and the SELF_CERTIFY repo
-        // permission are required. The pre-receive hook re-verifies the per-repo permission as defense in
-        // depth before forwarding an approved self-review.
+        // Every push waits here, including one its pusher may self-certify: self-approval is a review decision,
+        // made in the dashboard. SelfApprovalPolicy re-checks it before an approved push is forwarded.
         details.setResult(GitRequestDetails.GitResult.REVIEW);
         String pushId = details.getId().toString();
         String summary = buildValidationSummary(details.getSteps());

@@ -71,6 +71,10 @@ or IAM process. Self-approval requires **both** this role and a per-repo `SELF_C
 is sufficient. This separation lets organisations externalise the capability grant (who is trusted to self-certify at
 all) to their existing directory/IAM procedures, while the per-repo entitlement remains managed inside fogwall.
 
+Both are checked again when the approved push is forwarded, in either proxy mode. The role is read from the user's
+stored record, which an IdP login refreshes; a role removed in the IdP stops counting once the user next logs in, or
+immediately if the user is deleted.
+
 How to grant `ROLE_SELF_CERTIFY`:
 
 - **LDAP / AD / OIDC:** add `SELF_CERTIFY` to `auth.role-mappings` and map it to the appropriate IdP group.

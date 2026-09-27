@@ -1,6 +1,7 @@
 package com.rbc.fogwall.jetty;
 
 import com.rbc.fogwall.approval.ApprovalGateway;
+import com.rbc.fogwall.approval.SelfApprovalPolicy;
 import com.rbc.fogwall.approval.UiApprovalGateway;
 import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.config.JettyConfigurationBuilder;
@@ -34,6 +35,7 @@ public record FogwallContext(
         UserStore userStore,
         UrlRuleRegistry urlRuleRegistry,
         RepoPermissionService repoPermissionService,
+        SelfApprovalPolicy selfApprovalPolicy,
         PushIdentityResolver pushIdentityResolver,
         ApprovalGateway approvalGateway,
         CommitConfig commitConfig,

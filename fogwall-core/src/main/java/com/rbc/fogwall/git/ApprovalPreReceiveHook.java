@@ -9,16 +9,16 @@ import com.rbc.fogwall.approval.ApprovalGateway;
 import com.rbc.fogwall.approval.ApprovalResult;
 import com.rbc.fogwall.approval.ClientDisconnectedException;
 import com.rbc.fogwall.approval.ClientLivenessCheck;
+import com.rbc.fogwall.approval.SelfApprovalPolicy;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.model.Attestation;
 import com.rbc.fogwall.db.model.Attestation.Type;
-import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
-import com.rbc.fogwall.permission.RepoPermissionService;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.time.Duration;
 import java.util.Collection;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -41,8 +41,6 @@ import org.eclipse.jgit.transport.ReceivePack;
 @Slf4j
 public class ApprovalPreReceiveHook implements PreReceiveHook {
 
-    private static final Duration DEFAULT_TIMEOUT = Duration.ofMinutes(30);
-
     /**
      * Grace period added on top of {@code timeout} before the outer wait gives up on the approval-gateway task. The
      * gateway's own internal deadline uses the same {@code timeout} value, but its clock starts slightly later (once
@@ -59,64 +57,23 @@ public class ApprovalPreReceiveHook implements PreReceiveHook {
     private final ApprovalGateway approvalGateway;
     private final Duration timeout;
     private final String serviceUrl;
-    private final RepoPermissionService repoPermissionService;
+    private final SelfApprovalPolicy selfApprovalPolicy;
     private final PushContext pushContext;
 
-    public ApprovalPreReceiveHook(PushStore pushStore, ApprovalGateway approvalGateway) {
-        this(pushStore, approvalGateway, DEFAULT_TIMEOUT, null, null, null);
-    }
-
-    public ApprovalPreReceiveHook(PushStore pushStore, ApprovalGateway approvalGateway, String serviceUrl) {
-        this(pushStore, approvalGateway, DEFAULT_TIMEOUT, serviceUrl, null, null);
-    }
-
-    public ApprovalPreReceiveHook(
-            PushStore pushStore,
-            ApprovalGateway approvalGateway,
-            String serviceUrl,
-            RepoPermissionService repoPermissionService) {
-        this(pushStore, approvalGateway, DEFAULT_TIMEOUT, serviceUrl, repoPermissionService, null);
-    }
-
-    public ApprovalPreReceiveHook(
-            PushStore pushStore,
-            ApprovalGateway approvalGateway,
-            String serviceUrl,
-            RepoPermissionService repoPermissionService,
-            PushContext pushContext) {
-        this(pushStore, approvalGateway, DEFAULT_TIMEOUT, serviceUrl, repoPermissionService, pushContext);
-    }
-
-    public ApprovalPreReceiveHook(PushStore pushStore, ApprovalGateway approvalGateway, Duration timeout) {
-        this(pushStore, approvalGateway, timeout, null, null, null);
-    }
-
-    public ApprovalPreReceiveHook(
-            PushStore pushStore, ApprovalGateway approvalGateway, Duration timeout, String serviceUrl) {
-        this(pushStore, approvalGateway, timeout, serviceUrl, null, null);
-    }
-
     public ApprovalPreReceiveHook(
             PushStore pushStore,
             ApprovalGateway approvalGateway,
             Duration timeout,
             String serviceUrl,
-            RepoPermissionService repoPermissionService) {
-        this(pushStore, approvalGateway, timeout, serviceUrl, repoPermissionService, null);
-    }
-
-    public ApprovalPreReceiveHook(
-            PushStore pushStore,
-            ApprovalGateway approvalGateway,
-            Duration timeout,
-            String serviceUrl,
-            RepoPermissionService repoPermissionService,
+            SelfApprovalPolicy selfApprovalPolicy,
             PushContext pushContext) {
         this.pushStore = pushStore;
         this.approvalGateway = approvalGateway;
         this.timeout = timeout;
         this.serviceUrl = serviceUrl;
-        this.repoPermissionService = repoPermissionService;
+        this.selfApprovalPolicy = Objects.requireNonNull(
+                selfApprovalPolicy,
+                "selfApprovalPolicy is required: without it a self-approval would forward unchecked");
         this.pushContext = pushContext;
     }
 
@@ -150,8 +107,9 @@ public class ApprovalPreReceiveHook implements PreReceiveHook {
 
         // Safety net: already approved before this hook ran (race condition or re-push)
         if (record.getStatus() == PushStatus.APPROVED) {
-            if (!verifySelfApprovalEntitled(record)) {
-                String reason = "Self-approved push rejected: no SELF_CERTIFY permission for this repository";
+            SelfApprovalPolicy.Verdict verdict = selfApprovalPolicy.evaluate(record);
+            if (!verdict.isHonored()) {
+                String reason = verdict.getReason();
                 demoteUnentitledSelfApproval(record.getId(), reason);
                 sendAndFlush(rp, msgOut, color(RED, "" + sym(CROSS_MARK) + "  " + reason));
                 rejectAll(commands, reason);
@@ -212,8 +170,10 @@ public class ApprovalPreReceiveHook implements PreReceiveHook {
             switch (result) {
                 case APPROVED -> {
                     var approvedRecord = pushStore.findById(validationRecordId).orElse(null);
-                    if (approvedRecord != null && !verifySelfApprovalEntitled(approvedRecord)) {
-                        String reason = "Self-approved push rejected: no SELF_CERTIFY permission for this repository";
+                    SelfApprovalPolicy.Verdict verdict =
+                            approvedRecord != null ? selfApprovalPolicy.evaluate(approvedRecord) : null;
+                    if (verdict != null && !verdict.isHonored()) {
+                        String reason = verdict.getReason();
                         demoteUnentitledSelfApproval(validationRecordId, reason);
                         sendAndFlush(rp, msgOut, color(RED, "" + sym(CROSS_MARK) + "  " + reason));
                         rejectAll(commands, reason);
@@ -270,50 +230,6 @@ public class ApprovalPreReceiveHook implements PreReceiveHook {
                 }
             }
         }
-    }
-
-    /**
-     * Defense in depth: if the approver is the pusher, re-verify that a {@code SELF_CERTIFY} repo permission still
-     * exists for the pusher on this push's path. {@link com.rbc.fogwall.dashboard.controller.PushController#approve}
-     * already enforces this at approval time, but re-checking here protects against future code paths or bugs that mark
-     * a record APPROVED without going through that gate.
-     *
-     * <p>The {@code ROLE_SELF_CERTIFY} role check is intentionally NOT performed at the hook layer — it requires Spring
-     * Security context (only available in the dashboard) and may live in IdP-derived authorities that aren't persisted
-     * to the user store. The hook re-verifies only the per-repo permission, which is the more granular authoritative
-     * gate.
-     *
-     * @return {@code true} if the push may proceed; {@code false} if the approver was the pusher and no
-     *     {@code SELF_CERTIFY} permission row exists.
-     */
-    private boolean verifySelfApprovalEntitled(PushRecord record) {
-        Attestation att = record.getAttestation();
-        // No reviewer attestation means no human approver to police (e.g. an auto-approved push). Not a self-approval,
-        // so nothing for this check to act on.
-        if (att == null) return true;
-        String pusher = record.getResolvedUser();
-        String approver = att.getReviewerUsername();
-        // Only a pusher approving their own push is in scope here; anything else is left to the other controls.
-        if (pusher == null || approver == null || !pusher.equals(approver)) return true;
-        if (record.getProvider() == null || record.getUrl() == null) return true;
-        // Fail closed: this IS a self-approval, and without the permission service the entitlement
-        // cannot be verified. Allowing it here would silently waive the one check that separates
-        // self-certification from unreviewed pushing.
-        if (repoPermissionService == null) {
-            log.error(
-                    "Self-approval by {} rejected: no RepoPermissionService wired, entitlement cannot be verified",
-                    pusher);
-            return false;
-        }
-        boolean entitled = repoPermissionService.isBypassReviewAllowed(pusher, record.getProvider(), record.getUrl());
-        if (!entitled) {
-            log.warn(
-                    "Self-approval rejected at hook: pusher={} provider={} path={} has no SELF_CERTIFY permission",
-                    pusher,
-                    record.getProvider(),
-                    record.getUrl());
-        }
-        return entitled;
     }
 
     /**

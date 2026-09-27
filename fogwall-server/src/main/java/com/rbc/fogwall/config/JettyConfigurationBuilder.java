@@ -2,6 +2,7 @@ package com.rbc.fogwall.config;
 
 import com.rbc.fogwall.approval.ApprovalGateway;
 import com.rbc.fogwall.approval.AutoApprovalGateway;
+import com.rbc.fogwall.approval.SelfApprovalPolicy;
 import com.rbc.fogwall.approval.UiApprovalGateway;
 import com.rbc.fogwall.db.CompositeUrlRuleRegistry;
 import com.rbc.fogwall.db.FetchStore;
@@ -634,12 +635,14 @@ public class JettyConfigurationBuilder {
                 proxyCacheConfig.resolveCloneDepth(CacheConfig.DEFAULT_PROXY_CLONE_DEPTH),
                 true,
                 proxyCacheConfig.resolveShallowSince());
+        RepoPermissionService rps = buildRepoPermissionService();
         return new FogwallContext(
                 ps,
                 fs,
                 us,
                 rr,
-                buildRepoPermissionService(),
+                rps,
+                new SelfApprovalPolicy(rps, us),
                 buildPushIdentityResolver(us),
                 approvalGateway,
                 buildCommitConfig(),
