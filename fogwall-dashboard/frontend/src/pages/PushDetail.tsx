@@ -4,7 +4,15 @@ import { Link, useParams } from 'react-router'
 import { Diff2HtmlUI } from 'diff2html/lib/ui/js/diff2html-ui-slim'
 import { ColorSchemeType } from 'diff2html/lib/types'
 import 'diff2html/bundles/css/diff2html.min.css'
-import { approvePush, cancelPush, fetchDiff, fetchProviders, fetchPush, rejectPush } from '../api'
+import {
+  approvePush,
+  cancelPush,
+  fetchDiff,
+  fetchProviders,
+  fetchPush,
+  forwardPush,
+  rejectPush,
+} from '../api'
 import { StatusBadge } from '../components/StatusBadge'
 import { useToast } from '../components/Toast'
 import type {
@@ -401,6 +409,49 @@ function AttestationQuestionField({
   )
 }
 
+function DeferredForwarding({
+  record,
+  forwarding,
+  onForward,
+}: {
+  record: PushRecord
+  forwarding: boolean
+  onForward: () => void
+}) {
+  const failed = record.status === 'ERROR'
+  return (
+    <div
+      className={
+        failed
+          ? 'bg-red-50 border border-red-200 rounded-lg px-6 py-4 dark:bg-red-900/20 dark:border-red-700'
+          : 'bg-blue-50 border border-blue-200 rounded-lg px-6 py-4 dark:bg-blue-900/20 dark:border-blue-700'
+      }
+    >
+      <div
+        className={
+          failed
+            ? 'text-sm font-semibold text-red-800 mb-1 dark:text-red-300'
+            : 'text-sm font-semibold text-blue-800 mb-1 dark:text-blue-300'
+        }
+      >
+        {failed ? 'Forwarding failed' : 'Push approved — forwarding upstream'}
+      </div>
+      {failed && record.errorMessage && (
+        <p className="text-sm text-red-700 mb-3 dark:text-red-400">{record.errorMessage}</p>
+      )}
+      {record.canCurrentUserForward && (
+        <button
+          onClick={onForward}
+          disabled={forwarding}
+          className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          {forwarding ? 'Forwarding…' : 'Forward now'}
+        </button>
+      )}
+    </div>
+  )
+}
+
 function RePushGuidance({ record }: { record: PushRecord }) {
   const branch = record.branch?.replace('refs/heads/', '') ?? '<branch>'
 
@@ -518,6 +569,7 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
   const [saving, setSaving] = useState(false)
   const [openSteps, setOpenSteps] = useState<Record<string, boolean>>({})
   const [canceling, setCanceling] = useState(false)
+  const [forwarding, setForwarding] = useState(false)
   const [attestationQuestions, setAttestationQuestions] = useState<AttestationQuestion[]>([])
   const [attestationAnswers, setAttestationAnswers] = useState<Record<string, string>>({})
   const [adminOverrideEnabled, setAdminOverrideEnabled] = useState(false)
@@ -642,6 +694,19 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
       toast.error(errorMessage(e))
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleForward() {
+    if (!record) return
+    setForwarding(true)
+    try {
+      await forwardPush(record.id)
+      await load(record.id)
+    } catch (e) {
+      toast.error(errorMessage(e))
+    } finally {
+      setForwarding(false)
     }
   }
 
@@ -1018,7 +1083,12 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
           {/* Re-push guidance */}
           {(record.status === 'REJECTED' ||
             record.status === 'CANCELED' ||
-            record.status === 'APPROVED') && <RePushGuidance record={record} />}
+            (record.status === 'APPROVED' && !record.deferred)) && (
+            <RePushGuidance record={record} />
+          )}
+          {record.deferred && (record.status === 'APPROVED' || record.status === 'ERROR') && (
+            <DeferredForwarding record={record} forwarding={forwarding} onForward={handleForward} />
+          )}
 
           {/* Approve / Reject / Cancel */}
           {record.status === 'PENDING' &&

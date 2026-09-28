@@ -332,6 +332,12 @@ export async function cancelPush(id: string) {
   return res.json()
 }
 
+export async function forwardPush(id: string) {
+  const res = await apiFetch(`/api/push/${id}/forward`, { method: 'POST' })
+  if (!res.ok) await parseErrorResponse(res, 'Failed to forward')
+  return res.json()
+}
+
 export async function addEmail(email: string) {
   const res = await apiFetch('/api/me/emails', {
     method: 'POST',

@@ -143,8 +143,8 @@ public class FogwallDashboardApplication {
                 ctx.userStore());
         liveConfigLoader.start();
 
-        var pendingPushExpiryTask =
-                new PendingPushExpiryTask(ctx.pushStore(), Duration.ofDays(configBuilder.getPendingPushExpiryDays()));
+        var pendingPushExpiryTask = new PendingPushExpiryTask(
+                ctx.pushStore(), ctx.deferredForwarder(), Duration.ofDays(configBuilder.getPendingPushExpiryDays()));
         pendingPushExpiryTask.start();
 
         server.addEventListener(new LifeCycle.Listener() {
@@ -152,6 +152,7 @@ public class FogwallDashboardApplication {
             public void lifeCycleStopping(LifeCycle event) {
                 liveConfigLoader.stop();
                 pendingPushExpiryTask.stop();
+                ctx.deferredForwarder().close();
                 if (sshGitServer != null) sshGitServer.stop();
             }
         });
@@ -248,6 +249,7 @@ public class FogwallDashboardApplication {
             bf.registerSingleton("scmOAuthTokenStore", ctx.scmOAuthTokenStore());
             bf.registerSingleton("gitCredentialService", ctx.gitCredentialService());
             bf.registerSingleton("scmOAuthTokenService", ctx.scmOAuthTokenService());
+            bf.registerSingleton("deferredForwarder", ctx.deferredForwarder());
             // Dashboard issue path. Acts as the user via their linked OAuth token; enforces the ISSUE/PROPOSE
             // grant, content inspection and auditing. Wired here since it composes the linked OAuth token service with
             // the permission service and audit store.

@@ -8,6 +8,7 @@ import com.rbc.fogwall.crypto.TokenCipherProvider;
 import com.rbc.fogwall.db.CompositeUrlRuleRegistry;
 import com.rbc.fogwall.db.FetchStore;
 import com.rbc.fogwall.db.MongoStoreFactory;
+import com.rbc.fogwall.db.ParkedPushStore;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.PushStoreFactory;
 import com.rbc.fogwall.db.ScmApiActionStore;
@@ -17,11 +18,13 @@ import com.rbc.fogwall.db.ScmApiEntityStoreFactory;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.db.jdbc.DataSourceFactory;
 import com.rbc.fogwall.db.jdbc.JdbcFetchStore;
+import com.rbc.fogwall.db.jdbc.JdbcParkedPushStore;
 import com.rbc.fogwall.db.jdbc.JdbcUrlRuleRegistry;
 import com.rbc.fogwall.db.memory.InMemoryUrlRuleRegistry;
 import com.rbc.fogwall.db.model.AccessRule;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
+import com.rbc.fogwall.git.DeferredForwarder;
 import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.jetty.FogwallContext;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
@@ -74,6 +77,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
@@ -135,6 +139,7 @@ public class JettyConfigurationBuilder {
     private TokenCipherProvider cachedTokenCipherProvider;
     private ScmOAuthTokenService cachedScmOAuthTokenService;
     private GitCredentialService cachedGitCredentialService;
+    private ParkedPushStore cachedParkedPushStore;
 
     public JettyConfigurationBuilder(FogwallConfig config) {
         this.config = config;
@@ -648,13 +653,27 @@ public class JettyConfigurationBuilder {
                 true,
                 proxyCacheConfig.resolveShallowSince());
         RepoPermissionService rps = buildRepoPermissionService();
+        SelfApprovalPolicy selfApprovalPolicy = new SelfApprovalPolicy(rps, us);
+        // Checked for every provider up front, so a misconfiguration fails startup whichever transport it is on.
+        config.getProviders().keySet().forEach(this::isDeferredForwarding);
+        var deferredForwarder = new DeferredForwarder(
+                ps,
+                buildParkedPushStore(),
+                serverCache,
+                buildScmOAuthTokenService(),
+                selfApprovalPolicy,
+                DeferredForwarder.newInstanceId(),
+                DeferredForwarder.DEFAULT_CLAIM_TTL,
+                Duration.ofDays(getPendingPushExpiryDays()),
+                getUpstreamConnectTimeoutSeconds(),
+                Clock.systemUTC());
         return new FogwallContext(
                 ps,
                 fs,
                 us,
                 rr,
                 rps,
-                new SelfApprovalPolicy(rps, us),
+                selfApprovalPolicy,
                 buildPushIdentityResolver(us),
                 approvalGateway,
                 buildCommitConfig(),
@@ -679,7 +698,8 @@ public class JettyConfigurationBuilder {
                 buildTokenCipherProvider(),
                 buildScmOAuthTokenService(),
                 buildGitCredentialService(),
-                telemetry);
+                telemetry,
+                deferredForwarder);
     }
 
     /**
@@ -1188,6 +1208,15 @@ public class JettyConfigurationBuilder {
         return cachedGitCredentialService;
     }
 
+    /** Builds the {@link ParkedPushStore} holding the packs of parked pushes until they are forwarded. */
+    public ParkedPushStore buildParkedPushStore() {
+        if (cachedParkedPushStore != null) return cachedParkedPushStore;
+        cachedParkedPushStore = "mongo".equals(config.getDatabase().getType())
+                ? requireMongoStoreFactory().parkedPushStore()
+                : new JdbcParkedPushStore(requireJdbcDataSource());
+        return cachedParkedPushStore;
+    }
+
     /**
      * Parses an optional limit given as an ISO-8601 duration, such as {@code PT12H} or {@code P30D}. Empty when
      * {@code value} is blank.
@@ -1227,6 +1256,38 @@ public class JettyConfigurationBuilder {
             throw new IllegalStateException("providers." + providerName + ".oauth.brokered-push requires "
                     + "providers." + providerName + ".oauth.enabled and a client-id: pushes are forwarded with the "
                     + "OAuth token account linking obtains");
+        }
+        return true;
+    }
+
+    /** The providers with {@code oauth.deferred-forwarding} set, whether or not the rest of their config allows it. */
+    public List<String> getDeferredForwardingProviders() {
+        return config.getProviders().entrySet().stream()
+                .filter(e -> e.getValue().getOauth().isDeferredForwarding())
+                .map(Map.Entry::getKey)
+                .sorted()
+                .toList();
+    }
+
+    /**
+     * Whether pushes to {@code providerName} made with a fogwall credential are parked and forwarded after approval.
+     *
+     * @throws IllegalStateException if deferred forwarding is enabled without brokered pushes on the same provider, or
+     *     without a push size limit to bound what the database stores
+     */
+    public boolean isDeferredForwarding(String providerName) {
+        ProviderConfig providerConfig = config.getProviders().get(providerName);
+        if (providerConfig == null || !providerConfig.getOauth().isDeferredForwarding()) {
+            return false;
+        }
+        if (!isBrokeredPush(providerName)) {
+            throw new IllegalStateException("providers." + providerName + ".oauth.deferred-forwarding requires "
+                    + "providers." + providerName + ".oauth.brokered-push: a parked push is forwarded with the "
+                    + "pusher's linked OAuth token");
+        }
+        if (getMaxPushBytes() <= 0) {
+            throw new IllegalStateException("providers." + providerName + ".oauth.deferred-forwarding requires a "
+                    + "non-zero server.max-push-bytes: it bounds the size of every pack stored for forwarding");
         }
         return true;
     }

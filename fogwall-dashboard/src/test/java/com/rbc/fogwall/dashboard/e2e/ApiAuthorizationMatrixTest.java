@@ -99,6 +99,7 @@ class ApiAuthorizationMatrixTest {
             "POST /api/push/{id}/authorise",
             "POST /api/push/{id}/reject",
             "POST /api/push/{id}/cancel",
+            "POST /api/push/{id}/forward",
             "POST /api/issues",
             "PATCH /api/issues",
             "POST /api/issues/comment",

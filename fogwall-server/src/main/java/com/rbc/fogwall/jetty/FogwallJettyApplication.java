@@ -135,8 +135,8 @@ public class FogwallJettyApplication {
                 ctx.userStore());
         liveConfigLoader.start();
 
-        var pendingPushExpiryTask =
-                new PendingPushExpiryTask(ctx.pushStore(), Duration.ofDays(configBuilder.getPendingPushExpiryDays()));
+        var pendingPushExpiryTask = new PendingPushExpiryTask(
+                ctx.pushStore(), ctx.deferredForwarder(), Duration.ofDays(configBuilder.getPendingPushExpiryDays()));
         pendingPushExpiryTask.start();
 
         server.addEventListener(new LifeCycle.Listener() {
@@ -144,6 +144,7 @@ public class FogwallJettyApplication {
             public void lifeCycleStopping(LifeCycle event) {
                 liveConfigLoader.stop();
                 pendingPushExpiryTask.stop();
+                ctx.deferredForwarder().close();
                 if (finalSshGitServer != null) {
                     finalSshGitServer.stop();
                 }
@@ -213,6 +214,13 @@ public class FogwallJettyApplication {
             throw new IllegalStateException("server.approval-mode: ui requires the dashboard distribution. This server"
                     + " has no REST API or review UI, so a push held for review would wait until the approval timeout"
                     + " and then fail. Use approval-mode: auto here, or run fogwall-dashboard.");
+        }
+        List<String> deferred = configBuilder.getDeferredForwardingProviders();
+        if (!deferred.isEmpty()) {
+            throw new IllegalStateException("oauth.deferred-forwarding (providers " + deferred + ") requires the"
+                    + " dashboard distribution. A parked push is forwarded once a reviewer approves it, and fogwall"
+                    + " credentials and account linking are dashboard flows this server does not serve. Remove"
+                    + " deferred-forwarding here, or run fogwall-dashboard.");
         }
     }
 

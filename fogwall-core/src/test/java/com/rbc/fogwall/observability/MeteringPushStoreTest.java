@@ -1,6 +1,8 @@
 package com.rbc.fogwall.observability;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -106,5 +108,37 @@ class MeteringPushStoreTest {
         assertSame(rec, store.findById("x").orElseThrow());
         // Read paths never touch telemetry.
         verifyNoInteractions(telemetry);
+    }
+
+    @Test
+    void completeForward_recorded_recordsDecisionAndForwardOutcome() {
+        PushStore delegate = mock(PushStore.class);
+        when(delegate.completeForward("id1", "instance-a", PushStatus.ERROR, "refused"))
+                .thenReturn(true);
+        when(delegate.findById("id1")).thenReturn(Optional.of(record("github", PushStatus.ERROR)));
+        FogwallTelemetry telemetry = mock(FogwallTelemetry.class);
+        when(telemetry.isEnabled()).thenReturn(true);
+        MeteringPushStore store = new MeteringPushStore(delegate, telemetry);
+
+        assertTrue(store.completeForward("id1", "instance-a", PushStatus.ERROR, "refused"));
+
+        verify(telemetry).recordDecision("github", "ERROR");
+        verify(telemetry).recordForward("github", false);
+    }
+
+    @Test
+    void completeForward_claimLost_recordsNothing() {
+        // Another instance holds the claim and records the outcome itself; counting here would count it twice.
+        PushStore delegate = mock(PushStore.class);
+        when(delegate.completeForward("id1", "instance-a", PushStatus.FORWARDED, null))
+                .thenReturn(false);
+        FogwallTelemetry telemetry = mock(FogwallTelemetry.class);
+        when(telemetry.isEnabled()).thenReturn(true);
+        MeteringPushStore store = new MeteringPushStore(delegate, telemetry);
+
+        assertFalse(store.completeForward("id1", "instance-a", PushStatus.FORWARDED, null));
+
+        verify(telemetry, never()).recordDecision(anyString(), anyString());
+        verify(telemetry, never()).recordForward(anyString(), anyBoolean());
     }
 }

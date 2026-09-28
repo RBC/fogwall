@@ -9,6 +9,21 @@ approval is granted), a post-receive hook forwards it to upstream using the deve
 This mode can stream progress messages to the git client in real time via JGit sideband packets — so the developer sees
 `remote: [step] author email OK` lines as each validation step completes.
 
+### Deferred forwarding
+
+With `providers.<name>.oauth.deferred-forwarding`, a push made with a fogwall-issued credential is parked instead of
+held open. After validation, `ParkPushPreReceiveHook` stores the push's pack (the one JGit wrote into the quarantine,
+completed with any thin-pack bases) and its ref updates in the `ParkedPushStore`, before the record is saved as PENDING.
+`DeferredAckPreReceiveHook` then takes the approval hook's place: it reports every ref update as successful without
+applying it, so neither the mirror nor upstream moves.
+
+The database is the durable store and the mirror stays a disposable cache, so any instance can forward any parked push.
+`DeferredForwarder` claims the push with a conditional update on its record, brings its mirror current from upstream
+with the pusher's linked OAuth token, indexes the stored pack into a quarantine over the mirror, and pushes the ref
+updates. The instance that records the approval starts the forward; the periodic pending-push sweep restarts forwards
+whose claim lapsed and deletes stored packs nothing can forward any more. A fast-forward is pushed without an
+expected-old check, so several parked pushes to one branch land in order; a forced update or delete keeps the check.
+
 > **Naming:** this mode was formerly called _store-and-forward_. It is served under the canonical `/server/…` prefix as
 > of 1.4.0; the legacy `/push/…` prefix still routes to it as a deprecated alias, so existing git remotes keep working.
 
@@ -29,13 +44,13 @@ each hook completes.
 
 ## Choosing a mode
 
-| Concern                       | Server mode                                | Transparent proxy                                                         |
-| ----------------------------- | ------------------------------------------ | ------------------------------------------------------------------------- |
-| Live progress feedback        | Yes — per-step sideband messages           | No — single terminal response                                             |
-| Local storage required        | Yes — receives the push into a local clone | Yes — clone needed for pack inspection                                    |
-| Approval workflow             | Blocks git session until approved          | Records push, polls for approval (requires second push)                   |
-| Pack inspection               | Via JGit `ReceivePack` APIs                | Pack unpacked into local clone for inspection, then HTTP-proxied upstream |
-| Resumable push after approval | Same session                               | New push to `/proxy/` re-run detects prior approval                       |
+| Concern                       | Server mode                                                                                 | Transparent proxy                                                         |
+| ----------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Live progress feedback        | Yes — per-step sideband messages                                                            | No — single terminal response                                             |
+| Local storage required        | Yes — receives the push into a local clone                                                  | Yes — clone needed for pack inspection                                    |
+| Approval workflow             | Blocks git session until approved, or acknowledges and forwards later (deferred forwarding) | Records push, polls for approval (requires second push)                   |
+| Pack inspection               | Via JGit `ReceivePack` APIs                                                                 | Pack unpacked into local clone for inspection, then HTTP-proxied upstream |
+| Resumable push after approval | Same session                                                                                | New push to `/proxy/` re-run detects prior approval                       |
 
 Both modes share the same validation logic and push store. Both are always active for every configured provider — there
 is currently no per-provider toggle to disable one mode.

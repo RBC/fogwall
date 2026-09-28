@@ -7,9 +7,12 @@ import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Indexes;
 import com.mongodb.client.model.Projections;
 import com.mongodb.client.model.Sorts;
+import com.mongodb.client.model.Updates;
 import com.mongodb.client.result.UpdateResult;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.model.*;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -30,7 +33,7 @@ import tools.jackson.databind.ObjectMapper;
 public class MongoPushStore implements PushStore {
 
     private static final Logger log = LoggerFactory.getLogger(MongoPushStore.class);
-    private static final String COLLECTION_NAME = "proxy_pushes";
+    static final String COLLECTION_NAME = "proxy_pushes";
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, String>> ANSWERS_TYPE = new TypeReference<>() {};
 
@@ -159,6 +162,58 @@ public class MongoPushStore implements PushStore {
     }
 
     @Override
+    public boolean claimForward(String id, String claimant, Instant now, Duration ttl, boolean retryFailed) {
+        List<String> statuses = retryFailed
+                ? List.of(PushStatus.APPROVED.name(), PushStatus.ERROR.name())
+                : List.of(PushStatus.APPROVED.name());
+        return getCollection()
+                        .updateOne(
+                                Filters.and(
+                                        Filters.eq("_id", id),
+                                        Filters.eq("deferred", true),
+                                        Filters.in("status", statuses),
+                                        unclaimed(now)),
+                                Updates.combine(
+                                        Updates.set("forwardClaimedBy", claimant),
+                                        Updates.set("forwardClaimExpiresAt", Date.from(now.plus(ttl)))))
+                        .getModifiedCount()
+                == 1;
+    }
+
+    @Override
+    public boolean completeForward(String id, String claimant, PushStatus outcome, String errorMessage) {
+        return getCollection()
+                        .updateOne(
+                                Filters.and(Filters.eq("_id", id), Filters.eq("forwardClaimedBy", claimant)),
+                                Updates.combine(
+                                        Updates.set("status", outcome.name()),
+                                        Updates.set("errorMessage", errorMessage),
+                                        Updates.set("forwardedAt", new Date()),
+                                        Updates.unset("forwardClaimedBy"),
+                                        Updates.unset("forwardClaimExpiresAt")))
+                        .getModifiedCount()
+                == 1;
+    }
+
+    @Override
+    public List<String> findForwardable(Instant now, int limit) {
+        List<String> ids = new ArrayList<>();
+        getCollection()
+                .find(Filters.and(
+                        Filters.eq("status", PushStatus.APPROVED.name()), Filters.eq("deferred", true), unclaimed(now)))
+                .projection(Projections.include("_id"))
+                .sort(Sorts.ascending("timestamp"))
+                .limit(limit)
+                .forEach(doc -> ids.add(doc.getString("_id")));
+        return ids;
+    }
+
+    /** No claim, or one whose holder let it lapse. A missing field and an explicit null both count as no claim. */
+    private static Bson unclaimed(Instant now) {
+        return Filters.or(Filters.eq("forwardClaimedBy", null), Filters.lt("forwardClaimExpiresAt", Date.from(now)));
+    }
+
+    @Override
     public void close() {
         mongoClient.close();
     }
@@ -223,7 +278,8 @@ public class MongoPushStore implements PushStore {
                 .append("blockedMessage", r.getBlockedMessage())
                 .append("autoApproved", r.isAutoApproved())
                 .append("autoRejected", r.isAutoRejected())
-                .append("forwardedAt", r.getForwardedAt() != null ? Date.from(r.getForwardedAt()) : null);
+                .append("forwardedAt", r.getForwardedAt() != null ? Date.from(r.getForwardedAt()) : null)
+                .append("deferred", r.isDeferred());
 
         if (r.getSteps() != null && !r.getSteps().isEmpty()) {
             doc.append(
@@ -274,7 +330,8 @@ public class MongoPushStore implements PushStore {
                 .forwardedAt(
                         doc.getDate("forwardedAt") != null
                                 ? doc.getDate("forwardedAt").toInstant()
-                                : null);
+                                : null)
+                .deferred(doc.getBoolean("deferred", false));
 
         List<Document> stepDocs = doc.getList("steps", Document.class);
         if (stepDocs != null) {

@@ -257,7 +257,11 @@ public final class FogwallServletRegistrar {
                                 fogwallContext.gitCredentialService(),
                                 fogwallContext.scmOAuthTokenService(),
                                 fogwallContext.userStore(),
-                                fogwallContext.serviceUrl()));
+                                fogwallContext.serviceUrl()),
+                        configBuilder.isDeferredForwarding(provider.getName())
+                                ? Optional.of(new ServerReceivePackFactory.DeferredForwarding(
+                                        configBuilder.buildParkedPushStore(), fogwallContext.deferredForwarder()))
+                                : Optional.empty());
                 registerProxyServlet(
                         context,
                         provider,
@@ -357,7 +361,8 @@ public final class FogwallServletRegistrar {
             int connectTimeoutSeconds,
             UrlRuleRegistry urlRuleRegistry,
             FetchStore fetchStore,
-            FogwallCredentialFilter credentialFilter) {
+            FogwallCredentialFilter credentialFilter,
+            Optional<ServerReceivePackFactory.DeferredForwarding> deferredForwarding) {
         // A configured GitServlet is built fresh per path prefix rather than shared: mapping one servlet instance
         // under two holders would init() it twice. The resolver/factory are cheap, and both share the one repo cache.
         Supplier<GitServlet> gitServletFactory = () -> {
@@ -386,6 +391,7 @@ public final class FogwallServletRegistrar {
             factory.setScmOAuthConfig(scmOAuthConfig);
             factory.setMaxPackBytes(maxPushBytes);
             factory.setMaxObjectSizeBytes(maxObjectSizeBytes);
+            deferredForwarding.ifPresent(factory::setDeferredForwarding);
 
             var gitServlet = new GitServlet();
             gitServlet.setRepositoryResolver(resolver);

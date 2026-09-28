@@ -91,13 +91,19 @@ Each is read from a file or the environment and is under the operator's custody.
 - A push is never forwarded without a usable credential. A request whose linked OAuth token cannot be used is refused,
   with the remedy, before anything is received. A token that lapses while the push awaits review fails the forward, and
   the push record ends in `ERROR`.
+- With `oauth.deferred-forwarding`, the linked OAuth token forwards a push after its client has disconnected, from
+  whichever instance records the approval. A standing grant means fogwall may push as the user: a compromised instance
+  could push as any linked user, the same property a GitHub App installation has. fogwall only forwards a pack the user
+  pushed, after its checks and a recorded approval, and the push record is the evidence. The token's scopes are the
+  minimum a push needs, and the grant is revocable at the provider and bounded by `scm-oauth.max-link-age`.
 
 ## What an organisation can turn off
 
-| Capability                          | Off by                                                      |
-| ----------------------------------- | ----------------------------------------------------------- |
-| OAuth account linking               | `providers.<name>.oauth.enabled: false` (the default)       |
-| Brokered pushes and git credentials | `providers.<name>.oauth.brokered-push: false` (the default) |
-| Unverified SCM identities           | `scm-oauth.identity-mode: strict`                           |
-| Server mode fetches                 | `server.serve-fetch` or `providers.<name>.serve-fetch`      |
-| SSH transport                       | `server.ssh.enabled: false` (the default)                   |
+| Capability                          | Off by                                                            |
+| ----------------------------------- | ----------------------------------------------------------------- |
+| OAuth account linking               | `providers.<name>.oauth.enabled: false` (the default)             |
+| Brokered pushes and git credentials | `providers.<name>.oauth.brokered-push: false` (the default)       |
+| Deferred forwarding                 | `providers.<name>.oauth.deferred-forwarding: false` (the default) |
+| Unverified SCM identities           | `scm-oauth.identity-mode: strict`                                 |
+| Server mode fetches                 | `server.serve-fetch` or `providers.<name>.serve-fetch`            |
+| SSH transport                       | `server.ssh.enabled: false` (the default)                         |

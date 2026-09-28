@@ -2,15 +2,21 @@ package com.rbc.fogwall.db.jdbc;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.rbc.fogwall.db.PackChunks;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.PushStoreFactory;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Instant;
+import java.util.List;
+import java.util.Random;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
@@ -80,6 +86,22 @@ class JdbcMysqlSmokeTest {
                 .build());
 
         assertEquals(longProvider, store.findById(id).orElseThrow().getProvider());
+    }
+
+    @Test
+    void migrate_parkedPushChunks_holdFullChunk() throws IOException {
+        // V20.1 (mysql variant) stores chunks as MEDIUMBLOB; a BLOB column holds 64 KB, less than one chunk.
+        JdbcParkedPushStore parked = new JdbcParkedPushStore(dataSource);
+        byte[] pack = new byte[PackChunks.CHUNK_SIZE + 1];
+        new Random(7).nextBytes(pack);
+        String id = UUID.randomUUID().toString();
+
+        parked.park(
+                id, "github", "alice", "https://github.com/acme/repo.git", List.of(), new ByteArrayInputStream(pack));
+
+        try (InputStream in = parked.openPack(id)) {
+            assertArrayEquals(pack, in.readAllBytes());
+        }
     }
 
     @Test

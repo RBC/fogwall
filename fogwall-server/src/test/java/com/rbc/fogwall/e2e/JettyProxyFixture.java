@@ -145,6 +145,29 @@ class JettyProxyFixture implements AutoCloseable {
                 giteaUri, ApprovalMode.AUTO, List.of(), true, DEFAULT_USERS, null, true, oauth, keyPath);
     }
 
+    /**
+     * As {@link #brokeredPush}, but with review approval and deferred forwarding: a push made with a fogwall credential
+     * is acknowledged once received and forwarded when approved. A test approves through the push store and starts the
+     * forward, as the dashboard's approve endpoint does.
+     */
+    static JettyProxyFixture deferredForwarding(URI giteaUri, Path tokenKeyFile, Path clientSecretFile)
+            throws Exception {
+        String oauth = """
+                    oauth:
+                      enabled: true
+                      client-id: fogwall-e2e
+                      client-secret-path: %s
+                      brokered-push: true
+                      deferred-forwarding: true
+                """.formatted(clientSecretFile);
+        String keyPath = """
+                scm-oauth:
+                  token-encryption-key-path: %s
+                """.formatted(tokenKeyFile);
+        return new JettyProxyFixture(
+                giteaUri, ApprovalMode.UI, List.of(), true, DEFAULT_USERS, null, true, oauth, keyPath);
+    }
+
     private JettyProxyFixture(
             URI giteaUri,
             ApprovalMode approvalMode,

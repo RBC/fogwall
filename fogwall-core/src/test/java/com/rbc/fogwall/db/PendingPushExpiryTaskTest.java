@@ -2,10 +2,12 @@ package com.rbc.fogwall.db;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 import com.rbc.fogwall.db.model.Attestation;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
+import com.rbc.fogwall.git.DeferredForwarder;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -18,7 +20,8 @@ class PendingPushExpiryTaskTest {
         PushStore store = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
         PushRecord stale = savePending(store, Instant.now().minus(Duration.ofDays(31)));
 
-        new PendingPushExpiryTask(store, Duration.ofDays(30), Duration.ofMinutes(5)).sweep();
+        new PendingPushExpiryTask(store, mock(DeferredForwarder.class), Duration.ofDays(30), Duration.ofMinutes(5))
+                .sweep();
 
         PushRecord reloaded = store.findById(stale.getId()).orElseThrow();
         assertEquals(PushStatus.CANCELED, reloaded.getStatus());
@@ -31,7 +34,8 @@ class PendingPushExpiryTaskTest {
         PushStore store = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
         PushRecord recent = savePending(store, Instant.now().minus(Duration.ofDays(1)));
 
-        new PendingPushExpiryTask(store, Duration.ofDays(30), Duration.ofMinutes(5)).sweep();
+        new PendingPushExpiryTask(store, mock(DeferredForwarder.class), Duration.ofDays(30), Duration.ofMinutes(5))
+                .sweep();
 
         PushRecord reloaded = store.findById(recent.getId()).orElseThrow();
         assertEquals(PushStatus.PENDING, reloaded.getStatus());
@@ -49,7 +53,8 @@ class PendingPushExpiryTaskTest {
                         .reviewerUsername("admin")
                         .build());
 
-        new PendingPushExpiryTask(store, Duration.ofDays(30), Duration.ofMinutes(5)).sweep();
+        new PendingPushExpiryTask(store, mock(DeferredForwarder.class), Duration.ofDays(30), Duration.ofMinutes(5))
+                .sweep();
 
         PushRecord reloaded = store.findById(approved.getId()).orElseThrow();
         assertEquals(PushStatus.APPROVED, reloaded.getStatus());
@@ -65,7 +70,9 @@ class PendingPushExpiryTaskTest {
                     return null;
                 });
 
-        new PendingPushExpiryTask(failingStore, Duration.ofDays(30), Duration.ofMinutes(5)).sweep();
+        new PendingPushExpiryTask(
+                        failingStore, mock(DeferredForwarder.class), Duration.ofDays(30), Duration.ofMinutes(5))
+                .sweep();
     }
 
     private static PushRecord savePending(PushStore store, Instant timestamp) {

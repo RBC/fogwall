@@ -9,6 +9,7 @@ import com.rbc.fogwall.config.DiffScanConfig;
 import com.rbc.fogwall.config.GpgConfig;
 import com.rbc.fogwall.config.ScmOAuthConfig;
 import com.rbc.fogwall.config.SecretScanConfig;
+import com.rbc.fogwall.db.ParkedPushStore;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.permission.RepoPermissionService;
@@ -31,6 +32,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
@@ -90,6 +92,17 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
 
     /** Largest decompressed size of any single received object; 0 = unlimited. Guards against decompression bombs. */
     private long maxObjectSizeBytes = 0;
+
+    /** Present on a provider with deferred forwarding: pushes made with a fogwall credential are parked. */
+    private Optional<DeferredForwarding> deferredForwarding = Optional.empty();
+
+    /** What parking a push needs: somewhere to store it, and the forwarder that sends it on once approved. */
+    public record DeferredForwarding(ParkedPushStore parkedPushStore, DeferredForwarder forwarder) {}
+
+    /** Parks pushes made with a fogwall credential. Call before the factory handles any requests. */
+    public void setDeferredForwarding(DeferredForwarding deferredForwarding) {
+        this.deferredForwarding = Optional.of(deferredForwarding);
+    }
 
     /** Enable fail-fast mode. Call after construction before the factory handles any requests. */
     public void setFailFast(boolean failFast) {
@@ -345,6 +358,11 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
         //   [post-validation] ApprovalPreReceiveHook        - blocks until approved or timeout
         //   [last]  QuarantinePromotionHook                  - moves objects into the mirror once nothing rejected
         //
+        // Parked pushes replace the pinned hooks:
+        //   [post-validation] ParkPushPreReceiveHook         - stores the pack and ref updates
+        //   [post-validation] PushStorePersistenceHook.validationResult - creates the record, marked deferred
+        //   [last]  DeferredAckPreReceiveHook                - acknowledges without applying any ref update
+        //
         // Post-receive:
         //   ForwardingPostReceiveHook       - forwards to upstream
         //   PushStorePersistenceHook.postReceive - transitions that same record to FORWARDED/ERROR
@@ -366,10 +384,33 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
                 validationContext,
                 pushContext);
 
+        // A push made with a fogwall credential, on a provider with deferred forwarding, is parked: stored, then
+        // acknowledged without moving any ref, and forwarded from the store once approved. Every other push holds
+        // the connection open for approval and forwards from this request.
+        Optional<DeferredForwarding> parking =
+                transport instanceof PushTransport.Http http && http.credentialAuthentication() != null
+                        ? deferredForwarding
+                        : Optional.empty();
+
         List<PreReceiveHook> hooks = new ArrayList<>(validationHooks);
-        hooks.add(persistenceHook.validationResultHook(validationContext));
-        hooks.add(buildApprovalHook(pushContext));
-        if (quarantine != null) hooks.add(new QuarantinePromotionHook(quarantine));
+        if (parking.isPresent()) {
+            DeferredForwarding deferred = parking.get();
+            hooks.add(new ParkPushPreReceiveHook(
+                    deferred.parkedPushStore(),
+                    quarantine,
+                    validationContext,
+                    pushContext,
+                    provider.getName(),
+                    pushUser));
+            persistenceHook.setDeferred(true);
+            hooks.add(persistenceHook.validationResultHook(validationContext));
+            hooks.add(new DeferredAckPreReceiveHook(
+                    pushStore, deferred.parkedPushStore(), approvalGateway, approvalTimeout, serviceUrl, pushContext));
+        } else {
+            hooks.add(persistenceHook.validationResultHook(validationContext));
+            hooks.add(buildApprovalHook(pushContext));
+            if (quarantine != null) hooks.add(new QuarantinePromotionHook(quarantine));
+        }
         PreReceiveHook[] preHooks = hooks.toArray(PreReceiveHook[]::new);
 
         final PushContext capturedContext = pushContext;
@@ -391,9 +432,21 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
         rp.setPreReceiveHook(
                 chainPreReceiveHooks(heartbeatInterval, validationContext, failFast, disconnectCallback, preHooks));
 
-        // Post-receive: forward to upstream, then record final status
-        var forwardingHook = new ForwardingPostReceiveHook(creds, pushContext, connectTimeoutSeconds, cache);
-        rp.setPostReceiveHook(chainPostReceiveHooks(forwardingHook, persistenceHook.postReceiveHook()));
+        if (parking.isPresent()) {
+            // Post-receive runs before the response completes, so the forward itself is never done here. Starting it
+            // takes the claim, which succeeds only if the push was approved already (auto-approval); otherwise the
+            // approval starts it.
+            DeferredForwarder forwarder = parking.get().forwarder();
+            rp.setPostReceiveHook((receivePack, commands) -> {
+                if (!commands.isEmpty()) {
+                    forwarder.start(pushId, false);
+                }
+            });
+        } else {
+            // Post-receive: forward to upstream, then record final status
+            var forwardingHook = new ForwardingPostReceiveHook(creds, pushContext, connectTimeoutSeconds, cache);
+            rp.setPostReceiveHook(chainPostReceiveHooks(forwardingHook, persistenceHook.postReceiveHook()));
+        }
 
         log.debug("Created ReceivePack for {} with {} auth", provider.getName(), creds != null ? "credentials" : "no");
 

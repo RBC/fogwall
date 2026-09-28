@@ -1,7 +1,9 @@
 package com.rbc.fogwall.dashboard.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -14,6 +16,7 @@ import com.rbc.fogwall.db.model.Attestation;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
 import com.rbc.fogwall.db.model.PushSummary;
+import com.rbc.fogwall.git.DeferredForwarder;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.FogwallProvider;
@@ -52,6 +55,9 @@ class PushControllerTest {
 
     @Mock
     ProviderRegistry providerRegistry;
+
+    @Mock
+    DeferredForwarder deferredForwarder;
 
     // Not injected by default — individual tests that need it set it on the controller directly.
     RepoPermissionService repoPermissionService;
@@ -861,6 +867,131 @@ class PushControllerTest {
             controller.counts(null, null, null, null, null, null, "myrepo", null, null);
 
             verify(pushStore).countByStatus(argThat(q -> "myrepo".equals(q.getSearch())));
+        }
+    }
+
+    // ── deferred forwarding ─────────────────────────────────────────────────────────
+
+    @Nested
+    class DeferredForwarding {
+
+        private PushRecord parked(PushStatus status) {
+            return PushRecord.builder()
+                    .id("p1")
+                    .status(status)
+                    .resolvedUser("alice")
+                    .provider("github")
+                    .url("github.com/acme/repo.git")
+                    .deferred(true)
+                    .build();
+        }
+
+        @Test
+        void approvingAParkedPush_startsItsForward() {
+            loginAs("bob", false);
+            when(pushStore.findById("p1")).thenReturn(Optional.of(parked(PushStatus.PENDING)));
+            when(pushStore.approve(eq("p1"), any())).thenReturn(parked(PushStatus.APPROVED));
+
+            controller.approve("p1", approveBody());
+
+            verify(deferredForwarder).start("p1", false);
+        }
+
+        @Test
+        void approvingAHeldPush_leavesForwardingToTheHeldRequest() {
+            loginAs("bob", false);
+            when(pushStore.findById("p1")).thenReturn(Optional.of(blockedPush("p1", "alice")));
+            when(pushStore.approve(eq("p1"), any())).thenReturn(approvedPush("p1"));
+
+            controller.approve("p1", approveBody());
+
+            verifyNoInteractions(deferredForwarder);
+        }
+
+        @Test
+        void rejectingAParkedPush_discardsItsPack() {
+            loginAs("bob", false);
+            when(pushStore.findById("p1")).thenReturn(Optional.of(parked(PushStatus.PENDING)));
+            when(pushStore.reject(eq("p1"), any())).thenReturn(parked(PushStatus.REJECTED));
+
+            controller.reject("p1", Map.of("reason", "no"));
+
+            verify(deferredForwarder).discard("p1");
+        }
+
+        @Test
+        void forward_byPusher_startsARetry() {
+            loginAs("alice", false);
+            when(pushStore.findById("p1")).thenReturn(Optional.of(parked(PushStatus.ERROR)));
+            when(deferredForwarder.start("p1", true)).thenReturn(true);
+
+            var response = controller.forward("p1");
+
+            assertEquals(HttpStatus.ACCEPTED, response.getStatusCode());
+        }
+
+        @Test
+        void forward_byAnotherUser_isForbidden() {
+            loginAs("bob", false);
+            when(pushStore.findById("p1")).thenReturn(Optional.of(parked(PushStatus.APPROVED)));
+
+            var response = controller.forward("p1");
+
+            assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+            verifyNoInteractions(deferredForwarder);
+        }
+
+        @Test
+        void forward_pendingPush_isRefused() {
+            loginAs("alice", false);
+            when(pushStore.findById("p1")).thenReturn(Optional.of(parked(PushStatus.PENDING)));
+
+            var response = controller.forward("p1");
+
+            assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+            verifyNoInteractions(deferredForwarder);
+        }
+
+        @Test
+        void forward_heldPush_isRefused() {
+            loginAs("admin", true);
+            when(pushStore.findById("p1")).thenReturn(Optional.of(approvedPush("p1")));
+
+            var response = controller.forward("p1");
+
+            assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        }
+
+        @Test
+        void getById_offersForwardNow_toPusherAndAdminOnly() throws Exception {
+            injectRepoPermissionService();
+            when(pushStore.findById("p1")).thenAnswer(inv -> Optional.of(parked(PushStatus.ERROR)));
+
+            loginAs("alice", false);
+            assertTrue(controller.getById("p1").getBody().isCanCurrentUserForward(), "the pusher");
+            loginAs("admin", true);
+            assertTrue(controller.getById("p1").getBody().isCanCurrentUserForward(), "an admin");
+            loginAs("bob", false);
+            assertFalse(controller.getById("p1").getBody().isCanCurrentUserForward(), "another user");
+        }
+
+        @Test
+        void getById_offersNothing_beforeApproval() {
+            loginAs("alice", false);
+            when(pushStore.findById("p1")).thenReturn(Optional.of(parked(PushStatus.PENDING)));
+
+            assertFalse(controller.getById("p1").getBody().isCanCurrentUserForward());
+        }
+
+        @Test
+        void forward_alreadyForwarding_isAConflict() {
+            loginAs("admin", true);
+            when(pushStore.findById("p1")).thenReturn(Optional.of(parked(PushStatus.APPROVED)));
+            when(deferredForwarder.start("p1", true)).thenReturn(false);
+
+            var response = controller.forward("p1");
+
+            assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
         }
     }
 }
