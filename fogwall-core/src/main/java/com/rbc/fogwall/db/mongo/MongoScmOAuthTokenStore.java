@@ -88,11 +88,13 @@ public class MongoScmOAuthTokenStore implements ScmOAuthTokenStore {
         Binary accessToken = doc.get("access_token", Binary.class);
         Binary refreshToken = doc.get("refresh_token", Binary.class);
         Date expiresAt = doc.getDate("expires_at");
+        Date authorizedAt = doc.getDate("authorized_at");
         return Optional.of(new ScmOAuthToken(
                 accessToken != null ? accessToken.getData() : null,
                 refreshToken != null ? refreshToken.getData() : null,
                 doc.getString("scopes"),
-                expiresAt != null ? expiresAt.toInstant() : null));
+                expiresAt != null ? expiresAt.toInstant() : null,
+                authorizedAt != null ? authorizedAt.toInstant() : null));
     }
 
     @Override

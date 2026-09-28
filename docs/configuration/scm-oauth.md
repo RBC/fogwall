@@ -27,6 +27,10 @@ scm-oauth:
   # re-link — push authorization itself is never affected by a token-encryption problem.
   token-encryption-key-path: /run/secrets/fogwall-scm-oauth-key
 
+  # How long a linked account can be used after the user authorized it, as an ISO-8601 duration (PT12H, P7D, P30D).
+  # Unset for no limit. Refreshing a token does not restart it; linking the account again does.
+  max-link-age: P30D
+
 # OAuth app registration is a property of the provider instance it belongs to, nested under that provider's own
 # providers.<name>.oauth block below — not a separate map keyed by the same name. An operator running two separate
 # GitHub OAuth apps at once (one for github.com/GHEC, a second for a GHEC-with-data-residency *.ghe.com tenant, or a
@@ -76,6 +80,7 @@ providers:
 | ------------------------------------------- | ------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `identity-mode`                             | string  | `permissive` | `permissive` or `strict` — see above.                                                                                                                  |
 | `token-encryption-key-path`                 | string  | _(none)_     | Path to the base64-encoded 32-byte AES-256-GCM key file. Auto-generated under `./.data/` for local dev if unset and some provider has `oauth.enabled`. |
+| `max-link-age`                              | string  | _(none)_     | ISO-8601 duration after which a linked account must be linked again, counted from when the user authorized it. See the administrator guide.            |
 | `providers.<name>.oauth.enabled`            | boolean | `false`      | Whether "Link via OAuth" is offered for this provider.                                                                                                 |
 | `providers.<name>.oauth.client-id`          | string  | `""`         | OAuth app/client ID.                                                                                                                                   |
 | `providers.<name>.oauth.client-secret-path` | string  | `""`         | Path to a file holding the OAuth app/client secret.                                                                                                    |
@@ -109,9 +114,9 @@ providers:
 
 auth:
   git-credentials:
-    # Days a fogwall-issued git credential works after it is issued or rotated. 0 (default) for no limit. Lowering it
-    # also retires existing credentials older than the new limit.
-    max-lifetime-days: 90
+    # How long a fogwall-issued git credential works after it is issued or rotated, as an ISO-8601 duration. Unset
+    # (default) for no limit. Lowering it also retires existing credentials older than the new limit.
+    max-lifetime: P90D
 ```
 
 - Server mode over HTTP only. The transparent proxy and SSH always use the client's own credential.

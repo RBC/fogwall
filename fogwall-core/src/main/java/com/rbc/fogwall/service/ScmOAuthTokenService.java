@@ -72,8 +72,19 @@ public class ScmOAuthTokenService {
          */
         REFRESH_FAILED,
         /** The token encryption key is not available, so no stored token can be read. */
-        KEY_UNAVAILABLE
+        KEY_UNAVAILABLE,
+        /** The user linked the account longer ago than the configured maximum link age, and has to link it again. */
+        LINK_EXPIRED
     }
+
+    /**
+     * A linked account's authorization, as its owner is shown it.
+     *
+     * @param authorizedAt when the user linked the account
+     * @param usableUntil when the link reaches the maximum link age; null when there is no limit
+     * @param expired whether it has reached it
+     */
+    public record LinkStatus(String provider, Instant authorizedAt, Instant usableUntil, boolean expired) {}
 
     /** The OAuth application fogwall is registered as on one provider instance. */
     public record OAuthClient(String clientId, Path clientSecretPath) {}
@@ -83,20 +94,23 @@ public class ScmOAuthTokenService {
     private final ProviderRegistry providers;
     private final Map<String, OAuthClient> clients;
     private final String serviceUrl;
+    private final Duration maxLinkAge;
     private final Clock clock;
     private final Map<String, Object> refreshLocks = new ConcurrentHashMap<>();
 
     /**
      * @param clients the OAuth application registered for each provider instance, keyed by provider name
      * @param serviceUrl fogwall's external base URL, from which the registered redirect URI is derived
+     * @param maxLinkAge how long a linked account can be used after the user authorized it; empty for no limit
      */
     public ScmOAuthTokenService(
             ScmOAuthTokenStore store,
             TokenCipherProvider cipherProvider,
             ProviderRegistry providers,
             Map<String, OAuthClient> clients,
-            String serviceUrl) {
-        this(store, cipherProvider, providers, clients, serviceUrl, Clock.systemUTC());
+            String serviceUrl,
+            Optional<Duration> maxLinkAge) {
+        this(store, cipherProvider, providers, clients, serviceUrl, maxLinkAge, Clock.systemUTC());
     }
 
     ScmOAuthTokenService(
@@ -105,12 +119,14 @@ public class ScmOAuthTokenService {
             ProviderRegistry providers,
             Map<String, OAuthClient> clients,
             String serviceUrl,
+            Optional<Duration> maxLinkAge,
             Clock clock) {
         this.store = Objects.requireNonNull(store, "store is required: it holds the tokens this service hands out");
         this.cipherProvider = Objects.requireNonNull(cipherProvider, "cipherProvider is required");
         this.providers = Objects.requireNonNull(providers, "providers is required");
         this.clients = Map.copyOf(clients);
         this.serviceUrl = serviceUrl;
+        this.maxLinkAge = maxLinkAge.orElse(null);
         this.clock = clock;
     }
 
@@ -123,6 +139,14 @@ public class ScmOAuthTokenService {
         Optional<ScmOAuthToken> token = store.findToken(username, provider);
         if (token.isEmpty()) {
             return new Access.Unusable(Reason.NOT_LINKED);
+        }
+        if (isPastLinkAge(token.get())) {
+            log.info(
+                    "OAuth link for user '{}' / provider '{}' authorized at {} is past the maximum link age",
+                    username,
+                    provider,
+                    token.get().authorizedAt());
+            return new Access.Unusable(Reason.LINK_EXPIRED);
         }
         if (isCurrent(token.get())) {
             return usable(cipher.get(), token.get());
@@ -138,6 +162,28 @@ public class ScmOAuthTokenService {
             }
             return refresh(username, provider, cipher.get(), token.get());
         }
+    }
+
+    /**
+     * Returns the token {@code username} linked on {@code provider}, unless there is none or it is past the maximum
+     * link age. Reads the store only: an expired access token is still returned, since it may yet be refreshed.
+     */
+    public Optional<ScmOAuthToken> currentLink(String username, String provider) {
+        return store.findToken(username, provider).filter(token -> !isPastLinkAge(token));
+    }
+
+    /** Returns when each of {@code username}'s links was authorized and how long it stays usable, by provider. */
+    public List<LinkStatus> linkStatuses(String username) {
+        return store.findLinkedProviders(username).stream()
+                .flatMap(provider -> store.findToken(username, provider).stream()
+                        .map(token -> new LinkStatus(
+                                provider,
+                                token.authorizedAt(),
+                                maxLinkAge != null && token.authorizedAt() != null
+                                        ? token.authorizedAt().plus(maxLinkAge)
+                                        : null,
+                                isPastLinkAge(token))))
+                .toList();
     }
 
     /** Returns the providers {@code username} has linked a token on, whether or not it is still current. */
@@ -268,6 +314,13 @@ public class ScmOAuthTokenService {
         } catch (JacksonException e) {
             return Optional.empty();
         }
+    }
+
+    /** Whether the user authorized the link longer ago than the maximum link age. */
+    private boolean isPastLinkAge(ScmOAuthToken token) {
+        return maxLinkAge != null
+                && token.authorizedAt() != null
+                && !clock.instant().isBefore(token.authorizedAt().plus(maxLinkAge));
     }
 
     private boolean isCurrent(ScmOAuthToken token) {

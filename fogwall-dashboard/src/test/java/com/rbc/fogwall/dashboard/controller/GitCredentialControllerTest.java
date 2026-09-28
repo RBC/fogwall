@@ -13,10 +13,10 @@ import com.rbc.fogwall.dashboard.audit.AdminAuditLog;
 import com.rbc.fogwall.provider.ForgejoProvider;
 import com.rbc.fogwall.provider.ProviderRegistry;
 import com.rbc.fogwall.service.GitCredentialService;
+import com.rbc.fogwall.service.ScmOAuthTokenService;
 import com.rbc.fogwall.user.GitCredential;
 import com.rbc.fogwall.user.GitCredentialNameConflictException;
 import com.rbc.fogwall.user.ScmOAuthToken;
-import com.rbc.fogwall.user.ScmOAuthTokenStore;
 import com.rbc.fogwall.user.UserStore;
 import java.net.URI;
 import java.time.Instant;
@@ -47,7 +47,7 @@ class GitCredentialControllerTest {
     UserStore userStore;
 
     @Mock
-    ScmOAuthTokenStore scmOAuthTokens;
+    ScmOAuthTokenService oauthTokens;
 
     @Mock
     ProviderRegistry providers;
@@ -62,7 +62,7 @@ class GitCredentialControllerTest {
     void setUp() {
         SecurityContextHolder.getContext()
                 .setAuthentication(new UsernamePasswordAuthenticationToken("alice", null, List.of()));
-        controller = new GitCredentialController(credentials, userStore, scmOAuthTokens, providers, config, auditLog);
+        controller = new GitCredentialController(credentials, userStore, oauthTokens, providers, config, auditLog);
     }
 
     @AfterEach
@@ -79,7 +79,7 @@ class GitCredentialControllerTest {
     }
 
     private static ScmOAuthToken token(String scopes) {
-        return new ScmOAuthToken(new byte[] {1}, null, scopes, null);
+        return new ScmOAuthToken(new byte[] {1}, null, scopes, null, NOW);
     }
 
     /**
@@ -88,7 +88,7 @@ class GitCredentialControllerTest {
      */
     private void linkedBrokeredProvider() {
         brokeredProvider();
-        when(scmOAuthTokens.findToken("alice", "gitea")).thenReturn(Optional.of(token("read:user,write:repository")));
+        when(oauthTokens.currentLink("alice", "gitea")).thenReturn(Optional.of(token("read:user,write:repository")));
     }
 
     @Test
@@ -130,7 +130,7 @@ class GitCredentialControllerTest {
     void issue_withoutALinkedAccount_isRefused_andAudited() {
         // A credential is useless without a linked token to push with, so none is handed out before the link exists.
         brokeredProvider();
-        when(scmOAuthTokens.findLinkedProviders("alice")).thenReturn(List.of("github"));
+        when(oauthTokens.linkedProviders("alice")).thenReturn(List.of("github"));
 
         var response = controller.issue(new GitCredentialController.IssueRequest("laptop"));
 
@@ -146,7 +146,7 @@ class GitCredentialControllerTest {
     @Test
     void rotate_withoutALinkedAccount_isRefused() {
         brokeredProvider();
-        when(scmOAuthTokens.findLinkedProviders("alice")).thenReturn(List.of());
+        when(oauthTokens.linkedProviders("alice")).thenReturn(List.of());
 
         var response = controller.rotate("abcdefghijklmnop");
 
@@ -163,7 +163,7 @@ class GitCredentialControllerTest {
         ProviderConfig codeberg = new ProviderConfig();
         codeberg.getOauth().setEnabled(true);
         config.setProviders(Map.of("gitlab", gitlab, "codeberg", codeberg));
-        when(scmOAuthTokens.findToken("alice", "gitlab")).thenReturn(Optional.of(token(null)));
+        when(oauthTokens.currentLink("alice", "gitlab")).thenReturn(Optional.of(token(null)));
 
         assertEquals(List.of("gitlab"), controller.providersMine());
     }
@@ -177,8 +177,8 @@ class GitCredentialControllerTest {
                         .name("gitea")
                         .uri(URI.create("https://gitea.example.com"))
                         .build()));
-        when(scmOAuthTokens.findToken("alice", "gitea")).thenReturn(Optional.of(token("read:user")));
-        when(scmOAuthTokens.findLinkedProviders("alice")).thenReturn(List.of("gitea"));
+        when(oauthTokens.currentLink("alice", "gitea")).thenReturn(Optional.of(token("read:user")));
+        when(oauthTokens.linkedProviders("alice")).thenReturn(List.of("gitea"));
 
         var response = controller.issue(new GitCredentialController.IssueRequest("laptop"));
 
@@ -187,7 +187,7 @@ class GitCredentialControllerTest {
                 response.getBody().toString().contains("without permission to push"),
                 response.getBody().toString());
         verify(credentials, never()).issue(anyString(), anyString());
-        verify(auditLog).denied("git-credential.issue", "user:alice", "linked account cannot push");
+        verify(auditLog).denied("git-credential.issue", "user:alice", "linked account expired or cannot push");
         assertEquals(List.of(), controller.providersMine());
     }
 

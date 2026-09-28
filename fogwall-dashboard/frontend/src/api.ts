@@ -6,6 +6,7 @@ import type {
   ScmApiActionRecord,
   GroupPermissionRule,
   RepoPermission,
+  ScmOAuthLinkStatus,
   ScmOAuthProviderInfo,
   SetupInfo,
 } from './types'
@@ -135,7 +136,7 @@ export async function fetchConfig(): Promise<{
   scmApiEnabled: boolean
   /** Whether any provider has dashboard issue filing enabled; the ISSUE grant is offered only when one does. */
   issuesEnabled: boolean
-  /** Providers that forward server-mode pushes made with a fogwall git credential under the linked grant. */
+  /** Providers that forward server-mode pushes made with a fogwall git credential with the linked OAuth token. */
   brokeredPushProviders: string[]
 }> {
   const res = await fetch('/api/runtime-config')
@@ -362,6 +363,13 @@ export async function removeScmIdentity(provider: string, scmUsername: string) {
     { method: 'DELETE' },
   )
   if (!res.ok) await parseErrorResponse(res, 'Failed to remove SCM identity')
+}
+
+/** The current user's linked accounts, with when each was authorized and stays usable until. */
+export async function fetchScmOAuthLinks(): Promise<ScmOAuthLinkStatus[]> {
+  const res = await apiFetch('/api/scm-oauth/links')
+  if (!res.ok) throw new Error('Failed to fetch linked accounts')
+  return res.json()
 }
 
 export async function unlinkScmOAuth(provider: string) {

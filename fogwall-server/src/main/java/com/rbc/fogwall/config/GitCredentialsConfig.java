@@ -7,8 +7,8 @@ import lombok.Data;
 public class GitCredentialsConfig {
 
     /**
-     * Days a credential works after it is issued or rotated; {@code 0} for no limit. Lowering it also retires existing
-     * credentials older than the new limit.
+     * How long a credential works after it is issued or rotated, as an ISO-8601 duration such as {@code P90D}; empty
+     * for no limit. Lowering it also retires existing credentials older than the new limit.
      */
-    private int maxLifetimeDays = 0;
+    private String maxLifetime = "";
 }

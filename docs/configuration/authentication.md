@@ -10,10 +10,11 @@ auth:
   # Default: 86400 (24 hours). Tighten to 28800 (8 hours) or less for compliance environments.
   session-timeout-seconds: 86400
 
-  # Git credentials fogwall issues for server-mode pushes on providers with oauth.brokered-push. Days a credential works
-  # after it is issued or rotated; 0 (default) for no limit. See SCM OAuth → Brokered pushes.
+  # Git credentials fogwall issues for server-mode pushes on providers with oauth.brokered-push. How long a credential
+  # works after it is issued or rotated, as an ISO-8601 duration such as P90D; unset (default) for no limit. See SCM
+  # OAuth → Brokered pushes.
   git-credentials:
-    max-lifetime-days: 0
+    max-lifetime: P90D
 ```
 
 ## Local (default)

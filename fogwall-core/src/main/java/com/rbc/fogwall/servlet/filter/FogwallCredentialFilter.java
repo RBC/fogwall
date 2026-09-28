@@ -146,6 +146,8 @@ public class FogwallCredentialFilter implements Filter {
             case EXPIRED -> "Your linked " + name + " account can no longer be used. Link it again at " + profile + ".";
             case REFRESH_FAILED -> "fogwall could not renew access to your linked " + name + " account. Retry shortly.";
             case KEY_UNAVAILABLE -> "fogwall cannot use linked accounts right now. Contact an administrator.";
+            case LINK_EXPIRED ->
+                "Your " + name + " account was linked too long ago to be used. Link it again at " + profile + ".";
         };
     }
 

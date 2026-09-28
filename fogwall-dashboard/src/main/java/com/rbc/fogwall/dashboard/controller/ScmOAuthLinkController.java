@@ -12,6 +12,7 @@ import com.rbc.fogwall.provider.ForgejoProvider;
 import com.rbc.fogwall.provider.GitHubProvider;
 import com.rbc.fogwall.provider.GitLabProvider;
 import com.rbc.fogwall.provider.ProviderRegistry;
+import com.rbc.fogwall.service.ScmOAuthTokenService;
 import com.rbc.fogwall.user.EmailConflictException;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
 import com.rbc.fogwall.user.ScmIdentityConflictException;
@@ -95,6 +96,17 @@ public class ScmOAuthLinkController {
 
     /** JDBC deployments only — empty on Mongo backends, where OAuth linking degrades to 501 (see linkStart). */
     private final Optional<ScmOAuthTokenStore> scmOAuthTokenStore;
+
+    private final ScmOAuthTokenService oauthTokens;
+
+    @Operation(
+            operationId = "listScmOAuthLinks",
+            summary = "List the current user's linked accounts, with when each was authorized and stays usable until",
+            description = "usableUntil is null when scm-oauth.max-link-age is unset.")
+    @GetMapping("/links")
+    public List<ScmOAuthTokenService.LinkStatus> links() {
+        return oauthTokens.linkStatuses(currentUsername());
+    }
 
     @Operation(operationId = "linkScmOAuth", summary = "Start the OAuth flow to link the current user's SCM account")
     @GetMapping("/{providerId}/link")

@@ -54,8 +54,9 @@ credential belongs to, never commit metadata. With `scm-oauth.identity-mode: str
   `scm-oauth.token-encryption-key-path`. Expired access tokens are renewed with the refresh token.
 - **Can do:** the scopes requested at link time. Identity and key import only, unless the provider has dashboard issue
   filing (an issue write scope) or brokered pushes (a repository write scope) enabled.
-- **Revoked** by unlinking, which deletes the tokens and asks GitHub or GitLab to revoke them; or at the provider, after
-  which fogwall can no longer renew it.
+- **Revoked** by unlinking, which deletes the tokens and asks GitHub or GitLab to revoke them; at the provider, after
+  which fogwall can no longer renew it; or by age under `scm-oauth.max-link-age`, counted from when the user authorized
+  the link.
 
 ### fogwall-issued git credential
 
@@ -66,7 +67,7 @@ credential belongs to, never commit metadata. With `scm-oauth.identity-mode: str
   does not recognise it, and fogwall never sends it upstream. A push made with it passes every fogwall control, then is
   forwarded with the user's linked OAuth token.
 - **Revoked** by its owner or an administrator, by removing the user, or by expiry under
-  `auth.git-credentials.max-lifetime-days`. Rotation replaces its value.
+  `auth.git-credentials.max-lifetime`. Rotation replaces its value.
 
 ### Service credentials
 

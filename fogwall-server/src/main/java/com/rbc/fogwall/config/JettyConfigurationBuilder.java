@@ -76,6 +76,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -1177,17 +1178,37 @@ public class JettyConfigurationBuilder {
     /** Builds the {@link GitCredentialService} that issues and verifies fogwall's git credentials. */
     public GitCredentialService buildGitCredentialService() {
         if (cachedGitCredentialService != null) return cachedGitCredentialService;
-        int maxLifetimeDays = config.getAuth().getGitCredentials().getMaxLifetimeDays();
-        if (maxLifetimeDays < 0) {
-            throw new IllegalStateException(
-                    "auth.git-credentials.max-lifetime-days must be 0 (no limit) or a positive number of days");
-        }
+        Optional<Duration> maxLifetime = optionalDuration(
+                "auth.git-credentials.max-lifetime",
+                config.getAuth().getGitCredentials().getMaxLifetime());
         GitCredentialStore store = "mongo".equals(config.getDatabase().getType())
                 ? requireMongoStoreFactory().gitCredentialStore()
                 : new JdbcGitCredentialStore(requireJdbcDataSource());
-        cachedGitCredentialService = new GitCredentialService(
-                store, maxLifetimeDays > 0 ? Optional.of(Duration.ofDays(maxLifetimeDays)) : Optional.empty());
+        cachedGitCredentialService = new GitCredentialService(store, maxLifetime);
         return cachedGitCredentialService;
+    }
+
+    /**
+     * Parses an optional limit given as an ISO-8601 duration, such as {@code PT12H} or {@code P30D}. Empty when
+     * {@code value} is blank.
+     *
+     * @throws IllegalStateException naming {@code key} when the value is not a positive duration
+     */
+    public static Optional<Duration> optionalDuration(String key, String value) {
+        if (value == null || value.isBlank()) {
+            return Optional.empty();
+        }
+        Duration duration;
+        try {
+            duration = Duration.parse(value.trim());
+        } catch (DateTimeParseException e) {
+            throw new IllegalStateException(
+                    key + " must be an ISO-8601 duration such as PT12H or P30D, not '" + value + "'", e);
+        }
+        if (duration.isNegative() || duration.isZero()) {
+            throw new IllegalStateException(key + " must be a positive duration, or empty for no limit");
+        }
+        return Optional.of(duration);
     }
 
     /**
@@ -1228,7 +1249,8 @@ public class JettyConfigurationBuilder {
                 buildTokenCipherProvider(),
                 buildProviderRegistry(),
                 clients,
-                getServiceUrl());
+                getServiceUrl(),
+                optionalDuration("scm-oauth.max-link-age", config.getScmOauth().getMaxLinkAge()));
         return cachedScmOAuthTokenService;
     }
 

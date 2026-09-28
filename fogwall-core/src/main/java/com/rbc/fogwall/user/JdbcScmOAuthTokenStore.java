@@ -72,7 +72,7 @@ public class JdbcScmOAuthTokenStore implements ScmOAuthTokenStore {
     public Optional<ScmOAuthToken> findToken(String username, String provider) {
         return jdbc
                 .query(
-                        "SELECT access_token, refresh_token, scopes, expires_at FROM user_scm_tokens "
+                        "SELECT access_token, refresh_token, scopes, expires_at, authorized_at FROM user_scm_tokens "
                                 + "WHERE username = :u AND provider = :provider",
                         Map.of("u", username, "provider", provider),
                         (rs, rowNum) -> {
@@ -81,7 +81,8 @@ public class JdbcScmOAuthTokenStore implements ScmOAuthTokenStore {
                                     rs.getBytes("access_token"),
                                     rs.getBytes("refresh_token"),
                                     rs.getString("scopes"),
-                                    expiresAt != null ? expiresAt.toInstant() : null);
+                                    expiresAt != null ? expiresAt.toInstant() : null,
+                                    rs.getTimestamp("authorized_at").toInstant());
                         })
                 .stream()
                 .findFirst();

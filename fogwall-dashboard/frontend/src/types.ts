@@ -221,6 +221,15 @@ export interface EmailEntry {
   source: string
 }
 
+/** A linked account's authorization: when it was made, and until when it can be used. */
+export interface ScmOAuthLinkStatus {
+  provider: string
+  authorizedAt: string
+  /** Absent when the deployment sets no maximum link age. */
+  usableUntil?: string | null
+  expired: boolean
+}
+
 export interface ScmIdentity {
   provider: string
   username: string

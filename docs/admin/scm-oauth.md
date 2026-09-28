@@ -92,6 +92,16 @@ When fogwall acts as a user with an expired token, it first renews it with the r
 provider refuses to renew, because it was revoked upstream or its refresh token expired, stays unusable until the user
 links the account again.
 
+A classic GitHub OAuth App token never expires, and refresh tokens live for months, so a linked account can stay usable
+long after anyone last looked at it. `scm-oauth.max-link-age` bounds that: once the user authorized the link longer ago
+than the limit, fogwall stops using it, and the user links the account again from their profile. Renewing a token does
+not restart the count.
+
+```yaml
+scm-oauth:
+  max-link-age: P30D # an ISO-8601 duration: PT12H, P7D, P30D
+```
+
 ## What happens on unlink
 
 `DELETE /api/scm-oauth/<provider>/unlink` (the "Unlink" button in the profile page's SCM Identities tab) removes:

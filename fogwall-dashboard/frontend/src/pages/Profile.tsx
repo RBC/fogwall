@@ -8,6 +8,7 @@ import {
   fetchMyPermissions,
   fetchMySshKeys,
   fetchProviders,
+  fetchScmOAuthLinks,
   removeEmail,
   removeScmIdentity,
   removeSshKey,
@@ -22,6 +23,7 @@ import type {
   EmailEntry,
   RepoPermission,
   ScmIdentity,
+  ScmOAuthLinkStatus,
   ScmOAuthProviderInfo,
   SshKeyEntry,
 } from '../types'
@@ -149,6 +151,7 @@ export function Profile() {
   const [scmOAuthLinkAvailable, setScmOAuthLinkAvailable] = useState(false)
   const [scmIdentityMode, setScmIdentityMode] = useState<string>('permissive')
   const [brokeredPushProviders, setBrokeredPushProviders] = useState<string[]>([])
+  const [linkStatuses, setLinkStatuses] = useState<ScmOAuthLinkStatus[]>([])
 
   // The OAuth callback redirects back here with a query param on both success and failure — read it once as
   // initial state (not in an effect — this derives from the URL present at mount, it isn't subscribing to
@@ -186,6 +189,9 @@ export function Profile() {
       .then((data) => setProfile(data))
       .catch(() => setError('Failed to load profile'))
       .finally(() => setLoading(false))
+    fetchScmOAuthLinks()
+      .then(setLinkStatuses)
+      .catch(() => {})
     fetchMyPermissions()
       .then((data) => {
         setPermissions(data.direct)
@@ -264,6 +270,7 @@ export function Profile() {
   async function handleUnlinkOAuth(provider: string) {
     try {
       await unlinkScmOAuth(provider)
+      setLinkStatuses((statuses) => statuses.filter((s) => s.provider !== provider))
       setProfile(
         (p) =>
           p && { ...p, scmIdentities: p.scmIdentities.filter((id) => id.provider !== provider) },
@@ -371,6 +378,8 @@ export function Profile() {
           <ul className="divide-y divide-gray-100 dark:divide-gray-700">
             {scmOAuthProviders.map((p) => {
               const linked = profile.scmIdentities.find((id) => id.provider === p.id && id.verified)
+              const status = linkStatuses.find((s) => s.provider === p.id)
+              const linkHref = `/api/scm-oauth/${encodeURIComponent(p.id)}/link`
               return (
                 <li key={p.id} className="flex items-center justify-between py-2 text-sm">
                   <span className="flex items-center gap-2">
@@ -379,22 +388,53 @@ export function Profile() {
                       {p.id}
                     </span>
                     {linked ? (
-                      <span className="text-gray-800 dark:text-gray-200">{linked.username}</span>
+                      <>
+                        <span className="text-gray-800 dark:text-gray-200">{linked.username}</span>
+                        {status?.expired ? (
+                          <span className="rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/60 dark:text-red-300">
+                            Link expired
+                          </span>
+                        ) : (
+                          status?.usableUntil && (
+                            <span className="text-xs text-gray-400 dark:text-gray-500">
+                              usable until{' '}
+                              {new Date(status.usableUntil).toLocaleString(undefined, {
+                                dateStyle: 'medium',
+                                timeStyle: 'short',
+                              })}
+                            </span>
+                          )
+                        )}
+                      </>
                     ) : (
                       <span className="text-gray-400 italic dark:text-gray-500">Not linked</span>
                     )}
                   </span>
                   {linked ? (
-                    <button
-                      onClick={() => handleUnlinkOAuth(p.id)}
-                      className="text-gray-400 hover:text-red-500 transition-colors text-xs dark:text-gray-500 dark:hover:text-red-400"
-                      title="Unlink OAuth account"
-                    >
-                      Unlink
-                    </button>
+                    <span className="flex items-center gap-3">
+                      {status?.usableUntil && (
+                        <a
+                          href={linkHref}
+                          className={
+                            status.expired
+                              ? 'text-xs font-medium text-amber-700 hover:text-amber-600 dark:text-amber-400'
+                              : 'text-xs text-gray-400 hover:text-slate-700 transition-colors dark:text-gray-500 dark:hover:text-gray-300'
+                          }
+                        >
+                          Link again
+                        </a>
+                      )}
+                      <button
+                        onClick={() => handleUnlinkOAuth(p.id)}
+                        className="text-gray-400 hover:text-red-500 transition-colors text-xs dark:text-gray-500 dark:hover:text-red-400"
+                        title="Unlink OAuth account"
+                      >
+                        Unlink
+                      </button>
+                    </span>
                   ) : (
                     <a
-                      href={`/api/scm-oauth/${encodeURIComponent(p.id)}/link`}
+                      href={linkHref}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-slate-700 text-white text-xs hover:bg-slate-600 transition-colors"
                     >
                       <ProviderLogo type={p.type} hostname={p.hostname} onDark />

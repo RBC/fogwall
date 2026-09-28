@@ -247,6 +247,7 @@ public class FogwallDashboardApplication {
             }
             bf.registerSingleton("scmOAuthTokenStore", ctx.scmOAuthTokenStore());
             bf.registerSingleton("gitCredentialService", ctx.gitCredentialService());
+            bf.registerSingleton("scmOAuthTokenService", ctx.scmOAuthTokenService());
             // Dashboard issue path. Acts as the user via their linked OAuth token; enforces the ISSUE/PROPOSE
             // grant, content inspection and auditing. Wired here since it composes the linked OAuth token service with
             // the permission service and audit store.

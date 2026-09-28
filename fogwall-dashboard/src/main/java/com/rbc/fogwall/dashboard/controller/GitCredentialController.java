@@ -5,10 +5,10 @@ import com.rbc.fogwall.dashboard.audit.AdminAuditLog;
 import com.rbc.fogwall.provider.ProviderRegistry;
 import com.rbc.fogwall.provider.ScmOAuthProvider;
 import com.rbc.fogwall.service.GitCredentialService;
+import com.rbc.fogwall.service.ScmOAuthTokenService;
 import com.rbc.fogwall.user.GitCredential;
 import com.rbc.fogwall.user.GitCredentialNameConflictException;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
-import com.rbc.fogwall.user.ScmOAuthTokenStore;
 import com.rbc.fogwall.user.UserStore;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -43,7 +43,7 @@ public class GitCredentialController {
 
     private final ReadOnlyUserStore userStore;
 
-    private final ScmOAuthTokenStore scmOAuthTokens;
+    private final ScmOAuthTokenService oauthTokens;
 
     private final ProviderRegistry providers;
 
@@ -186,14 +186,14 @@ public class GitCredentialController {
         if (!usableProviders(username).isEmpty()) {
             return null;
         }
-        List<String> linked = scmOAuthTokens.findLinkedProviders(username);
+        List<String> linked = oauthTokens.linkedProviders(username);
         if (brokered.stream().anyMatch(linked::contains)) {
-            auditLog.denied(action, "user:" + username, "linked account cannot push");
+            auditLog.denied(action, "user:" + username, "linked account expired or cannot push");
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of(
                             "error",
-                            "Your linked account was linked without permission to push. Link your account for "
-                                    + String.join(" or ", brokered) + " again on your profile."));
+                            "Your linked account was linked too long ago, or without permission to push. Link your"
+                                    + " account for " + String.join(" or ", brokered) + " again on your profile."));
         }
         auditLog.denied(action, "user:" + username, "no linked account");
         return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -203,11 +203,14 @@ public class GitCredentialController {
                                 + " on your profile before creating a git credential"));
     }
 
-    /** Providers with brokered pushes on which {@code username} has linked an account that can push. */
+    /**
+     * Providers with brokered pushes on which {@code username} has a link within the maximum link age, to an account
+     * that can push.
+     */
     private List<String> usableProviders(String username) {
         return brokeredProviders().stream()
-                .filter(provider -> scmOAuthTokens
-                        .findToken(username, provider)
+                .filter(provider -> oauthTokens
+                        .currentLink(username, provider)
                         .filter(token -> grantsPush(provider, token.scopes()))
                         .isPresent())
                 .toList();

@@ -19,4 +19,10 @@ public class ScmOAuthSettings {
 
     /** Path to a file holding a base64-encoded 32-byte AES-256-GCM key used to encrypt stored OAuth tokens at rest. */
     private String tokenEncryptionKeyPath = "";
+
+    /**
+     * How long a linked account can be used after the user authorized it, as an ISO-8601 duration such as {@code P30D};
+     * empty for no limit. Refreshing a token does not restart it; linking the account again does.
+     */
+    private String maxLinkAge = "";
 }

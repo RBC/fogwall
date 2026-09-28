@@ -62,6 +62,8 @@ class ScmOAuthTokenServiceTest {
     private final FakeTokenStore store = new FakeTokenStore();
     private TokenCipherProvider cipherProvider;
     private TokenCipher cipher;
+    private InMemoryProviderRegistry registry;
+    private Map<String, OAuthClient> clients;
     private ScmOAuthTokenService service;
 
     @BeforeEach
@@ -87,12 +89,19 @@ class ScmOAuthTokenServiceTest {
                 .name(PROVIDER)
                 .uri(URI.create("http://localhost:" + server.getAddress().getPort()))
                 .build();
-        service = new ScmOAuthTokenService(
+        registry = new InMemoryProviderRegistry(List.of(gitlab));
+        clients = Map.of(PROVIDER, new OAuthClient("the-client", secret));
+        service = withMaxLinkAge(Optional.empty());
+    }
+
+    private ScmOAuthTokenService withMaxLinkAge(Optional<Duration> maxLinkAge) {
+        return new ScmOAuthTokenService(
                 store,
                 cipherProvider,
-                new InMemoryProviderRegistry(List.of(gitlab)),
-                Map.of(PROVIDER, new OAuthClient("the-client", secret)),
+                registry,
+                clients,
                 "https://fogwall.example.com",
+                maxLinkAge,
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
@@ -133,9 +142,68 @@ class ScmOAuthTokenServiceTest {
                 new InMemoryProviderRegistry(List.of()),
                 Map.of(),
                 null,
+                Optional.empty(),
                 Clock.fixed(NOW, ZoneOffset.UTC));
 
         assertEquals(new Access.Unusable(Reason.KEY_UNAVAILABLE), withoutKey.access(USER, PROVIDER));
+    }
+
+    // ---- Maximum link age ----
+
+    @Test
+    void linkPastTheMaximumAge_isUnusable_evenWithACurrentToken() {
+        store.linkedAt = NOW.minus(Duration.ofDays(30));
+        link("access-1", "refresh-1", NOW.plus(Duration.ofHours(1)));
+
+        var aged = withMaxLinkAge(Optional.of(Duration.ofDays(30)));
+
+        assertEquals(new Access.Unusable(Reason.LINK_EXPIRED), aged.access(USER, PROVIDER));
+        assertTrue(aged.currentLink(USER, PROVIDER).isEmpty());
+        assertEquals(0, requestCount.get());
+    }
+
+    @Test
+    void linkWithinTheMaximumAge_isUsable() {
+        store.linkedAt = NOW.minus(Duration.ofDays(29));
+        link("access-1", "refresh-1", null);
+
+        var aged = withMaxLinkAge(Optional.of(Duration.ofDays(30)));
+
+        assertEquals(new Access.Usable("access-1", SCOPES), aged.access(USER, PROVIDER));
+        assertTrue(aged.currentLink(USER, PROVIDER).isPresent());
+    }
+
+    @Test
+    void linkStatuses_reportWhenEachLinkAgesOut() {
+        store.linkedAt = NOW.minus(Duration.ofDays(10));
+        link("access-1", null, null);
+
+        assertEquals(
+                List.of(new ScmOAuthTokenService.LinkStatus(
+                        PROVIDER, NOW.minus(Duration.ofDays(10)), NOW.plus(Duration.ofDays(20)), false)),
+                withMaxLinkAge(Optional.of(Duration.ofDays(30))).linkStatuses(USER));
+        assertEquals(
+                List.of(new ScmOAuthTokenService.LinkStatus(PROVIDER, NOW.minus(Duration.ofDays(10)), null, false)),
+                service.linkStatuses(USER));
+        assertTrue(withMaxLinkAge(Optional.of(Duration.ofDays(10)))
+                .linkStatuses(USER)
+                .get(0)
+                .expired());
+    }
+
+    @Test
+    void refreshing_doesNotRestartTheLinkAge() {
+        store.linkedAt = NOW.minus(Duration.ofDays(29));
+        link("access-1", "refresh-1", NOW.minus(Duration.ofMinutes(5)));
+        responseBody = """
+                {"access_token":"access-2","refresh_token":"refresh-2","expires_in":7200}
+                """;
+
+        withMaxLinkAge(Optional.of(Duration.ofDays(30))).access(USER, PROVIDER);
+
+        assertEquals(
+                NOW.minus(Duration.ofDays(29)),
+                store.findToken(USER, PROVIDER).orElseThrow().authorizedAt());
     }
 
     // ---- Refresh ----
@@ -252,6 +320,7 @@ class ScmOAuthTokenServiceTest {
                 new InMemoryProviderRegistry(List.of(new BitbucketProvider("/proxy"))),
                 Map.of(),
                 null,
+                Optional.empty(),
                 Clock.fixed(NOW, ZoneOffset.UTC));
 
         assertEquals(new Access.Unusable(Reason.EXPIRED), unconfigured.access(USER, PROVIDER));
@@ -336,6 +405,9 @@ class ScmOAuthTokenServiceTest {
 
         private final Map<String, ScmOAuthToken> tokens = new ConcurrentHashMap<>();
 
+        /** When the next {@link #save} records the user as having linked the account. */
+        Instant linkedAt = NOW;
+
         @Override
         public void save(
                 String username,
@@ -346,7 +418,7 @@ class ScmOAuthTokenServiceTest {
                 Instant expiresAt) {
             tokens.put(
                     key(username, provider),
-                    new ScmOAuthToken(encryptedAccessToken, encryptedRefreshToken, scopes, expiresAt));
+                    new ScmOAuthToken(encryptedAccessToken, encryptedRefreshToken, scopes, expiresAt, linkedAt));
         }
 
         @Override
@@ -368,8 +440,8 @@ class ScmOAuthTokenServiceTest {
                 Instant expiresAt) {
             tokens.computeIfPresent(
                     key(username, provider),
-                    (k, old) ->
-                            new ScmOAuthToken(encryptedAccessToken, encryptedRefreshToken, old.scopes(), expiresAt));
+                    (k, old) -> new ScmOAuthToken(
+                            encryptedAccessToken, encryptedRefreshToken, old.scopes(), expiresAt, old.authorizedAt()));
         }
 
         @Override

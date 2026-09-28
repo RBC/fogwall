@@ -11,8 +11,10 @@ import com.rbc.fogwall.db.model.MatchType;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.provider.*;
 import java.net.URI;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -793,11 +795,36 @@ class JettyConfigurationBuilderTest {
     }
 
     @Test
-    void buildGitCredentialService_negativeLifetime_failsStartup() {
+    void buildGitCredentialService_unparseableLifetime_failsStartupNamingTheKey() {
         var config = new FogwallConfig();
-        config.getAuth().getGitCredentials().setMaxLifetimeDays(-1);
+        config.getAuth().getGitCredentials().setMaxLifetime("90 days");
 
-        assertThrows(
+        var ex = assertThrows(
                 IllegalStateException.class, () -> new JettyConfigurationBuilder(config).buildGitCredentialService());
+        assertTrue(ex.getMessage().contains("auth.git-credentials.max-lifetime"), ex.getMessage());
+    }
+
+    @Test
+    void optionalDuration_acceptsIsoDurations_andBlankAsNoLimit() {
+        assertEquals(Optional.of(Duration.ofMinutes(15)), JettyConfigurationBuilder.optionalDuration("k", "PT15M"));
+        assertEquals(Optional.of(Duration.ofDays(14)), JettyConfigurationBuilder.optionalDuration("k", " P14D "));
+        assertEquals(Optional.empty(), JettyConfigurationBuilder.optionalDuration("k", ""));
+        assertEquals(Optional.empty(), JettyConfigurationBuilder.optionalDuration("k", null));
+    }
+
+    @Test
+    void optionalDuration_refusesZeroAndNegative() {
+        assertThrows(IllegalStateException.class, () -> JettyConfigurationBuilder.optionalDuration("k", "PT0S"));
+        assertThrows(IllegalStateException.class, () -> JettyConfigurationBuilder.optionalDuration("k", "-P1D"));
+    }
+
+    @Test
+    void buildScmOAuthTokenService_unparseableLinkAge_failsStartupNamingTheKey() {
+        var config = new FogwallConfig();
+        config.getScmOauth().setMaxLinkAge("30d");
+
+        var ex = assertThrows(
+                IllegalStateException.class, () -> new JettyConfigurationBuilder(config).buildScmOAuthTokenService());
+        assertTrue(ex.getMessage().contains("scm-oauth.max-link-age"), ex.getMessage());
     }
 }
