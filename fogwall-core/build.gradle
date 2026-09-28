@@ -4,7 +4,7 @@ import java.nio.file.StandardCopyOption
 buildscript {
     configurations.all {
         resolutionStrategy {
-            force 'com.fasterxml.jackson.core:jackson-core:2.22.2'
+            force 'com.fasterxml.jackson.core:jackson-core:2.22.3'
         }
     }
 }

@@ -7,8 +7,8 @@ buildscript {
             // The runtime pin in the subprojects eachDependency table does not reach this
             // configuration, and the dependency graph submitted to GitHub includes it.
             // CVE fix: GHSA-r7wm-3cxj-wff9, GHSA-5gvw-p9qm-jgwh, GHSA-5jmj-h7xm-6q6v
-            force 'com.fasterxml.jackson.core:jackson-core:2.22.2'
-            force 'com.fasterxml.jackson.core:jackson-databind:2.22.2'
+            force 'com.fasterxml.jackson.core:jackson-core:2.22.3'
+            force 'com.fasterxml.jackson.core:jackson-databind:2.22.3'
         }
     }
 }
@@ -36,7 +36,7 @@ ext {
     jakartaServletVersion = '6.1.0'
 
     // Logging
-    slf4jVersion = '2.0.19'
+    slf4jVersion = '2.0.20'
     log4j2Version = '2.26.1'
 
     // Database
@@ -48,7 +48,7 @@ ext {
     mongoVersion = '5.12.0'
 
     // Jackson
-    jacksonBomVersion = '3.2.2'
+    jacksonBomVersion = '3.2.3'
 
     // GraphQL (SCM API proxy — parses GraphQL request bodies for AST-based mutation allowlisting)
     graphqlJavaVersion = '26.1'
@@ -77,7 +77,7 @@ ext {
     // Testing
     junitVersion = '6.1.3'
     junitPlatformVersion = '6.1.0'
-    mockitoVersion = '5.23.0'
+    mockitoVersion = '5.24.0'
     testContainersVersion = '2.0.5'
 
     // Gitleaks (bundled binary)
