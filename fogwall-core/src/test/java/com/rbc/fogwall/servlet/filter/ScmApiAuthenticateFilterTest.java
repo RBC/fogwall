@@ -72,6 +72,20 @@ class ScmApiAuthenticateFilterTest {
     }
 
     @Test
+    void fogwallCredential_isRefusedBeforeIdentityResolution() throws Exception {
+        HttpServletRequest req = mockRequest("Bearer fgw_abcdefghijklmnop_secret");
+        ByteArrayOutputStream body = new ByteArrayOutputStream();
+        HttpServletResponse resp = mockResponse(body);
+        FilterChain chain = mock(FilterChain.class);
+
+        new ScmApiAuthenticateFilter(provider, resolver).doFilter(req, resp, chain);
+
+        verify(resp).setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        assertTrue(body.toString().contains("was not sent upstream"), body.toString());
+        verifyNoInteractions(resolver, chain);
+    }
+
+    @Test
     void nullResolver_returns401() throws Exception {
         HttpServletRequest req = mockRequest("Bearer sometoken");
         HttpServletResponse resp = mockResponse(new ByteArrayOutputStream());

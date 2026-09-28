@@ -3,6 +3,7 @@ package com.rbc.fogwall.e2e;
 import com.rbc.fogwall.config.FogwallConfigLoader;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.model.AccessRule;
+import com.rbc.fogwall.jetty.FogwallContext;
 import com.rbc.fogwall.jetty.FogwallJettyApplication;
 import com.rbc.fogwall.jetty.FogwallServletRegistrar;
 import com.rbc.fogwall.permission.RepoPermissionService;
@@ -120,9 +121,52 @@ class JettyProxyFixture implements AutoCloseable {
             String committerAttributionPolicy,
             boolean grantAll)
             throws Exception {
+        this(giteaUri, approvalMode, configRules, serveFetch, users, committerAttributionPolicy, grantAll, "", "");
+    }
+
+    /**
+     * Auto-approve, fetches served, the default user granted everything, and the provider forwarding pushes made with a
+     * fogwall credential with the pusher's linked OAuth token. The OAuth application is never contacted: a test seeds
+     * the token straight into the token store, and a token with no expiry is never refreshed.
+     */
+    static JettyProxyFixture brokeredPush(URI giteaUri, Path tokenKeyFile, Path clientSecretFile) throws Exception {
+        String oauth = """
+                    oauth:
+                      enabled: true
+                      client-id: fogwall-e2e
+                      client-secret-path: %s
+                      brokered-push: true
+                """.formatted(clientSecretFile);
+        String keyPath = """
+                scm-oauth:
+                  token-encryption-key-path: %s
+                """.formatted(tokenKeyFile);
+        return new JettyProxyFixture(
+                giteaUri, ApprovalMode.AUTO, List.of(), true, DEFAULT_USERS, null, true, oauth, keyPath);
+    }
+
+    private JettyProxyFixture(
+            URI giteaUri,
+            ApprovalMode approvalMode,
+            List<AccessRule> configRules,
+            boolean serveFetch,
+            List<TestUser> users,
+            String committerAttributionPolicy,
+            boolean grantAll,
+            String providerExtras,
+            String topLevelExtras)
+            throws Exception {
         this.giteaHostPort = giteaUri.getHost() + ":" + giteaUri.getPort();
         Path override = writeOverride(
-                giteaUri, approvalMode, configRules, serveFetch, users, committerAttributionPolicy, grantAll);
+                giteaUri,
+                approvalMode,
+                configRules,
+                serveFetch,
+                users,
+                committerAttributionPolicy,
+                grantAll,
+                providerExtras,
+                topLevelExtras);
         try {
             running = FogwallJettyApplication.start(FogwallConfigLoader.loadLayers("test-e2e", List.of(override)));
         } finally {
@@ -142,7 +186,9 @@ class JettyProxyFixture implements AutoCloseable {
             boolean serveFetch,
             List<TestUser> users,
             String committerAttributionPolicy,
-            boolean grantAll)
+            boolean grantAll,
+            String providerExtras,
+            String topLevelExtras)
             throws IOException {
         String rules = configRules.isEmpty()
                 // No explicit rules — open the proxy, so a test about something else is not refused by an access rule.
@@ -168,15 +214,17 @@ class JettyProxyFixture implements AutoCloseable {
                     type: forgejo
                     uri: %s
                     serve-fetch: %s
-                %s%s%s%s""".formatted(
+                %s%s%s%s%s%s""".formatted(
                         approvalMode.configValue,
                         PROVIDER_NAME,
                         giteaUri,
                         serveFetch,
+                        providerExtras,
                         rules,
                         renderUsers(users),
                         renderAttributionPolicy(committerAttributionPolicy),
-                        grantAll ? renderGrants(users) : "");
+                        grantAll ? renderGrants(users) : "",
+                        topLevelExtras);
 
         Path file = Files.createTempFile("fogwall-e2e-override-", ".yml");
         Files.writeString(file, yaml);
@@ -277,6 +325,11 @@ class JettyProxyFixture implements AutoCloseable {
     /** The permission service behind the server — writable, so a test can grant mid-run. */
     RepoPermissionService getPermissionService() {
         return running.ctx().repoPermissionService();
+    }
+
+    /** The server's assembled runtime, for a test that seeds state the dashboard would otherwise create. */
+    FogwallContext getContext() {
+        return running.ctx();
     }
 
     String getProviderId() {

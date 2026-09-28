@@ -4,10 +4,14 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.rbc.fogwall.provider.FogwallProvider;
+import com.rbc.fogwall.service.ScmOAuthTokenService;
+import com.rbc.fogwall.servlet.filter.FogwallCredentialFilter;
+import com.rbc.fogwall.user.UserEntry;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.List;
 import org.eclipse.jgit.errors.RepositoryNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -81,5 +85,40 @@ class ServerRepositoryResolverTest {
 
         verify(cache).getOrClone(anyString(), isNull(), isNull(), isNull());
         verify(req, never()).setAttribute(eq(ServerRepositoryResolver.CREDENTIALS_ATTRIBUTE), any());
+    }
+
+    /**
+     * A request FogwallCredentialFilter authenticated carries the user's linked OAuth token as its credentials. The
+     * fogwall credential in the Basic header is what the client authenticated to fogwall with; it never reaches the
+     * upstream.
+     */
+    @Test
+    void aCredentialAuthenticatedRequest_syncsWithTheLinkedTokenNotTheHeader() throws Exception {
+        String header = "Basic "
+                + Base64.getEncoder().encodeToString("me:fgw_abcdefghijklmnop_secret".getBytes(StandardCharsets.UTF_8));
+        UserEntry alice = UserEntry.builder()
+                .username("alice")
+                .emails(List.of())
+                .scmIdentities(List.of())
+                .build();
+        var linked = new ScmOAuthCredentialsProvider(mock(ScmOAuthTokenService.class), "alice", "github");
+
+        LocalRepositoryCache cache = mock(LocalRepositoryCache.class);
+        FogwallProvider provider = mock(FogwallProvider.class);
+        when(provider.getUri()).thenReturn(URI.create("https://upstream.example"));
+        HttpServletRequest req = mock(HttpServletRequest.class);
+        when(req.getHeader("Authorization")).thenReturn(header);
+        when(req.getAttribute(FogwallCredentialFilter.AUTHENTICATION_ATTRIBUTE))
+                .thenReturn(new CredentialAuthentication(alice, "abcdefghijklmnop", "laptop"));
+        when(req.getAttribute(ServerRepositoryResolver.CREDENTIALS_ATTRIBUTE)).thenReturn(linked);
+
+        new ServerRepositoryResolver(cache, provider).open(req, "owner/repo.git");
+
+        verify(cache).getOrClone("https://upstream.example/owner/repo.git", linked, null, "fogwall-user:alice");
+        verify(req, never()).setAttribute(eq(ServerRepositoryResolver.CREDENTIALS_ATTRIBUTE), any());
+        verify(req, never()).setAttribute(eq("com.rbc.fogwall.pushUser"), any());
+        verify(req)
+                .setAttribute(
+                        ServerRepositoryResolver.UPSTREAM_URL_ATTRIBUTE, "https://upstream.example/owner/repo.git");
     }
 }

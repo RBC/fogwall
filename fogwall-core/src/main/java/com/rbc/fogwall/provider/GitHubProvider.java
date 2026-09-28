@@ -86,6 +86,12 @@ public class GitHubProvider extends AbstractFogwallProvider
         return selfHostedHttpsBase() + "/login/oauth/access_token";
     }
 
+    /** {@code repo}: GitHub has no narrower OAuth scope that permits a push. */
+    @Override
+    public Set<String> getOAuthPushScopes() {
+        return Set.of("repo");
+    }
+
     /**
      * {@inheritDoc}
      *

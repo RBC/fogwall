@@ -67,6 +67,14 @@ public class RuntimeConfigController {
                 .anyMatch(p -> p.getScmApi().isEnabled());
         boolean issuesEnabled =
                 fogwallConfig.getProviders().values().stream().anyMatch(ProviderConfig::isIssuesEnabled);
+        // The providers a fogwall git credential pushes to; the profile offers credentials only when there is one.
+        List<String> brokeredPushProviders = fogwallConfig.getProviders().entrySet().stream()
+                .filter(e -> e.getValue().isEnabled()
+                        && e.getValue().getOauth().isEnabled()
+                        && e.getValue().getOauth().isBrokeredPush())
+                .map(Map.Entry::getKey)
+                .sorted()
+                .toList();
 
         return Map.of(
                 "allowedOrigins", allowedOrigins,
@@ -76,6 +84,7 @@ public class RuntimeConfigController {
                 "scmOAuthLinkAvailable", scmOAuthLinkAvailable,
                 "scmIdentityMode", scmIdentityMode,
                 "scmApiEnabled", scmApiEnabled,
-                "issuesEnabled", issuesEnabled);
+                "issuesEnabled", issuesEnabled,
+                "brokeredPushProviders", brokeredPushProviders);
     }
 }

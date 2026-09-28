@@ -47,6 +47,7 @@ import com.rbc.fogwall.scmapi.GitLabProjectIdCache;
 import com.rbc.fogwall.scmapi.JdbcGitHubNodeIdCache;
 import com.rbc.fogwall.scmapi.JdbcGitLabProjectIdCache;
 import com.rbc.fogwall.service.CachingTokenPushIdentityResolver;
+import com.rbc.fogwall.service.GitCredentialService;
 import com.rbc.fogwall.service.JdbcScmTokenCache;
 import com.rbc.fogwall.service.JdbcSshFingerprintCache;
 import com.rbc.fogwall.service.PushIdentityResolver;
@@ -58,6 +59,8 @@ import com.rbc.fogwall.service.TokenPushIdentityResolver;
 import com.rbc.fogwall.ssh.SshKeyUtils;
 import com.rbc.fogwall.tls.SslUtil;
 import com.rbc.fogwall.user.CompositeUserStore;
+import com.rbc.fogwall.user.GitCredentialStore;
+import com.rbc.fogwall.user.JdbcGitCredentialStore;
 import com.rbc.fogwall.user.JdbcScmOAuthTokenStore;
 import com.rbc.fogwall.user.JdbcUserStore;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
@@ -73,6 +76,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -130,6 +134,7 @@ public class JettyConfigurationBuilder {
     private ScmOAuthTokenStore cachedScmOAuthTokenStore;
     private TokenCipherProvider cachedTokenCipherProvider;
     private ScmOAuthTokenService cachedScmOAuthTokenService;
+    private GitCredentialService cachedGitCredentialService;
 
     public JettyConfigurationBuilder(FogwallConfig config) {
         this.config = config;
@@ -673,6 +678,7 @@ public class JettyConfigurationBuilder {
                 buildScmOAuthTokenStore(),
                 buildTokenCipherProvider(),
                 buildScmOAuthTokenService(),
+                buildGitCredentialService(),
                 telemetry);
     }
 
@@ -1169,6 +1175,62 @@ public class JettyConfigurationBuilder {
         return cachedTokenCipherProvider;
     }
 
+    /** Builds the {@link GitCredentialService} that issues and verifies fogwall's git credentials. */
+    public GitCredentialService buildGitCredentialService() {
+        if (cachedGitCredentialService != null) return cachedGitCredentialService;
+        Optional<Duration> maxLifetime = optionalDuration(
+                "auth.git-credentials.max-lifetime",
+                config.getAuth().getGitCredentials().getMaxLifetime());
+        GitCredentialStore store = "mongo".equals(config.getDatabase().getType())
+                ? requireMongoStoreFactory().gitCredentialStore()
+                : new JdbcGitCredentialStore(requireJdbcDataSource());
+        cachedGitCredentialService = new GitCredentialService(store, maxLifetime);
+        return cachedGitCredentialService;
+    }
+
+    /**
+     * Parses an optional limit given as an ISO-8601 duration, such as {@code PT12H} or {@code P30D}. Empty when
+     * {@code value} is blank.
+     *
+     * @throws IllegalStateException naming {@code key} when the value is not a positive duration
+     */
+    public static Optional<Duration> optionalDuration(String key, String value) {
+        if (value == null || value.isBlank()) {
+            return Optional.empty();
+        }
+        Duration duration;
+        try {
+            duration = Duration.parse(value.trim());
+        } catch (DateTimeParseException e) {
+            throw new IllegalStateException(
+                    key + " must be an ISO-8601 duration such as PT12H or P30D, not '" + value + "'", e);
+        }
+        if (duration.isNegative() || duration.isZero()) {
+            throw new IllegalStateException(key + " must be a positive duration, or empty for no limit");
+        }
+        return Optional.of(duration);
+    }
+
+    /**
+     * Whether server-mode pushes to {@code providerName} authenticated by a fogwall credential are forwarded with the
+     * pusher's linked OAuth token.
+     *
+     * @throws IllegalStateException if brokered pushes are enabled on a provider that does not offer account linking
+     */
+    public boolean isBrokeredPush(String providerName) {
+        ProviderConfig providerConfig = config.getProviders().get(providerName);
+        if (providerConfig == null || !providerConfig.getOauth().isBrokeredPush()) {
+            return false;
+        }
+        OAuthProviderSettings oauth = providerConfig.getOauth();
+        if (!oauth.isEnabled() || oauth.getClientId().isBlank()) {
+            throw new IllegalStateException("providers." + providerName + ".oauth.brokered-push requires "
+                    + "providers." + providerName + ".oauth.enabled and a client-id: pushes are forwarded with the "
+                    + "OAuth token account linking obtains");
+        }
+        return true;
+    }
+
     /** Builds the {@link ScmOAuthTokenService} that hands out linked OAuth tokens' access tokens, refreshing them. */
     public ScmOAuthTokenService buildScmOAuthTokenService() {
         if (cachedScmOAuthTokenService != null) return cachedScmOAuthTokenService;
@@ -1187,7 +1249,8 @@ public class JettyConfigurationBuilder {
                 buildTokenCipherProvider(),
                 buildProviderRegistry(),
                 clients,
-                getServiceUrl());
+                getServiceUrl(),
+                optionalDuration("scm-oauth.max-link-age", config.getScmOauth().getMaxLinkAge()));
         return cachedScmOAuthTokenService;
     }
 

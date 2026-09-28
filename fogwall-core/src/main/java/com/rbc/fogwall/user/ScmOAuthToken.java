@@ -10,6 +10,11 @@ import java.time.Instant;
  * @param encryptedRefreshToken the refresh token, encrypted; null when the provider issued none
  * @param scopes the scopes the provider reported, as it reported them; null when it reported none
  * @param expiresAt when the access token expires; null when the provider gave it no expiry
+ * @param authorizedAt when the user linked the account; a refresh does not change it
  */
 public record ScmOAuthToken(
-        byte[] encryptedAccessToken, byte[] encryptedRefreshToken, String scopes, Instant expiresAt) {}
+        byte[] encryptedAccessToken,
+        byte[] encryptedRefreshToken,
+        String scopes,
+        Instant expiresAt,
+        Instant authorizedAt) {}

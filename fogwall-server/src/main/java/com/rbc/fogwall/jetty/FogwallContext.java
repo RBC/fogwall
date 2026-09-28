@@ -17,6 +17,7 @@ import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.ProviderRegistry;
 import com.rbc.fogwall.scmapi.GitHubNodeIdCache;
 import com.rbc.fogwall.scmapi.GitLabProjectIdCache;
+import com.rbc.fogwall.service.GitCredentialService;
 import com.rbc.fogwall.service.PushIdentityResolver;
 import com.rbc.fogwall.service.ScmOAuthTokenService;
 import com.rbc.fogwall.service.SshScmIdentityEnricher;
@@ -62,4 +63,5 @@ public record FogwallContext(
         ScmOAuthTokenStore scmOAuthTokenStore,
         TokenCipherProvider tokenCipherProvider,
         ScmOAuthTokenService scmOAuthTokenService,
+        GitCredentialService gitCredentialService,
         FogwallTelemetry telemetry) {}

@@ -91,9 +91,11 @@ class ScmOAuthTokenStoreTest {
     @Test
     void findToken_returnsEveryStoredField() {
         Instant expiresAt = Instant.now().plus(1, ChronoUnit.HOURS).truncatedTo(ChronoUnit.MILLIS);
+        Instant before = Instant.now().minusSeconds(1);
         store.save("alice", "gitlab", bytes("access"), bytes("refresh"), "read_user", expiresAt);
 
         ScmOAuthToken token = store.findToken("alice", "gitlab").orElseThrow();
+        assertFalse(token.authorizedAt().isBefore(before), "linking records when it happened");
 
         assertArrayEquals(bytes("access"), token.encryptedAccessToken());
         assertArrayEquals(bytes("refresh"), token.encryptedRefreshToken());
@@ -103,8 +105,9 @@ class ScmOAuthTokenStoreTest {
     }
 
     @Test
-    void replaceTokens_replacesTheTokensAndExpiry_keepingTheScopes() {
+    void replaceTokens_replacesTheTokensAndExpiry_keepingTheScopesAndAuthorization() {
         store.save("alice", "gitlab", bytes("access-1"), bytes("refresh-1"), "read_user", Instant.now());
+        Instant authorizedAt = store.findToken("alice", "gitlab").orElseThrow().authorizedAt();
         Instant expiresAt = Instant.now().plus(2, ChronoUnit.HOURS).truncatedTo(ChronoUnit.MILLIS);
 
         store.replaceTokens("alice", "gitlab", bytes("access-2"), bytes("refresh-2"), expiresAt);
@@ -114,6 +117,7 @@ class ScmOAuthTokenStoreTest {
         assertArrayEquals(bytes("refresh-2"), token.encryptedRefreshToken());
         assertEquals(expiresAt, token.expiresAt());
         assertEquals("read_user", token.scopes());
+        assertEquals(authorizedAt, token.authorizedAt(), "a refresh does not restart the link age");
     }
 
     @Test

@@ -221,6 +221,15 @@ export interface EmailEntry {
   source: string
 }
 
+/** A linked account's authorization: when it was made, and until when it can be used. */
+export interface ScmOAuthLinkStatus {
+  provider: string
+  authorizedAt: string
+  /** Absent when the deployment sets no maximum link age. */
+  usableUntil?: string | null
+  expired: boolean
+}
+
 export interface ScmIdentity {
   provider: string
   username: string
@@ -271,6 +280,22 @@ export interface SshKeyEntry {
   createdAt: string
   locked: boolean
   source: string
+}
+
+/** A git credential fogwall issued to the user. Its value is only ever in the response that issues or rotates it. */
+export interface GitCredential {
+  id: string
+  name: string
+  createdAt: string
+  /** When it stops working under the current configuration; absent when it never does. */
+  expiresAt?: string
+  expired: boolean
+  lastUsedAt?: string
+}
+
+export interface IssuedGitCredential {
+  credential: GitCredential
+  value: string
 }
 
 export interface RepoPermission {

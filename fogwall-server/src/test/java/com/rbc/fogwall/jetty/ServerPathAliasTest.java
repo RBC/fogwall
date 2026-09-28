@@ -16,6 +16,10 @@ import com.rbc.fogwall.db.memory.InMemoryUrlRuleRegistry;
 import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.GenericProxyProvider;
+import com.rbc.fogwall.service.GitCredentialService;
+import com.rbc.fogwall.service.ScmOAuthTokenService;
+import com.rbc.fogwall.servlet.filter.FogwallCredentialFilter;
+import com.rbc.fogwall.user.ReadOnlyUserStore;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -74,7 +78,8 @@ class ServerPathAliasTest {
                 0,
                 0,
                 new InMemoryUrlRuleRegistry(),
-                null); // fetchStore
+                null, // fetchStore
+                credentialFilter(provider));
 
         String servletPath = provider.servletPath();
         Set<String> pathSpecs = registeredPathSpecs(context);
@@ -115,7 +120,8 @@ class ServerPathAliasTest {
                 0,
                 0,
                 new InMemoryUrlRuleRegistry(),
-                null);
+                null,
+                credentialFilter(provider));
 
         List<String> gitHolderNames = Arrays.stream(context.getServletHandler().getServlets())
                 .map(ServletHolder::getName)
@@ -127,5 +133,15 @@ class ServerPathAliasTest {
                 List.of("git-gitea-push", "git-gitea-server"),
                 gitHolderNames,
                 "each server-mode prefix registers its own GitServlet holder so JGit init() runs once per instance");
+    }
+
+    private static FogwallCredentialFilter credentialFilter(FogwallProvider provider) {
+        return new FogwallCredentialFilter(
+                provider,
+                false,
+                mock(GitCredentialService.class),
+                mock(ScmOAuthTokenService.class),
+                mock(ReadOnlyUserStore.class),
+                null);
     }
 }

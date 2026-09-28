@@ -1,8 +1,12 @@
 package com.rbc.fogwall.git;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 import com.rbc.fogwall.db.model.StepStatus;
+import com.rbc.fogwall.service.ScmOAuthTokenService;
+import com.rbc.fogwall.service.ScmOAuthTokenService.Access;
+import com.rbc.fogwall.service.ScmOAuthTokenService.Reason;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -146,6 +150,62 @@ class ForwardingPostReceiveHookTest {
         try (Repository upstream = Git.open(upstreamDir.toFile()).getRepository()) {
             assertNotNull(upstream.resolve("refs/heads/main"));
             assertNotNull(upstream.resolve("refs/heads/feature"));
+        }
+    }
+
+    // ---- forwarding with a linked OAuth token ----
+
+    /**
+     * The linked token is checked before any upstream connection: a push that waited for review past its token's life
+     * fails with the remedy, not with an upstream authentication error.
+     */
+    @Test
+    void unusableLinkedToken_failsTheForwardStepWithTheRemedy_withoutOpeningUpstream() throws Exception {
+        RevCommit c1 = createCommit("first commit");
+        ScmOAuthTokenService oauthTokens = mock(ScmOAuthTokenService.class);
+        when(oauthTokens.access("alice", "github")).thenReturn(new Access.Unusable(Reason.EXPIRED));
+        var linked = new ScmOAuthCredentialsProvider(oauthTokens, "alice", "github");
+
+        ReceivePack rp = mock(ReceivePack.class);
+        when(rp.getRepository()).thenReturn(localRepo);
+        ReceiveCommand cmd =
+                new ReceiveCommand(ObjectId.zeroId(), c1.getId(), "refs/heads/main", ReceiveCommand.Type.CREATE);
+        cmd.setResult(ReceiveCommand.Result.OK);
+
+        PushContext pushContext = new PushContext();
+        // An unroutable upstream: opening a transport to it would fail with a connection error, not the linked token's.
+        pushContext.setUpstreamUrl("https://127.0.0.1:1/owner/repo.git");
+        new ForwardingPostReceiveHook(linked, pushContext).onPostReceive(rp, List.of(cmd));
+
+        assertEquals(1, pushContext.getSteps().size());
+        assertEquals(StepStatus.FAIL, pushContext.getSteps().get(0).getStatus());
+        String error = pushContext.getSteps().get(0).getErrorMessage();
+        assertTrue(error.contains("EXPIRED"), error);
+        assertTrue(error.contains("link it again from their fogwall profile"), error);
+        assertTrue(pushContext.getSteps().get(0).getLogs().stream().anyMatch(l -> l.contains(error)));
+        verify(rp).sendMessage(contains("link it again from their fogwall profile"));
+        verify(rp, never()).sendMessage(contains("Forwarding to"));
+    }
+
+    @Test
+    void usableLinkedToken_forwards() throws Exception {
+        RevCommit c1 = createCommit("first commit");
+        ScmOAuthTokenService oauthTokens = mock(ScmOAuthTokenService.class);
+        when(oauthTokens.access("alice", "github")).thenReturn(new Access.Usable("tok", null));
+        var linked = new ScmOAuthCredentialsProvider(oauthTokens, "alice", "github");
+
+        ReceivePack rp = new ReceivePack(localRepo);
+        ReceiveCommand cmd =
+                new ReceiveCommand(ObjectId.zeroId(), c1.getId(), "refs/heads/main", ReceiveCommand.Type.CREATE);
+        cmd.setResult(ReceiveCommand.Result.OK);
+
+        PushContext pushContext = new PushContext();
+        pushContext.setUpstreamUrl(upstreamUrl);
+        new ForwardingPostReceiveHook(linked, pushContext).onPostReceive(rp, List.of(cmd));
+
+        assertEquals(StepStatus.PASS, pushContext.getSteps().get(0).getStatus());
+        try (Repository upstream = Git.open(upstreamDir.toFile()).getRepository()) {
+            assertEquals(c1.getId(), upstream.resolve("refs/heads/main"));
         }
     }
 }

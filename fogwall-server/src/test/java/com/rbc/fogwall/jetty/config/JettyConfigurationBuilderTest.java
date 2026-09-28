@@ -11,8 +11,10 @@ import com.rbc.fogwall.db.model.MatchType;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.provider.*;
 import java.net.URI;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -754,5 +756,75 @@ class JettyConfigurationBuilderTest {
         assertEquals(1, rules.size());
         assertEquals(MatchRule.Match.LITERAL, rules.get(0).getMatch());
         assertEquals("TOP SECRET", rules.get(0).getValue());
+    }
+
+    // ---- brokered pushes ----
+
+    @Test
+    void isBrokeredPush_offByDefault() {
+        var config = new FogwallConfig();
+        config.setProviders(Map.of("gitea", new ProviderConfig()));
+
+        assertFalse(new JettyConfigurationBuilder(config).isBrokeredPush("gitea"));
+        assertFalse(new JettyConfigurationBuilder(config).isBrokeredPush("not-a-provider"));
+    }
+
+    @Test
+    void isBrokeredPush_withLinkingConfigured_isOn() {
+        var gitea = new ProviderConfig();
+        gitea.getOauth().setEnabled(true);
+        gitea.getOauth().setClientId("client");
+        gitea.getOauth().setBrokeredPush(true);
+        var config = new FogwallConfig();
+        config.setProviders(Map.of("gitea", gitea));
+
+        assertTrue(new JettyConfigurationBuilder(config).isBrokeredPush("gitea"));
+    }
+
+    @Test
+    void isBrokeredPush_withoutLinking_failsStartup() {
+        // Pushes are forwarded under the grant linking obtains; without linking there is none to forward with.
+        var gitea = new ProviderConfig();
+        gitea.getOauth().setBrokeredPush(true);
+        var config = new FogwallConfig();
+        config.setProviders(Map.of("gitea", gitea));
+
+        var ex = assertThrows(
+                IllegalStateException.class, () -> new JettyConfigurationBuilder(config).isBrokeredPush("gitea"));
+        assertTrue(ex.getMessage().contains("providers.gitea.oauth.enabled"), ex.getMessage());
+    }
+
+    @Test
+    void buildGitCredentialService_unparseableLifetime_failsStartupNamingTheKey() {
+        var config = new FogwallConfig();
+        config.getAuth().getGitCredentials().setMaxLifetime("90 days");
+
+        var ex = assertThrows(
+                IllegalStateException.class, () -> new JettyConfigurationBuilder(config).buildGitCredentialService());
+        assertTrue(ex.getMessage().contains("auth.git-credentials.max-lifetime"), ex.getMessage());
+    }
+
+    @Test
+    void optionalDuration_acceptsIsoDurations_andBlankAsNoLimit() {
+        assertEquals(Optional.of(Duration.ofMinutes(15)), JettyConfigurationBuilder.optionalDuration("k", "PT15M"));
+        assertEquals(Optional.of(Duration.ofDays(14)), JettyConfigurationBuilder.optionalDuration("k", " P14D "));
+        assertEquals(Optional.empty(), JettyConfigurationBuilder.optionalDuration("k", ""));
+        assertEquals(Optional.empty(), JettyConfigurationBuilder.optionalDuration("k", null));
+    }
+
+    @Test
+    void optionalDuration_refusesZeroAndNegative() {
+        assertThrows(IllegalStateException.class, () -> JettyConfigurationBuilder.optionalDuration("k", "PT0S"));
+        assertThrows(IllegalStateException.class, () -> JettyConfigurationBuilder.optionalDuration("k", "-P1D"));
+    }
+
+    @Test
+    void buildScmOAuthTokenService_unparseableLinkAge_failsStartupNamingTheKey() {
+        var config = new FogwallConfig();
+        config.getScmOauth().setMaxLinkAge("30d");
+
+        var ex = assertThrows(
+                IllegalStateException.class, () -> new JettyConfigurationBuilder(config).buildScmOAuthTokenService());
+        assertTrue(ex.getMessage().contains("scm-oauth.max-link-age"), ex.getMessage());
     }
 }

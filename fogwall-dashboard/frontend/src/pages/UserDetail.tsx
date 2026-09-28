@@ -19,6 +19,7 @@ import {
 } from '../api'
 import type { PermissionTestResponse } from '../api'
 import { OperationsBadge, PathTypeBadge } from '../components/PermissionBadges'
+import { UserGitCredentials } from '../components/GitCredentials'
 import { useToast } from '../components/Toast'
 import { StatusBadge } from '../components/StatusBadge'
 import type {
@@ -462,6 +463,8 @@ function OverviewTab({
           </ul>
         )}
       </section>
+
+      {isAdmin && <UserGitCredentials username={user.username} />}
 
       {/* Push summary */}
       <section className="space-y-2">

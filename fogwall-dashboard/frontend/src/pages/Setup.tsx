@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink } from 'react-router'
-import { fetchSetup } from '../api'
+import { fetchConfig, fetchSetup } from '../api'
 import type { SetupInfo, SetupProvider } from '../types'
+import { ConfigBlock } from '../components/ConfigBlock'
 
 /**
  * In-app developer setup guide (#475). Public page (no login required): shows generated, deployment-specific git
@@ -18,6 +19,13 @@ export function Setup() {
   const [setup, setSetup] = useState<SetupInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [brokeredPushProviders, setBrokeredPushProviders] = useState<string[]>([])
+
+  useEffect(() => {
+    fetchConfig()
+      .then((c) => setBrokeredPushProviders(c.brokeredPushProviders ?? []))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     fetchSetup()
@@ -76,7 +84,9 @@ export function Setup() {
 
       {setup && setup.providers.length > 0 && <QuickStart provider={setup.providers[0]} />}
 
-      {setup && setup.providers.length > 0 && <Authentication host={host} />}
+      {setup && setup.providers.length > 0 && (
+        <Authentication host={host} brokeredPushProviders={brokeredPushProviders} />
+      )}
 
       {setup && setup.providers.length > 0 && (
         <section className="space-y-3">
@@ -297,7 +307,13 @@ function SectionLabel({ children, muted = false }: { children: ReactNode; muted?
  * — the thing developers most often get tripped up on. Rendered as a plain section (not an accordion) since it applies
  * to everyone regardless of which config form they chose.
  */
-function Authentication({ host }: { host: string }) {
+function Authentication({
+  host,
+  brokeredPushProviders,
+}: {
+  host: string
+  brokeredPushProviders: string[]
+}) {
   const fw = host || 'the fogwall host'
   return (
     <section className="rounded-lg border border-gray-200 bg-white px-6 py-4 dark:border-slate-700 dark:bg-slate-800">
@@ -348,6 +364,18 @@ function Authentication({ host }: { host: string }) {
           <code className="font-mono">me</code>, or <code className="font-mono">token</code> works —
           but it is provider-specific, so check your SCM provider&rsquo;s docs.
         </p>
+        {brokeredPushProviders.length > 0 && (
+          <Notice>
+            Pushes through server mode to{' '}
+            <span className="font-medium">{brokeredPushProviders.join(', ')}</span> can use a
+            fogwall credential instead of a token of your own: create one under Git Credentials on
+            your <NavLink to="/profile">profile</NavLink>, after linking your account there. fogwall
+            forwards the push under the linked account. Keep it to server-mode remotes with{' '}
+            <code className="font-mono">
+              git config --global credential.https://{fw}/server.useHttpPath true
+            </code>
+          </Notice>
+        )}
         <Notice>
           Make sure your token has sufficient permissions on the target upstream repository (e.g.{' '}
           <code className="font-mono">write</code> / <code className="font-mono">repo</code> scope
@@ -357,42 +385,6 @@ function Authentication({ host }: { host: string }) {
         </Notice>
       </div>
     </section>
-  )
-}
-
-function ConfigBlock({ label, config }: { label: string; config: string }) {
-  const [copied, setCopied] = useState(false)
-
-  const copy = () => {
-    navigator.clipboard.writeText(config).then(
-      () => {
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2000)
-      },
-      () => {
-        /* clipboard blocked (e.g. insecure context) — leave the text selectable to copy by hand */
-      },
-    )
-  }
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-          {label}
-        </span>
-        <button
-          onClick={copy}
-          className="text-xs px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200 transition-colors"
-          aria-label="Copy configuration to clipboard"
-        >
-          {copied ? 'Copied ✓' : 'Copy'}
-        </button>
-      </div>
-      <pre className="overflow-x-auto rounded bg-slate-50 border border-gray-200 p-3 text-xs font-mono text-gray-800 dark:bg-slate-900 dark:border-slate-700 dark:text-gray-200">
-        {config}
-      </pre>
-    </div>
   )
 }
 

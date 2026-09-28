@@ -663,4 +663,91 @@ class CheckUserPushPermissionHookTest {
                 .onPreReceive(rp, List.of(cmd));
         return validationContext;
     }
+
+    // ---- HTTP push authenticated by a fogwall-issued credential ----
+
+    /** Runs one HTTP push authenticated by a fogwall credential of {@code user} and returns the context it wrote to. */
+    private PushContext credentialRun(FogwallProvider provider, UserEntry user, ValidationContext validationContext)
+            throws Exception {
+        RevCommit c1 = createCommit("init");
+        RevCommit c2 = createCommit("second");
+        ReceivePack rp = new ReceivePack(repo);
+        ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
+        PushContext pushContext = new PushContext();
+        pushContext.setPushUser(user.getUsername());
+        pushContext.setRepoSlug("/owner/repo");
+        pushContext.setTransport(PushTransport.http(new CredentialAuthentication(user, "abcdefghijklmnop", "laptop")));
+        new CheckUserPushPermissionHook(
+                        resolver,
+                        permService,
+                        validationContext,
+                        pushContext,
+                        provider,
+                        null,
+                        null,
+                        ScmOAuthConfig.IdentityMode.PERMISSIVE)
+                .onPreReceive(rp, List.of(cmd));
+        return pushContext;
+    }
+
+    @Test
+    void credentialAuthenticated_checksTheFogwallUser_withoutResolvingIdentity() throws Exception {
+        FogwallProvider github = new GitHubProvider("/push");
+        UserEntry alice = userEntryWithScmIdentity("alice", "github", "alice-gh", true);
+        when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(true);
+        ValidationContext validationContext = new ValidationContext();
+
+        PushContext pushContext = credentialRun(github, alice, validationContext);
+
+        verifyNoInteractions(resolver);
+        assertFalse(validationContext.hasIssues());
+        assertEquals("alice", pushContext.getResolvedUser());
+        assertEquals(StepStatus.PASS, pushContext.getSteps().get(0).getStatus());
+        List<String> logs = pushContext.getSteps().get(0).getLogs();
+        assertEquals(
+                List.of(
+                        "Authenticated by fogwall credential 'laptop' (abcdefghijklmnop) of alice",
+                        "Forwarded with the linked github OAuth token of alice, not a client credential"),
+                logs);
+    }
+
+    @Test
+    void credentialAuthenticated_unauthorizedUser_isBlocked() throws Exception {
+        FogwallProvider github = new GitHubProvider("/push");
+        UserEntry alice = userEntryWithScmIdentity("alice", "github", "alice-gh", true);
+        when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(false);
+        ValidationContext validationContext = new ValidationContext();
+
+        PushContext pushContext = credentialRun(github, alice, validationContext);
+
+        verifyNoInteractions(resolver);
+        assertTrue(validationContext.hasIssues());
+        assertTrue(validationContext.getIssues().get(0).summary().contains("not authorized"));
+        assertTrue(pushContext.getSteps().isEmpty());
+    }
+
+    @Test
+    void credentialAuthenticated_recordsTheVerifiedIdentity_overAHandEnteredOne() throws Exception {
+        // The forward acts as the OAuth-linked account, whatever else the user typed into their profile.
+        FogwallProvider github = new GitHubProvider("/push");
+        UserEntry alice = userEntryWithScmIdentities(
+                "alice", identity("github", "alice-typed", false), identity("github", "alice-linked", true));
+        when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(true);
+
+        PushContext pushContext = credentialRun(github, alice, new ValidationContext());
+
+        assertEquals("alice-linked", pushContext.getScmUsername());
+    }
+
+    @Test
+    void credentialAuthenticated_withOnlyHandEnteredIdentities_recordsTheFirst() throws Exception {
+        FogwallProvider github = new GitHubProvider("/push");
+        UserEntry alice = userEntryWithScmIdentities(
+                "alice", identity("github", "alice-typed", false), identity("gitlab", "alice-gl", true));
+        when(permService.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(true);
+
+        PushContext pushContext = credentialRun(github, alice, new ValidationContext());
+
+        assertEquals("alice-typed", pushContext.getScmUsername());
+    }
 }

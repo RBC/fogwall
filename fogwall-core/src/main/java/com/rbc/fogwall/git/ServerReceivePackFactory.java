@@ -18,6 +18,7 @@ import com.rbc.fogwall.service.ImportedKeyIdentityResolver;
 import com.rbc.fogwall.service.PushIdentityResolver;
 import com.rbc.fogwall.service.SshScmIdentityEnricher;
 import com.rbc.fogwall.service.SshScmLoginResolver;
+import com.rbc.fogwall.servlet.filter.FogwallCredentialFilter;
 import com.rbc.fogwall.user.UserEntry;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
@@ -209,9 +210,22 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
             creds = extractBasicAuth(req);
         }
 
-        String[] userPass = extractUserPass(req);
-        String pushUser = userPass != null ? userPass[0] : null;
-        String pushToken = userPass != null ? userPass[1] : null;
+        String pushUser;
+        String pushToken;
+        PushTransport transport;
+        if (req.getAttribute(FogwallCredentialFilter.AUTHENTICATION_ATTRIBUTE)
+                instanceof CredentialAuthentication authentication) {
+            // Authenticated by a fogwall credential: the user is fixed, and the credential is kept out of the push
+            // context so nothing downstream can mistake it for an SCM token.
+            pushUser = authentication.user().getUsername();
+            pushToken = null;
+            transport = PushTransport.http(authentication);
+        } else {
+            String[] userPass = extractUserPass(req);
+            pushUser = userPass != null ? userPass[0] : null;
+            pushToken = userPass != null ? userPass[1] : null;
+            transport = PushTransport.http();
+        }
 
         // Null when the path does not name a repository; RepositoryUrlRuleHook blocks the push fail-closed rather
         // than evaluating rules against a partial slug.
@@ -233,7 +247,7 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
         }
 
         return buildReceivePack(
-                target, creds, pushUser, pushToken, repoSlug, upstreamUrl, PushTransport.http(), quarantine, pushId);
+                target, creds, pushUser, pushToken, repoSlug, upstreamUrl, transport, quarantine, pushId);
     }
 
     /**

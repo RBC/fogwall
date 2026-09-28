@@ -1,6 +1,7 @@
 package com.rbc.fogwall.git;
 
 import com.rbc.fogwall.provider.FogwallProvider;
+import com.rbc.fogwall.servlet.filter.FogwallCredentialFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -62,7 +63,13 @@ public class ServerRepositoryResolver implements RepositoryResolver<HttpServletR
         // the username: providers such as GitHub ignore the HTTP Basic username entirely, so the token is the
         // only part that actually identifies the caller. Hashed inside the cache; never retained raw.
         String principal = null;
-        if (userPass != null) {
+        if (req.getAttribute(FogwallCredentialFilter.AUTHENTICATION_ATTRIBUTE)
+                instanceof CredentialAuthentication authentication) {
+            // FogwallCredentialFilter authenticated a fogwall credential and put the user's linked OAuth token in its
+            // place; the credential itself never goes upstream.
+            creds = (CredentialsProvider) req.getAttribute(CREDENTIALS_ATTRIBUTE);
+            principal = "fogwall-user:" + authentication.user().getUsername();
+        } else if (userPass != null) {
             creds = new UsernamePasswordCredentialsProvider(userPass[0], userPass[1]);
             principal = userPass[0] + ":" + userPass[1];
             req.setAttribute(CREDENTIALS_ATTRIBUTE, creds);

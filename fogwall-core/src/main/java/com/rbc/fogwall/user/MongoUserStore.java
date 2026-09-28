@@ -6,6 +6,8 @@ import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Indexes;
 import com.mongodb.client.model.Updates;
+import com.rbc.fogwall.db.mongo.MongoGitCredentialStore;
+import com.rbc.fogwall.db.mongo.MongoScmOAuthTokenStore;
 import com.rbc.fogwall.service.ScmTokenCache;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -163,6 +165,11 @@ public class MongoUserStore implements UserStore {
         long permDeleted = database.getCollection("repo_permissions")
                 .deleteMany(Filters.eq("username", username))
                 .getDeletedCount();
+        // The JDBC schema removes these by foreign-key cascade. Left behind, they would pass to a later user created
+        // with the same name: the OAuth token fogwall forwards pushes with, and the credentials it authenticates them
+        // by.
+        database.getCollection(MongoScmOAuthTokenStore.COLLECTION_NAME).deleteMany(Filters.eq("username", username));
+        database.getCollection(MongoGitCredentialStore.COLLECTION_NAME).deleteMany(Filters.eq("username", username));
         if (permDeleted > 0) {
             log.info("Deleted user '{}' and {} orphaned permission(s)", username, permDeleted);
         } else {

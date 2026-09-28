@@ -12,6 +12,7 @@ import com.rbc.fogwall.provider.ForgejoProvider;
 import com.rbc.fogwall.provider.GitHubProvider;
 import com.rbc.fogwall.provider.GitLabProvider;
 import com.rbc.fogwall.provider.ProviderRegistry;
+import com.rbc.fogwall.service.ScmOAuthTokenService;
 import com.rbc.fogwall.user.EmailConflictException;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
 import com.rbc.fogwall.user.ScmIdentityConflictException;
@@ -28,6 +29,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.LinkedHashSet;
@@ -95,6 +97,17 @@ public class ScmOAuthLinkController {
     /** JDBC deployments only — empty on Mongo backends, where OAuth linking degrades to 501 (see linkStart). */
     private final Optional<ScmOAuthTokenStore> scmOAuthTokenStore;
 
+    private final ScmOAuthTokenService oauthTokens;
+
+    @Operation(
+            operationId = "listScmOAuthLinks",
+            summary = "List the current user's linked accounts, with when each was authorized and stays usable until",
+            description = "usableUntil is null when scm-oauth.max-link-age is unset.")
+    @GetMapping("/links")
+    public List<ScmOAuthTokenService.LinkStatus> links() {
+        return oauthTokens.linkStatuses(currentUsername());
+    }
+
     @Operation(operationId = "linkScmOAuth", summary = "Start the OAuth flow to link the current user's SCM account")
     @GetMapping("/{providerId}/link")
     public void link(@PathVariable String providerId, HttpServletRequest request, HttpServletResponse response)
@@ -115,7 +128,10 @@ public class ScmOAuthLinkController {
                 + "?client_id=" + encode(linkable.settings().getClientId())
                 + "&redirect_uri=" + encode(redirectUri)
                 + "&response_type=code"
-                + scopeParam(linkable.provider(), isIssuesEnabled(providerId))
+                + scopeParam(
+                        linkable.provider(),
+                        isIssuesEnabled(providerId),
+                        linkable.settings().isBrokeredPush())
                 + "&state=" + encode(state);
         response.sendRedirect(authorizeUrl);
     }
@@ -123,25 +139,38 @@ public class ScmOAuthLinkController {
     /**
      * The OAuth scope requested at link time — hardcoded per provider type rather than operator-configurable, so a
      * misconfigured value cannot request broader access than the flow uses. The identity/SSH-key reads always need the
-     * user-read scopes; when the provider has the dashboard issue feature enabled, fogwall also acts on the user's
-     * behalf to write issues, so the scope is widened to a write scope only then (kept off otherwise, so an
-     * identity-only deployment hands fogwall no write access). Empty for a provider type that takes no scope parameter.
+     * user-read scopes. Write scopes are added only for the features that act on the user's behalf, so an identity-only
+     * deployment hands fogwall no write access: the dashboard issue feature adds an issue write scope, and brokered
+     * pushes add the repository write scope pushing over HTTP needs. Empty for a provider type that takes no scope
+     * parameter.
      *
      * <p>GitHub gives no fine-grained "issues only" OAuth scope — {@code repo} is the narrowest that permits an issue
-     * write on private repositories (use {@code public_repo} instead if only public repos are in scope). GitLab's
-     * {@code api} and Forgejo's {@code write:issue} are the counterparts. A GitHub <em>App</em> would take no scope
-     * parameter at all (its permissions come from the app/installation), so this only applies to a classic OAuth App.
+     * write on private repositories, and it also covers pushing. GitLab's {@code api} and {@code write_repository} and
+     * Forgejo's {@code write:issue} and {@code write:repository} are the counterparts. A GitHub <em>App</em> takes no
+     * scope parameter at all (its permissions come from the app/installation), so this only applies to a classic OAuth
+     * App.
      */
-    private static String scopeParam(FogwallProvider provider, boolean issuesEnabled) {
-        return switch (provider.getType()) {
-            case "github" ->
-                issuesEnabled
-                        ? "&scope=read:user%20user:email%20read:public_key%20repo"
-                        : "&scope=read:user%20user:email%20read:public_key";
-            case "gitlab" -> issuesEnabled ? "&scope=api" : "&scope=read_user";
-            case "forgejo" -> issuesEnabled ? "&scope=read:user%20write:issue" : "&scope=read:user";
-            default -> "";
-        };
+    static String scopeParam(FogwallProvider provider, boolean issuesEnabled, boolean brokeredPush) {
+        List<String> scopes = new ArrayList<>();
+        switch (provider.getType()) {
+            case "github" -> {
+                scopes.addAll(List.of("read:user", "user:email", "read:public_key"));
+                if (issuesEnabled || brokeredPush) scopes.add("repo");
+            }
+            case "gitlab" -> {
+                scopes.add(issuesEnabled ? "api" : "read_user");
+                if (brokeredPush) scopes.add("write_repository");
+            }
+            case "forgejo" -> {
+                scopes.add("read:user");
+                if (issuesEnabled) scopes.add("write:issue");
+                if (brokeredPush) scopes.add("write:repository");
+            }
+            default -> {
+                return "";
+            }
+        }
+        return "&scope=" + String.join("%20", scopes);
     }
 
     /** Whether the provider has the dashboard issue feature enabled, which requires a write-capable OAuth token. */

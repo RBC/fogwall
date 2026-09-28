@@ -79,4 +79,7 @@ public class AuthConfig {
     private LdapAuthConfig ldap = new LdapAuthConfig();
     private AdAuthConfig ad = new AdAuthConfig();
     private OidcAuthConfig oidc = new OidcAuthConfig();
+
+    /** The git credentials fogwall issues for server-mode pushes on providers with {@code oauth.brokered-push}. */
+    private GitCredentialsConfig gitCredentials = new GitCredentialsConfig();
 }

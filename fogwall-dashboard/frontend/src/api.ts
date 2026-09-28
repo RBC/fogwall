@@ -1,9 +1,12 @@
 import type {
   CacheListResponse,
   CacheRef,
+  GitCredential,
+  IssuedGitCredential,
   ScmApiActionRecord,
   GroupPermissionRule,
   RepoPermission,
+  ScmOAuthLinkStatus,
   ScmOAuthProviderInfo,
   SetupInfo,
 } from './types'
@@ -133,6 +136,8 @@ export async function fetchConfig(): Promise<{
   scmApiEnabled: boolean
   /** Whether any provider has dashboard issue filing enabled; the ISSUE grant is offered only when one does. */
   issuesEnabled: boolean
+  /** Providers that forward server-mode pushes made with a fogwall git credential with the linked OAuth token. */
+  brokeredPushProviders: string[]
 }> {
   const res = await fetch('/api/runtime-config')
   if (!res.ok) throw new Error('Failed to fetch config')
@@ -358,6 +363,13 @@ export async function removeScmIdentity(provider: string, scmUsername: string) {
     { method: 'DELETE' },
   )
   if (!res.ok) await parseErrorResponse(res, 'Failed to remove SCM identity')
+}
+
+/** The current user's linked accounts, with when each was authorized and stays usable until. */
+export async function fetchScmOAuthLinks(): Promise<ScmOAuthLinkStatus[]> {
+  const res = await apiFetch('/api/scm-oauth/links')
+  if (!res.ok) throw new Error('Failed to fetch linked accounts')
+  return res.json()
 }
 
 export async function unlinkScmOAuth(provider: string) {
@@ -727,6 +739,58 @@ export async function addSshKey(publicKey: string, label: string) {
 export async function removeSshKey(id: string) {
   const res = await apiFetch(`/api/me/ssh-keys/${encodeURIComponent(id)}`, { method: 'DELETE' })
   if (!res.ok) await parseErrorResponse(res, 'Failed to remove SSH key')
+}
+
+export async function fetchMyGitCredentials(): Promise<GitCredential[]> {
+  const res = await apiFetch('/api/me/git-credentials')
+  if (!res.ok) throw new Error('Failed to fetch git credentials')
+  return res.json()
+}
+
+/** Providers the current user can push to with a git credential: brokered pushes on, and an account linked. */
+export async function fetchMyGitCredentialProviders(): Promise<string[]> {
+  const res = await apiFetch('/api/me/git-credentials/providers')
+  if (!res.ok) throw new Error('Failed to fetch git credential providers')
+  return res.json()
+}
+
+export async function issueGitCredential(name: string): Promise<IssuedGitCredential> {
+  const res = await apiFetch('/api/me/git-credentials', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  })
+  if (!res.ok) await parseErrorResponse(res, 'Failed to create git credential')
+  return res.json()
+}
+
+export async function rotateGitCredential(id: string): Promise<IssuedGitCredential> {
+  const res = await apiFetch(`/api/me/git-credentials/${encodeURIComponent(id)}/rotate`, {
+    method: 'POST',
+  })
+  if (!res.ok) await parseErrorResponse(res, 'Failed to rotate git credential')
+  return res.json()
+}
+
+export async function revokeGitCredential(id: string) {
+  const res = await apiFetch(`/api/me/git-credentials/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) await parseErrorResponse(res, 'Failed to revoke git credential')
+}
+
+export async function fetchUserGitCredentials(username: string): Promise<GitCredential[]> {
+  const res = await apiFetch(`/api/users/${encodeURIComponent(username)}/git-credentials`)
+  if (!res.ok) throw new Error('Failed to fetch git credentials')
+  return res.json()
+}
+
+export async function revokeUserGitCredential(username: string, id: string) {
+  const res = await apiFetch(
+    `/api/users/${encodeURIComponent(username)}/git-credentials/${encodeURIComponent(id)}`,
+    { method: 'DELETE' },
+  )
+  if (!res.ok) await parseErrorResponse(res, 'Failed to revoke git credential')
 }
 
 export async function deleteUserPermission(username: string, id: string) {

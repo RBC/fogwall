@@ -20,4 +20,10 @@ public class OAuthProviderSettings {
 
     /** Path to a file holding the OAuth app/client secret. */
     private String clientSecretPath = "";
+
+    /**
+     * Whether server-mode pushes authenticated by a fogwall-issued git credential are forwarded with the pusher's
+     * linked OAuth token. Linking then also requests the provider's repository write scope. Requires {@link #enabled}.
+     */
+    private boolean brokeredPush = false;
 }

@@ -3,6 +3,7 @@ package com.rbc.fogwall.db;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.rbc.fogwall.db.mongo.MongoFetchStore;
+import com.rbc.fogwall.db.mongo.MongoGitCredentialStore;
 import com.rbc.fogwall.db.mongo.MongoGitHubNodeIdCache;
 import com.rbc.fogwall.db.mongo.MongoGitLabProjectIdCache;
 import com.rbc.fogwall.db.mongo.MongoPushStore;
@@ -21,6 +22,7 @@ import com.rbc.fogwall.scmapi.GitHubNodeIdCache;
 import com.rbc.fogwall.scmapi.GitLabProjectIdCache;
 import com.rbc.fogwall.service.ScmTokenCache;
 import com.rbc.fogwall.service.SshFingerprintCache;
+import com.rbc.fogwall.user.GitCredentialStore;
 import com.rbc.fogwall.user.MongoUserStore;
 import com.rbc.fogwall.user.ScmOAuthTokenStore;
 import com.rbc.fogwall.user.UserStore;
@@ -110,6 +112,13 @@ public final class MongoStoreFactory implements AutoCloseable {
     /** Create and initialize a {@link ScmOAuthTokenStore} backed by this factory's client. */
     public ScmOAuthTokenStore scmOAuthTokenStore() {
         MongoScmOAuthTokenStore store = new MongoScmOAuthTokenStore(client, databaseName);
+        store.initialize();
+        return store;
+    }
+
+    /** Create and initialize a {@link GitCredentialStore} backed by this factory's client. */
+    public GitCredentialStore gitCredentialStore() {
+        MongoGitCredentialStore store = new MongoGitCredentialStore(client, databaseName);
         store.initialize();
         return store;
     }

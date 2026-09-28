@@ -63,6 +63,7 @@
   - [Request flow](architecture/request-flow.md)
   - [Validation pipeline](architecture/validation-pipeline.md)
   - [Core abstractions](architecture/core-abstractions.md)
+  - [Identity and credentials](architecture/identity-and-credentials.md)
   - [Deployment modes](architecture/deployment-modes.md)
   - [Advanced use cases](architecture/advanced-use-cases.md)
   - [What this architecture enables](architecture/what-this-enables.md)
