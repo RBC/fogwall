@@ -7,6 +7,7 @@ import com.rbc.fogwall.git.CredentialAuthentication;
 import com.rbc.fogwall.git.ScmOAuthCredentialsProvider;
 import com.rbc.fogwall.git.ServerRepositoryResolver;
 import com.rbc.fogwall.provider.FogwallProvider;
+import com.rbc.fogwall.provider.GenericProxyProvider;
 import com.rbc.fogwall.provider.GitLabProvider;
 import com.rbc.fogwall.service.GitCredentialService;
 import com.rbc.fogwall.service.ScmOAuthTokenService;
@@ -21,6 +22,7 @@ import jakarta.servlet.WriteListener;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.ByteArrayOutputStream;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
@@ -161,6 +163,25 @@ class FogwallCredentialFilterTest {
         verify(resp).setStatus(HttpServletResponse.SC_FORBIDDEN);
         assertTrue(responseBody().contains("fogwall credentials are not accepted for gitlab"));
         assertTrue(attributes.isEmpty());
+    }
+
+    /** A refusal fogwall makes on discovery answers with the provider's denial status, like a URL-rule refusal. */
+    @Test
+    void refusal_followsTheConfiguredDenialStatus() throws Exception {
+        provider = GenericProxyProvider.builder()
+                .name("gitlab")
+                .type("gitlab")
+                .uri(URI.create("https://gitlab.com"))
+                .pathSuffix("/server")
+                .blockedInfoRefsStatus(404)
+                .build();
+        HttpServletRequest req = infoRefsRequest(basicAuth("me", VALUE));
+
+        filter(false).doFilter(req, resp, chain);
+
+        verifyNoInteractions(chain);
+        verify(resp).setStatus(HttpServletResponse.SC_NOT_FOUND);
+        assertTrue(responseBody().contains("fogwall credentials are not accepted for gitlab"));
     }
 
     @Test

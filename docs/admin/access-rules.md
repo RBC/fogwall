@@ -46,9 +46,9 @@ expects `git pull` to work against it, and taking that away breaks the single-re
 - you want the reachable surface as small as the use case requires.
 
 When disabled, the `git-upload-pack` capability is simply not mounted (HTTP) and is refused on the SSH transport; a
-fetch is rejected with a clear git-side message — `fatal: remote error: fetches are not served through this gateway` —
-rather than a `404` that reads as a missing repository. Push (`receive-pack`) is unaffected, and the switch applies to
-**both** server mode transports so neither can serve a fetch the other refuses.
+fetch is refused with a `403` and a message git prints — `remote: fetches are not served through this gateway` — rather
+than a `404` that reads as a missing repository. Push (`receive-pack`) is unaffected, and the switch applies to **both**
+server mode transports so neither can serve a fetch the other refuses.
 
 This is deliberately not a per-user read-permission model: for a public upstream there is no credential to authorize,
 and for a private one the fetch already carries the caller's own upstream credentials, which answers the question

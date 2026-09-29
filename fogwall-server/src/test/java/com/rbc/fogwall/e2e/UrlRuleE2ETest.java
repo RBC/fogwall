@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.rbc.fogwall.db.model.AccessRule;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
+import com.rbc.fogwall.git.UpstreamFailure;
 import com.rbc.fogwall.servlet.filter.UrlRuleEvaluator;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -58,6 +59,7 @@ class UrlRuleE2ETest {
         gitea.createOrg("otherorg");
         gitea.createRepo("otherorg", "allowed-repo");
         gitea.createRepo("otherorg", "other-secret");
+        gitea.createRepo("otherorg", "private-repo", true);
 
         proxy = new JettyProxyFixture(gitea.getBaseUri(), buildRules());
         tempDir = Files.createTempDirectory("fogwall-urlrule-e2e-");
@@ -67,6 +69,23 @@ class UrlRuleE2ETest {
     static void stopInfrastructure() throws Exception {
         if (proxy != null) proxy.close();
         if (gitea != null) gitea.stop();
+    }
+
+    /** Text of the discovery refusal for a repository no allow rule covers. */
+    private static final String NOT_ALLOWED = "this repository is not in the allow list";
+
+    /** Text of the discovery refusal for a repository a deny rule matches. */
+    private static final String DENIED = "this repository has been explicitly blocked by an administrator";
+
+    /**
+     * The push was refused on discovery with fogwall's reason and the configured status. Anything else means the
+     * request went on to the upstream: in server mode the GitServlet then fetched the refused repository and listed its
+     * refs, and git refused the push itself as non-fast-forward.
+     */
+    private static void assertRefused(GitHelper.PushResult result, String reason) {
+        assertFalse(result.succeeded(), result.output());
+        assertTrue(result.output().contains("remote: Repository access denied: " + reason), result.output());
+        assertTrue(result.output().contains("The requested URL returned error: 403"), result.output());
     }
 
     // ── URL helpers ──────────────────────────────────────────────────────────
@@ -183,7 +202,7 @@ class UrlRuleE2ETest {
                 proxyUrl("unknown-org", "some-repo"),
                 "proxy-notallowed",
                 "feat: this org has no allow rule");
-        assertFalse(result.succeeded(), "push to unconfigured org/repo should be blocked");
+        assertRefused(result, NOT_ALLOWED);
     }
 
     @Test
@@ -195,7 +214,7 @@ class UrlRuleE2ETest {
                 pushUrl("unknown-org", "some-repo"),
                 "sf-notallowed",
                 "feat: this org has no allow rule");
-        assertFalse(result.succeeded(), "server mode push to unconfigured org/repo should be blocked");
+        assertRefused(result, NOT_ALLOWED);
     }
 
     // ── Deny overrides allow ──────────────────────────────────────────────────
@@ -211,9 +230,7 @@ class UrlRuleE2ETest {
                 proxyUrl("otherorg", "other-secret"),
                 "proxy-deny-slug",
                 "feat: this repo is explicitly denied");
-        assertFalse(
-                result.succeeded(),
-                "push to /otherorg/other-secret should be denied even though otherorg/* is allowed");
+        assertRefused(result, DENIED);
     }
 
     @Test
@@ -225,7 +242,7 @@ class UrlRuleE2ETest {
                 pushUrl("otherorg", "other-secret"),
                 "sf-deny-slug",
                 "feat: this repo is explicitly denied");
-        assertFalse(result.succeeded(), "server mode push to /otherorg/other-secret should be denied");
+        assertRefused(result, DENIED);
     }
 
     // ── Deny by name glob (*-readonly, push only) ─────────────────────────────
@@ -240,7 +257,7 @@ class UrlRuleE2ETest {
                 proxyUrl(GiteaContainer.TEST_ORG, "test-repo-readonly"),
                 "proxy-deny-glob",
                 "feat: readonly repos should not accept pushes");
-        assertFalse(result.succeeded(), "push to *-readonly repo should be blocked by name glob deny rule");
+        assertRefused(result, DENIED);
     }
 
     @Test
@@ -252,7 +269,7 @@ class UrlRuleE2ETest {
                 pushUrl(GiteaContainer.TEST_ORG, "test-repo-readonly"),
                 "sf-deny-glob",
                 "feat: readonly repos should not accept pushes");
-        assertFalse(result.succeeded(), "server mode push to *-readonly repo should be blocked");
+        assertRefused(result, DENIED);
     }
 
     // ── Deny by name regex (push only) ───────────────────────────────────────
@@ -266,7 +283,7 @@ class UrlRuleE2ETest {
                 proxyUrl(GiteaContainer.TEST_ORG, "secret-store"),
                 "proxy-deny-regex",
                 "feat: secret repos should not accept pushes");
-        assertFalse(result.succeeded(), "push to secret-store should be blocked by regex deny rule");
+        assertRefused(result, DENIED);
     }
 
     @Test
@@ -278,7 +295,51 @@ class UrlRuleE2ETest {
                 pushUrl(GiteaContainer.TEST_ORG, "secret-store"),
                 "sf-deny-regex",
                 "feat: secret repos should not accept pushes");
-        assertFalse(result.succeeded(), "server mode push to secret-store should be blocked by regex deny rule");
+        assertRefused(result, DENIED);
+    }
+
+    // ── Fetch refused on discovery ────────────────────────────────────────────
+
+    @Test
+    @Order(60)
+    void proxy_denySlug_cloneRefused() throws Exception {
+        var result = new GitHelper(tempDir).cloneWithResult(proxyUrl("otherorg", "other-secret"), "proxy-clone-deny");
+        assertRefused(result, DENIED);
+    }
+
+    /** A refused clone must not reach the upstream: the refusal comes before any ref is listed. */
+    @Test
+    @Order(61)
+    void sf_denySlug_cloneRefused() throws Exception {
+        var result = new GitHelper(tempDir).cloneWithResult(pushUrl("otherorg", "other-secret"), "sf-clone-deny");
+        assertRefused(result, DENIED);
+    }
+
+    // ── Upstream failures, server mode ────────────────────────────────────────
+
+    @Test
+    @Order(70)
+    void sf_missingUpstreamRepository_saysNotFoundUpstream() throws Exception {
+        var result = new GitHelper(tempDir).cloneWithResult(pushUrl("otherorg", "does-not-exist"), "sf-missing");
+
+        assertFalse(result.succeeded(), result.output());
+        assertTrue(result.output().contains("remote: " + UpstreamFailure.NOT_FOUND_MESSAGE), result.output());
+        assertTrue(result.output().contains("not found"), result.output());
+    }
+
+    /** A rejected token used to read as a missing repository; git now reports an authentication failure. */
+    @Test
+    @Order(71)
+    void sf_rejectedCredential_saysAuthenticationFailed() throws Exception {
+        String url = proxy.getPushBase()
+                        .replace("http://", "http://" + encode(GiteaContainer.ADMIN_USER) + ":not-a-valid-token@")
+                + "/otherorg/private-repo.git";
+
+        var result = new GitHelper(tempDir).cloneWithResult(url, "sf-bad-token");
+
+        assertFalse(result.succeeded(), result.output());
+        assertTrue(result.output().contains("remote: " + UpstreamFailure.NOT_AUTHORIZED_MESSAGE), result.output());
+        assertTrue(result.output().contains("Authentication failed"), result.output());
     }
 
     // ── Rule set — mirrors docker/fogwall-docker-default.yml ───────────────

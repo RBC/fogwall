@@ -40,9 +40,10 @@ public interface FogwallProvider {
     String servletMapping();
 
     /**
-     * HTTP status code to return when a {@code /info/refs} discovery request is blocked by URL rules. Defaults to
-     * {@code 403 Forbidden} — unambiguous, helps clients distinguish a proxy denial from a missing repo. Operators may
-     * configure {@code 404} to obscure whether a repository exists at all.
+     * HTTP status of every refusal fogwall makes on {@code /info/refs} discovery: URL rules, a refused fogwall
+     * credential, and an upstream that refuses the caller's credential access. Defaults to {@code 403 Forbidden} —
+     * unambiguous, helps clients distinguish a proxy denial from a missing repo. Operators may configure {@code 404} to
+     * obscure whether a repository exists at all.
      */
     default int getBlockedInfoRefsStatus() {
         return 403;

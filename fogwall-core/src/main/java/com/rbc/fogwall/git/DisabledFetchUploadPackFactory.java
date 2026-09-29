@@ -12,10 +12,9 @@ import org.eclipse.jgit.transport.resolver.UploadPackFactory;
  * fogwall#478). It refuses to create an {@link UploadPack}, so no local mirror is ever served over this endpoint.
  *
  * <p>The refusal is a {@link ServiceNotEnabledException} carrying {@link #MESSAGE}. JGit's smart-HTTP handlers
- * translate that to a {@code 403} with the message written as a git protocol {@code ERR} pkt-line, and
- * {@code SmartHttpErrorFilter} rewrites the status to {@code 200} so the git client surfaces it as {@code fatal: remote
- * error: <message>} rather than an opaque {@code 403} or a {@code 404} that would read as a missing repository. The SSH
- * transport refuses {@code git-upload-pack} separately with the same {@link #MESSAGE}.
+ * translate that to a {@code 403}, and {@code SmartHttpErrorFilter} makes sure the git client prints the message with
+ * it rather than an opaque {@code 403} or a {@code 404} that would read as a missing repository. The SSH transport
+ * refuses {@code git-upload-pack} separately with the same {@link #MESSAGE}.
  */
 public class DisabledFetchUploadPackFactory implements UploadPackFactory<HttpServletRequest> {
 

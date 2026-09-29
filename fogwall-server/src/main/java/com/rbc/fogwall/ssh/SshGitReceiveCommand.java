@@ -6,6 +6,7 @@ import com.rbc.fogwall.git.PushTransport;
 import com.rbc.fogwall.git.QuarantineObjectStore;
 import com.rbc.fogwall.git.RepoPath;
 import com.rbc.fogwall.git.ServerReceivePackFactory;
+import com.rbc.fogwall.git.UpstreamFailure;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.user.UserEntry;
 import java.io.IOException;
@@ -26,6 +27,7 @@ import org.apache.sshd.server.channel.ChannelSession;
 import org.apache.sshd.server.command.Command;
 import org.apache.sshd.server.session.ServerSession;
 import org.eclipse.jgit.api.TransportConfigCallback;
+import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.transport.ReceivePack;
 
@@ -200,7 +202,19 @@ public class SshGitReceiveCommand implements Command {
             // The connecting key fingerprint is this session's authenticated identity, and so is the principal
             // for the mirror cache's per-principal fetch cooldown — the forwarded agent is what authorizes
             // upstream, and a different key must not inherit another key's verification.
-            Repository localRepo = cache.getOrClone(upstreamUrl, null, transportConfig, connectingFingerprint);
+            Repository localRepo;
+            try {
+                localRepo = cache.getOrClone(upstreamUrl, null, transportConfig, connectingFingerprint);
+            } catch (GitAPIException | IOException e) {
+                UpstreamFailure failure = SshUpstreamTransport.classify(e);
+                if (failure instanceof UpstreamFailure.Internal) {
+                    throw e;
+                }
+                log.warn("Upstream refused or failed {} ({}): {}", upstreamUrl, failure, e.getMessage());
+                writeError(failure.message());
+                exitCode = 128;
+                return;
+            }
 
             // Receive into a scratch store so a rejected push leaves nothing behind in the shared mirror.
             // Unlike the HTTP path there is no servlet request to hang the lifetime off, so it is scoped here.

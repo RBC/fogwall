@@ -1,146 +1,232 @@
 package com.rbc.fogwall.servlet.filter;
 
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.rbc.fogwall.servlet.GitDenialResponse;
 import jakarta.servlet.FilterChain;
+import jakarta.servlet.ReadListener;
+import jakarta.servlet.ServletInputStream;
+import jakarta.servlet.ServletOutputStream;
+import jakarta.servlet.WriteListener;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
+import org.eclipse.jgit.http.server.GitSmartHttpTools;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /**
- * Tests for {@link SmartHttpErrorFilter}.
- *
- * <p>The filter wraps the response on git smart HTTP requests so that 4xx/5xx status codes are silently mapped to 200
- * (except 401). Non-git requests pass through unchanged.
+ * git displays a server's message only in particular shapes (see {@link GitDenialResponse}); these tests pin the shape
+ * of what reaches the client, with JGit's own error rendering run through the filter.
  */
 class SmartHttpErrorFilterTest {
 
-    /** Build a request that looks like a git receive-pack POST. */
-    private static HttpServletRequest receivePackRequest() {
+    /** What the client receives: status, headers, body, and whether the response was committed. */
+    private static final class ClientResponse {
+        final ByteArrayOutputStream body = new ByteArrayOutputStream();
+        final Map<String, String> headers = new HashMap<>();
+        final HttpServletResponse mock = mock(HttpServletResponse.class);
+        int status = 200;
+        String contentType;
+        boolean committed;
+        Integer sentError;
+
+        ClientResponse() throws IOException {
+            doAnswer(inv -> status = inv.getArgument(0)).when(mock).setStatus(anyInt());
+            doAnswer(inv -> contentType = inv.getArgument(0)).when(mock).setContentType(anyString());
+            doAnswer(inv -> headers.put(inv.getArgument(0), inv.getArgument(1)))
+                    .when(mock)
+                    .setHeader(anyString(), anyString());
+            when(mock.getHeader(anyString())).thenAnswer(inv -> headers.get(inv.<String>getArgument(0)));
+            doAnswer(inv -> committed = true).when(mock).flushBuffer();
+            doAnswer(inv -> {
+                        sentError = inv.getArgument(0);
+                        committed = true;
+                        return null;
+                    })
+                    .when(mock)
+                    .sendError(anyInt());
+            when(mock.isCommitted()).thenAnswer(inv -> committed);
+            when(mock.getOutputStream()).thenReturn(new ServletOutputStream() {
+                @Override
+                public void write(int b) {
+                    body.write(b);
+                    committed = true;
+                }
+
+                @Override
+                public boolean isReady() {
+                    return true;
+                }
+
+                @Override
+                public void setWriteListener(WriteListener l) {}
+            });
+        }
+
+        String text() {
+            return body.toString(StandardCharsets.UTF_8);
+        }
+    }
+
+    private static ServletInputStream emptyBody() {
+        return new ServletInputStream() {
+            @Override
+            public int read() {
+                return -1;
+            }
+
+            @Override
+            public boolean isFinished() {
+                return true;
+            }
+
+            @Override
+            public boolean isReady() {
+                return true;
+            }
+
+            @Override
+            public void setReadListener(ReadListener l) {}
+        };
+    }
+
+    private static HttpServletRequest infoRefsRequest() throws IOException {
+        HttpServletRequest req = mock(HttpServletRequest.class);
+        when(req.getMethod()).thenReturn("GET");
+        when(req.getRequestURI()).thenReturn("/server/github.com/owner/repo.git/info/refs");
+        when(req.getParameter("service")).thenReturn("git-upload-pack");
+        when(req.getInputStream()).thenReturn(emptyBody());
+        return req;
+    }
+
+    private static HttpServletRequest receivePackRequest() throws IOException {
         HttpServletRequest req = mock(HttpServletRequest.class);
         when(req.getContentType()).thenReturn("application/x-git-receive-pack-request");
-        when(req.getRequestURI()).thenReturn("/push/github.com/owner/repo.git/git-receive-pack");
+        when(req.getRequestURI()).thenReturn("/server/github.com/owner/repo.git/git-receive-pack");
         when(req.getMethod()).thenReturn("POST");
+        when(req.getInputStream()).thenReturn(emptyBody());
         return req;
     }
 
-    /** Build a request that looks like a regular (non-git) HTTP call. */
-    private static HttpServletRequest plainRequest() {
-        HttpServletRequest req = mock(HttpServletRequest.class);
-        when(req.getContentType()).thenReturn("application/json");
-        when(req.getRequestURI()).thenReturn("/api/some-endpoint");
-        when(req.getMethod()).thenReturn("GET");
-        return req;
+    private static ClientResponse run(HttpServletRequest req, FilterChain chain) throws Exception {
+        ClientResponse resp = new ClientResponse();
+        new SmartHttpErrorFilter().doFilter(req, resp.mock, chain);
+        return resp;
     }
 
-    // ---- tests ---- //
+    // ---- discovery (/info/refs) ---- //
 
+    /** JGit writes a resolver's refusal as an ERR packet on the status, which git would not print. */
     @Test
-    void gitSmartRequest_chainIsCalled() throws Exception {
-        SmartHttpErrorFilter filter = new SmartHttpErrorFilter();
-        HttpServletRequest req = receivePackRequest();
-        HttpServletResponse resp = mock(HttpServletResponse.class);
-        FilterChain chain = mock(FilterChain.class);
+    void infoRefs_jgitErrorKeepsItsStatus_andBecomesText() throws Exception {
+        HttpServletRequest req = infoRefsRequest();
 
-        filter.doFilter(req, resp, chain);
+        ClientResponse resp = run(
+                req, (r, w) -> GitSmartHttpTools.sendError(req, (HttpServletResponse) w, 404, "not found upstream"));
 
-        // chain must be called even when the wrapper is applied
-        verify(chain).doFilter(eq(req), any());
+        assertEquals(404, resp.status);
+        assertEquals("text/plain; charset=UTF-8", resp.contentType);
+        assertEquals("not found upstream\n", resp.text());
     }
 
     @Test
-    void nonGitRequest_chainCalledWithOriginalResponse() throws Exception {
-        SmartHttpErrorFilter filter = new SmartHttpErrorFilter();
-        HttpServletRequest req = plainRequest();
-        HttpServletResponse resp = mock(HttpServletResponse.class);
-        FilterChain chain = mock(FilterChain.class);
+    void infoRefs_jgit401_carriesAChallenge() throws Exception {
+        HttpServletRequest req = infoRefsRequest();
 
-        filter.doFilter(req, resp, chain);
+        ClientResponse resp = run(
+                req, (r, w) -> GitSmartHttpTools.sendError(req, (HttpServletResponse) w, 401, "credential rejected"));
 
-        // For non-git requests the chain must be called with the original response, not a wrapper
-        verify(chain).doFilter(req, resp);
+        assertEquals(401, resp.status);
+        assertEquals("Basic realm=\"fogwall\"", resp.headers.get("WWW-Authenticate"));
+        assertEquals("credential rejected\n", resp.text());
+    }
+
+    /**
+     * A filter that refuses discovery with {@code sendError} must end the request there. When the refusal was swallowed
+     * instead, the request went on into the GitServlet, which fetched the refused repository and listed its refs.
+     */
+    @ParameterizedTest
+    @ValueSource(ints = {403, 404})
+    void infoRefs_sendError_writesTheMessageAndCommits(int status) throws Exception {
+        ClientResponse resp = run(
+                infoRefsRequest(), (r, w) -> ((HttpServletResponse) w).sendError(status, "Repository access denied"));
+
+        assertTrue(resp.committed);
+        assertEquals(status, resp.status);
+        assertEquals("Repository access denied\n", resp.text());
     }
 
     @Test
-    void gitSmartRequest_errorStatusMappedTo200ViaWrapper() throws Exception {
-        // Verify that when a 403 is set during chain execution the wrapper intercepts it.
-        // We capture the wrapper passed to the chain and call setStatus on it.
-        SmartHttpErrorFilter filter = new SmartHttpErrorFilter();
-        HttpServletRequest req = receivePackRequest();
-        HttpServletResponse resp = mock(HttpServletResponse.class);
+    void infoRefs_textDenialPassesThroughUntouched() throws Exception {
+        HttpServletRequest req = infoRefsRequest();
 
-        FilterChain chain = (servletReq, servletResp) -> {
-            // The response passed to the chain is the wrapper
-            HttpServletResponse wrappedResp = (HttpServletResponse) servletResp;
-            wrappedResp.setStatus(403);
-            // The wrapper must have redirected this to 200
-            verify(resp).setStatus(HttpServletResponse.SC_OK);
-        };
+        ClientResponse resp =
+                run(req, (r, w) -> GitDenialResponse.send(req, (HttpServletResponse) w, 403, "not in the allow list"));
 
-        filter.doFilter(req, resp, chain);
+        assertTrue(resp.committed);
+        assertEquals(403, resp.status);
+        assertEquals("not in the allow list\n", resp.text());
     }
+
+    @Test
+    void infoRefs_successIsUntouched() throws Exception {
+        byte[] advertisement = "001e# service=git-upload-pack\n0000".getBytes(StandardCharsets.UTF_8);
+
+        ClientResponse resp = run(infoRefsRequest(), (r, w) -> {
+            var response = (HttpServletResponse) w;
+            response.setStatus(200);
+            response.setContentType("application/x-git-upload-pack-advertisement");
+            response.getOutputStream().write(advertisement);
+        });
+
+        assertEquals(200, resp.status);
+        assertEquals("application/x-git-upload-pack-advertisement", resp.contentType);
+        assertArrayEquals(advertisement, resp.body.toByteArray());
+    }
+
+    // ---- fetch and push (upload-pack / receive-pack) ---- //
 
     @ParameterizedTest
     @ValueSource(ints = {400, 403, 404, 500, 503})
-    void errorStatuses_mappedTo200(int statusCode) throws Exception {
-        SmartHttpErrorFilter filter = new SmartHttpErrorFilter();
-        HttpServletRequest req = receivePackRequest();
-        HttpServletResponse resp = mock(HttpServletResponse.class);
+    void pack_errorStatusBecomes200(int statusCode) throws Exception {
+        ClientResponse resp = run(receivePackRequest(), (r, w) -> ((HttpServletResponse) w).setStatus(statusCode));
 
-        FilterChain chain = (servletReq, servletResp) -> {
-            ((HttpServletResponse) servletResp).setStatus(statusCode);
-        };
-
-        filter.doFilter(req, resp, chain);
-
-        verify(resp).setStatus(HttpServletResponse.SC_OK);
+        assertEquals(200, resp.status);
     }
 
     @Test
-    void unauthorizedStatus_passesThroughUnchanged() throws Exception {
-        SmartHttpErrorFilter filter = new SmartHttpErrorFilter();
-        HttpServletRequest req = receivePackRequest();
-        HttpServletResponse resp = mock(HttpServletResponse.class);
+    void pack_sendError_writesTheMessageOn200AndCommits() throws Exception {
+        ClientResponse resp = run(receivePackRequest(), (r, w) -> ((HttpServletResponse) w).sendError(403, "refused"));
 
-        FilterChain chain = (servletReq, servletResp) -> {
-            ((HttpServletResponse) servletResp).setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        };
-
-        filter.doFilter(req, resp, chain);
-
-        // 401 must pass through - git clients need it to prompt for credentials
-        verify(resp).setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        assertTrue(resp.committed);
+        assertEquals(200, resp.status);
+        assertTrue(resp.text().contains("refused"), resp.text());
     }
 
     @Test
-    void sendError_nonUnauthorized_mapTo200() throws Exception {
-        SmartHttpErrorFilter filter = new SmartHttpErrorFilter();
-        HttpServletRequest req = receivePackRequest();
-        HttpServletResponse resp = mock(HttpServletResponse.class);
+    void pack_401PassesThrough() throws Exception {
+        ClientResponse resp = run(receivePackRequest(), (r, w) -> ((HttpServletResponse) w).sendError(401));
 
-        FilterChain chain = (servletReq, servletResp) -> {
-            ((HttpServletResponse) servletResp).sendError(HttpServletResponse.SC_FORBIDDEN, "Forbidden");
-        };
-
-        filter.doFilter(req, resp, chain);
-
-        verify(resp).setStatus(HttpServletResponse.SC_OK);
+        assertEquals(401, resp.sentError);
     }
 
     @Test
-    void sendError_unauthorized_passesThroughUnchanged() throws Exception {
-        SmartHttpErrorFilter filter = new SmartHttpErrorFilter();
-        HttpServletRequest req = receivePackRequest();
+    void nonGitRequest_getsTheOriginalResponse() throws Exception {
+        HttpServletRequest req = mock(HttpServletRequest.class);
+        when(req.getRequestURI()).thenReturn("/api/some-endpoint");
+        when(req.getMethod()).thenReturn("GET");
         HttpServletResponse resp = mock(HttpServletResponse.class);
+        FilterChain chain = mock(FilterChain.class);
 
-        FilterChain chain = (servletReq, servletResp) -> {
-            ((HttpServletResponse) servletResp).sendError(HttpServletResponse.SC_UNAUTHORIZED);
-        };
+        new SmartHttpErrorFilter().doFilter(req, resp, chain);
 
-        filter.doFilter(req, resp, chain);
-
-        verify(resp).sendError(HttpServletResponse.SC_UNAUTHORIZED);
+        verify(chain).doFilter(req, resp);
     }
 }

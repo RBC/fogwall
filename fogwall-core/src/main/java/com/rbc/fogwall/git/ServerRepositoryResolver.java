@@ -3,6 +3,7 @@ package com.rbc.fogwall.git;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.servlet.filter.FogwallCredentialFilter;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import lombok.RequiredArgsConstructor;
@@ -10,10 +11,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.errors.RepositoryNotFoundException;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.transport.CredentialsProvider;
+import org.eclipse.jgit.transport.ServiceMayNotContinueException;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 import org.eclipse.jgit.transport.resolver.RepositoryResolver;
-import org.eclipse.jgit.transport.resolver.ServiceNotAuthorizedException;
-import org.eclipse.jgit.transport.resolver.ServiceNotEnabledException;
 
 /**
  * Repository resolver for server mode. Syncs a local bare repo from the upstream provider on each open, ensuring the
@@ -38,7 +38,7 @@ public class ServerRepositoryResolver implements RepositoryResolver<HttpServletR
 
     @Override
     public Repository open(HttpServletRequest req, String name)
-            throws RepositoryNotFoundException, ServiceNotAuthorizedException, ServiceNotEnabledException {
+            throws RepositoryNotFoundException, ServiceMayNotContinueException {
 
         // JGit passes name as the path after the servlet mapping, e.g. "owner/repo.git"
         String cleanName = name.replaceAll("\\.git$", "");
@@ -83,9 +83,38 @@ public class ServerRepositoryResolver implements RepositoryResolver<HttpServletR
         try {
             return cache.getOrClone(cleanUpstreamUrl, creds, null, principal);
         } catch (Exception e) {
-            log.error("Failed to open repository: {} from upstream {}", name, cleanUpstreamUrl, e);
-            throw new RepositoryNotFoundException(name, e);
+            UpstreamFailure failure = UpstreamFailure.classify(e);
+            if (failure instanceof UpstreamFailure.Internal) {
+                log.error("Failed to open repository {} from upstream {}", name, cleanUpstreamUrl, e);
+            } else {
+                log.warn("Upstream refused or failed {} ({}): {}", cleanUpstreamUrl, failure, e.getMessage());
+            }
+            throw new ServiceMayNotContinueException(message(failure), e, status(failure));
         }
+    }
+
+    /**
+     * The status for a failed upstream open. A refusal of the credential's access follows the provider's configured
+     * denial status, like every other refusal fogwall makes on discovery; the others say what happened.
+     */
+    private int status(UpstreamFailure failure) {
+        return switch (failure) {
+            case UpstreamFailure.CredentialRequired _, UpstreamFailure.NotAuthorized _ ->
+                HttpServletResponse.SC_UNAUTHORIZED;
+            case UpstreamFailure.Forbidden _ -> provider.getBlockedInfoRefsStatus();
+            case UpstreamFailure.NotFound _ -> HttpServletResponse.SC_NOT_FOUND;
+            case UpstreamFailure.Unavailable _ -> HttpServletResponse.SC_BAD_GATEWAY;
+            case UpstreamFailure.Internal _ -> HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
+        };
+    }
+
+    /** An operator who answers refusals with 404 hides whether a repository exists, so a refusal reads as not found. */
+    private String message(UpstreamFailure failure) {
+        if (failure instanceof UpstreamFailure.Forbidden
+                && provider.getBlockedInfoRefsStatus() == HttpServletResponse.SC_NOT_FOUND) {
+            return new UpstreamFailure.NotFound().message();
+        }
+        return failure.message();
     }
 
     /**

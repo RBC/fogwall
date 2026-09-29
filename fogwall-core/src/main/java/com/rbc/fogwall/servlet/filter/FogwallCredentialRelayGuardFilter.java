@@ -1,6 +1,7 @@
 package com.rbc.fogwall.servlet.filter;
 
 import com.rbc.fogwall.service.GitCredentialService;
+import com.rbc.fogwall.servlet.GitDenialResponse;
 import com.rbc.fogwall.servlet.ScmApiTokenExtractor;
 import jakarta.servlet.Filter;
 import jakarta.servlet.FilterChain;
@@ -13,7 +14,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import lombok.extern.slf4j.Slf4j;
-import org.eclipse.jgit.http.server.GitSmartHttpTools;
 
 /**
  * Refuses transparent-proxy requests that carry a fogwall-issued credential, which the proxy would otherwise relay
@@ -34,7 +34,7 @@ public class FogwallCredentialRelayGuardFilter implements Filter {
         var req = (HttpServletRequest) request;
         if (carriesFogwallCredential(req)) {
             log.warn("Refused a fogwall credential on transparent-proxy path {}", req.getRequestURI());
-            GitSmartHttpTools.sendError(req, (HttpServletResponse) response, HttpServletResponse.SC_FORBIDDEN, MESSAGE);
+            GitDenialResponse.send(req, (HttpServletResponse) response, HttpServletResponse.SC_FORBIDDEN, MESSAGE);
             return;
         }
         chain.doFilter(request, response);
