@@ -236,24 +236,23 @@ class ServerModeE2ETest {
                 "push with token= in message should be rejected");
     }
 
-    // ---- checkEmptyBranch (mirrors checkEmptyBranch.ts) ----
+    // ---- branch with no new commits ----
 
     @Test
     @Order(50)
-    void emptyBranch_blocked() throws Exception {
-        // The Gitea repo is auto-initialised with a README, so main already has a commit.
-        // Cloning and creating a new branch at HEAD (no new commits) means the branch tip
-        // is already reachable from main - getCommitRange returns empty → rejected.
+    void branchAtExistingCommit_isForwarded() throws Exception {
+        // The Gitea repo is auto-initialised with a README, so main already has a commit. A branch created at HEAD
+        // introduces no new commits; it is checked and forwarded like any other push.
         GitHelper git = new GitHelper(tempDir);
-        Path repo = git.clone(repoUrl(), "sf-empty-branch");
+        Path repo = git.clone(repoUrl(), "sf-branch-pointer");
         git.setAuthor(repo, GiteaContainer.VALID_AUTHOR_NAME, GiteaContainer.VALID_AUTHOR_EMAIL);
-        git.createAndCheckoutBranch(repo, "sf-empty-test-branch");
+        git.createAndCheckoutBranch(repo, "sf-branch-pointer");
 
         var result = git.pushWithResult(repo);
-        assertFalse(result.succeeded(), "push of branch with no new commits should be rejected");
+
         assertTrue(
-                result.output().contains("commit before pushing"),
-                "rejection message should mention making a commit. Output:\n" + result.output());
+                result.succeeded(), "a branch at an existing commit should be forwarded. Output:\n" + result.output());
+        assertTrue(result.output().contains("[new branch]"), result.output());
     }
 
     // ---- push options ----

@@ -31,6 +31,12 @@ public class GitRequestDetails {
     private List<Commit> pushedCommits = new ArrayList<>(); // All commits received in this push
 
     /**
+     * Whether {@code EnrichPushCommitsFilter} walked the push range, so an empty {@link #pushedCommits} means the push
+     * introduces no commits rather than that nothing was inspected.
+     */
+    private boolean commitRangeInspected;
+
+    /**
      * The annotation message of an annotated tag push, or {@code null} for a branch push or a lightweight tag. Set by
      * {@code EnrichPushCommitsFilter} (transparent proxy). Developer-authored free text that reaches the upstream repo
      * and release notes, so it is validated by the same message-content filters as commit messages (#474).

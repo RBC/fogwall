@@ -243,17 +243,12 @@ public final class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<Fo
 
             List<Commit> commits =
                     commitRangeRefreshingIfStale(repository, fromCommit, toCommit, remoteUrl, credentials, principal);
+            requestDetails.setCommitRangeInspected(true);
 
             if (commits.isEmpty()) {
-                // Not an inspection failure: the walk succeeded and the range is genuinely empty, which is
-                // what a branch pushed with no new commits looks like. Leave the result untouched and let
-                // CheckEmptyBranchFilter report it — it names the condition accurately and its rejection
-                // carries the push-record link. Claiming it here as an error would replace a precise
-                // message with a vague one and drop that link.
-                log.debug(
-                        "No commits in range {}..{} — leaving the empty-branch check to report it",
-                        fromCommit,
-                        toCommit);
+                // Not an inspection failure: the walk succeeded and the range is genuinely empty. The pushed tip is
+                // already reachable from the mirror's refs, as when a branch is created at an existing commit.
+                log.debug("No commits in range {}..{} — the push introduces no new commits", fromCommit, toCommit);
                 return;
             }
 

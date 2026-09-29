@@ -345,7 +345,8 @@ public class CommitInspectionService {
      * For a new-branch push, find the tree that should be used as the diff base so that only the genuinely new content
      * is scanned. Walks commits reachable from {@code toCommit} that are NOT reachable from any existing
      * {@code refs/heads/*} branch tip, then returns the tree of the oldest such commit's first parent. Returns
-     * {@code null} if the oldest new commit is a root commit (base is the empty tree).
+     * {@code null} if the oldest new commit is a root commit (base is the empty tree), and the tip's own tree when the
+     * push introduces no commits (an empty diff).
      */
     private static ObjectId findNewBranchBase(Repository repository, String toCommit) throws IOException {
         // Use "^{commit}" to dereference annotated tags to their target commit
@@ -364,7 +365,9 @@ public class CommitInspectionService {
                 newCommits.add(c);
             }
 
-            if (newCommits.isEmpty()) return null;
+            // No new commits: the tip is already reachable from an existing branch, so nothing is introduced. Its own
+            // tree is the base, giving an empty diff rather than the whole snapshot against an empty tree.
+            if (newCommits.isEmpty()) return repository.resolve(toId.getName() + "^{tree}");
 
             // logCmd returns newest-first; last entry is the oldest new commit
             RevCommit oldest = newCommits.get(newCommits.size() - 1);

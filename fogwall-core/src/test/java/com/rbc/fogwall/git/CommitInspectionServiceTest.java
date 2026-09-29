@@ -91,6 +91,18 @@ class CommitInspectionServiceTest {
     // ---- getAnnotatedTagMessage (#474) ----
 
     @Test
+    void getFormattedDiff_newBranchAtExistingCommit_isEmpty() throws Exception {
+        // A branch created at a commit an existing branch already holds introduces nothing, so there is nothing to
+        // scan; diffing against an empty tree would present the whole snapshot as added.
+        RevCommit existing = createCommit("on main");
+
+        String diff = CommitInspectionService.getFormattedDiff(
+                repo, "0000000000000000000000000000000000000000", existing.getName());
+
+        assertEquals("", diff);
+    }
+
+    @Test
     void getAnnotatedTagMessage_annotatedTag_returnsMessage() throws Exception {
         createCommit("init");
         var ref = git.tag()

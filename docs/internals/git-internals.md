@@ -70,9 +70,8 @@ When you run `git push origin refs/tags/v1.0`:
 Tags push commits that already exist upstream. `CommitInspectionService.getCommitRange()` returns an empty list — the
 commit at the tag tip is already reachable from existing heads, so it is not "new".
 
-**`CheckEmptyBranchHook`** — an empty commit range on a zero-oldId ref would normally mean the branch has no new commits
-(a reject condition). For tags this is always the case and is legitimate, so the hook skips any ref whose name starts
-with `refs/tags/`.
+**`CheckEmptyBranchHook`** — an empty commit range means the ref introduces no new commits, which passes; only a range
+that cannot be walked blocks. Tags skip the check, since their range is always empty.
 
 **`CheckHiddenCommitsHook`** — calls `walk.parseCommit()` on `cmd.getNewId()`. For an annotated tag this throws. Fix:
 resolve through `^{commit}` first.
@@ -101,8 +100,8 @@ exception is caught; `requestDetails.commit` is left null. `requestDetails.branc
 email → rejects with "Unknown User". Fix: skip the email check for tag pushes; the user is already verified by HTTP
 basic auth.
 
-**`CheckEmptyBranchFilter`** — empty `pushedCommits` + zero `commitFrom` looks like an empty branch push. Fix: skip for
-tag refs, same reasoning as the server mode hook.
+**`CheckEmptyBranchFilter`** — empty `pushedCommits` passes when `EnrichPushCommitsFilter` walked the range, and blocks
+when nothing did. Tags skip the check, same reasoning as the server mode hook.
 
 **`CheckHiddenCommitsFilter`** — calls `walk.parseCommit(repo.resolve(toCommit))` where `toCommit` is the tag object
 SHA. Fix: use `repo.resolve(toCommit + "^{commit}")`, consistent with all other `CommitInspectionService` callers.
