@@ -124,6 +124,9 @@ source of truth for exact commands, since it's written for human contributors an
   / `tail` — a hung test never writes `build/test-results`, so the console stream is the only record.
 - A feature isn't done until it has been pushed or fetched through the running proxy end to end. Unit tests plus a clean
   compile have hidden unwired filter chains before.
+- A passing JaCoCo check is not coverage evidence: gates cover some packages, and lines only. A feature PR tests its
+  fail-closed branches and names the integration or e2e test behind anything too brittle to mock; see
+  `.claude/rules/testing.md`.
 
 ## Git workflow
 

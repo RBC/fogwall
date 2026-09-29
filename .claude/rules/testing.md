@@ -15,6 +15,16 @@ paths:
 - The HTTP Basic username is meaningless for identity — the token drives resolution (only Bitbucket differs). The
   scripts under `test/` use `me`; never switch it to a real handle or document it as an identity input.
 
+## Coverage is per feature, not per gate
+
+JaCoCo gates only the packages named in each module's `jacocoTestCoverageVerification` (fogwall-core gates an
+include-list; fogwall-server has no gate at all), and only on line coverage. A green coverage check says nothing about
+code outside those packages, or about branches anywhere. Before a feature PR is ready:
+
+- Every fail-closed branch — the path that refuses, rejects, or keeps state safe — has a test asserting the refusal.
+- Code too brittle to unit-test (JGit hook wiring, async servlet plumbing, real provider calls) is covered by a named
+  integration or e2e test, and the PR body says which test covers what.
+
 ## What each layer is for
 
 Four layers, and a case belongs to exactly one of them. Put it in the cheapest layer that can actually prove it.
