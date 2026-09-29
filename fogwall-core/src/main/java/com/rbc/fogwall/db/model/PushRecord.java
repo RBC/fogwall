@@ -113,8 +113,15 @@ public class PushRecord {
     @Builder.Default
     private boolean autoRejected = false;
 
-    /** When the push was forwarded upstream. Null until status reaches FORWARDED. */
+    /** When forwarding upstream finished, with FORWARDED or ERROR. Null until then. */
     private Instant forwardedAt;
+
+    /**
+     * Whether the push was parked: acknowledged to the client and forwarded upstream once approved, rather than held
+     * open for approval.
+     */
+    @Builder.Default
+    private boolean deferred = false;
 
     /** Validation steps executed for this push. */
     @Builder.Default
@@ -143,4 +150,12 @@ public class PushRecord {
      */
     @Builder.Default
     private boolean canCurrentUserCancel = false;
+
+    /**
+     * Transient flag computed by the dashboard {@code PushController#getById} endpoint indicating whether the currently
+     * authenticated user may ask fogwall to forward this parked push now: an admin or the resolved pusher, on an
+     * approved push whose forward has not completed. Not persisted to the database.
+     */
+    @Builder.Default
+    private boolean canCurrentUserForward = false;
 }

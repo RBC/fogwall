@@ -26,4 +26,10 @@ public class OAuthProviderSettings {
      * linked OAuth token. Linking then also requests the provider's repository write scope. Requires {@link #enabled}.
      */
     private boolean brokeredPush = false;
+
+    /**
+     * Whether a server-mode push made with a fogwall-issued git credential is acknowledged once received and forwarded
+     * after approval, rather than holding the connection open for review. Requires {@link #brokeredPush}.
+     */
+    private boolean deferredForwarding = false;
 }

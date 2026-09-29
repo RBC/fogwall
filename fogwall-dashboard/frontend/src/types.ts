@@ -131,6 +131,10 @@ export interface PushRecord {
    */
   canCurrentUserSelfCertify?: boolean
   canCurrentUserCancel?: boolean
+  /** Whether the push was parked: acknowledged on receipt and forwarded by fogwall once approved. */
+  deferred?: boolean
+  /** Server-computed flag (only set on GET /api/push/{id}): the current user may forward this parked push now. */
+  canCurrentUserForward?: boolean
 }
 
 /** One cached local mirror, from GET /api/admin/cache (#340). */

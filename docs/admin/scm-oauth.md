@@ -116,6 +116,20 @@ and GitLab), unlinking one only removes that provider's claim on it — the key/
 solely to the remaining provider(s), and is only fully removed once no linked provider claims it anymore. Re-linking is
 always available to restore the identity and re-import SSH keys/emails if needed.
 
+## Operating deferred forwarding
+
+With `oauth.deferred-forwarding` (see [SCM OAuth](../configuration/scm-oauth.md#deferred-forwarding)), each parked push
+is stored in the database until it is forwarded, rejected, cancelled, or its failed forward ages out. Its size is
+bounded by `server.max-push-bytes` plus the few base objects JGit adds to complete a thin pack, each bounded by
+`server.max-object-size-bytes`.
+
+- The instance that records an approval forwards the push. If that instance stops mid-forward, the push is picked up by
+  the pending-push sweep, which every instance runs every five minutes, once its 30-minute claim lapses.
+- The push record shows the outcome. A forward that fails ends in `ERROR` with the cause; the pusher or an administrator
+  can retry it with **Forward now** (`POST /api/push/{id}/forward`) while its stored push is kept.
+- A developer whose forward fails is not notified outside the dashboard; the client disconnected when the push was
+  queued.
+
 ## Production checklist addition: token encryption key
 
 See [Production checklist](production-checklist.md) below for database/TLS. For SCM OAuth specifically: generate a

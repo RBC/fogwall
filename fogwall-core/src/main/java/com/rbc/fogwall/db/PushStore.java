@@ -5,6 +5,8 @@ import com.rbc.fogwall.db.model.PushQuery;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
 import com.rbc.fogwall.db.model.PushSummary;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -87,6 +89,34 @@ public interface PushStore {
      * @param errorMessage human-readable upstream error detail; {@code null} for FORWARDED
      */
     void updateForwardStatus(String id, PushStatus status, String errorMessage);
+
+    /**
+     * Takes the forwarding claim on a deferred push, so exactly one instance forwards it. The claim is granted only
+     * while the push is APPROVED (or, with {@code retryFailed}, ERROR) and no other claimant holds an unexpired claim.
+     *
+     * @param claimant identifies the instance taking the claim
+     * @param now the current time, against which an existing claim's expiry is compared
+     * @param ttl how long the claim holds if the claimant never completes it
+     * @param retryFailed also claim a push whose previous forward ended in ERROR
+     * @return whether {@code claimant} now holds the claim
+     */
+    boolean claimForward(String id, String claimant, Instant now, Duration ttl, boolean retryFailed);
+
+    /**
+     * Records the outcome of a claimed forward and releases the claim. Takes effect only while {@code claimant} still
+     * holds the claim, so an instance whose claim expired and was taken over cannot overwrite the new holder's result.
+     *
+     * @param outcome {@link PushStatus#FORWARDED} or {@link PushStatus#ERROR}
+     * @param errorMessage the cause on ERROR; {@code null} on FORWARDED
+     * @return whether the outcome was recorded
+     */
+    boolean completeForward(String id, String claimant, PushStatus outcome, String errorMessage);
+
+    /**
+     * Returns the ids of APPROVED deferred pushes that no instance holds an unexpired claim on, oldest first: approvals
+     * whose forward never started, and forwards whose instance died.
+     */
+    List<String> findForwardable(Instant now, int limit);
 
     /** Initialize the store (create tables, indexes, etc.). Called once at startup. */
     void initialize();

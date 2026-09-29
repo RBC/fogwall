@@ -110,6 +110,26 @@ If a push is refused because your linked account is missing, can no longer be us
 push, link it again from your profile. Rotate or revoke a credential from the same tab; a credential you revoke stops
 working at once.
 
+### Pushes queued for review
+
+Where your administrator has turned on deferred forwarding, a push made with a fogwall credential does not wait for
+review. Once fogwall's checks pass, git reports the push as done and fogwall prints its push ID:
+
+```text
+remote: ✅  Push received and queued for review
+remote: 🔑  Push ID: 4d6196fb-...
+remote:    Review at: https://fogwall.corp.example.com/dashboard/push/4d6196fb-...
+remote:    fogwall forwards it upstream once approved; the push record shows the outcome.
+```
+
+The push reaches the provider only after it is approved. Until then, fetching through fogwall still shows the branch
+where it was, even though your local remote-tracking branch has moved. Pushing more commits to the same branch queues
+them too; they are forwarded in order.
+
+If forwarding fails, the push record says why and shows **Forward now**, which you can use once the cause is fixed, for
+example after linking your account again. A push that can no longer be applied upstream, because the branch moved in a
+way yours does not build on, has to be pushed again.
+
 ## Required token scopes
 
 The proxy calls the SCM API to resolve your identity. Your PAT needs at least:

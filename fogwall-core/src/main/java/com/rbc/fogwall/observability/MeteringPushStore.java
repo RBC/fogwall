@@ -6,6 +6,8 @@ import com.rbc.fogwall.db.model.PushQuery;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
 import com.rbc.fogwall.db.model.PushSummary;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -68,6 +70,18 @@ public class MeteringPushStore implements PushStore {
         }
     }
 
+    @Override
+    public boolean completeForward(String id, String claimant, PushStatus outcome, String errorMessage) {
+        boolean recorded = delegate.completeForward(id, claimant, outcome, errorMessage);
+        if (recorded && telemetry.isEnabled()) {
+            String provider = providerLabel(
+                    delegate.findById(id).map(PushRecord::getProvider).orElse(null));
+            telemetry.recordDecision(provider, outcome.name());
+            telemetry.recordForward(provider, outcome == PushStatus.FORWARDED);
+        }
+        return recorded;
+    }
+
     private static String providerLabel(String provider) {
         return provider == null || provider.isBlank() ? "unknown" : provider;
     }
@@ -107,6 +121,16 @@ public class MeteringPushStore implements PushStore {
     @Override
     public PushRecord cancel(String id, Attestation attestation) {
         return delegate.cancel(id, attestation);
+    }
+
+    @Override
+    public boolean claimForward(String id, String claimant, Instant now, Duration ttl, boolean retryFailed) {
+        return delegate.claimForward(id, claimant, now, ttl, retryFailed);
+    }
+
+    @Override
+    public List<String> findForwardable(Instant now, int limit) {
+        return delegate.findForwardable(now, limit);
     }
 
     @Override

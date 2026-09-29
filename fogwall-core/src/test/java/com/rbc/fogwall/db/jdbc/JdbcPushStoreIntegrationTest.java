@@ -7,9 +7,11 @@ import com.rbc.fogwall.db.PushStoreFactory;
 import com.rbc.fogwall.db.model.*;
 import com.rbc.fogwall.db.model.PushSummary;
 import com.rbc.fogwall.db.model.StepStatus;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -427,6 +429,109 @@ class JdbcPushStoreIntegrationTest {
 
         assertEquals(1, results.size());
         assertEquals("repoA", results.get(0).getRepoName());
+    }
+
+    // ---- forwarding claim ----
+
+    private static final Duration CLAIM_TTL = Duration.ofMinutes(15);
+
+    private String approvedDeferred() {
+        PushRecord r = record("abc", "refs/heads/main", "repo");
+        r.setStatus(PushStatus.PENDING);
+        r.setDeferred(true);
+        store.save(r);
+        store.approve(r.getId(), approvalFor(r.getId()));
+        return r.getId();
+    }
+
+    @Test
+    void claimForward_approvedDeferred_grantsOneClaimant() {
+        String id = approvedDeferred();
+        Instant now = Instant.now();
+
+        assertTrue(store.claimForward(id, "instance-a", now, CLAIM_TTL, false));
+        assertFalse(store.claimForward(id, "instance-b", now, CLAIM_TTL, false));
+    }
+
+    @Test
+    void claimForward_expiredClaim_canBeTakenOver() {
+        String id = approvedDeferred();
+        Instant now = Instant.now();
+        store.claimForward(id, "instance-a", now, CLAIM_TTL, false);
+
+        assertTrue(store.claimForward(id, "instance-b", now.plus(CLAIM_TTL).plusSeconds(1), CLAIM_TTL, false));
+        assertFalse(store.completeForward(id, "instance-a", PushStatus.FORWARDED, null));
+        assertTrue(store.completeForward(id, "instance-b", PushStatus.FORWARDED, null));
+    }
+
+    @Test
+    void claimForward_notDeferred_refused() {
+        PushRecord r = record("abc", "refs/heads/main", "repo");
+        r.setStatus(PushStatus.PENDING);
+        store.save(r);
+        store.approve(r.getId(), approvalFor(r.getId()));
+
+        assertFalse(store.claimForward(r.getId(), "instance-a", Instant.now(), CLAIM_TTL, false));
+    }
+
+    @Test
+    void claimForward_pending_refused() {
+        PushRecord r = record("abc", "refs/heads/main", "repo");
+        r.setStatus(PushStatus.PENDING);
+        r.setDeferred(true);
+        store.save(r);
+
+        assertFalse(store.claimForward(r.getId(), "instance-a", Instant.now(), CLAIM_TTL, false));
+    }
+
+    @Test
+    void claimForward_failedForward_claimableOnlyWhenRetrying() {
+        String id = approvedDeferred();
+        store.claimForward(id, "instance-a", Instant.now(), CLAIM_TTL, false);
+        store.completeForward(id, "instance-a", PushStatus.ERROR, "upstream refused");
+
+        assertFalse(store.claimForward(id, "instance-a", Instant.now(), CLAIM_TTL, false));
+        assertTrue(store.claimForward(id, "instance-a", Instant.now(), CLAIM_TTL, true));
+    }
+
+    @Test
+    void completeForward_recordsOutcomeAndReleasesClaim() {
+        String id = approvedDeferred();
+        store.claimForward(id, "instance-a", Instant.now(), CLAIM_TTL, false);
+
+        assertTrue(store.completeForward(id, "instance-a", PushStatus.ERROR, "upstream refused"));
+
+        PushRecord after = store.findById(id).orElseThrow();
+        assertEquals(PushStatus.ERROR, after.getStatus());
+        assertEquals("upstream refused", after.getErrorMessage());
+        assertNotNull(after.getForwardedAt());
+        assertTrue(after.isDeferred());
+        assertTrue(store.claimForward(id, "instance-b", Instant.now(), CLAIM_TTL, true));
+    }
+
+    @Test
+    void completeForward_withoutClaim_refused() {
+        String id = approvedDeferred();
+
+        assertFalse(store.completeForward(id, "instance-a", PushStatus.FORWARDED, null));
+        assertEquals(PushStatus.APPROVED, store.findById(id).orElseThrow().getStatus());
+    }
+
+    @Test
+    void findForwardable_returnsApprovedDeferredWithoutLiveClaim() {
+        String unclaimed = approvedDeferred();
+        String claimed = approvedDeferred();
+        Instant now = Instant.now();
+        store.claimForward(claimed, "instance-a", now, CLAIM_TTL, false);
+        PushRecord pending = record("abc", "refs/heads/main", "repo");
+        pending.setStatus(PushStatus.PENDING);
+        pending.setDeferred(true);
+        store.save(pending);
+
+        assertEquals(List.of(unclaimed), store.findForwardable(now, 10));
+        assertEquals(
+                Set.of(unclaimed, claimed),
+                Set.copyOf(store.findForwardable(now.plus(CLAIM_TTL).plusSeconds(1), 10)));
     }
 
     // ---- initialize idempotency ----

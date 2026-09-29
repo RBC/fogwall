@@ -7,6 +7,8 @@ import com.rbc.fogwall.db.jdbc.mapper.PushRecordRowMapper;
 import com.rbc.fogwall.db.jdbc.mapper.PushStepRowMapper;
 import com.rbc.fogwall.db.model.*;
 import java.sql.Timestamp;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -56,11 +58,11 @@ public class JdbcPushStore implements PushStore {
                     INSERT INTO push_records (id, timestamp, url, upstream_url, provider, project, repo_name, branch,
                         commit_from, commit_to, message, author, author_email, committer, committer_email,
                         push_user, resolved_user, scm_username, user_email, method, status, error_message, blocked_message,
-                        auto_approved, auto_rejected)
+                        auto_approved, auto_rejected, deferred)
                     VALUES (:id, :timestamp, :url, :upstreamUrl, :provider, :project, :repoName, :branch,
                         :commitFrom, :commitTo, :message, :author, :authorEmail, :committer, :committerEmail,
                         :user, :resolvedUser, :scmUsername, :userEmail, :method, :status, :errorMessage, :blockedMessage,
-                        :autoApproved, :autoRejected)
+                        :autoApproved, :autoRejected, :deferred)
                     """, pushRecordParams(record));
 
             saveSteps(record.getId(), record.getSteps());
@@ -207,7 +209,7 @@ public class JdbcPushStore implements PushStore {
 
     @Override
     public void updateForwardStatus(String id, PushStatus status, String errorMessage) {
-        Timestamp now = Timestamp.from(java.time.Instant.now());
+        Timestamp now = Timestamp.from(Instant.now());
         tx.executeWithoutResult(txStatus -> {
             String currentStatus = jdbc.queryForObject(
                     "SELECT status FROM push_records WHERE id = :id", Map.of("id", id), String.class);
@@ -232,6 +234,55 @@ public class JdbcPushStore implements PushStore {
                         "Push " + id + " status changed concurrently (expected " + currentStatus + ")");
             }
         });
+    }
+
+    @Override
+    public boolean claimForward(String id, String claimant, Instant now, Duration ttl, boolean retryFailed) {
+        String statuses = retryFailed ? "('APPROVED', 'ERROR')" : "('APPROVED')";
+        return jdbc.update(
+                        "UPDATE push_records SET forward_claimed_by = :claimant, forward_claim_expires_at = :expiresAt"
+                                + " WHERE id = :id AND deferred = :deferred AND status IN " + statuses
+                                + " AND (forward_claimed_by IS NULL OR forward_claim_expires_at < :now)",
+                        new MapSqlParameterSource()
+                                .addValue("claimant", claimant)
+                                .addValue("expiresAt", Timestamp.from(now.plus(ttl)))
+                                .addValue("id", id)
+                                .addValue("deferred", true)
+                                .addValue("now", Timestamp.from(now)))
+                == 1;
+    }
+
+    @Override
+    public boolean completeForward(String id, String claimant, PushStatus outcome, String errorMessage) {
+        return jdbc.update(
+                        """
+                        UPDATE push_records SET status = :status, error_message = :errorMessage,
+                            forwarded_at = :forwardedAt, forward_claimed_by = NULL, forward_claim_expires_at = NULL
+                        WHERE id = :id AND forward_claimed_by = :claimant
+                        """,
+                        new MapSqlParameterSource()
+                                .addValue("status", outcome.name())
+                                .addValue("errorMessage", errorMessage)
+                                .addValue("forwardedAt", Timestamp.from(Instant.now()))
+                                .addValue("id", id)
+                                .addValue("claimant", claimant))
+                == 1;
+    }
+
+    @Override
+    public List<String> findForwardable(Instant now, int limit) {
+        return jdbc.queryForList(
+                """
+                SELECT id FROM push_records
+                WHERE status = 'APPROVED' AND deferred = :deferred
+                    AND (forward_claimed_by IS NULL OR forward_claim_expires_at < :now)
+                ORDER BY timestamp LIMIT :limit
+                """,
+                new MapSqlParameterSource()
+                        .addValue("deferred", true)
+                        .addValue("now", Timestamp.from(now))
+                        .addValue("limit", limit),
+                String.class);
     }
 
     @Override
@@ -470,6 +521,7 @@ public class JdbcPushStore implements PushStore {
                 .addValue("errorMessage", r.getErrorMessage())
                 .addValue("blockedMessage", r.getBlockedMessage())
                 .addValue("autoApproved", r.isAutoApproved())
-                .addValue("autoRejected", r.isAutoRejected());
+                .addValue("autoRejected", r.isAutoRejected())
+                .addValue("deferred", r.isDeferred());
     }
 }

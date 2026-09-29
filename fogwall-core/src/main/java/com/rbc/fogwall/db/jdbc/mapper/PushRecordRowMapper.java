@@ -44,6 +44,7 @@ public final class PushRecordRowMapper implements RowMapper<PushRecord> {
                 .autoApproved(rs.getBoolean("auto_approved"))
                 .autoRejected(rs.getBoolean("auto_rejected"))
                 .forwardedAt(toInstant(rs.getTimestamp("forwarded_at")))
+                .deferred(rs.getBoolean("deferred"))
                 .build();
     }
 

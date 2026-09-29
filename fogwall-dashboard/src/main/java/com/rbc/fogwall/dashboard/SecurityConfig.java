@@ -222,7 +222,12 @@ public class SecurityConfig {
                 // permissions inside the controller. Listed before the admin catch-all so they win.
                 .requestMatchers("/api/me", "/api/me/**")
                 .authenticated()
-                .requestMatchers(HttpMethod.POST, "/api/push/*/authorise", "/api/push/*/reject", "/api/push/*/cancel")
+                .requestMatchers(
+                        HttpMethod.POST,
+                        "/api/push/*/authorise",
+                        "/api/push/*/reject",
+                        "/api/push/*/cancel",
+                        "/api/push/*/forward")
                 .authenticated()
                 .requestMatchers("/api/issues", "/api/issues/**")
                 .authenticated()

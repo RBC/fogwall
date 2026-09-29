@@ -54,6 +54,10 @@ public class PushStorePersistenceHook {
     @Setter
     private boolean autoApproval;
 
+    /** Whether the push is parked, so its PENDING record is marked for forwarding from the parked-push store. */
+    @Setter
+    private boolean deferred;
+
     /**
      * Returns a {@link PreReceiveHook} that persists the validation outcome as the push's single lifecycle record. Runs
      * after all validation hooks and before the approval gate.
@@ -190,6 +194,7 @@ public class PushStorePersistenceHook {
 
                 // No validation issues → PENDING human review
                 record.setStatus(PushStatus.PENDING);
+                record.setDeferred(deferred);
 
                 // Steps from push context (diffs, scans, etc.)
                 if (pushContext != null) {

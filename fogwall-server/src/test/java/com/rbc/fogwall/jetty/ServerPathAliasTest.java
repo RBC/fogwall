@@ -22,6 +22,7 @@ import com.rbc.fogwall.servlet.filter.FogwallCredentialFilter;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.eclipse.jetty.ee11.servlet.ServletContextHandler;
@@ -79,7 +80,8 @@ class ServerPathAliasTest {
                 0,
                 new InMemoryUrlRuleRegistry(),
                 null, // fetchStore
-                credentialFilter(provider));
+                credentialFilter(provider),
+                Optional.empty());
 
         String servletPath = provider.servletPath();
         Set<String> pathSpecs = registeredPathSpecs(context);
@@ -121,7 +123,8 @@ class ServerPathAliasTest {
                 0,
                 new InMemoryUrlRuleRegistry(),
                 null,
-                credentialFilter(provider));
+                credentialFilter(provider),
+                Optional.empty());
 
         List<String> gitHolderNames = Arrays.stream(context.getServletHandler().getServlets())
                 .map(ServletHolder::getName)

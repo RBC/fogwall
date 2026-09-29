@@ -5,6 +5,7 @@ import com.rbc.fogwall.db.model.Attestation.Type;
 import com.rbc.fogwall.db.model.PushQuery;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
+import com.rbc.fogwall.git.DeferredForwarder;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -14,10 +15,13 @@ import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Cancels PENDING push records that have sat unreviewed for longer than {@code expiryAge}. Only transparent proxy mode
- * needs this: server mode's held request already times out and cancels itself synchronously within the same connection
- * (see {@code ApprovalPreReceiveHook}), but a proxy-mode PENDING record has no held connection to bound — without this
- * sweep it would sit forever unless a human acts on it or a new push to the same branch supersedes it.
+ * Cancels PENDING push records that have sat unreviewed for longer than {@code expiryAge}. A held server-mode request
+ * times out and cancels itself within the same connection (see {@code ApprovalPreReceiveHook}), but a transparent-proxy
+ * PENDING record and a parked server-mode push have no held connection to bound — without this sweep they would sit
+ * forever unless a human acts on them or a new push to the same branch supersedes them.
+ *
+ * <p>Each run also sweeps deferred forwarding: approved parked pushes whose forward never started or whose instance
+ * died, and stored packs nothing can forward any more (see {@link DeferredForwarder#sweep}).
  *
  * <p>Runs on a fixed interval rather than a scheduled-per-record timer: candidates are found by querying for PENDING
  * records older than the cutoff, so a record that's expired between sweeps is caught on the next one rather than
@@ -32,19 +36,22 @@ public class PendingPushExpiryTask {
     private static final int MAX_PER_SWEEP = 500;
 
     private final PushStore pushStore;
+    private final DeferredForwarder deferredForwarder;
     private final Duration expiryAge;
     private final Duration checkInterval;
     private ScheduledExecutorService scheduler;
 
-    public PendingPushExpiryTask(PushStore pushStore, Duration expiryAge) {
-        this(pushStore, expiryAge, DEFAULT_CHECK_INTERVAL);
+    public PendingPushExpiryTask(PushStore pushStore, DeferredForwarder deferredForwarder, Duration expiryAge) {
+        this(pushStore, deferredForwarder, expiryAge, DEFAULT_CHECK_INTERVAL);
     }
 
     /**
      * Package-visible so a test can use a short check interval instead of waiting on {@link #DEFAULT_CHECK_INTERVAL}.
      */
-    PendingPushExpiryTask(PushStore pushStore, Duration expiryAge, Duration checkInterval) {
+    PendingPushExpiryTask(
+            PushStore pushStore, DeferredForwarder deferredForwarder, Duration expiryAge, Duration checkInterval) {
         this.pushStore = pushStore;
+        this.deferredForwarder = deferredForwarder;
         this.expiryAge = expiryAge;
         this.checkInterval = checkInterval;
     }
@@ -88,6 +95,14 @@ public class PendingPushExpiryTask {
             }
         } catch (Exception e) {
             log.error("Pending-push expiry sweep failed", e);
+        }
+        try {
+            int started = deferredForwarder.sweep();
+            if (started > 0) {
+                log.info("Deferred-forwarding sweep started {} forward(s)", started);
+            }
+        } catch (Exception e) {
+            log.error("Deferred-forwarding sweep failed", e);
         }
     }
 }

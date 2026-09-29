@@ -6,6 +6,7 @@ import com.rbc.fogwall.db.mongo.MongoFetchStore;
 import com.rbc.fogwall.db.mongo.MongoGitCredentialStore;
 import com.rbc.fogwall.db.mongo.MongoGitHubNodeIdCache;
 import com.rbc.fogwall.db.mongo.MongoGitLabProjectIdCache;
+import com.rbc.fogwall.db.mongo.MongoParkedPushStore;
 import com.rbc.fogwall.db.mongo.MongoPushStore;
 import com.rbc.fogwall.db.mongo.MongoScmApiActionStore;
 import com.rbc.fogwall.db.mongo.MongoScmApiEntityStore;
@@ -119,6 +120,13 @@ public final class MongoStoreFactory implements AutoCloseable {
     /** Create and initialize a {@link GitCredentialStore} backed by this factory's client. */
     public GitCredentialStore gitCredentialStore() {
         MongoGitCredentialStore store = new MongoGitCredentialStore(client, databaseName);
+        store.initialize();
+        return store;
+    }
+
+    /** Create and initialize a {@link ParkedPushStore} backed by this factory's client. */
+    public ParkedPushStore parkedPushStore() {
+        MongoParkedPushStore store = new MongoParkedPushStore(client, databaseName);
         store.initialize();
         return store;
     }

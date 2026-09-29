@@ -76,15 +76,16 @@ providers:
 
 ## SCM OAuth properties
 
-| Property                                    | Type    | Default      | Description                                                                                                                                            |
-| ------------------------------------------- | ------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `identity-mode`                             | string  | `permissive` | `permissive` or `strict` — see above.                                                                                                                  |
-| `token-encryption-key-path`                 | string  | _(none)_     | Path to the base64-encoded 32-byte AES-256-GCM key file. Auto-generated under `./.data/` for local dev if unset and some provider has `oauth.enabled`. |
-| `max-link-age`                              | string  | _(none)_     | ISO-8601 duration after which a linked account must be linked again, counted from when the user authorized it. See the administrator guide.            |
-| `providers.<name>.oauth.enabled`            | boolean | `false`      | Whether "Link via OAuth" is offered for this provider.                                                                                                 |
-| `providers.<name>.oauth.client-id`          | string  | `""`         | OAuth app/client ID.                                                                                                                                   |
-| `providers.<name>.oauth.client-secret-path` | string  | `""`         | Path to a file holding the OAuth app/client secret.                                                                                                    |
-| `providers.<name>.oauth.brokered-push`      | boolean | `false`      | Forward server-mode pushes made with a fogwall-issued git credential with the pusher's linked OAuth token. Requires `oauth.enabled`. See below.        |
+| Property                                     | Type    | Default      | Description                                                                                                                                            |
+| -------------------------------------------- | ------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `identity-mode`                              | string  | `permissive` | `permissive` or `strict` — see above.                                                                                                                  |
+| `token-encryption-key-path`                  | string  | _(none)_     | Path to the base64-encoded 32-byte AES-256-GCM key file. Auto-generated under `./.data/` for local dev if unset and some provider has `oauth.enabled`. |
+| `max-link-age`                               | string  | _(none)_     | ISO-8601 duration after which a linked account must be linked again, counted from when the user authorized it. See the administrator guide.            |
+| `providers.<name>.oauth.enabled`             | boolean | `false`      | Whether "Link via OAuth" is offered for this provider.                                                                                                 |
+| `providers.<name>.oauth.client-id`           | string  | `""`         | OAuth app/client ID.                                                                                                                                   |
+| `providers.<name>.oauth.client-secret-path`  | string  | `""`         | Path to a file holding the OAuth app/client secret.                                                                                                    |
+| `providers.<name>.oauth.brokered-push`       | boolean | `false`      | Forward server-mode pushes made with a fogwall-issued git credential with the pusher's linked OAuth token. Requires `oauth.enabled`. See below.        |
+| `providers.<name>.oauth.deferred-forwarding` | boolean | `false`      | Acknowledge those pushes once received and forward them after approval. Requires `oauth.brokered-push`. Dashboard only. See below.                     |
 
 **Registering a GitHub App:** account permissions needed are exactly **Email addresses (read-only)** and **Git SSH keys
 (read-only)** — no others, and no private key (a GitHub App's private key is for app/installation-level auth, which this
@@ -128,3 +129,29 @@ auth:
 - A fogwall credential presented for a provider without `brokered-push`, on a transparent-proxy remote, or to the SCM
   API proxy is refused, and never sent upstream.
 - The push record names the credential that authenticated the push and the linked account it was forwarded with.
+
+## Deferred forwarding
+
+With `providers.<name>.oauth.deferred-forwarding: true`, a push made with a fogwall-issued git credential does not wait
+for review. fogwall runs its checks, stores the push, and reports it to the client as pushed and queued. Once the push
+is approved, fogwall forwards it with the developer's linked OAuth token.
+
+```yaml
+providers:
+  github:
+    oauth:
+      enabled: true
+      client-id: Iv1.abc123
+      client-secret-path: /run/secrets/fogwall-github-oauth-secret
+      brokered-push: true
+      deferred-forwarding: true
+```
+
+- Requires `oauth.brokered-push` on the same provider and a non-zero `server.max-push-bytes`; startup fails otherwise.
+- The dashboard distribution only. The standalone server refuses the setting at startup.
+- Server mode over HTTP only. Pushes over SSH, pushes made with the developer's own credential, and transparent-proxy
+  pushes keep the synchronous flow.
+- Every such push is parked, including one that is then self-certified.
+- The stored push is kept in the database until the push is forwarded, rejected or cancelled. A push whose forward fails
+  ends in `ERROR` and keeps its stored push for `server.pending-push-expiry-days`, so it can be forwarded again. A push
+  that is never reviewed is cancelled after the same period.

@@ -145,7 +145,15 @@ public class DatabaseMigrator {
             new Migration("16", "scm token cache scm login", "db/migration/V16__scm_token_cache_login.sql", Vendor.ANY),
             new Migration("17", "scm api merge", "db/migration/V17__scm_api_merge.sql", Vendor.ANY),
             new Migration("18", "scm api action origin", "db/migration/V18__scm_api_action_origin.sql", Vendor.ANY),
-            new Migration("19", "git credentials", "db/migration/V19__git_credentials.sql", Vendor.ANY));
+            new Migration("19", "git credentials", "db/migration/V19__git_credentials.sql", Vendor.ANY),
+            new Migration("20", "deferred forwarding", "db/migration/V20__deferred_forwarding.sql", Vendor.ANY),
+            new Migration(
+                    "20.1", "parked push chunks", "db/migration/V20_1__parked_push_chunks.sql", Vendor.EXCEPT_MYSQL),
+            new Migration(
+                    "20.1",
+                    "parked push chunks (mysql/mariadb)",
+                    "db/migration-mysql/V20_1__parked_push_chunks.sql",
+                    Vendor.MYSQL_ONLY));
 
     // ---------------------------------------------------------------------------
 

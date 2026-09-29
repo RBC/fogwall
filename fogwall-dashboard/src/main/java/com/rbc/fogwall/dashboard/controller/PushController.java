@@ -10,6 +10,7 @@ import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
 import com.rbc.fogwall.db.model.PushStep;
 import com.rbc.fogwall.db.model.PushSummary;
+import com.rbc.fogwall.git.DeferredForwarder;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.permission.RepoPermissionService;
@@ -44,6 +45,8 @@ public class PushController {
     private final ConfigHolder configHolder;
 
     private final ProviderRegistry providerRegistry;
+
+    private final DeferredForwarder deferredForwarder;
 
     /** Returns the authenticated username, falling back to {@code body.reviewerUsername}, then {@code "system"}. */
     private static String resolveReviewer(Map<String, String> body) {
@@ -260,6 +263,8 @@ public class PushController {
                     record.setCanCurrentUserSelfCertify(computeCanCurrentUserSelfCertify(record));
                     record.setCanCurrentUserCancel(
                             canCancel(record, SecurityContextHolder.getContext().getAuthentication()));
+                    record.setCanCurrentUserForward(canForward(
+                            record, SecurityContextHolder.getContext().getAuthentication()));
                     enrichUrls(record);
                     return ResponseEntity.ok(record);
                 })
@@ -358,6 +363,10 @@ public class PushController {
                             .answers(body.attestations())
                             .build();
                     var updated = pushStore.approve(id, attestation);
+                    // A parked push has no held connection waiting on this approval; the approving instance forwards.
+                    if (updated.isDeferred()) {
+                        deferredForwarder.start(id, false);
+                    }
                     return ResponseEntity.ok(updated);
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -424,6 +433,9 @@ public class PushController {
                             .reason(reason)
                             .build();
                     var updated = pushStore.reject(id, attestation);
+                    if (updated.isDeferred()) {
+                        deferredForwarder.discard(id);
+                    }
                     return ResponseEntity.ok(updated);
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -538,9 +550,54 @@ public class PushController {
                             .reviewerUsername(resolveReviewer(body))
                             .build();
                     var updated = pushStore.cancel(id, attestation);
+                    if (updated.isDeferred()) {
+                        deferredForwarder.discard(id);
+                    }
                     return ResponseEntity.ok(updated);
                 })
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Forward an approved parked push now: one whose forward has not started, or ended in ERROR while its stored pack
+     * is still kept. The pusher or an admin may ask. Forwarding runs in the background; the push record shows the
+     * outcome.
+     */
+    @Operation(operationId = "forwardPush", summary = "Forward an approved parked push now")
+    @PostMapping("/{id}/forward")
+    public ResponseEntity<?> forward(@PathVariable String id) {
+        return pushStore
+                .findById(id)
+                .map(record -> {
+                    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+                    if (!isAdmin(auth) && (auth == null || !auth.getName().equals(record.getResolvedUser()))) {
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                                .body(Map.of("error", "Only the pusher or an admin can forward a push"));
+                    }
+                    if (!isForwardable(record)) {
+                        return ResponseEntity.badRequest()
+                                .body(Map.of(
+                                        "error",
+                                        "Only an approved parked push, or one whose forward failed, can be forwarded"));
+                    }
+                    if (!deferredForwarder.start(id, true)) {
+                        return ResponseEntity.status(HttpStatus.CONFLICT)
+                                .body(Map.of("error", "This push is already being forwarded"));
+                    }
+                    return ResponseEntity.accepted().body(Map.of("id", id));
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /** Whether {@code auth} may forward {@code record} now: the pusher or an admin, on a forwardable parked push. */
+    private boolean canForward(PushRecord record, Authentication auth) {
+        if (auth == null || !isForwardable(record)) return false;
+        return isAdmin(auth) || auth.getName().equals(record.getResolvedUser());
+    }
+
+    private static boolean isForwardable(PushRecord record) {
+        return record.isDeferred()
+                && (record.getStatus() == PushStatus.APPROVED || record.getStatus() == PushStatus.ERROR);
     }
 
     /**

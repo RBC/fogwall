@@ -794,6 +794,61 @@ class JettyConfigurationBuilderTest {
         assertTrue(ex.getMessage().contains("providers.gitea.oauth.enabled"), ex.getMessage());
     }
 
+    // ---- deferred forwarding ----
+
+    private static ProviderConfig brokeredGitea() {
+        var gitea = new ProviderConfig();
+        gitea.getOauth().setEnabled(true);
+        gitea.getOauth().setClientId("client");
+        gitea.getOauth().setBrokeredPush(true);
+        return gitea;
+    }
+
+    @Test
+    void isDeferredForwarding_offByDefault() {
+        var config = new FogwallConfig();
+        config.setProviders(Map.of("gitea", brokeredGitea()));
+
+        assertFalse(new JettyConfigurationBuilder(config).isDeferredForwarding("gitea"));
+    }
+
+    @Test
+    void isDeferredForwarding_withBrokeredPush_isOn() {
+        var gitea = brokeredGitea();
+        gitea.getOauth().setDeferredForwarding(true);
+        var config = new FogwallConfig();
+        config.setProviders(Map.of("gitea", gitea));
+
+        assertTrue(new JettyConfigurationBuilder(config).isDeferredForwarding("gitea"));
+    }
+
+    @Test
+    void isDeferredForwarding_withoutBrokeredPush_failsStartup() {
+        var gitea = brokeredGitea();
+        gitea.getOauth().setBrokeredPush(false);
+        gitea.getOauth().setDeferredForwarding(true);
+        var config = new FogwallConfig();
+        config.setProviders(Map.of("gitea", gitea));
+
+        var ex = assertThrows(
+                IllegalStateException.class, () -> new JettyConfigurationBuilder(config).isDeferredForwarding("gitea"));
+        assertTrue(ex.getMessage().contains("providers.gitea.oauth.brokered-push"), ex.getMessage());
+    }
+
+    @Test
+    void isDeferredForwarding_withUnlimitedPushSize_failsStartup() {
+        // Every parked pack is stored in the database; without a push size limit nothing bounds it.
+        var gitea = brokeredGitea();
+        gitea.getOauth().setDeferredForwarding(true);
+        var config = new FogwallConfig();
+        config.setProviders(Map.of("gitea", gitea));
+        config.getServer().setMaxPushBytes(0);
+
+        var ex = assertThrows(
+                IllegalStateException.class, () -> new JettyConfigurationBuilder(config).isDeferredForwarding("gitea"));
+        assertTrue(ex.getMessage().contains("server.max-push-bytes"), ex.getMessage());
+    }
+
     @Test
     void buildGitCredentialService_unparseableLifetime_failsStartupNamingTheKey() {
         var config = new FogwallConfig();

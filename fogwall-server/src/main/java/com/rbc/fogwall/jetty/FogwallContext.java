@@ -11,6 +11,7 @@ import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.ScmApiActionStore;
 import com.rbc.fogwall.db.ScmApiEntityStore;
 import com.rbc.fogwall.db.UrlRuleRegistry;
+import com.rbc.fogwall.git.DeferredForwarder;
 import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.observability.FogwallTelemetry;
 import com.rbc.fogwall.permission.RepoPermissionService;
@@ -64,4 +65,5 @@ public record FogwallContext(
         TokenCipherProvider tokenCipherProvider,
         ScmOAuthTokenService scmOAuthTokenService,
         GitCredentialService gitCredentialService,
-        FogwallTelemetry telemetry) {}
+        FogwallTelemetry telemetry,
+        DeferredForwarder deferredForwarder) {}

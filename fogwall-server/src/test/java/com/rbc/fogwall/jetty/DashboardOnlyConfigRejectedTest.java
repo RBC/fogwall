@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.rbc.fogwall.config.FogwallConfig;
 import com.rbc.fogwall.config.JettyConfigurationBuilder;
+import com.rbc.fogwall.config.ProviderConfig;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -60,5 +62,19 @@ class DashboardOnlyConfigRejectedTest {
         config.getServer().setApprovalMode("auto");
 
         assertDoesNotThrow(() -> validate(config));
+    }
+
+    @Test
+    void deferredForwarding_isRefused() {
+        // A parked push waits for a reviewer's approval, and the credentials it is made with are issued by the
+        // dashboard; neither exists here.
+        var gitea = new ProviderConfig();
+        gitea.getOauth().setDeferredForwarding(true);
+        var config = new FogwallConfig();
+        config.setProviders(Map.of("gitea", gitea));
+
+        var e = assertThrows(IllegalStateException.class, () -> validate(config));
+        assertTrue(e.getMessage().contains("deferred-forwarding"), e.getMessage());
+        assertTrue(e.getMessage().contains("gitea"), e.getMessage());
     }
 }

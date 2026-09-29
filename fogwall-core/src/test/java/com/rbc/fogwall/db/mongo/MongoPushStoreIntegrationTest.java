@@ -4,9 +4,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.mongodb.client.MongoClients;
 import com.rbc.fogwall.db.model.*;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.*;
 import org.testcontainers.containers.MongoDBContainer;
@@ -422,5 +424,100 @@ class MongoPushStoreIntegrationTest {
         var page1Ids = page1.stream().map(PushRecord::getId).toList();
         var page2Ids = page2.stream().map(PushRecord::getId).toList();
         assertTrue(page1Ids.stream().noneMatch(page2Ids::contains));
+    }
+
+    // ---- forwarding claim ----
+
+    private static final Duration CLAIM_TTL = Duration.ofMinutes(15);
+
+    private String approvedDeferred() {
+        PushRecord r = record(UUID.randomUUID().toString());
+        r.setStatus(PushStatus.PENDING);
+        r.setDeferred(true);
+        store.save(r);
+        store.approve(
+                r.getId(),
+                Attestation.builder()
+                        .pushId(r.getId())
+                        .type(Attestation.Type.APPROVAL)
+                        .reviewerUsername("reviewer")
+                        .build());
+        return r.getId();
+    }
+
+    @Test
+    void claimForward_approvedDeferred_grantsOneClaimant() {
+        String id = approvedDeferred();
+        Instant now = Instant.now();
+
+        assertTrue(store.claimForward(id, "instance-a", now, CLAIM_TTL, false));
+        assertFalse(store.claimForward(id, "instance-b", now, CLAIM_TTL, false));
+    }
+
+    @Test
+    void claimForward_expiredClaim_canBeTakenOver() {
+        String id = approvedDeferred();
+        Instant now = Instant.now();
+        store.claimForward(id, "instance-a", now, CLAIM_TTL, false);
+
+        assertTrue(store.claimForward(id, "instance-b", now.plus(CLAIM_TTL).plusSeconds(1), CLAIM_TTL, false));
+        assertFalse(store.completeForward(id, "instance-a", PushStatus.FORWARDED, null));
+        assertTrue(store.completeForward(id, "instance-b", PushStatus.FORWARDED, null));
+    }
+
+    @Test
+    void claimForward_pending_refused() {
+        PushRecord r = record(UUID.randomUUID().toString());
+        r.setStatus(PushStatus.PENDING);
+        r.setDeferred(true);
+        store.save(r);
+
+        assertFalse(store.claimForward(r.getId(), "instance-a", Instant.now(), CLAIM_TTL, false));
+    }
+
+    @Test
+    void claimForward_failedForward_claimableOnlyWhenRetrying() {
+        String id = approvedDeferred();
+        store.claimForward(id, "instance-a", Instant.now(), CLAIM_TTL, false);
+        store.completeForward(id, "instance-a", PushStatus.ERROR, "upstream refused");
+
+        assertFalse(store.claimForward(id, "instance-a", Instant.now(), CLAIM_TTL, false));
+        assertTrue(store.claimForward(id, "instance-a", Instant.now(), CLAIM_TTL, true));
+    }
+
+    @Test
+    void completeForward_recordsOutcomeAndReleasesClaim() {
+        String id = approvedDeferred();
+        store.claimForward(id, "instance-a", Instant.now(), CLAIM_TTL, false);
+
+        assertTrue(store.completeForward(id, "instance-a", PushStatus.ERROR, "upstream refused"));
+
+        PushRecord after = store.findById(id).orElseThrow();
+        assertEquals(PushStatus.ERROR, after.getStatus());
+        assertEquals("upstream refused", after.getErrorMessage());
+        assertNotNull(after.getForwardedAt());
+        assertTrue(after.isDeferred());
+        assertTrue(store.claimForward(id, "instance-b", Instant.now(), CLAIM_TTL, true));
+    }
+
+    @Test
+    void completeForward_withoutClaim_refused() {
+        String id = approvedDeferred();
+
+        assertFalse(store.completeForward(id, "instance-a", PushStatus.FORWARDED, null));
+        assertEquals(PushStatus.APPROVED, store.findById(id).orElseThrow().getStatus());
+    }
+
+    @Test
+    void findForwardable_returnsApprovedDeferredWithoutLiveClaim() {
+        String unclaimed = approvedDeferred();
+        String claimed = approvedDeferred();
+        Instant now = Instant.now();
+        store.claimForward(claimed, "instance-a", now, CLAIM_TTL, false);
+
+        assertEquals(List.of(unclaimed), store.findForwardable(now, 10));
+        assertEquals(
+                Set.of(unclaimed, claimed),
+                Set.copyOf(store.findForwardable(now.plus(CLAIM_TTL).plusSeconds(1), 10)));
     }
 }
