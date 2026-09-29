@@ -240,26 +240,33 @@ class ProxyModeE2ETest {
         assertFalse(result.succeeded(), "push with token= in message should be rejected");
     }
 
-    // ---- checkEmptyBranch (mirrors checkEmptyBranch.ts) ----
+    // ---- branch with no new commits ----
 
     @Test
-    void emptyBranch_rejected() throws Exception {
-        // The Gitea repo is auto-initialised with a README, so main already has a commit.
-        // Cloning and creating a new branch at HEAD (no new commits) means the branch tip
-        // is already reachable from main - getCommitRange returns empty → rejected outright.
+    void branchAtExistingCommit_reviewedLikeAnyPush() throws Exception {
+        // The Gitea repo is auto-initialised with a README, so main already has a commit. A branch created at HEAD
+        // introduces no new commits; it goes through review like any other push rather than being refused.
         GitHelper git = helper();
-        Path repo = git.clone(repoUrl(), "proxy-empty-branch");
+        Path repo = git.clone(repoUrl(), "proxy-branch-pointer");
         git.setAuthor(repo, GiteaContainer.VALID_AUTHOR_NAME, GiteaContainer.VALID_AUTHOR_EMAIL);
-        git.createAndCheckoutBranch(repo, "proxy-empty-test-branch");
+        git.createAndCheckoutBranch(repo, "proxy-branch-pointer");
 
-        var result = git.pushWithResult(repo);
-        assertFalse(result.succeeded(), "push of branch with no new commits should be rejected");
-        assertTrue(
-                result.output().contains("Empty Branch"),
-                "rejection should identify the empty branch condition. Output:\n" + result.output());
-        assertTrue(
-                result.output().contains("commit before pushing"),
-                "rejection message should mention making a commit. Output:\n" + result.output());
+        var firstPush = git.pushWithResult(repo);
+        assertFalse(firstPush.output().contains("Empty Branch"), firstPush.output());
+        String pushId = firstPush.extractPushId();
+        assertEquals(
+                PushStatus.PENDING, pushStore().findById(pushId).orElseThrow().getStatus());
+
+        pushStore()
+                .approve(
+                        pushId,
+                        Attestation.builder()
+                                .pushId(pushId)
+                                .type(Attestation.Type.APPROVAL)
+                                .reviewerUsername("e2e-test-reviewer")
+                                .build());
+        var rePush = git.pushWithResult(repo);
+        assertTrue(rePush.succeeded(), "re-push after approval should succeed. Output:\n" + rePush.output());
     }
 
     // ---- push options ----

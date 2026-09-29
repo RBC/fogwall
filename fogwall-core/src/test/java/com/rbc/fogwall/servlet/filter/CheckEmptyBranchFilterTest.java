@@ -134,32 +134,32 @@ class CheckEmptyBranchFilterTest {
     }
 
     @Test
-    void newBranchNoCommits_blocked() throws Exception {
-        GitRequestDetails details = detailsWithNoCommits(true);
-        FakeResponse fakeResponse = new FakeResponse();
-        CheckEmptyBranchFilter filter = new CheckEmptyBranchFilter();
+    void noNewCommits_afterInspection_passes() throws Exception {
+        // EnrichPushCommitsFilter walked the range and found nothing new: a branch created at, or moved back to, a
+        // commit already upstream.
+        for (boolean isNewBranch : new boolean[] {true, false}) {
+            GitRequestDetails details = detailsWithNoCommits(isNewBranch);
+            details.setCommitRangeInspected(true);
+            FakeResponse fakeResponse = new FakeResponse();
 
-        filter.doHttpFilter(mockPushRequest(details), fakeResponse.mock);
+            new CheckEmptyBranchFilter().doHttpFilter(mockPushRequest(details), fakeResponse.mock);
 
-        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult(), "Empty new branch must be rejected");
-        // The recorded issue carries the message the runner emits to the client.
-        String recorded = details.getSteps().get(details.getSteps().size() - 1).getContent();
-        assertTrue(
-                recorded.contains("Empty Branch") || recorded.contains("commit"),
-                "Recorded issue must explain the rejection");
+            assertFalse(fakeResponse.committed.get(), "a push with no new commits is not an error");
+            assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
+        }
     }
 
     @Test
-    void existingBranchNoCommitData_blocked() throws Exception {
-        GitRequestDetails details = detailsWithNoCommits(false);
+    void noCommits_withoutInspection_blocked() throws Exception {
+        // Nothing walked the range, so an empty commit list says nothing about whether the push is new.
+        GitRequestDetails details = detailsWithNoCommits(true);
         FakeResponse fakeResponse = new FakeResponse();
-        CheckEmptyBranchFilter filter = new CheckEmptyBranchFilter();
 
-        filter.doHttpFilter(mockPushRequest(details), fakeResponse.mock);
+        new CheckEmptyBranchFilter().doHttpFilter(mockPushRequest(details), fakeResponse.mock);
 
-        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult(), "Missing commit data must be rejected");
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
         String recorded = details.getSteps().get(details.getSteps().size() - 1).getContent();
-        assertTrue(recorded.contains("Not Found") || recorded.contains("administrator") || recorded.length() > 0);
+        assertTrue(recorded.contains("Commit data not found"), recorded);
     }
 
     @Test

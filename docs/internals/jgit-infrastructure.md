@@ -128,7 +128,7 @@ chain:
 - **Validation hooks** implement `FogwallHook` and declare a `LifecycleStage`; the roster is a fixed, core-owned list
   and is sorted by stage. The built-in hooks all run in `MANDATORY_PROCESSING`: URL rules and user permission, then
   empty-branch and hidden-commit guards, then email/message validation, diffs, GPG, and secret scanning. Each hook also
-  declares `terminatesChainOnFailure()` — the structural guards (empty branch, hidden commits) end the chain on a
+  declares `terminatesChainOnFailure()` — the structural guards (unreadable commits, hidden commits) end the chain on a
   finding; the rest accumulate.
 - **Lifecycle hooks** are pinned at fixed positions around the validation hooks: persistence (before/after) and approval
   (after). They do not implement `FogwallHook`.
@@ -172,7 +172,7 @@ Key points:
 | —     | `PushStorePersistenceHook.preReceive`       | Record initial RECEIVED state in database                    |
 | 100   | `RepositoryWhitelistHook`                   | Record whitelist pass (resolver already validated)           |
 | 150   | `CheckUserPushPermissionHook`               | Validate push user via `UserAuthorizationService`            |
-| 210   | `CheckEmptyBranchHook`                      | Reject if push range has no commits (skips tags)             |
+| 210   | `CheckEmptyBranchHook`                      | Reject if the push range cannot be read (skips tags)         |
 | 220   | `CheckHiddenCommitsHook`                    | Detect unreferenced commits smuggled in via pack             |
 | 250   | `AuthorEmailValidationHook`                 | Check author emails against allow/block patterns             |
 | 260   | `CommitMessageValidationHook`               | Check commit messages against blocked literals/patterns      |

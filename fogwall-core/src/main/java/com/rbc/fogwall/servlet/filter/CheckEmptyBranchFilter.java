@@ -18,17 +18,18 @@ import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Filter that rejects pushes where no commits could be found in the pushed range. Two cases are distinguished:
+ * Records whether a push introduces new commits, and blocks one whose commits were never inspected.
  *
  * <ul>
- *   <li><b>Empty branch</b> - a new branch is being created but its tip is already reachable from an existing ref; no
- *       new commits were introduced.
- *   <li><b>Commit data not found</b> - a non-new-branch push produced no commit data; indicates a proxy or repository
- *       state problem.
+ *   <li><b>No new commits</b> - {@code EnrichPushCommitsFilter} walked the range and found nothing new: the pushed tip
+ *       is already reachable from an existing ref, as when a branch is created at a commit already upstream. There is
+ *       no new content to inspect, so the push continues.
+ *   <li><b>Commit data not found</b> - no commits and no completed walk. The content stages would have nothing to
+ *       inspect for a reason other than there being nothing new, so the push is blocked.
  * </ul>
  *
- * <p>Terminating: an empty branch leaves nothing for the content stages to inspect, so recording the issue ends the
- * chain.
+ * <p>Terminating: a push whose commits could not be inspected leaves nothing for the content stages, so recording the
+ * issue ends the chain.
  */
 @Slf4j
 public final class CheckEmptyBranchFilter extends AbstractFogwallFilter {
@@ -72,20 +73,13 @@ public final class CheckEmptyBranchFilter extends AbstractFogwallFilter {
         if (commits != null && !commits.isEmpty()) {
             return;
         }
-
-        String commitFrom = requestDetails.getCommitFrom();
-        boolean isNewBranch = commitFrom == null || commitFrom.matches("^0+$");
-
-        String title;
-        String message;
-        if (isNewBranch) {
-            title = sym(NO_ENTRY) + "  Push Blocked - Empty Branch";
-            message = "Please make a commit before pushing a new branch.";
-        } else {
-            title = sym(NO_ENTRY) + "  Push Blocked - Commit Data Not Found";
-            message = "Commit data not found. Please contact an administrator for support.";
+        if (requestDetails.isCommitRangeInspected()) {
+            log.debug("Push to {} introduces no new commits", requestDetails.getBranch());
+            return;
         }
 
+        String title = sym(NO_ENTRY) + "  Push Blocked - Commit Data Not Found";
+        String message = "Commit data not found. Please contact an administrator for support.";
         log.warn("checkEmptyBranch: rejecting push - {}", message);
         recordIssue(request, title, GitClientUtils.format(title, message, RED, null));
     }

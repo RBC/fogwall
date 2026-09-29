@@ -2,6 +2,7 @@ package com.rbc.fogwall.git;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.rbc.fogwall.db.model.StepStatus;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -64,40 +65,36 @@ class CheckEmptyBranchHookTest {
     }
 
     @Test
-    void newBranch_withNewCommit_passes() throws Exception {
-        // First commit on main (C1), then C2 is created in a detached state by pointing HEAD at a
-        // fresh commit. In our test-repo-as-server model, "new" means not yet reachable from any
-        // existing ref. We simulate a first-ever push: empty repo → first commit.
-        // Do NOT create a ref beforehand so that the new commit is genuinely new.
-        Git freshGit =
-                Git.init().setDirectory(tempDir.resolve("fresh").toFile()).call();
-        Repository freshRepo = freshGit.getRepository();
-        freshRepo.getConfig().setBoolean("commit", null, "gpgsign", false);
-        freshRepo.getConfig().save();
-
-        File f = new File(tempDir.resolve("fresh").toFile(), "init.txt");
-        f.createNewFile();
-        Files.writeString(f.toPath(), "hello");
-        freshGit.add().addFilepattern(".").call();
-        RevCommit first = freshGit.commit()
-                .setAuthor(new PersonIdent("Dev", "dev@example.com"))
-                .setCommitter(new PersonIdent("Dev", "dev@example.com"))
-                .setMessage("Initial commit")
-                .call();
-
-        // Now we want to push "refs/heads/main" pointing to `first`, but `first` is
-        // HEAD on main. The log command in getCommitRange should still find the commit
-        // because no other ref exists yet.
-        ReceivePack rp = new ReceivePack(freshRepo);
-        // Simulating: the branch "main" is being created for the first time (old = zeros)
-        ReceiveCommand cmd = new ReceiveCommand(ObjectId.zeroId(), first.getId(), "refs/heads/feature");
+    void newBranch_atExistingCommit_passesAndNamesTheRef() throws Exception {
+        // A branch created at a commit main already holds introduces nothing new, as when a developer branches off
+        // work that is already upstream. There is no content to inspect, so the push continues.
+        ObjectId existing = createCommit("on main");
+        PushContext pushCtx = new PushContext();
         ValidationContext ctx = new ValidationContext();
-        CheckEmptyBranchHook hook = new CheckEmptyBranchHook(ctx, new PushContext());
-        hook.onPreReceive(rp, List.of(cmd));
+        ReceiveCommand cmd = new ReceiveCommand(ObjectId.zeroId(), existing, "refs/heads/feature");
 
-        // Terminating hooks record the issue; the chain runner rejects the command. The hook itself
-        // leaves the command NOT_ATTEMPTED.
-        assertTrue(ctx.hasIssues(), "New branch pointing to existing commit must be recorded as an empty-branch issue");
+        new CheckEmptyBranchHook(ctx, pushCtx).onPreReceive(new ReceivePack(repo), List.of(cmd));
+
+        assertFalse(ctx.hasIssues(), "a branch at an existing commit is not an error");
+        assertEquals(StepStatus.PASS, pushCtx.getSteps().get(0).getStatus());
+        assertEquals(
+                List.of("refs/heads/feature introduces no new commits"),
+                pushCtx.getSteps().get(0).getLogs());
+    }
+
+    @Test
+    void unreadableTip_blocks() throws Exception {
+        // A tip that is not in the repository cannot be walked; the content checks would inspect nothing.
+        createCommit("on main");
+        ValidationContext ctx = new ValidationContext();
+        ReceiveCommand cmd = new ReceiveCommand(
+                ObjectId.zeroId(),
+                ObjectId.fromString("1234567890123456789012345678901234567890"),
+                "refs/heads/feature");
+
+        new CheckEmptyBranchHook(ctx, new PushContext()).onPreReceive(new ReceivePack(repo), List.of(cmd));
+
+        assertTrue(ctx.hasIssues(), "a push whose commits cannot be read must be blocked");
     }
 
     @Test
