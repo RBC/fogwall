@@ -4,6 +4,7 @@ import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.git.DisabledFetchUploadPackFactory;
 import com.rbc.fogwall.git.HttpOperation;
 import com.rbc.fogwall.git.LocalRepositoryCache;
+import com.rbc.fogwall.git.UpstreamFailure;
 import com.rbc.fogwall.servlet.filter.UrlRuleEvaluator;
 import java.io.IOException;
 import java.io.InputStream;
@@ -19,6 +20,7 @@ import org.apache.sshd.server.channel.ChannelSession;
 import org.apache.sshd.server.command.Command;
 import org.apache.sshd.server.session.ServerSession;
 import org.eclipse.jgit.api.TransportConfigCallback;
+import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.transport.UploadPack;
 
@@ -170,7 +172,19 @@ public class SshGitUploadCommand implements Command {
 
             TransportConfigCallback transportConfig =
                     SshUpstreamTransport.forwardedAgent(agent, knownHostsFile, trustOnFirstUse);
-            Repository localRepo = cache.getOrClone(upstreamUrl, null, transportConfig, connectingFingerprint);
+            Repository localRepo;
+            try {
+                localRepo = cache.getOrClone(upstreamUrl, null, transportConfig, connectingFingerprint);
+            } catch (GitAPIException | IOException e) {
+                UpstreamFailure failure = SshUpstreamTransport.classify(e);
+                if (failure instanceof UpstreamFailure.Internal) {
+                    throw e;
+                }
+                log.warn("Upstream refused or failed {} ({}): {}", upstreamUrl, failure, e.getMessage());
+                writeError(failure.message());
+                exitCode = 128;
+                return;
+            }
             localRepo.getConfig().setString("fogwall", null, "upstreamUrl", upstreamUrl);
             localRepo.getConfig().save();
 

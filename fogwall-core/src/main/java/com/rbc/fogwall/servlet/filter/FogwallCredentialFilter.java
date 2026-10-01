@@ -8,6 +8,7 @@ import com.rbc.fogwall.provider.ScmOAuthProvider;
 import com.rbc.fogwall.service.GitCredentialService;
 import com.rbc.fogwall.service.ScmOAuthTokenService;
 import com.rbc.fogwall.service.ScmOAuthTokenService.Access;
+import com.rbc.fogwall.servlet.GitDenialResponse;
 import com.rbc.fogwall.user.GitCredential;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
 import com.rbc.fogwall.user.UserEntry;
@@ -85,10 +86,10 @@ public class FogwallCredentialFilter implements Filter {
         if (!brokeredPush) {
             log.warn(
                     "Refused a fogwall credential for provider '{}', which does not broker pushes", provider.getName());
-            GitSmartHttpTools.sendError(
+            GitDenialResponse.send(
                     req,
                     resp,
-                    HttpServletResponse.SC_FORBIDDEN,
+                    provider.getBlockedInfoRefsStatus(),
                     "fogwall credentials are not accepted for " + provider.getName() + ". Use your "
                             + provider.getName() + " credential for this remote.");
             return;
@@ -111,8 +112,8 @@ public class FogwallCredentialFilter implements Filter {
                     username,
                     provider.getName(),
                     unusable.reason());
-            GitSmartHttpTools.sendError(
-                    req, resp, HttpServletResponse.SC_FORBIDDEN, unusableTokenMessage(unusable.reason()));
+            GitDenialResponse.send(
+                    req, resp, provider.getBlockedInfoRefsStatus(), unusableTokenMessage(unusable.reason()));
             return;
         }
         if (access instanceof Access.Usable usable && isPush(req) && !grantsPush(usable.scopes())) {
@@ -123,7 +124,7 @@ public class FogwallCredentialFilter implements Filter {
                     username,
                     provider.getName(),
                     usable.scopes());
-            GitSmartHttpTools.sendError(req, resp, HttpServletResponse.SC_FORBIDDEN, missingPushScopeMessage());
+            GitDenialResponse.send(req, resp, provider.getBlockedInfoRefsStatus(), missingPushScopeMessage());
             return;
         }
 

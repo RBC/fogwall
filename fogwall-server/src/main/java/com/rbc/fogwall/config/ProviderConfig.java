@@ -53,9 +53,9 @@ public class ProviderConfig {
     private String type = "";
 
     /**
-     * HTTP status returned to the git client when a {@code /info/refs} discovery request is blocked by URL rules.
-     * {@code 403} (default) is unambiguous — clients see a clear denial. Use {@code 404} to obscure whether a
-     * repository exists at all (security by obscurity for sensitive environments).
+     * HTTP status of every refusal fogwall makes on {@code /info/refs} discovery: URL rules, a refused fogwall
+     * credential, and an upstream that refuses the caller's credential access. {@code 403} (default) is unambiguous.
+     * Use {@code 404} to obscure whether a repository exists at all (security by obscurity for sensitive environments).
      */
     private int blockedInfoRefsStatus = 403;
 

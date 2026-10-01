@@ -1,5 +1,6 @@
 package com.rbc.fogwall.ssh;
 
+import com.rbc.fogwall.git.UpstreamFailure;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -12,6 +13,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.sshd.agent.SshAgent;
 import org.apache.sshd.agent.SshAgentConstants;
+import org.apache.sshd.common.SshConstants;
+import org.apache.sshd.common.SshException;
 import org.apache.sshd.common.config.keys.KeyUtils;
 import org.apache.sshd.common.util.buffer.Buffer;
 import org.apache.sshd.common.util.buffer.ByteArrayBuffer;
@@ -114,6 +117,20 @@ final class SshUpstreamTransport {
                 sshTransport.setSshSessionFactory(factory);
             }
         };
+    }
+
+    /**
+     * Classifies a failed mirror clone or fetch over SSH. An upstream that accepts none of the keys the agent offered
+     * has refused the credential, which JGit reports only through the SSH disconnect code.
+     */
+    static UpstreamFailure classify(Exception failure) {
+        for (Throwable t = failure; t != null; t = t.getCause()) {
+            if (t instanceof SshException ssh
+                    && ssh.getDisconnectCode() == SshConstants.SSH2_DISCONNECT_NO_MORE_AUTH_METHODS_AVAILABLE) {
+                return new UpstreamFailure.NotAuthorized();
+            }
+        }
+        return UpstreamFailure.classify(failure);
     }
 
     /**

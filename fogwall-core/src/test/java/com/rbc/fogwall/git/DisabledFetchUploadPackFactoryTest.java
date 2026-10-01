@@ -16,8 +16,7 @@ class DisabledFetchUploadPackFactoryTest {
         var ex = assertThrows(
                 ServiceNotEnabledException.class,
                 () -> factory.create(mock(HttpServletRequest.class), mock(Repository.class)));
-        // JGit surfaces this message to the git client as `fatal: remote error: <message>` via
-        // SmartServiceInfoRefs / UploadPackServlet + SmartHttpErrorFilter.
+        // JGit's SmartServiceInfoRefs / UploadPackServlet + SmartHttpErrorFilter show this message to the git client.
         assertEquals(DisabledFetchUploadPackFactory.MESSAGE, ex.getMessage());
     }
 

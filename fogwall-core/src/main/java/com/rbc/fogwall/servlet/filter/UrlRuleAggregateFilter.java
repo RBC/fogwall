@@ -13,6 +13,7 @@ import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.servlet.FogwallServlet;
+import com.rbc.fogwall.servlet.GitDenialResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -26,7 +27,8 @@ import lombok.extern.slf4j.Slf4j;
  * {@link UrlRuleEvaluator}; this class only handles extracting the request context and writing the HTTP response.
  *
  * <p>For push/fetch operations: evaluates rules and either passes the request down the chain or sends a git-protocol
- * error response. For {@code /info/refs} discovery: evaluates rules and sends an HTTP status error (default 403).
+ * error response. For {@code /info/refs} discovery: evaluates rules and sends the provider's denial status (default
+ * 403).
  */
 @Slf4j
 @ToString
@@ -125,7 +127,7 @@ public final class UrlRuleAggregateFilter extends ProviderAwareFogwallFilter<Fog
     /**
      * Applies URL allow/deny rules to an {@code /info/refs} discovery request. The effective operation (FETCH or PUSH)
      * is derived from the {@code service} query parameter. When blocked, responds with the provider-configured HTTP
-     * status (default 403).
+     * status (default 403) and commits the response, so a refused repository is never opened or fetched from upstream.
      */
     private void applyInfoRefsRules(HttpServletRequest request, HttpServletResponse response) throws IOException {
         String service = request.getParameter("service");
@@ -149,7 +151,9 @@ public final class UrlRuleAggregateFilter extends ProviderAwareFogwallFilter<Fog
                 log.debug("Blocking /info/refs — matched deny rule: {}", d.ruleId());
                 if (effectiveOp == HttpOperation.FETCH && fetchStore != null) recordFetch(request, false);
                 setResult(request, GitRequestDetails.GitResult.REJECTED, "Repository blocked by deny rule");
-                response.sendError(
+                GitDenialResponse.send(
+                        request,
+                        response,
                         provider.getBlockedInfoRefsStatus(),
                         "Repository access denied: this repository has been explicitly blocked by an administrator.");
             }
@@ -157,7 +161,9 @@ public final class UrlRuleAggregateFilter extends ProviderAwareFogwallFilter<Fog
                 log.debug("Blocking /info/refs — no rule matched");
                 if (effectiveOp == HttpOperation.FETCH && fetchStore != null) recordFetch(request, false);
                 setResult(request, GitRequestDetails.GitResult.REJECTED, "Repository not in allow rules");
-                response.sendError(
+                GitDenialResponse.send(
+                        request,
+                        response,
                         provider.getBlockedInfoRefsStatus(),
                         "Repository access denied: this repository is not in the allow list."
                                 + " Contact an administrator to add it.");

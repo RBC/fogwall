@@ -24,6 +24,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -64,6 +65,16 @@ class UrlRuleFilterTest {
             });
             when(mock.isCommitted()).thenAnswer(inv -> committed.get());
         }
+    }
+
+    /**
+     * A refusal on discovery must commit the response: the request otherwise goes on into the GitServlet, which opens
+     * the refused repository from upstream and lists its refs.
+     */
+    private static void assertDenied(FakeResponse resp, int status) {
+        verify(resp.mock).setStatus(status);
+        assertTrue(resp.committed.get(), "the refusal must end the request");
+        assertTrue(resp.body.toString(StandardCharsets.UTF_8).startsWith("Repository access denied"));
     }
 
     private static ServletInputStream emptyServletInputStream() {
@@ -302,7 +313,7 @@ class UrlRuleFilterTest {
 
         aggregate.doHttpFilter(mockInfoRefsRequest(details, "git-upload-pack"), resp.mock);
 
-        verify(resp.mock).sendError(eq(403), anyString());
+        assertDenied(resp, 403);
         assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
     }
 
@@ -321,7 +332,7 @@ class UrlRuleFilterTest {
 
         aggregate.doHttpFilter(mockInfoRefsRequest(details, "git-upload-pack"), resp.mock);
 
-        verify(resp.mock, never()).sendError(anyInt());
+        assertFalse(resp.committed.get(), "an allowed discovery request must reach the servlet");
         assertEquals(GitRequestDetails.GitResult.ALLOWED, details.getResult());
     }
 
@@ -349,7 +360,7 @@ class UrlRuleFilterTest {
 
         aggregate.doHttpFilter(mockInfoRefsRequest(details, "git-upload-pack"), resp.mock);
 
-        verify(resp.mock, never()).sendError(anyInt());
+        assertFalse(resp.committed.get(), "an allowed discovery request must reach the servlet");
     }
 
     @Test
@@ -376,7 +387,7 @@ class UrlRuleFilterTest {
 
         aggregate.doHttpFilter(mockInfoRefsRequest(details, "git-receive-pack"), resp.mock);
 
-        verify(resp.mock).sendError(eq(403), anyString());
+        assertDenied(resp, 403);
     }
 
     // --- Gap 2: recordFetch on blocked /info/refs ---
@@ -391,7 +402,7 @@ class UrlRuleFilterTest {
 
         aggregate.doHttpFilter(mockInfoRefsRequest(details, "git-upload-pack"), resp.mock);
 
-        verify(resp.mock).sendError(eq(403), anyString());
+        assertDenied(resp, 403);
         ArgumentCaptor<FetchRecord> captor = ArgumentCaptor.forClass(FetchRecord.class);
         verify(fetchStore).record(captor.capture());
         assertEquals(FetchRecord.Result.BLOCKED, captor.getValue().getResult());
@@ -415,7 +426,7 @@ class UrlRuleFilterTest {
 
         aggregate.doHttpFilter(mockInfoRefsRequest(details, "git-upload-pack"), resp.mock);
 
-        verify(resp.mock).sendError(eq(403), anyString());
+        assertDenied(resp, 403);
         ArgumentCaptor<FetchRecord> captor = ArgumentCaptor.forClass(FetchRecord.class);
         verify(fetchStore).record(captor.capture());
         assertEquals(FetchRecord.Result.BLOCKED, captor.getValue().getResult());
@@ -431,7 +442,7 @@ class UrlRuleFilterTest {
 
         aggregate.doHttpFilter(mockInfoRefsRequest(details, "git-receive-pack"), resp.mock);
 
-        verify(resp.mock).sendError(eq(403), anyString());
+        assertDenied(resp, 403);
         verify(fetchStore, never()).record(any());
     }
 
@@ -453,7 +464,7 @@ class UrlRuleFilterTest {
 
         aggregate.doHttpFilter(mockInfoRefsRequest(details, "git-upload-pack"), resp.mock);
 
-        verify(resp.mock, never()).sendError(anyInt());
+        assertFalse(resp.committed.get(), "an allowed discovery request must reach the servlet");
         verify(fetchStore, never()).record(any());
     }
 
@@ -472,6 +483,6 @@ class UrlRuleFilterTest {
 
         aggregate.doHttpFilter(mockInfoRefsRequest(details, "git-upload-pack"), resp.mock);
 
-        verify(resp.mock).sendError(eq(404), anyString());
+        assertDenied(resp, 404);
     }
 }

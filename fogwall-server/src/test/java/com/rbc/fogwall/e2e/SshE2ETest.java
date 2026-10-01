@@ -7,6 +7,7 @@ import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
 import com.rbc.fogwall.db.model.PushQuery;
 import com.rbc.fogwall.db.model.PushStatus;
+import com.rbc.fogwall.git.UpstreamFailure;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -275,8 +276,21 @@ class SshE2ETest {
                 "Expected a clear routing error in output:\n" + result.output());
     }
 
+    /** An upstream failure used to surface as "Internal error" and JGit's own message; it now says what went wrong. */
     @Test
     @Order(8)
+    void fetchViaSsh_missingUpstreamRepository_saysNotFoundUpstream() throws Exception {
+        var git = sshGit();
+        RuntimeException ex = assertThrows(
+                RuntimeException.class,
+                () -> git.clone(proxy.pushUrl(GiteaContainer.TEST_ORG, "does-not-exist"), "ssh-fetch-missing"));
+        assertTrue(
+                ex.getMessage().contains(UpstreamFailure.NOT_FOUND_MESSAGE),
+                "Expected the upstream not-found message in clone failure output:\n" + ex.getMessage());
+    }
+
+    @Test
+    @Order(9)
     void fetchViaSsh_deniedByUrlRule_isRejected() throws Exception {
         // Lower ruleOrder than the fixture's catch-all allow (order 1), so this is evaluated first.
         // Last test in the class by design — no cleanup needed for a rule that outlives this method.

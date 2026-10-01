@@ -15,6 +15,22 @@ runners) that surfaces as an outright failure rather than a prompt.
 Check the fogwall server log for a line about probing the upstream. If the upstream genuinely is private, supply a token
 as normal.
 
+## A `remote:` line, then `repository not found`, `Authentication failed` or `returned error`
+
+When fogwall refuses a clone, fetch or push, git prints fogwall's reason on a `remote:` line and then its own line for
+the HTTP status. Over SSH the reason appears on an `error:` line.
+
+| Reason                                                             | Meaning                                                                                                                 |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `Repository access denied: ...`                                    | An access rule refuses this repository. Ask an administrator.                                                           |
+| `The upstream needs a credential for this repository.`             | The repository is private or does not exist, and no credential was sent. Add one to the remote or a credential helper.  |
+| `The upstream did not accept your credential. ...`                 | The token was rejected upstream: expired, revoked or mistyped. git discards the stored credential and asks for another. |
+| `The upstream refused your credential access to this repository.`  | The token is valid but lacks permission or a scope for this repository.                                                 |
+| `Repository not found upstream, or your credential cannot see it.` | Check the remote URL. Providers answer "not found" for a private repository the token cannot read.                      |
+| `The upstream could not be reached. Try again later.`              | The upstream is down or unreachable from fogwall.                                                                       |
+
+The last five come from server-mode remotes. A transparent-proxy remote passes the upstream's own answer through.
+
 ## `SSL certificate problem`
 
 Your corporate PKI certificate is not trusted by your git client. Ask your administrator for the CA bundle and install

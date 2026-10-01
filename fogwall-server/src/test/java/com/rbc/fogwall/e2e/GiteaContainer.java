@@ -248,13 +248,19 @@ class GiteaContainer extends GenericContainer<GiteaContainer> {
 
     /** Creates a repository under an existing org. Auto-initialises with a README. Ignores 409 (already exists). */
     void createRepo(String org, String repoName) throws IOException, InterruptedException {
+        createRepo(org, repoName, false);
+    }
+
+    /** As {@link #createRepo(String, String)}, private when {@code isPrivate}: reading it then needs a credential. */
+    void createRepo(String org, String repoName, boolean isPrivate) throws IOException, InterruptedException {
         var client = HttpClient.newHttpClient();
         String auth = Base64.getEncoder().encodeToString((ADMIN_USER + ":" + ADMIN_PASSWORD).getBytes());
         var resp = apiPost(
                 client,
                 auth,
                 getBaseUrl() + "/api/v1/orgs/" + org + "/repos",
-                "{\"name\":\"" + repoName + "\",\"private\":false,\"auto_init\":true,\"default_branch\":\"main\"}");
+                "{\"name\":\"" + repoName + "\",\"private\":" + isPrivate
+                        + ",\"auto_init\":true,\"default_branch\":\"main\"}");
         if (resp.statusCode() >= 400 && resp.statusCode() != 409) {
             throw new RuntimeException(
                     "Failed to create repo " + org + "/" + repoName + " (" + resp.statusCode() + "): " + resp.body());
