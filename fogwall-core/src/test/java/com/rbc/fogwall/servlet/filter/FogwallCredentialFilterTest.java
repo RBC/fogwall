@@ -3,6 +3,8 @@ package com.rbc.fogwall.servlet.filter;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.rbc.fogwall.db.model.FetchActivity;
+import com.rbc.fogwall.db.model.FetchRefusal;
 import com.rbc.fogwall.git.CredentialAuthentication;
 import com.rbc.fogwall.git.ScmOAuthCredentialsProvider;
 import com.rbc.fogwall.git.ServerRepositoryResolver;
@@ -13,6 +15,7 @@ import com.rbc.fogwall.service.GitCredentialService;
 import com.rbc.fogwall.service.ScmOAuthTokenService;
 import com.rbc.fogwall.service.ScmOAuthTokenService.Access;
 import com.rbc.fogwall.service.ScmOAuthTokenService.Reason;
+import com.rbc.fogwall.servlet.FetchDecision;
 import com.rbc.fogwall.user.GitCredential;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
 import com.rbc.fogwall.user.UserEntry;
@@ -248,6 +251,45 @@ class FogwallCredentialFilterTest {
         var filter = new FogwallCredentialFilter(provider, true, credentials, oauthTokens, users, null);
 
         assertTrue(filter.unusableTokenMessage(Reason.NOT_LINKED).contains("your fogwall profile"));
+    }
+
+    // ---- the fetch audit trail ----
+
+    @Test
+    void fetchRefusal_isLeftForTheFetchAuditTrail() throws Exception {
+        when(credentials.authenticate(VALUE)).thenReturn(Optional.empty());
+        HttpServletRequest req = infoRefsRequest(basicAuth("me", VALUE), "git-upload-pack");
+
+        filter(true).doFilter(req, resp, chain);
+
+        FetchDecision decision = FetchDecision.of(req).orElseThrow();
+        assertEquals(FetchActivity.Result.BLOCKED, decision.result());
+        assertEquals(FetchRefusal.CREDENTIAL_REFUSED, decision.refusal());
+    }
+
+    @Test
+    void fetchRefusal_replacesTheUrlRulesAllow() throws Exception {
+        when(credentials.authenticate(VALUE)).thenReturn(Optional.of(CREDENTIAL));
+        when(users.findByUsername("alice")).thenReturn(Optional.of(ALICE));
+        when(oauthTokens.access("alice", "gitlab")).thenReturn(new Access.Unusable(Reason.EXPIRED));
+        HttpServletRequest req = infoRefsRequest(basicAuth("me", VALUE), "git-upload-pack");
+        FetchDecision.allowed(req, "allow-rule");
+
+        filter(true).doFilter(req, resp, chain);
+
+        FetchDecision decision = FetchDecision.of(req).orElseThrow();
+        assertEquals(FetchActivity.Result.BLOCKED, decision.result());
+        assertEquals(FetchRefusal.LINKED_TOKEN_UNUSABLE, decision.refusal());
+        assertNull(decision.ruleId());
+    }
+
+    @Test
+    void pushRefusal_leavesNoFetchDecision() throws Exception {
+        HttpServletRequest req = infoRefsRequest(basicAuth("me", VALUE));
+
+        filter(false).doFilter(req, resp, chain);
+
+        assertTrue(FetchDecision.of(req).isEmpty());
     }
 
     // ---- push scope ----

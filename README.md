@@ -60,7 +60,7 @@ Both proxy modes enforce the same rules:
 - 📝 **Commit attribution policy** — author, committer, `Co-authored-by` and DCO trailers, against allowed email domains
 - 🔒 **Proxy-wide URL allow/deny rules**
 - 🕵️ **Git-level guards** — rejects hidden commits, empty branch pushes, Git LFS and push options
-- 📊 **Audit trail** — every push state transition and every fetch recorded, in both modes
+- 📊 **Audit trail** — every push state transition recorded, and every clone and fetch decision counted, in both modes
 
 ### Dashboard
 

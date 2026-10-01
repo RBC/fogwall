@@ -9,6 +9,29 @@ export type ScmApiActionStatus = 'FORWARDED' | 'DENIED' | 'REJECTED' | 'ERROR'
  */
 export type ScmApiActionOrigin = 'DASHBOARD' | 'SCM_API'
 
+/** Clones and fetches fogwall decided in one hour, for one repository, transport, mode and outcome. */
+export interface FetchActivity {
+  id: string
+  /** Start of the hour, UTC. */
+  bucketStart: string | number
+  provider?: string
+  owner?: string
+  repoName?: string
+  transport: 'HTTP' | 'SSH'
+  mode: 'SERVER' | 'TRANSPARENT'
+  result: 'ALLOWED' | 'BLOCKED'
+  refusal?:
+    | 'NOT_IN_ALLOW_LIST'
+    | 'DENY_RULE'
+    | 'FETCH_DISABLED'
+    | 'CREDENTIAL_REFUSED'
+    | 'LINKED_TOKEN_UNUSABLE'
+    | 'SSH_AGENT_MISSING'
+  ruleId?: string
+  fetchCount: number
+  lastSeen: string | number
+}
+
 /** SCM API audit record — one per mutation fogwall ran or forwarded, never per read. */
 export interface ScmApiActionRecord {
   id: string

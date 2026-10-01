@@ -1,8 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { createUrlRule, deleteUrlRule, fetchProviders, testUrlRules } from '../api'
+import {
+  createUrlRule,
+  deleteUrlRule,
+  fetchFetchActivity,
+  fetchProviders,
+  testUrlRules,
+} from '../api'
 import type { RuleTestResponse } from '../api'
+import { StatusBadge } from '../components/StatusBadge'
 import { useToast } from '../components/Toast'
-import type { Provider, CurrentUser } from '../types'
+import type { FetchActivity, Provider, CurrentUser } from '../types'
 
 interface ActiveRepo {
   provider: string
@@ -25,6 +32,85 @@ interface Rule {
   enabled: boolean
   ruleOrder: number
   source: 'CONFIG' | 'DB'
+}
+
+function formatTime(ts: string | number | undefined) {
+  if (!ts) return ''
+  try {
+    return new Date(ts).toLocaleString()
+  } catch {
+    return String(ts)
+  }
+}
+
+const REFUSAL_LABELS: Record<string, string> = {
+  NOT_IN_ALLOW_LIST: 'Not in allow list',
+  DENY_RULE: 'Deny rule',
+  FETCH_DISABLED: 'Fetch serving disabled',
+  CREDENTIAL_REFUSED: 'fogwall credential refused',
+  LINKED_TOKEN_UNUSABLE: 'Linked account unusable',
+  SSH_AGENT_MISSING: 'No SSH agent forwarding',
+}
+
+/** Hourly fetch counts for one repository: how many, how, and what was refused and why. */
+function FetchHistory({ repo }: { repo: ActiveRepo }) {
+  const [rows, setRows] = useState<FetchActivity[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const params = new URLSearchParams({
+      provider: repo.provider,
+      owner: repo.owner,
+      repoName: repo.repoName,
+      limit: '50',
+    })
+    fetchFetchActivity(params)
+      .then(setRows)
+      .catch((e: Error) => setError(e.message))
+  }, [repo.provider, repo.owner, repo.repoName])
+
+  if (error) return <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+  if (!rows) return <p className="text-sm text-gray-400 dark:text-gray-500">Loading…</p>
+  if (rows.length === 0)
+    return <p className="text-sm text-gray-400 dark:text-gray-500">No fetches recorded.</p>
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs text-gray-400 dark:text-gray-500">
+            <th className="py-1 pr-4 font-medium">Hour</th>
+            <th className="py-1 pr-4 font-medium">Result</th>
+            <th className="py-1 pr-4 font-medium text-right">Fetches</th>
+            <th className="py-1 pr-4 font-medium">Via</th>
+            <th className="py-1 font-medium">Reason</th>
+          </tr>
+        </thead>
+        <tbody className="text-gray-700 dark:text-gray-300">
+          {rows.map((r) => (
+            <tr key={r.id} className="border-t border-gray-100 dark:border-slate-700">
+              <td className="py-1.5 pr-4 whitespace-nowrap">{formatTime(r.bucketStart)}</td>
+              <td className="py-1.5 pr-4">
+                <StatusBadge status={r.result} />
+              </td>
+              <td className="py-1.5 pr-4 text-right tabular-nums">{r.fetchCount}</td>
+              <td className="py-1.5 pr-4 whitespace-nowrap">
+                {r.transport} · {r.mode.toLowerCase()}
+              </td>
+              <td className="py-1.5">
+                {r.refusal ? (REFUSAL_LABELS[r.refusal] ?? r.refusal) : ''}
+                {r.ruleId && (
+                  <span className="ml-1 font-mono text-xs text-gray-400 dark:text-gray-500">
+                    rule {r.ruleId}
+                  </span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
 }
 
 function CloneButton({ httpsUrl, sshUrl }: { httpsUrl: string; sshUrl?: string | null }) {
@@ -635,6 +721,7 @@ export function Repos({ currentUser }: { currentUser: CurrentUser | null }) {
   const toast = useToast()
   const [tab, setTab] = useState<Tab>('active')
   const [activeRepos, setActiveRepos] = useState<ActiveRepo[]>([])
+  const [openFetches, setOpenFetches] = useState<string | null>(null)
   const [rules, setRules] = useState<Rule[]>([])
   const [loadedTab, setLoadedTab] = useState<Tab | null>(null)
   const [showAddRule, setShowAddRule] = useState(false)
@@ -735,55 +822,101 @@ export function Repos({ currentUser }: { currentUser: CurrentUser | null }) {
             </p>
           ) : (
             <div className="space-y-3">
-              {activeRepos.map((repo) => (
-                <div
-                  key={`${repo.provider}/${repo.owner}/${repo.repoName}`}
-                  className="bg-white rounded-lg shadow border border-gray-200 px-6 py-4 flex items-center justify-between dark:bg-slate-800 dark:border-slate-700"
-                >
-                  <div>
-                    <div className="text-xs text-gray-400 mb-0.5 dark:text-gray-500">
-                      {providers.find((p) => p.id === repo.provider)?.name ?? repo.provider}
-                    </div>
-                    <div className="font-semibold text-gray-800 dark:text-gray-200">
-                      {repo.owner}/{repo.repoName}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <div className="flex gap-6 text-sm text-gray-600 dark:text-gray-400">
-                      <div className="text-center">
-                        <div className="font-semibold text-gray-900 dark:text-gray-100">
-                          {repo.pushCount}
+              {activeRepos.map((repo) => {
+                const repoKey = `${repo.provider}/${repo.owner}/${repo.repoName}`
+                return (
+                  <div
+                    key={repoKey}
+                    className="bg-white rounded-lg shadow border border-gray-200 px-6 py-4 dark:bg-slate-800 dark:border-slate-700"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-xs text-gray-400 mb-0.5 dark:text-gray-500">
+                          {providers.find((p) => p.id === repo.provider)?.name ?? repo.provider}
                         </div>
-                        <div className="text-xs text-gray-400 dark:text-gray-500">pushes</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="font-semibold text-gray-900 dark:text-gray-100">
-                          {repo.fetchCount}
+                        <div className="font-semibold text-gray-800 dark:text-gray-200">
+                          {repo.owner}/{repo.repoName}
                         </div>
-                        <div className="text-xs text-gray-400 dark:text-gray-500">fetches</div>
                       </div>
-                      {repo.blockedFetchCount > 0 && (
-                        <div className="text-center">
-                          <div className="font-semibold text-red-600 dark:text-red-400">
-                            {repo.blockedFetchCount}
+                      <div className="flex items-center gap-6">
+                        <div className="flex gap-6 text-sm text-gray-600 dark:text-gray-400">
+                          <div className="text-center">
+                            <div className="font-semibold text-gray-900 dark:text-gray-100">
+                              {repo.pushCount}
+                            </div>
+                            <div className="text-xs text-gray-400 dark:text-gray-500">pushes</div>
                           </div>
-                          <div className="text-xs text-red-400 dark:text-red-500">blocked</div>
+                          <button
+                            type="button"
+                            onClick={() => setOpenFetches(openFetches === repoKey ? null : repoKey)}
+                            aria-expanded={openFetches === repoKey}
+                            disabled={repo.fetchCount + repo.blockedFetchCount === 0}
+                            className="group flex items-center gap-6 rounded px-2 py-1 -mx-2 -my-1 hover:bg-gray-50 disabled:hover:bg-transparent dark:hover:bg-slate-700 disabled:cursor-default"
+                            title={
+                              repo.fetchCount + repo.blockedFetchCount > 0
+                                ? 'Show fetch activity'
+                                : undefined
+                            }
+                          >
+                            <div className="text-center">
+                              <div className="font-semibold text-gray-900 dark:text-gray-100">
+                                {repo.fetchCount}
+                              </div>
+                              <div className="text-xs text-gray-400 dark:text-gray-500">
+                                fetches
+                              </div>
+                            </div>
+                            {repo.blockedFetchCount > 0 && (
+                              <div className="text-center">
+                                <div className="font-semibold text-red-600 dark:text-red-400">
+                                  {repo.blockedFetchCount}
+                                </div>
+                                <div className="text-xs text-red-400 dark:text-red-500">
+                                  blocked
+                                </div>
+                              </div>
+                            )}
+                            {repo.fetchCount + repo.blockedFetchCount > 0 && (
+                              <svg
+                                className={
+                                  '-ml-3 h-4 w-4 shrink-0 text-gray-400 transition-transform group-hover:text-gray-600 dark:group-hover:text-gray-300 ' +
+                                  (openFetches === repoKey ? 'rotate-90' : '')
+                                }
+                                fill="none"
+                                viewBox="0 0 20 20"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                aria-hidden="true"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M7 5l6 5-6 5"
+                                />
+                              </svg>
+                            )}
+                          </button>
                         </div>
-                      )}
+                        {(() => {
+                          const provider = providers.find((p) => p.id === repo.provider)
+                          const httpsUrl = `${window.location.origin}${provider?.proxyPath ?? '/proxy/' + repo.provider}/${repo.owner}/${repo.repoName}.git`
+                          // ssh://<fogwall-host>:<port><route>/<owner>/<repo>.git — the standard port 22 is left implicit.
+                          const sshUrl =
+                            provider?.sshEnabled && provider.sshPath
+                              ? `ssh://${window.location.hostname}${provider.sshPort === 22 ? '' : ':' + provider.sshPort}${provider.sshPath}/${repo.owner}/${repo.repoName}.git`
+                              : null
+                          return <CloneButton httpsUrl={httpsUrl} sshUrl={sshUrl} />
+                        })()}
+                      </div>
                     </div>
-                    {(() => {
-                      const provider = providers.find((p) => p.id === repo.provider)
-                      const httpsUrl = `${window.location.origin}${provider?.proxyPath ?? '/proxy/' + repo.provider}/${repo.owner}/${repo.repoName}.git`
-                      // ssh://<fogwall-host>:<port><route>/<owner>/<repo>.git — the standard port 22 is left implicit.
-                      const sshUrl =
-                        provider?.sshEnabled && provider.sshPath
-                          ? `ssh://${window.location.hostname}${provider.sshPort === 22 ? '' : ':' + provider.sshPort}${provider.sshPath}/${repo.owner}/${repo.repoName}.git`
-                          : null
-                      return <CloneButton httpsUrl={httpsUrl} sshUrl={sshUrl} />
-                    })()}
+                    {openFetches === repoKey && (
+                      <div className="mt-4 border-t border-gray-100 pt-3 dark:border-slate-700">
+                        <FetchHistory repo={repo} />
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </>

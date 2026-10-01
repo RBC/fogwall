@@ -138,12 +138,14 @@ public class FogwallJettyApplication {
         var pendingPushExpiryTask = new PendingPushExpiryTask(
                 ctx.pushStore(), ctx.deferredForwarder(), Duration.ofDays(configBuilder.getPendingPushExpiryDays()));
         pendingPushExpiryTask.start();
+        ctx.fetchActivity().start();
 
         server.addEventListener(new LifeCycle.Listener() {
             @Override
             public void lifeCycleStopping(LifeCycle event) {
                 liveConfigLoader.stop();
                 pendingPushExpiryTask.stop();
+                ctx.fetchActivity().stop();
                 ctx.deferredForwarder().close();
                 if (finalSshGitServer != null) {
                     finalSshGitServer.stop();

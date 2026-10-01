@@ -11,6 +11,10 @@ const STATUS_CLASSES: Record<string, string> = {
     'bg-red-100 text-red-800 border border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700',
   DENIED:
     'bg-orange-100 text-orange-800 border border-orange-300 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-700',
+  ALLOWED:
+    'bg-green-100 text-green-800 border border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700',
+  BLOCKED:
+    'bg-red-100 text-red-800 border border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700',
   CANCELED:
     'bg-gray-100 text-gray-600 border border-gray-300 dark:bg-slate-700 dark:text-gray-300 dark:border-slate-600',
   RECEIVED:

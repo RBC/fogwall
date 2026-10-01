@@ -1,6 +1,7 @@
 package com.rbc.fogwall.e2e;
 
 import com.rbc.fogwall.config.FogwallConfigLoader;
+import com.rbc.fogwall.db.FetchStore;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.jetty.FogwallJettyApplication;
@@ -148,6 +149,12 @@ class SshProxyFixture implements AutoCloseable {
 
     PushStore getPushStore() {
         return running.ctx().pushStore();
+    }
+
+    /** Writes the fetch counts held in memory, and returns the store they were written to. */
+    FetchStore flushFetchActivity() {
+        running.ctx().fetchActivity().flush();
+        return running.ctx().fetchStore();
     }
 
     UrlRuleRegistry getUrlRuleRegistry() {

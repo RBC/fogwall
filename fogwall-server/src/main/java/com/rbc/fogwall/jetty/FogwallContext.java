@@ -6,6 +6,7 @@ import com.rbc.fogwall.approval.UiApprovalGateway;
 import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.crypto.TokenCipherProvider;
+import com.rbc.fogwall.db.FetchActivityRecorder;
 import com.rbc.fogwall.db.FetchStore;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.ScmApiActionStore;
@@ -37,6 +38,7 @@ import com.rbc.fogwall.user.UserStore;
 public record FogwallContext(
         PushStore pushStore,
         FetchStore fetchStore,
+        FetchActivityRecorder fetchActivity,
         UserStore userStore,
         UrlRuleRegistry urlRuleRegistry,
         RepoPermissionService repoPermissionService,

@@ -3,21 +3,20 @@ package com.rbc.fogwall.servlet.filter;
 import static com.rbc.fogwall.git.GitClientUtils.SymbolCodes.*;
 import static com.rbc.fogwall.git.GitClientUtils.sym;
 
-import com.rbc.fogwall.db.FetchStore;
 import com.rbc.fogwall.db.UrlRuleRegistry;
-import com.rbc.fogwall.db.model.FetchRecord;
+import com.rbc.fogwall.db.model.FetchRefusal;
 import com.rbc.fogwall.git.GitClientUtils;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
 import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.provider.FogwallProvider;
+import com.rbc.fogwall.servlet.FetchDecision;
 import com.rbc.fogwall.servlet.FogwallServlet;
 import com.rbc.fogwall.servlet.GitDenialResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
@@ -35,16 +34,10 @@ import lombok.extern.slf4j.Slf4j;
 public final class UrlRuleAggregateFilter extends ProviderAwareFogwallFilter<FogwallProvider> {
 
     private final UrlRuleEvaluator evaluator;
-    private final FetchStore fetchStore;
 
     public UrlRuleAggregateFilter(FogwallProvider provider, UrlRuleRegistry urlRuleRegistry) {
-        this(provider, null, urlRuleRegistry);
-    }
-
-    public UrlRuleAggregateFilter(FogwallProvider provider, FetchStore fetchStore, UrlRuleRegistry urlRuleRegistry) {
         super(LifecycleStage.MANDATORY_PROCESSING, ALL_OPERATIONS, provider);
         this.evaluator = new UrlRuleEvaluator(urlRuleRegistry, provider);
-        this.fetchStore = fetchStore;
     }
 
     @Override
@@ -87,7 +80,8 @@ public final class UrlRuleAggregateFilter extends ProviderAwareFogwallFilter<Fog
         switch (result) {
             case UrlRuleEvaluator.Result.Denied d -> {
                 log.debug("Blocked by deny rule: {}", d.ruleId());
-                if (operation == HttpOperation.FETCH && fetchStore != null) recordFetch(request, false);
+                if (operation == HttpOperation.FETCH)
+                    FetchDecision.blocked(request, FetchRefusal.DENY_RULE, d.ruleId());
                 String action = operation == HttpOperation.PUSH ? "Push" : "Fetch";
                 String title = sym(NO_ENTRY) + "  " + action + " Blocked - Repository Denied";
                 String verb = operation == HttpOperation.PUSH ? "Pushes to" : "Fetches from";
@@ -101,11 +95,12 @@ public final class UrlRuleAggregateFilter extends ProviderAwareFogwallFilter<Fog
             }
             case UrlRuleEvaluator.Result.Allowed a -> {
                 log.debug("Allowed by rule: {}", a.ruleId());
-                if (operation == HttpOperation.FETCH && fetchStore != null) recordFetch(request, true);
+                if (operation == HttpOperation.FETCH) FetchDecision.allowed(request, a.ruleId());
             }
             case UrlRuleEvaluator.Result.NotAllowed _ -> {
                 log.debug("Blocked — no rule matched");
-                if (operation == HttpOperation.FETCH && fetchStore != null) recordFetch(request, false);
+                if (operation == HttpOperation.FETCH)
+                    FetchDecision.blocked(request, FetchRefusal.NOT_IN_ALLOW_LIST, null);
                 sendNotAllowed(request, operation);
             }
         }
@@ -149,7 +144,8 @@ public final class UrlRuleAggregateFilter extends ProviderAwareFogwallFilter<Fog
         switch (result) {
             case UrlRuleEvaluator.Result.Denied d -> {
                 log.debug("Blocking /info/refs — matched deny rule: {}", d.ruleId());
-                if (effectiveOp == HttpOperation.FETCH && fetchStore != null) recordFetch(request, false);
+                if (effectiveOp == HttpOperation.FETCH)
+                    FetchDecision.blocked(request, FetchRefusal.DENY_RULE, d.ruleId());
                 setResult(request, GitRequestDetails.GitResult.REJECTED, "Repository blocked by deny rule");
                 GitDenialResponse.send(
                         request,
@@ -159,7 +155,8 @@ public final class UrlRuleAggregateFilter extends ProviderAwareFogwallFilter<Fog
             }
             case UrlRuleEvaluator.Result.NotAllowed _ -> {
                 log.debug("Blocking /info/refs — no rule matched");
-                if (effectiveOp == HttpOperation.FETCH && fetchStore != null) recordFetch(request, false);
+                if (effectiveOp == HttpOperation.FETCH)
+                    FetchDecision.blocked(request, FetchRefusal.NOT_IN_ALLOW_LIST, null);
                 setResult(request, GitRequestDetails.GitResult.REJECTED, "Repository not in allow rules");
                 GitDenialResponse.send(
                         request,
@@ -168,34 +165,9 @@ public final class UrlRuleAggregateFilter extends ProviderAwareFogwallFilter<Fog
                         "Repository access denied: this repository is not in the allow list."
                                 + " Contact an administrator to add it.");
             }
-            case UrlRuleEvaluator.Result.Allowed _ -> {
-                /* pass through — request is permitted */
+            case UrlRuleEvaluator.Result.Allowed a -> {
+                if (effectiveOp == HttpOperation.FETCH) FetchDecision.allowed(request, a.ruleId());
             }
-        }
-    }
-
-    private void recordFetch(HttpServletRequest request, boolean allowed) {
-        try {
-            var details = (GitRequestDetails) request.getAttribute(FogwallServlet.GIT_REQUEST_ATTR);
-            if (details == null) return;
-            var ref = details.getRepoRef();
-            String authHeader = request.getHeader("Authorization");
-            String pushUsername = null;
-            if (authHeader != null && authHeader.startsWith("Basic ")) {
-                String decoded = new String(
-                        java.util.Base64.getDecoder().decode(authHeader.substring(6)), StandardCharsets.UTF_8);
-                int colon = decoded.indexOf(':');
-                if (colon > 0) pushUsername = decoded.substring(0, colon);
-            }
-            fetchStore.record(FetchRecord.builder()
-                    .provider(provider.getProviderId())
-                    .owner(ref.getOwner())
-                    .repoName(ref.getName())
-                    .result(allowed ? FetchRecord.Result.ALLOWED : FetchRecord.Result.BLOCKED)
-                    .pushUsername(pushUsername)
-                    .build());
-        } catch (Exception e) {
-            log.warn("Failed to record fetch event", e);
         }
     }
 }

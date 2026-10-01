@@ -153,6 +153,12 @@ public class DatabaseMigrator {
                     "20.1",
                     "parked push chunks (mysql/mariadb)",
                     "db/migration-mysql/V20_1__parked_push_chunks.sql",
+                    Vendor.MYSQL_ONLY),
+            new Migration("21", "fetch activity", "db/migration/V21__fetch_activity.sql", Vendor.EXCEPT_MYSQL),
+            new Migration(
+                    "21",
+                    "fetch activity (mysql/mariadb)",
+                    "db/migration-mysql/V21__fetch_activity.sql",
                     Vendor.MYSQL_ONLY));
 
     // ---------------------------------------------------------------------------

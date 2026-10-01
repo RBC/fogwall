@@ -1,5 +1,6 @@
 package com.rbc.fogwall.servlet.filter;
 
+import com.rbc.fogwall.db.model.FetchRefusal;
 import com.rbc.fogwall.git.CredentialAuthentication;
 import com.rbc.fogwall.git.ScmOAuthCredentialsProvider;
 import com.rbc.fogwall.git.ServerRepositoryResolver;
@@ -8,6 +9,7 @@ import com.rbc.fogwall.provider.ScmOAuthProvider;
 import com.rbc.fogwall.service.GitCredentialService;
 import com.rbc.fogwall.service.ScmOAuthTokenService;
 import com.rbc.fogwall.service.ScmOAuthTokenService.Access;
+import com.rbc.fogwall.servlet.FetchDecision;
 import com.rbc.fogwall.servlet.GitDenialResponse;
 import com.rbc.fogwall.user.GitCredential;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
@@ -86,6 +88,7 @@ public class FogwallCredentialFilter implements Filter {
         if (!brokeredPush) {
             log.warn(
                     "Refused a fogwall credential for provider '{}', which does not broker pushes", provider.getName());
+            refuseFetch(req, FetchRefusal.CREDENTIAL_REFUSED);
             GitDenialResponse.send(
                     req,
                     resp,
@@ -98,6 +101,7 @@ public class FogwallCredentialFilter implements Filter {
         Optional<GitCredential> credential = credentials.authenticate(password);
         Optional<UserEntry> user = credential.flatMap(c -> users.findByUsername(c.username()));
         if (user.isEmpty()) {
+            refuseFetch(req, FetchRefusal.CREDENTIAL_REFUSED);
             // A fresh challenge, so git discards the stored credential and asks for another.
             resp.setHeader("WWW-Authenticate", "Basic realm=\"fogwall\"");
             resp.sendError(HttpServletResponse.SC_UNAUTHORIZED);
@@ -112,6 +116,7 @@ public class FogwallCredentialFilter implements Filter {
                     username,
                     provider.getName(),
                     unusable.reason());
+            refuseFetch(req, FetchRefusal.LINKED_TOKEN_UNUSABLE);
             GitDenialResponse.send(
                     req, resp, provider.getBlockedInfoRefsStatus(), unusableTokenMessage(unusable.reason()));
             return;
@@ -136,6 +141,13 @@ public class FogwallCredentialFilter implements Filter {
                 ServerRepositoryResolver.CREDENTIALS_ATTRIBUTE,
                 new ScmOAuthCredentialsProvider(oauthTokens, username, provider.getName()));
         chain.doFilter(request, response);
+    }
+
+    /** Counts the refusal when it ends a clone or fetch. A push refusal is the push record's to keep. */
+    private static void refuseFetch(HttpServletRequest req, FetchRefusal refusal) {
+        if (!isPush(req)) {
+            FetchDecision.blocked(req, refusal, null);
+        }
     }
 
     /** What a user whose linked OAuth token cannot be used is told, for both fetch and push. */

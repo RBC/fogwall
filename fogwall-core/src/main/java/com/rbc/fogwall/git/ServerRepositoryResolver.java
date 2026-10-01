@@ -76,7 +76,7 @@ public class ServerRepositoryResolver implements RepositoryResolver<HttpServletR
             req.setAttribute("com.rbc.fogwall.pushUser", userPass[0]);
         }
 
-        log.info("Opening server mode repository: {} -> {}", name, cleanUpstreamUrl);
+        log.debug("Opening server mode repository: {} -> {}", name, cleanUpstreamUrl);
 
         req.setAttribute(UPSTREAM_URL_ATTRIBUTE, cleanUpstreamUrl);
 

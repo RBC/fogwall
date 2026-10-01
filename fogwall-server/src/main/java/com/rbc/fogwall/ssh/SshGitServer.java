@@ -1,6 +1,7 @@
 package com.rbc.fogwall.ssh;
 
 import com.rbc.fogwall.config.SshConfig;
+import com.rbc.fogwall.db.FetchActivityRecorder;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
@@ -58,6 +59,7 @@ public class SshGitServer {
             LocalRepositoryCache cache,
             ReadOnlyUserStore userStore,
             UrlRuleRegistry urlRuleRegistry,
+            FetchActivityRecorder fetchActivity,
             List<String> providerKnownHosts)
             throws IOException {
 
@@ -87,7 +89,13 @@ public class SshGitServer {
         Path knownHostsFile = UpstreamKnownHosts.assemble(config.getKnownHostsPath(), extraKnownHosts);
 
         sshd.setCommandFactory(new SshGitCommandFactory(
-                routes, cache, agentFactory, urlRuleRegistry, knownHostsFile, config.isTrustOnFirstUse()));
+                routes,
+                cache,
+                agentFactory,
+                urlRuleRegistry,
+                fetchActivity,
+                knownHostsFile,
+                config.isTrustOnFirstUse()));
 
         return new SshGitServer(sshd);
     }

@@ -142,7 +142,8 @@ upstream Node.js implementation:
 | `proxy_pushes`     | `MongoPushStore`           | Renamed from `pushes` to avoid collision with upstream's `pushes`. |
 | `repo_permissions` | `MongoRepoPermissionStore` | No upstream equivalent.                                            |
 | `access_rules`     | `MongoUrlRuleRegistry`     | No upstream equivalent.                                            |
-| `fetch_records`    | `MongoFetchStore`          | No upstream equivalent.                                            |
+| `fetch_activity`   | `MongoFetchStore`          | No upstream equivalent.                                            |
+| `fetch_records`    | none since 1.5.0           | Superseded by `fetch_activity`; safe to drop.                      |
 
 This means you _can_ point both apps at the same MongoDB database without corrupting each other's data. We still
 recommend separate databases for operational clarity — shared databases make backups, restores, and index tuning harder

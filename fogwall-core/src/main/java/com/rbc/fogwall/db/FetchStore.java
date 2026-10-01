@@ -1,39 +1,34 @@
 package com.rbc.fogwall.db;
 
-import com.rbc.fogwall.db.model.FetchRecord;
+import com.rbc.fogwall.db.model.FetchActivity;
+import com.rbc.fogwall.db.model.FetchActivityQuery;
+import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 
 /**
- * Append-only audit log for fetch (and info/refs) requests through the proxy. Analogous to {@link PushStore} but
- * intentionally lightweight — no steps, commits, or attestations.
+ * Hourly fetch activity, written in batches by {@link FetchActivityRecorder} rather than once per request. Analogous to
+ * {@link PushStore} for the read path, at a deliberately coarser grain.
  */
 public interface FetchStore {
 
-    /** Record a fetch event. */
-    void record(FetchRecord fetchRecord);
-
     /**
-     * Return the most recent fetch records, newest first.
-     *
-     * @param limit maximum number of records to return
+     * Adds each row's {@code fetchCount} to the stored row with the same id, creating it when there is none, and keeps
+     * the later of the two {@code lastSeen}s. Safe for several fogwall instances adding to the same row.
      */
-    List<FetchRecord> findRecent(int limit);
+    void add(Collection<FetchActivity> increments);
+
+    /** Return activity rows matching the query, by hour. */
+    List<FetchActivity> find(FetchActivityQuery query);
 
     /**
-     * Return fetch records for a specific repo, newest first.
-     *
-     * @param provider provider name
-     * @param owner repository owner/org
-     * @param repoName repository name
-     * @param limit maximum number of records to return
-     */
-    List<FetchRecord> findByRepo(String provider, String owner, String repoName, int limit);
-
-    /**
-     * Summarise fetch activity grouped by provider + owner + repo_name. Each entry contains the repo coordinates plus
-     * total fetch count and blocked fetch count.
+     * Summarise fetch activity grouped by provider + owner + repo_name: total fetch count and blocked fetch count. The
+     * row collecting fetches past the in-memory key cap names no repository and is left out.
      */
     List<RepoFetchSummary> summarizeByRepo();
+
+    /** Delete rows for hours that started before {@code cutoff}. */
+    void pruneBefore(Instant cutoff);
 
     /** Initialize the store (run migrations). Called once at startup. */
     void initialize();

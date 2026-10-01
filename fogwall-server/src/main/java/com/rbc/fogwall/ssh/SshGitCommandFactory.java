@@ -1,5 +1,6 @@
 package com.rbc.fogwall.ssh;
 
+import com.rbc.fogwall.db.FetchActivityRecorder;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.git.LocalRepositoryCache;
 import java.io.IOException;
@@ -26,6 +27,7 @@ public class SshGitCommandFactory implements CommandFactory {
     private final LocalRepositoryCache cache;
     private final FogwallProxyAgentFactory agentFactory;
     private final UrlRuleRegistry urlRuleRegistry;
+    private final FetchActivityRecorder fetchActivity;
 
     /** Assembled upstream known_hosts file (or {@code null} to use the default) — see {@link UpstreamKnownHosts}. */
     private final Path knownHostsFile;
@@ -47,7 +49,14 @@ public class SshGitCommandFactory implements CommandFactory {
             String repoPath =
                     stripQuotes(command.substring("git-upload-pack ".length()).trim());
             return new SshGitUploadCommand(
-                    repoPath, routes, cache, agentFactory, urlRuleRegistry, knownHostsFile, trustOnFirstUse);
+                    repoPath,
+                    routes,
+                    cache,
+                    agentFactory,
+                    urlRuleRegistry,
+                    fetchActivity,
+                    knownHostsFile,
+                    trustOnFirstUse);
         }
 
         log.warn("Unsupported SSH git command: {}", command);

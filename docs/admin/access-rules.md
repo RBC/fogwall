@@ -56,6 +56,36 @@ authoritatively. Use access rules to gate _which_ repos are reachable, and `serv
 serves fetches at all. Transparent proxy mode forwards to upstream rather than serving a local mirror, so it is
 unaffected by this setting.
 
+## Fetch activity
+
+fogwall counts its decisions on clones and fetches rather than recording each one. Every decision increments a counter
+in memory, keyed by the hour, repository, transport (HTTP or SSH), proxy mode, result, refusal reason, and the access
+rule that matched. Counts are written to the `fetch_activity` table every `server.fetch-activity.flush-interval-seconds`
+and kept for `retention-days`; see [Server settings](../configuration/server.md). A clone never waits on the database.
+
+The counts drive the fetch and blocked numbers on the Repos page, where each repository's numbers open its hourly rows.
+They are also served at `GET /api/fetches`, filterable by result, transport, provider, owner, repository, and search.
+
+A refusal carries one of these reasons:
+
+| Reason                  | Refused because                                                      |
+| ----------------------- | -------------------------------------------------------------------- |
+| `NOT_IN_ALLOW_LIST`     | No allow rule matched the repository.                                |
+| `DENY_RULE`             | A deny rule matched; the row names the rule.                         |
+| `FETCH_DISABLED`        | `serve-fetch` is off for the provider.                               |
+| `CREDENTIAL_REFUSED`    | A fogwall credential was invalid, expired, revoked, or not accepted. |
+| `LINKED_TOKEN_UNUSABLE` | A fogwall credential was valid, but its linked SCM account was not.  |
+| `SSH_AGENT_MISSING`     | An SSH client connected without agent forwarding.                    |
+
+No caller identity is kept: fetch access never depends on one. Up to one flush interval of counts is lost if fogwall
+stops abruptly or the database refuses a write. Past `max-keys` distinct combinations between writes, further fetches
+are counted in a row per provider and outcome that names no repository, and fogwall logs a warning. An allowed fetch
+logs at `DEBUG`; a refused one logs at `INFO`. The `fogwall.fetch.decisions` metric carries the same decisions without
+the repository; see [Observability](../configuration/observability.md).
+
+Before 1.5.0, fogwall wrote one `fetch_records` row per request. That table (or MongoDB collection) is no longer written
+or read, and is left in place for you to drop.
+
 ## Dry-run testing rules and permissions
 
 _Available since v1.3.0._

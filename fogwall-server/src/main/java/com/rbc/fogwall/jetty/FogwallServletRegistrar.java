@@ -13,11 +13,12 @@ import com.rbc.fogwall.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.config.ScmOAuthConfig;
 import com.rbc.fogwall.config.SecretScanConfig;
 import com.rbc.fogwall.config.TlsConfig;
-import com.rbc.fogwall.db.FetchStore;
+import com.rbc.fogwall.db.FetchActivityRecorder;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.git.DisabledFetchUploadPackFactory;
 import com.rbc.fogwall.git.LocalRepositoryCache;
+import com.rbc.fogwall.git.ProxyMode;
 import com.rbc.fogwall.git.ServerReceivePackFactory;
 import com.rbc.fogwall.git.ServerRepositoryResolver;
 import com.rbc.fogwall.git.ServerUploadPackFactory;
@@ -250,7 +251,7 @@ public final class FogwallServletRegistrar {
                         fogwallContext.maxObjectSizeBytes(),
                         fogwallContext.upstreamConnectTimeoutSeconds(),
                         fogwallContext.urlRuleRegistry(),
-                        fogwallContext.fetchStore(),
+                        fogwallContext.fetchActivity(),
                         new FogwallCredentialFilter(
                                 provider,
                                 configBuilder.isBrokeredPush(provider.getName()),
@@ -285,7 +286,7 @@ public final class FogwallServletRegistrar {
                         fogwallContext.pushIdentityResolver(),
                         fogwallContext.repoPermissionService(),
                         fogwallContext.selfApprovalPolicy(),
-                        fogwallContext.fetchStore(),
+                        fogwallContext.fetchActivity(),
                         fogwallContext.urlRuleRegistry(),
                         scmOAuthConfig);
             } else {
@@ -360,7 +361,7 @@ public final class FogwallServletRegistrar {
             long maxObjectSizeBytes,
             int connectTimeoutSeconds,
             UrlRuleRegistry urlRuleRegistry,
-            FetchStore fetchStore,
+            FetchActivityRecorder fetchActivity,
             FogwallCredentialFilter credentialFilter,
             Optional<ServerReceivePackFactory.DeferredForwarding> deferredForwarding) {
         // A configured GitServlet is built fresh per path prefix rather than shared: mapping one servlet instance
@@ -428,8 +429,13 @@ public final class FogwallServletRegistrar {
                     new FilterHolder(new ParseGitRequestFilter(provider, maxPushBytes)),
                     mapping,
                     EnumSet.of(DispatcherType.REQUEST));
+            // Ahead of every filter that can refuse a fetch, so its finally block counts the decision they reach.
             context.addFilter(
-                    new FilterHolder(new UrlRuleAggregateFilter(provider, fetchStore, urlRuleRegistry)),
+                    new FilterHolder(new FetchActivityFilter(provider, ProxyMode.SERVER, fetchActivity)),
+                    mapping,
+                    EnumSet.of(DispatcherType.REQUEST));
+            context.addFilter(
+                    new FilterHolder(new UrlRuleAggregateFilter(provider, urlRuleRegistry)),
                     mapping,
                     EnumSet.of(DispatcherType.REQUEST));
             // Last, so URL rules refuse a repository before a credential is hashed, and so the SmartHttpErrorFilter
@@ -891,7 +897,7 @@ public final class FogwallServletRegistrar {
             PushIdentityResolver pushIdentityResolver,
             RepoPermissionService repoPermissionService,
             SelfApprovalPolicy selfApprovalPolicy,
-            FetchStore fetchStore,
+            FetchActivityRecorder fetchActivity,
             UrlRuleRegistry urlRuleRegistry,
             ScmOAuthConfig scmOAuthConfig) {
         String urlPattern = PROXY_PATH_PREFIX + provider.servletPath() + "/*";
@@ -906,6 +912,12 @@ public final class FogwallServletRegistrar {
         var pushStoreAuditFilterHolder = new FilterHolder(new PushStoreAuditFilter(pushStore));
         pushStoreAuditFilterHolder.setAsyncSupported(true);
         context.addFilter(pushStoreAuditFilterHolder, urlPattern, EnumSet.of(DispatcherType.REQUEST));
+
+        // Wraps the chain like PushStoreAuditFilter, counting the fetch decision once every filter has run.
+        var fetchActivityHolder =
+                new FilterHolder(new FetchActivityFilter(provider, ProxyMode.TRANSPARENT, fetchActivity));
+        fetchActivityHolder.setAsyncSupported(true);
+        context.addFilter(fetchActivityHolder, urlPattern, EnumSet.of(DispatcherType.REQUEST));
 
         // Build the orderable filter list. Sorted by getOrder() before registration so the Jetty chain
         // execution order matches the documented order ranges in fogwallFilter.
@@ -924,7 +936,6 @@ public final class FogwallServletRegistrar {
                 pushIdentityResolver,
                 repoPermissionService,
                 selfApprovalPolicy,
-                fetchStore,
                 urlRuleRegistry,
                 scmOAuthConfig);
 
@@ -957,7 +968,6 @@ public final class FogwallServletRegistrar {
             PushIdentityResolver pushIdentityResolver,
             RepoPermissionService repoPermissionService,
             SelfApprovalPolicy selfApprovalPolicy,
-            FetchStore fetchStore,
             UrlRuleRegistry urlRuleRegistry,
             ScmOAuthConfig scmOAuthConfig) {
         // Assembled in execution order, grouped by lifecycle stage. The stable stage sort below preserves this
@@ -969,7 +979,7 @@ public final class FogwallServletRegistrar {
         filters.add(new AllowApprovedPushFilter(pushStore, serviceUrl, selfApprovalPolicy));
         filters.add(new EnrichPushCommitsFilter(provider, repositoryCache, configBuilder.getMaxObjectSizeBytes()));
         // --- MANDATORY_PROCESSING: URL rules, permissions, content/commit checks ---
-        filters.add(new UrlRuleAggregateFilter(provider, fetchStore, urlRuleRegistry));
+        filters.add(new UrlRuleAggregateFilter(provider, urlRuleRegistry));
         if (provider instanceof BitbucketProvider bitbucketProvider) {
             filters.add(new BitbucketIdentityFilter(bitbucketProvider));
         }

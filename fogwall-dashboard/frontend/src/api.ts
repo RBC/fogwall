@@ -1,6 +1,7 @@
 import type {
   CacheListResponse,
   CacheRef,
+  FetchActivity,
   GitCredential,
   IssuedGitCredential,
   ScmApiActionRecord,
@@ -69,6 +70,12 @@ export async function fetchDiff(id: string): Promise<{ content: string | null }>
 export async function fetchScmApiActions(params: URLSearchParams): Promise<ScmApiActionRecord[]> {
   const res = await apiFetch('/api/scm-api-actions?' + params)
   if (!res.ok) throw new Error('Failed to fetch SCM API actions')
+  return res.json()
+}
+
+export async function fetchFetchActivity(params: URLSearchParams): Promise<FetchActivity[]> {
+  const res = await apiFetch('/api/fetches?' + params)
+  if (!res.ok) throw new Error('Failed to load fetch activity')
   return res.json()
 }
 

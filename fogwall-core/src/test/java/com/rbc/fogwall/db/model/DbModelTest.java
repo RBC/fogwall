@@ -2,7 +2,6 @@ package com.rbc.fogwall.db.model;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -104,77 +103,5 @@ class DbModelTest {
     void accessRule_toString_containsId() {
         AccessRule rule = AccessRule.builder().id("my-rule").build();
         assertTrue(rule.toString().contains("my-rule"));
-    }
-
-    // ---- FetchRecord ----
-
-    @Test
-    void fetchRecord_defaults() {
-        FetchRecord record =
-                FetchRecord.builder().result(FetchRecord.Result.ALLOWED).build();
-
-        assertNotNull(record.getId());
-        assertNotNull(record.getTimestamp());
-        assertNull(record.getProvider());
-        assertNull(record.getOwner());
-        assertNull(record.getRepoName());
-        assertNull(record.getPushUsername());
-        assertNull(record.getResolvedUser());
-    }
-
-    @Test
-    void fetchRecord_builderOverridesDefaults() {
-        Instant ts = Instant.parse("2026-01-01T00:00:00Z");
-        FetchRecord record = FetchRecord.builder()
-                .id("fetch-1")
-                .timestamp(ts)
-                .provider("github")
-                .owner("myorg")
-                .repoName("myrepo")
-                .result(FetchRecord.Result.BLOCKED)
-                .pushUsername("me")
-                .resolvedUser("alice")
-                .build();
-
-        assertEquals("fetch-1", record.getId());
-        assertEquals(ts, record.getTimestamp());
-        assertEquals("github", record.getProvider());
-        assertEquals("myorg", record.getOwner());
-        assertEquals("myrepo", record.getRepoName());
-        assertEquals(FetchRecord.Result.BLOCKED, record.getResult());
-        assertEquals("me", record.getPushUsername());
-        assertEquals("alice", record.getResolvedUser());
-    }
-
-    @Test
-    void fetchRecord_allResultEnumValues() {
-        assertNotNull(FetchRecord.Result.valueOf("ALLOWED"));
-        assertNotNull(FetchRecord.Result.valueOf("BLOCKED"));
-    }
-
-    @Test
-    void fetchRecord_equalsAndHashCode() {
-        Instant ts = Instant.parse("2026-01-01T00:00:00Z");
-        FetchRecord a = FetchRecord.builder()
-                .id("f1")
-                .timestamp(ts)
-                .result(FetchRecord.Result.ALLOWED)
-                .build();
-        FetchRecord b = FetchRecord.builder()
-                .id("f1")
-                .timestamp(ts)
-                .result(FetchRecord.Result.ALLOWED)
-                .build();
-        assertEquals(a, b);
-        assertEquals(a.hashCode(), b.hashCode());
-    }
-
-    @Test
-    void fetchRecord_toString_containsId() {
-        FetchRecord record = FetchRecord.builder()
-                .id("my-fetch")
-                .result(FetchRecord.Result.ALLOWED)
-                .build();
-        assertTrue(record.toString().contains("my-fetch"));
     }
 }
