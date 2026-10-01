@@ -13,8 +13,10 @@ import {
   removeGroupMember,
   updateGroup,
 } from '../api'
+import { canAdminister } from '../roles'
 import { useToast } from '../components/Toast'
 import type {
+  CurrentUser,
   GroupDetail,
   GroupPermissionRule,
   GroupSummary,
@@ -22,7 +24,8 @@ import type {
   UserSummary,
 } from '../types'
 
-export function Groups() {
+export function Groups({ currentUser }: { currentUser: CurrentUser | null }) {
+  const canManage = canAdminister(currentUser)
   const [groups, setGroups] = useState<GroupSummary[]>([])
   const [selected, setSelected] = useState<GroupDetail | null>(null)
   const [providers, setProviders] = useState<Provider[]>([])
@@ -199,6 +202,8 @@ export function Groups() {
 
   if (loading) return <div className="p-6 text-slate-500 dark:text-slate-400">Loading groups…</div>
 
+  const editable = canManage && selected?.source === 'DB'
+
   return (
     <div className="max-w-6xl px-6 py-6">
       <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-6">
@@ -215,28 +220,32 @@ export function Groups() {
         {/* left: group list + create form */}
         <div className="w-80 flex-shrink-0 space-y-4">
           {/* create */}
-          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-3">
-            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">New Group</h2>
-            <input
-              className="w-full text-sm border rounded px-2 py-1 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
-              placeholder="Name"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-            />
-            <input
-              className="w-full text-sm border rounded px-2 py-1 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
-              placeholder="Description (optional)"
-              value={newDesc}
-              onChange={(e) => setNewDesc(e.target.value)}
-            />
-            {createError && <p className="text-red-500 text-xs">{createError}</p>}
-            <button
-              onClick={handleCreate}
-              className="w-full text-sm bg-blue-600 hover:bg-blue-700 text-white rounded px-3 py-1.5 transition-colors"
-            >
-              Create
-            </button>
-          </div>
+          {canManage && (
+            <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+              <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                New Group
+              </h2>
+              <input
+                className="w-full text-sm border rounded px-2 py-1 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
+                placeholder="Name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+              />
+              <input
+                className="w-full text-sm border rounded px-2 py-1 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
+                placeholder="Description (optional)"
+                value={newDesc}
+                onChange={(e) => setNewDesc(e.target.value)}
+              />
+              {createError && <p className="text-red-500 text-xs">{createError}</p>}
+              <button
+                onClick={handleCreate}
+                className="w-full text-sm bg-blue-600 hover:bg-blue-700 text-white rounded px-3 py-1.5 transition-colors"
+              >
+                Create
+              </button>
+            </div>
+          )}
 
           {/* list */}
           <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700">
@@ -274,7 +283,7 @@ export function Groups() {
                         config
                       </span>
                     )}
-                    {g.source === 'DB' && (
+                    {canManage && g.source === 'DB' && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
@@ -295,16 +304,19 @@ export function Groups() {
         {/* right: detail panel */}
         {selected ? (
           <div className="flex-1 space-y-5">
+            {/* A config group is read-only for everyone; a database group is for an administrator to change. */}
             <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5">
-              {selected.source === 'CONFIG' ? (
+              {!editable ? (
                 <>
                   <div className="flex items-center gap-2 mb-1">
                     <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
                       {selected.name}
                     </h2>
-                    <span className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded px-1.5 py-0.5">
-                      config
-                    </span>
+                    {selected.source === 'CONFIG' && (
+                      <span className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded px-1.5 py-0.5">
+                        config
+                      </span>
+                    )}
                   </div>
                   {selected.description && (
                     <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -352,7 +364,7 @@ export function Groups() {
                   {selected.members.map((m) => (
                     <li key={m} className="flex items-center justify-between text-sm">
                       <span className="text-slate-700 dark:text-slate-200 font-mono">{m}</span>
-                      {selected.source === 'DB' && (
+                      {editable && (
                         <button
                           onClick={() => handleRemoveMember(m)}
                           className="text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
@@ -364,7 +376,7 @@ export function Groups() {
                   ))}
                 </ul>
               )}
-              {selected.source === 'DB' && (
+              {editable && (
                 <div className="flex gap-2 mt-2">
                   <select
                     className="flex-1 text-sm border rounded px-2 py-1 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
@@ -406,7 +418,7 @@ export function Groups() {
                       <th className="pb-1 pr-3">Value</th>
                       <th className="pb-1 pr-3">Match</th>
                       <th className="pb-1 pr-3">Grant</th>
-                      {selected.source === 'DB' && <th className="pb-1" />}
+                      {editable && <th className="pb-1" />}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
@@ -416,7 +428,7 @@ export function Groups() {
                         <td className="py-1 pr-3 font-mono text-xs">{r.value}</td>
                         <td className="py-1 pr-3 text-xs">{r.matchType}</td>
                         <td className="py-1 pr-3 text-xs">{r.grant}</td>
-                        {selected.source === 'DB' && (
+                        {editable && (
                           <td className="py-1 text-right">
                             <button
                               onClick={() => handleDeleteRule(r.id)}
@@ -431,7 +443,7 @@ export function Groups() {
                   </tbody>
                 </table>
               )}
-              {selected.source === 'DB' && (
+              {editable && (
                 <div className="space-y-2">
                   <div className="flex gap-2">
                     <select

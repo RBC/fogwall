@@ -256,6 +256,19 @@ class GroupControllerTest {
     }
 
     @Test
+    void addMember_auditor_returns400() {
+        when(groupStore.findGroupById(DB_GROUP.getId())).thenReturn(Optional.of(DB_GROUP));
+        when(userStore.findByUsername("alice")).thenReturn(Optional.of(ALICE));
+        when(permissionService.isAuditor("alice")).thenReturn(true);
+
+        var resp = controller.addMember(DB_GROUP.getId(), new GroupController.MemberRequest("alice"));
+
+        assertEquals(HttpStatus.BAD_REQUEST, resp.getStatusCode());
+        verify(groupStore, never()).addMember(any(), any());
+        verify(auditLog).denied(eq("group.member.add"), any(), any());
+    }
+
+    @Test
     void addMember_alreadyMember_returns400() {
         when(groupStore.findGroupById(DB_GROUP.getId())).thenReturn(Optional.of(DB_GROUP));
         when(userStore.findByUsername("alice")).thenReturn(Optional.of(ALICE));

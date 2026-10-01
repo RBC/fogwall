@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
+import com.rbc.fogwall.user.StaticUserStore;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -16,7 +18,7 @@ class GroupPermissionServiceTest {
     @BeforeEach
     void setUp() {
         groupStore = new InMemoryGroupPermissionStore();
-        svc = new RepoPermissionService(new InMemoryRepoPermissionStore(), groupStore);
+        svc = new RepoPermissionService(new InMemoryRepoPermissionStore(), groupStore, new StaticUserStore(List.of()));
     }
 
     private PermissionGroup group(String name) {
@@ -214,7 +216,8 @@ class GroupPermissionServiceTest {
 
     @Test
     void noGroupStore_noDirectPermissions_denied() {
-        RepoPermissionService noGroupSvc = new RepoPermissionService(new InMemoryRepoPermissionStore());
+        RepoPermissionService noGroupSvc =
+                new RepoPermissionService(new InMemoryRepoPermissionStore(), new StaticUserStore(List.of()));
         assertFalse(noGroupSvc.isAllowedToPush("alice", "github", "/acme/repo"));
     }
 

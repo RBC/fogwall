@@ -45,6 +45,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.authorization.AuthenticatedAuthorizationManager;
+import org.springframework.security.authorization.AuthorityAuthorizationManager;
+import org.springframework.security.authorization.AuthorizationManager;
+import org.springframework.security.authorization.AuthorizationManagers;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -77,6 +81,7 @@ import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -191,11 +196,12 @@ public class SecurityConfig {
      *
      * <p>The model is default-deny for mutations: reads fall through to {@code authenticated()}, but every
      * {@code POST/PUT/PATCH/DELETE} under {@code /api} that is not explicitly granted to users requires
-     * {@code ROLE_ADMIN}. A newly added mutating endpoint that nobody classified therefore fails closed (a non-admin
-     * gets 403) rather than inheriting any-authenticated access — a forgotten gate becomes a visible functional bug,
-     * not a silent privilege-escalation hole. The explicit user-facing mutations below are self-scoped (a user's own
-     * profile, OAuth links) or run their own identity/permission checks inside the controller (push approve, reject,
-     * cancel).
+     * {@code ROLE_ADMIN}. A session holding {@code ROLE_AUDITOR} reads the access records and is refused every
+     * mutation, its own profile included, even when it also holds {@code ROLE_ADMIN}. A newly added mutating endpoint
+     * that nobody classified therefore fails closed (a non-admin gets 403) rather than inheriting any-authenticated
+     * access — a forgotten gate becomes a visible functional bug, not a silent privilege-escalation hole. The explicit
+     * user-facing mutations below are self-scoped (a user's own profile, OAuth links) or run their own
+     * identity/permission checks inside the controller (push approve, reject, cancel).
      */
     private static void authorizeApiRequests(
             AuthorizeHttpRequestsConfigurer<HttpSecurity>.AuthorizationManagerRequestMatcherRegistry auth) {
@@ -208,46 +214,63 @@ public class SecurityConfig {
                         "/api/openapi.json",
                         "/webjars/**")
                 .permitAll()
-                // Administrative surfaces, gated whole (reads included): user administration, operational/cache
-                // endpoints, and permission groups — the last because creating a group, managing members, and
-                // attaching permission rules all grant repo-level entitlements, and even reading membership and rules
-                // is admin-only in the UI.
-                .requestMatchers("/api/users", "/api/users/**")
-                .hasRole("ADMIN")
-                .requestMatchers("/api/admin/**")
-                .hasRole("ADMIN")
-                .requestMatchers("/api/groups", "/api/groups/**")
-                .hasRole("ADMIN")
-                // User-facing mutations: self-scoped, or the push-review actions that police their own identity and
-                // permissions inside the controller. Listed before the admin catch-all so they win.
-                .requestMatchers("/api/me", "/api/me/**")
-                .authenticated()
+                // The access records an auditor reads: users, their permissions, and groups with their members and
+                // rules. Linked git credentials stay with administrators.
                 .requestMatchers(
-                        HttpMethod.POST,
-                        "/api/push/*/authorise",
-                        "/api/push/*/reject",
-                        "/api/push/*/cancel",
-                        "/api/push/*/forward")
-                .authenticated()
-                .requestMatchers("/api/issues", "/api/issues/**")
-                .authenticated()
-                .requestMatchers("/api/scm-oauth/**")
-                .authenticated()
-                // Default-deny for every other mutation: admin only. This is what closes the gap where an ungated
-                // mutating endpoint (e.g. group management, a rule update) would otherwise fall through to
-                // authenticated().
-                .requestMatchers(HttpMethod.POST, "/api/**")
+                        HttpMethod.GET,
+                        "/api/users",
+                        "/api/users/*",
+                        "/api/users/*/permissions",
+                        "/api/users/*/permissions/groups",
+                        "/api/groups",
+                        "/api/groups/*",
+                        "/api/groups/*/permissions")
+                .hasAnyRole("ADMIN", "AUDITOR")
+                // The rest of the administrative reads: other user administration, operational/cache endpoints and
+                // groups. Mutations under these paths fall to the admin catch-all below.
+                .requestMatchers(
+                        HttpMethod.GET, "/api/users", "/api/users/**", "/api/admin/**", "/api/groups", "/api/groups/**")
                 .hasRole("ADMIN")
-                .requestMatchers(HttpMethod.PUT, "/api/**")
-                .hasRole("ADMIN")
-                .requestMatchers(HttpMethod.PATCH, "/api/**")
-                .hasRole("ADMIN")
-                .requestMatchers(HttpMethod.DELETE, "/api/**")
-                .hasRole("ADMIN")
-                // Reads and the login/logout/OAuth endpoints: any authenticated user.
-                .anyRequest()
-                .authenticated();
+                // Linking an SCM account is a GET that writes: it starts and completes the OAuth link.
+                .requestMatchers(HttpMethod.GET, "/api/scm-oauth/*/link", "/api/scm-oauth/*/callback")
+                .access(WRITER);
+        // User-facing mutations: self-scoped, or the push-review actions that police their own identity and permissions
+        // inside the controller. Listed before the admin catch-all so they win.
+        for (HttpMethod method : MUTATIONS) {
+            auth.requestMatchers(
+                            method,
+                            "/api/me",
+                            "/api/me/**",
+                            "/api/push/*/authorise",
+                            "/api/push/*/reject",
+                            "/api/push/*/cancel",
+                            "/api/push/*/forward",
+                            "/api/issues",
+                            "/api/issues/**",
+                            "/api/scm-oauth/**")
+                    .access(WRITER);
+        }
+        // Default-deny for every other mutation: admin only. This is what closes the gap where an ungated mutating
+        // endpoint (e.g. group management, a rule update) would otherwise fall through to authenticated().
+        for (HttpMethod method : MUTATIONS) {
+            auth.requestMatchers(method, "/api/**").access(ADMIN_WRITER);
+        }
+        // Reads and the login/logout/OAuth endpoints: any authenticated user.
+        auth.anyRequest().authenticated();
     }
+
+    private static final List<HttpMethod> MUTATIONS =
+            List.of(HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE);
+
+    /** A session holding {@code ROLE_AUDITOR} is read-only, whatever other role it holds. */
+    private static final AuthorizationManager<RequestAuthorizationContext> NOT_AUDITOR =
+            AuthorizationManagers.not(AuthorityAuthorizationManager.hasRole("AUDITOR"));
+
+    private static final AuthorizationManager<RequestAuthorizationContext> WRITER =
+            AuthorizationManagers.allOf(AuthenticatedAuthorizationManager.authenticated(), NOT_AUDITOR);
+
+    private static final AuthorizationManager<RequestAuthorizationContext> ADMIN_WRITER =
+            AuthorizationManagers.allOf(AuthorityAuthorizationManager.hasRole("ADMIN"), NOT_AUDITOR);
 
     @Bean
     HttpSessionListener sessionTimeoutListener() {

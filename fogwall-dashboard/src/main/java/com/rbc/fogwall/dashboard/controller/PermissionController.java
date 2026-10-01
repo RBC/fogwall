@@ -19,7 +19,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "Users", description = "User management — requires ROLE_ADMIN")
+@Tag(
+        name = "Users",
+        description = "User management — reads require ROLE_AUDITOR or ROLE_ADMIN, changes require ROLE_ADMIN")
 @RestController
 @RequestMapping("/api/users/{username}/permissions")
 @PreAuthorize("hasRole('ADMIN')")
@@ -34,6 +36,7 @@ public class PermissionController {
 
     @Operation(operationId = "listUserPermissions", summary = "List permissions for a user")
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'AUDITOR')")
     public ResponseEntity<?> list(@PathVariable String username) {
         if (userStore.findByUsername(username).isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -50,6 +53,10 @@ public class PermissionController {
     public ResponseEntity<?> add(@PathVariable String username, @RequestBody AddPermissionRequest req) {
         if (userStore.findByUsername(username).isEmpty()) {
             return ResponseEntity.notFound().build();
+        }
+        if (permissionService.isAuditor(username)) {
+            auditLog.denied("permission.grant", "user:" + username, "auditor");
+            return ResponseEntity.badRequest().body(Map.of("error", "An auditor holds no repository permission"));
         }
         if (req.provider() == null || req.provider().isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "provider is required"));
@@ -137,6 +144,7 @@ public class PermissionController {
 
     @Operation(operationId = "listUserGroups", summary = "List permission groups the user belongs to")
     @GetMapping("/groups")
+    @PreAuthorize("hasAnyRole('ADMIN', 'AUDITOR')")
     public ResponseEntity<?> listGroups(@PathVariable String username) {
         if (userStore.findByUsername(username).isEmpty()) {
             return ResponseEntity.notFound().build();

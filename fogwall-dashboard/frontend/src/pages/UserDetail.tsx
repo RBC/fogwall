@@ -20,6 +20,7 @@ import {
 import type { PermissionTestResponse } from '../api'
 import { OperationsBadge, PathTypeBadge } from '../components/PermissionBadges'
 import { UserGitCredentials } from '../components/GitCredentials'
+import { canAdminister } from '../roles'
 import { useToast } from '../components/Toast'
 import { StatusBadge } from '../components/StatusBadge'
 import type {
@@ -1123,7 +1124,7 @@ export function UserDetail({ authProvider, currentUser }: UserDetailProps) {
   const [tab, setTab] = useState<Tab>('overview')
 
   const isLocalAuth = authProvider === 'local'
-  const isAdmin = currentUser?.authorities?.includes('ROLE_ADMIN') ?? false
+  const isAdmin = canAdminister(currentUser)
 
   const loadUser = useCallback(() => {
     if (!username) return

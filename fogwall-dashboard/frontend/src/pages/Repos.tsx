@@ -8,6 +8,7 @@ import {
 } from '../api'
 import type { RuleTestResponse } from '../api'
 import { StatusBadge } from '../components/StatusBadge'
+import { canAdminister } from '../roles'
 import { useToast } from '../components/Toast'
 import type { FetchActivity, Provider, CurrentUser } from '../types'
 
@@ -717,7 +718,7 @@ function TestRuleModal({ onClose }: { onClose: () => void }) {
 }
 
 export function Repos({ currentUser }: { currentUser: CurrentUser | null }) {
-  const isAdmin = currentUser?.authorities.includes('ROLE_ADMIN') ?? false
+  const isAdmin = canAdminister(currentUser)
   const toast = useToast()
   const [tab, setTab] = useState<Tab>('active')
   const [activeRepos, setActiveRepos] = useState<ActiveRepo[]>([])

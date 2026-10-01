@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react'
 import { NavLink } from 'react-router'
+import { canAdminister, hasRole, isReadOnly } from '../roles'
 import type { CurrentUser } from '../types'
 
 interface SidebarProps {
@@ -101,6 +102,10 @@ interface Dest {
   disabled?: boolean // not a live route yet; renders greyed out
   /** Sub-destinations, rendered indented under this one. Hidden in the collapsed rail, which has no room for them. */
   children?: Dest[]
+  /** Shown to auditors as well as admins; the rest of the admin section is admin-only. */
+  auditorVisible?: boolean
+  /** A destination that only acts, hidden from an auditor's read-only session. */
+  writes?: boolean
 }
 
 const PRIMARY: Dest[] = [
@@ -114,7 +119,7 @@ const PRIMARY: Dest[] = [
     // than the form being a destination of its own alongside Pushes.
     children: [
       { to: '/contributions', label: 'Activity', end: true },
-      { to: '/contributions/issues', label: 'Report an issue' },
+      { to: '/contributions/issues', label: 'Report an issue', writes: true },
     ],
   },
   { to: '/repos', label: 'Repos', icon: 'repos' },
@@ -122,8 +127,8 @@ const PRIMARY: Dest[] = [
 ]
 
 const ADMIN: Dest[] = [
-  { to: '/users', label: 'Users', icon: 'users' },
-  { to: '/groups', label: 'Groups', icon: 'groups' },
+  { to: '/users', label: 'Users', icon: 'users', auditorVisible: true },
+  { to: '/groups', label: 'Groups', icon: 'groups', auditorVisible: true },
   { to: '/operations', label: 'Operations', icon: 'operations' },
   { to: '/mirror-cache', label: 'Mirror cache', icon: 'mirror' },
 ]
@@ -179,7 +184,17 @@ function NavRow({ dest, collapsed }: { dest: Dest; collapsed: boolean }) {
 }
 
 export function Sidebar({ currentUser, dark, toggleDark, collapsed }: SidebarProps) {
-  const isAdmin = currentUser?.authorities.includes('ROLE_ADMIN') ?? false
+  const admin = canAdminister(currentUser)
+    ? ADMIN
+    : hasRole(currentUser, 'AUDITOR')
+      ? ADMIN.filter((d) => d.auditorVisible)
+      : []
+  const readOnly = isReadOnly(currentUser)
+  const roleLabel = canAdminister(currentUser)
+    ? 'admin'
+    : hasRole(currentUser, 'AUDITOR')
+      ? 'auditor'
+      : 'user'
 
   return (
     <aside
@@ -250,9 +265,11 @@ export function Sidebar({ currentUser, dark, toggleDark, collapsed }: SidebarPro
                 <span className="truncate">{d.label}</span>
               </div>
               <div className="ml-[19px] space-y-0.5 border-l border-slate-700 pl-2">
-                {d.children.map((c) => (
-                  <NavRow key={c.to} dest={c} collapsed={collapsed} />
-                ))}
+                {d.children
+                  .filter((c) => !(c.writes && readOnly))
+                  .map((c) => (
+                    <NavRow key={c.to} dest={c} collapsed={collapsed} />
+                  ))}
               </div>
             </div>
           ) : (
@@ -260,7 +277,7 @@ export function Sidebar({ currentUser, dark, toggleDark, collapsed }: SidebarPro
           ),
         )}
 
-        {isAdmin && (
+        {admin.length > 0 && (
           <>
             {!collapsed && (
               <div className="px-2.5 pb-1 pt-3 text-[10.5px] font-semibold uppercase tracking-wider text-slate-500">
@@ -268,7 +285,7 @@ export function Sidebar({ currentUser, dark, toggleDark, collapsed }: SidebarPro
               </div>
             )}
             {collapsed && <div className="mx-2.5 my-2 border-t border-slate-700" />}
-            {ADMIN.map((d) => (
+            {admin.map((d) => (
               <NavRow key={d.to} dest={d} collapsed={collapsed} />
             ))}
           </>
@@ -356,7 +373,7 @@ export function Sidebar({ currentUser, dark, toggleDark, collapsed }: SidebarPro
           </button>
         </div>
 
-        {/* Profile — name and role (admin/user, from the mapped authorities), links to the profile page. */}
+        {/* Profile — name and role (admin, auditor or user, from the mapped authorities), links to the profile page. */}
         {currentUser && (
           <NavLink
             to="/profile"
@@ -374,9 +391,7 @@ export function Sidebar({ currentUser, dark, toggleDark, collapsed }: SidebarPro
                 <span className="block truncate text-[13px] font-semibold text-white">
                   {currentUser.username}
                 </span>
-                <span className="block truncate text-[11px] text-slate-400">
-                  {isAdmin ? 'admin' : 'user'}
-                </span>
+                <span className="block truncate text-[11px] text-slate-400">{roleLabel}</span>
               </span>
             )}
           </NavLink>

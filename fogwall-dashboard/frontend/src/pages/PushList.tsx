@@ -2,6 +2,7 @@ import { ExtIcon } from '../components/ExtIcon'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { approvePush, fetchProviders, fetchPushCounts, fetchPushes, rejectPush } from '../api'
+import { isReadOnly } from '../roles'
 import { useToast } from '../components/Toast'
 import { StatusBadge } from '../components/StatusBadge'
 import type { CurrentUser, Provider, PushRecord, PushStatus } from '../types'
@@ -154,7 +155,8 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
   }, [])
 
   // Only allow selection when bulk review is enabled and viewing PENDING pushes
-  const selectionEnabled = bulkReviewEnabled && filters.status === 'PENDING'
+  const selectionEnabled =
+    bulkReviewEnabled && filters.status === 'PENDING' && !isReadOnly(currentUser)
 
   useEffect(() => {
     fetchProviders()

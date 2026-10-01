@@ -2,6 +2,7 @@ package com.rbc.fogwall.dashboard.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -109,6 +110,18 @@ class PermissionControllerTest {
 
         assertEquals(HttpStatus.NOT_FOUND, resp.getStatusCode());
         verify(permissionService, never()).save(any());
+    }
+
+    @Test
+    void add_auditor_returns400() {
+        when(userStore.findByUsername("alice")).thenReturn(Optional.of(ALICE));
+        when(permissionService.isAuditor("alice")).thenReturn(true);
+
+        var resp = controller.add("alice", req("github", null, "/a/b", null, "PUSH"));
+
+        assertEquals(HttpStatus.BAD_REQUEST, resp.getStatusCode());
+        verify(permissionService, never()).save(any());
+        verify(auditLog).denied(eq("permission.grant"), any(), any());
     }
 
     @Test

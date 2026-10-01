@@ -591,7 +591,7 @@ public class PushController {
 
     /** Whether {@code auth} may forward {@code record} now: the pusher or an admin, on a forwardable parked push. */
     private boolean canForward(PushRecord record, Authentication auth) {
-        if (auth == null || !isForwardable(record)) return false;
+        if (auth == null || isReadOnly(auth) || !isForwardable(record)) return false;
         return isAdmin(auth) || auth.getName().equals(record.getResolvedUser());
     }
 
@@ -606,7 +606,7 @@ public class PushController {
      * repository, not a review grant. A push with no resolved pusher is still cancelable by a collaborator.
      */
     private boolean canCancel(PushRecord record, Authentication auth) {
-        if (auth == null) return false;
+        if (auth == null || isReadOnly(auth)) return false;
         if (isAdmin(auth)) return true;
         String user = auth.getName();
         if (user == null) return false;
@@ -614,6 +614,13 @@ public class PushController {
         return record.getProvider() != null
                 && record.getUrl() != null
                 && repoPermissionService.hasAnyGrant(user, record.getProvider(), record.getUrl());
+    }
+
+    /**
+     * An auditor's session acts on no push; {@code SecurityConfig} refuses the requests, this keeps the flags honest.
+     */
+    private static boolean isReadOnly(Authentication auth) {
+        return auth.getAuthorities().stream().anyMatch(a -> "ROLE_AUDITOR".equals(a.getAuthority()));
     }
 
     private static boolean isAdmin(Authentication auth) {

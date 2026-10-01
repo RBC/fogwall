@@ -59,12 +59,24 @@ Roles control what a user can do in the dashboard and REST API:
 | Role             | What it grants                                                                                                                                                   |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `USER` (default) | View push records; approve or reject pushes they have `REVIEW` permission on; manage their own profile (emails, SCM identities)                                  |
+| `AUDITOR`        | View push records, plus read-only access to users, groups and their permissions. Changes nothing, even alongside `ADMIN`                                         |
 | `ADMIN`          | Everything USER can do, plus: create/delete users, reset passwords, manage any user's profile, view all push records                                             |
 | `SELF_CERTIFY`   | Grants the **capability** to self-approve pushes. This is the prerequisite gate — it must be present before any per-repo `SELF_CERTIFY` permission takes effect. |
 
 `ROLE_USER` is granted to every authenticated user automatically when no `role-mappings` are configured (open mode).
 When `role-mappings` are configured, access is deny-by-default — a user must belong to at least one mapped group or they
 are refused login entirely. Map a broad group to `USER` to grant baseline access to all directory members.
+
+`AUDITOR` lets someone read the evidence of who was permitted to do what without being able to change it. An auditor's
+session is read-only: every change answers 403, including approving, rejecting, cancelling or forwarding a push, filing
+an issue, and editing their own profile, and the pages render without those controls. This holds even for a user who is
+also `ADMIN`.
+
+An auditor holds no repository permission: entries naming them, directly or through a group, are ignored, so they cannot
+push, propose or merge. The dashboard refuses to grant an auditor a permission or add them to a group, and startup fails
+when the config does either for a user it declares an auditor. A user who becomes an auditor keeps their existing
+entries on record, inert. Assign the role the way any other role is assigned: `AUDITOR` under `auth.role-mappings` for
+LDAP, AD and OIDC, `roles: [AUDITOR]` on a configured local user, or the Role field in the Add User form.
 
 `ROLE_SELF_CERTIFY` is the prerequisite gate for self-approval. It represents the capability, attested by your org's IdP
 or IAM process. Self-approval requires **both** this role and a per-repo `SELF_CERTIFY` permission entry — neither alone

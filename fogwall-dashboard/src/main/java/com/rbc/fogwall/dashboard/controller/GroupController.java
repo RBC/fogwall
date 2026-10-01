@@ -20,7 +20,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "Groups", description = "Permission group management — requires ROLE_ADMIN")
+@Tag(
+        name = "Groups",
+        description =
+                "Permission group management — reads require ROLE_AUDITOR or ROLE_ADMIN, changes require ROLE_ADMIN")
 @RestController
 @RequestMapping("/api/groups")
 @PreAuthorize("hasRole('ADMIN')")
@@ -41,6 +44,7 @@ public class GroupController {
 
     @Operation(operationId = "listGroups", summary = "List all permission groups")
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'AUDITOR')")
     public ResponseEntity<?> list() {
         List<PermissionGroup> groups = groupStore().findAllGroups();
         List<GroupSummary> summaries = groups.stream()
@@ -76,6 +80,7 @@ public class GroupController {
 
     @Operation(operationId = "getGroup", summary = "Get group details including members and rules")
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'AUDITOR')")
     public ResponseEntity<?> get(@PathVariable String id) {
         return groupStore()
                 .findGroupById(id)
@@ -157,6 +162,11 @@ public class GroupController {
         if (userStore.findByUsername(req.username()).isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "user not found: " + req.username()));
         }
+        if (permissionService.isAuditor(req.username())) {
+            auditLog.denied("group.member.add", "group:" + id, "auditor " + req.username());
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "An auditor holds no repository permission, so cannot join a group"));
+        }
         List<String> current = groupStore().findMembers(id);
         if (current.contains(req.username())) {
             return ResponseEntity.badRequest().body(Map.of("error", "user already a member of this group"));
@@ -191,6 +201,7 @@ public class GroupController {
 
     @Operation(operationId = "listGroupPermissions", summary = "List permission rules for a group")
     @GetMapping("/{id}/permissions")
+    @PreAuthorize("hasAnyRole('ADMIN', 'AUDITOR')")
     public ResponseEntity<?> listRules(@PathVariable String id) {
         if (groupStore().findGroupById(id).isEmpty())
             return ResponseEntity.notFound().build();

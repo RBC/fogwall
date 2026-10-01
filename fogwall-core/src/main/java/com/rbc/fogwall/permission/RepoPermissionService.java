@@ -4,7 +4,9 @@ import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
 import com.rbc.fogwall.git.RepoPath;
 import com.rbc.fogwall.git.RepoPathMatching;
+import com.rbc.fogwall.user.ReadOnlyUserStore;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,6 +34,12 @@ import lombok.extern.slf4j.Slf4j;
  *       path segment, {@code **} matches any depth
  *   <li>{@code REGEX} — full Java regex matched against the full path string
  * </ul>
+ *
+ * <h3>Auditors</h3>
+ *
+ * <p>A user whose stored roles include {@value #AUDITOR_ROLE} holds no grant, whatever entries name them directly or
+ * through a group. Every grant permits a write, and an auditor writes nothing. The role is read from the user store
+ * only once a grant has matched, so a denial costs no lookup.
  */
 @Slf4j
 public class RepoPermissionService {
@@ -52,15 +60,22 @@ public class RepoPermissionService {
 
     private final PermissionStore<RepoPermission> store;
     private final GroupPermissionStore groupStore;
+    private final ReadOnlyUserStore userStore;
     private final ConcurrentHashMap<String, Pattern> patternCache = new ConcurrentHashMap<>();
 
-    public RepoPermissionService(PermissionStore<RepoPermission> store) {
-        this(store, null);
+    /** The role, as stored on a user, that holds no repository grant. */
+    public static final String AUDITOR_ROLE = "AUDITOR";
+
+    public RepoPermissionService(PermissionStore<RepoPermission> store, ReadOnlyUserStore userStore) {
+        this(store, null, userStore);
     }
 
-    public RepoPermissionService(PermissionStore<RepoPermission> store, GroupPermissionStore groupStore) {
+    public RepoPermissionService(
+            PermissionStore<RepoPermission> store, GroupPermissionStore groupStore, ReadOnlyUserStore userStore) {
         this.store = store;
         this.groupStore = groupStore;
+        this.userStore = Objects.requireNonNull(
+                userStore, "userStore is required: without it an auditor's grants could not be refused");
     }
 
     /**
@@ -123,8 +138,9 @@ public class RepoPermissionService {
         }
 
         boolean allowed = forPath.stream()
-                .filter(p -> p.getGrant() == RepoPermission.Grant.SELF_CERTIFY)
-                .anyMatch(p -> username.equals(p.getUsername()));
+                        .filter(p -> p.getGrant() == RepoPermission.Grant.SELF_CERTIFY)
+                        .anyMatch(p -> username.equals(p.getUsername()))
+                && !isAuditor(username);
 
         log.debug(
                 "Bypass review check: user={} provider={} path={} → {}",
@@ -140,16 +156,16 @@ public class RepoPermissionService {
      * through a group. Marks a collaborator on the repository regardless of which operations the grant permits.
      */
     public boolean hasAnyGrant(String username, String provider, String path) {
-        boolean direct = store.findByProvider(provider).stream()
+        boolean granted = store.findByProvider(provider).stream()
                 .filter(p -> username.equals(p.getUsername()))
                 .anyMatch(p -> matchesPath(p, path));
-        if (direct || groupStore == null) {
-            return direct;
+        if (!granted && groupStore != null) {
+            Set<String> userGroupIds = Set.copyOf(groupStore.findGroupIdsForUser(username));
+            granted = groupStore.findRulesByProvider(provider).stream()
+                    .filter(r -> userGroupIds.contains(r.getGroupId()))
+                    .anyMatch(r -> matchesPathRule(r, path));
         }
-        Set<String> userGroupIds = Set.copyOf(groupStore.findGroupIdsForUser(username));
-        return groupStore.findRulesByProvider(provider).stream()
-                .filter(r -> userGroupIds.contains(r.getGroupId()))
-                .anyMatch(r -> matchesPathRule(r, path));
+        return granted && !isAuditor(username);
     }
 
     /**
@@ -255,9 +271,33 @@ public class RepoPermissionService {
     /**
      * Evaluates whether {@code username} has {@code op} (or the combined {@code PUSH_AND_REVIEW} grant) for
      * {@code path} at {@code provider}, and returns which permission entry granted it — a direct per-user permission, a
-     * group-inherited rule, or neither. Direct permissions are preferred over group rules when both exist.
+     * group-inherited rule, or neither. Direct permissions are preferred over group rules when both exist. An auditor
+     * is never granted.
      */
     public GrantResult evaluateGrant(String username, String provider, String path, RepoPermission.Grant op) {
+        GrantResult result = matchGrant(username, provider, path, op);
+        if (!(result instanceof GrantResult.NotGranted) && isAuditor(username)) {
+            log.debug(
+                    "Grant {} for user={} provider={} path={} ignored: user is an auditor",
+                    op,
+                    username,
+                    provider,
+                    path);
+            return new GrantResult.NotGranted();
+        }
+        return result;
+    }
+
+    /** Whether {@code username} is stored with the {@value #AUDITOR_ROLE} role. A user with no record is not. */
+    public boolean isAuditor(String username) {
+        return username != null
+                && userStore
+                        .findByUsername(username)
+                        .map(u -> u.getRoles().contains(AUDITOR_ROLE))
+                        .orElse(false);
+    }
+
+    private GrantResult matchGrant(String username, String provider, String path, RepoPermission.Grant op) {
         Optional<RepoPermission> direct = store.findByProvider(provider).stream()
                 .filter(p -> matchesPath(p, path))
                 .filter(p -> p.getGrant().implies(op))

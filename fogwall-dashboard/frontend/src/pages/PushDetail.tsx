@@ -14,6 +14,7 @@ import {
   rejectPush,
 } from '../api'
 import { StatusBadge } from '../components/StatusBadge'
+import { canAdminister, isReadOnly } from '../roles'
 import { useToast } from '../components/Toast'
 import type {
   AttestationLink,
@@ -1090,10 +1091,11 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
             <DeferredForwarding record={record} forwarding={forwarding} onForward={handleForward} />
           )}
 
-          {/* Approve / Reject / Cancel */}
+          {/* Approve / Reject / Cancel — absent for an auditor, whose session is read-only */}
           {record.status === 'PENDING' &&
+            !isReadOnly(currentUser) &&
             (() => {
-              const isAdmin = currentUser?.authorities?.includes('ROLE_ADMIN') ?? false
+              const isAdmin = canAdminister(currentUser)
               const canSelfCertify = record.canCurrentUserSelfCertify ?? false
               const isPusher =
                 !!currentUser?.username &&
