@@ -6,6 +6,7 @@ import com.rbc.fogwall.approval.SelfApprovalPolicy;
 import com.rbc.fogwall.approval.UiApprovalGateway;
 import com.rbc.fogwall.crypto.TokenCipherProvider;
 import com.rbc.fogwall.db.CompositeUrlRuleRegistry;
+import com.rbc.fogwall.db.FetchActivityRecorder;
 import com.rbc.fogwall.db.FetchStore;
 import com.rbc.fogwall.db.MongoStoreFactory;
 import com.rbc.fogwall.db.ParkedPushStore;
@@ -670,6 +671,7 @@ public class JettyConfigurationBuilder {
         return new FogwallContext(
                 ps,
                 fs,
+                buildFetchActivityRecorder(fs),
                 us,
                 rr,
                 rps,
@@ -914,6 +916,21 @@ public class JettyConfigurationBuilder {
                 configRegistry.findAll().size(),
                 dbRegistry.findAll().size());
         return cachedUrlRuleRegistry;
+    }
+
+    /** Counts fetch decisions in memory for {@code fs}; started and stopped by the application. */
+    public FetchActivityRecorder buildFetchActivityRecorder(FetchStore fs) {
+        var settings = config.getServer().getFetchActivity();
+        if (settings.getFlushIntervalSeconds() < 1 || settings.getRetentionDays() < 1 || settings.getMaxKeys() < 1) {
+            throw new IllegalStateException(
+                    "server.fetch-activity: flush-interval-seconds, retention-days and max-keys must each be at least 1");
+        }
+        return new FetchActivityRecorder(
+                fs,
+                telemetry,
+                Duration.ofSeconds(settings.getFlushIntervalSeconds()),
+                Duration.ofDays(settings.getRetentionDays()),
+                settings.getMaxKeys());
     }
 
     /** Builds a {@link FetchStore}. JDBC backends share the same {@link DataSource} as the push store. */

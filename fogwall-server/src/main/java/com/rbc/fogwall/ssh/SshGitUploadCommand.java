@@ -1,9 +1,13 @@
 package com.rbc.fogwall.ssh;
 
+import com.rbc.fogwall.db.FetchActivityRecorder;
 import com.rbc.fogwall.db.UrlRuleRegistry;
+import com.rbc.fogwall.db.model.FetchActivity;
+import com.rbc.fogwall.db.model.FetchRefusal;
 import com.rbc.fogwall.git.DisabledFetchUploadPackFactory;
 import com.rbc.fogwall.git.HttpOperation;
 import com.rbc.fogwall.git.LocalRepositoryCache;
+import com.rbc.fogwall.git.ProxyMode;
 import com.rbc.fogwall.git.UpstreamFailure;
 import com.rbc.fogwall.servlet.filter.UrlRuleEvaluator;
 import java.io.IOException;
@@ -38,6 +42,9 @@ import org.eclipse.jgit.transport.UploadPack;
  * validation and approval gating are push-specific, and fetch has no fogwall-side permission grant on either transport
  * today — access is delegated to the upstream SCM via the forwarded agent, same as HTTP delegates via client-forwarded
  * credentials.
+ *
+ * <p>Each session that resolves to a repository is counted once in {@link FetchActivityRecorder}: allowed once every
+ * check fogwall makes has passed, or blocked by the first one that refuses.
  */
 @Slf4j
 public class SshGitUploadCommand implements Command {
@@ -47,6 +54,7 @@ public class SshGitUploadCommand implements Command {
     private final LocalRepositoryCache cache;
     private final FogwallProxyAgentFactory agentFactory;
     private final UrlRuleRegistry urlRuleRegistry;
+    private final FetchActivityRecorder fetchActivity;
     private final Path knownHostsFile;
     private final boolean trustOnFirstUse;
 
@@ -61,6 +69,7 @@ public class SshGitUploadCommand implements Command {
             LocalRepositoryCache cache,
             FogwallProxyAgentFactory agentFactory,
             UrlRuleRegistry urlRuleRegistry,
+            FetchActivityRecorder fetchActivity,
             Path knownHostsFile,
             boolean trustOnFirstUse) {
         this.repoPath = repoPath;
@@ -68,6 +77,7 @@ public class SshGitUploadCommand implements Command {
         this.cache = cache;
         this.agentFactory = agentFactory;
         this.urlRuleRegistry = urlRuleRegistry;
+        this.fetchActivity = fetchActivity;
         this.knownHostsFile = knownHostsFile;
         this.trustOnFirstUse = trustOnFirstUse;
     }
@@ -125,6 +135,7 @@ public class SshGitUploadCommand implements Command {
             String owner = route.owner();
             String repo = route.repo();
             String upstreamUrl = route.upstreamUrl();
+            String providerId = route.provider().getProviderId();
 
             // Fetch toggle (#478): honour the same serve-fetch switch the HTTP transport does, so a switch one
             // transport honours and the other ignores can't happen. Refused before URL-rule evaluation — when fetch
@@ -134,6 +145,7 @@ public class SshGitUploadCommand implements Command {
                         "SSH fetch refused for {}: fetch serving disabled for provider '{}'",
                         repoPath,
                         route.provider().getName());
+                count(providerId, owner, repo, FetchActivity.Result.BLOCKED, FetchRefusal.FETCH_DISABLED, null);
                 writeError(DisabledFetchUploadPackFactory.MESSAGE);
                 exitCode = 128;
                 return;
@@ -147,10 +159,18 @@ public class SshGitUploadCommand implements Command {
             String slug = "/" + owner + "/" + repo;
             UrlRuleEvaluator.Result result = evaluator.evaluate(slug, owner, repo, HttpOperation.FETCH);
             if (!(result instanceof UrlRuleEvaluator.Result.Allowed allowed)) {
-                String reason = result instanceof UrlRuleEvaluator.Result.Denied denied
-                        ? "Repository blocked by deny rule: " + denied.ruleId()
+                String deniedBy = result instanceof UrlRuleEvaluator.Result.Denied denied ? denied.ruleId() : null;
+                String reason = deniedBy != null
+                        ? "Repository blocked by deny rule: " + deniedBy
                         : "Repository not in allow list";
-                log.debug("SSH fetch blocked for {}: {}", repoPath, reason);
+                log.info("SSH fetch blocked for {}: {}", repoPath, reason);
+                count(
+                        providerId,
+                        owner,
+                        repo,
+                        FetchActivity.Result.BLOCKED,
+                        deniedBy != null ? FetchRefusal.DENY_RULE : FetchRefusal.NOT_IN_ALLOW_LIST,
+                        deniedBy);
                 writeError(reason);
                 exitCode = 128;
                 return;
@@ -162,13 +182,15 @@ public class SshGitUploadCommand implements Command {
             // channel env as SSH_AUTH_SOCK when the client's ssh -A request was processed.
             agent = agentFactory.getForwardedAgent(authSocket);
             if (agent == null || !agent.isOpen()) {
+                count(providerId, owner, repo, FetchActivity.Result.BLOCKED, FetchRefusal.SSH_AGENT_MISSING, null);
                 writeError(
                         "SSH agent forwarding required — connect with 'ssh -A' or set 'ForwardAgent yes' in ~/.ssh/config");
                 exitCode = 128;
                 return;
             }
 
-            log.info("SSH git-upload-pack: user='{}' path={} -> {}", sshUser, repoPath, upstreamUrl);
+            log.debug("SSH git-upload-pack: user='{}' path={} -> {}", sshUser, repoPath, upstreamUrl);
+            count(providerId, owner, repo, FetchActivity.Result.ALLOWED, null, allowed.ruleId());
 
             TransportConfigCallback transportConfig =
                     SshUpstreamTransport.forwardedAgent(agent, knownHostsFile, trustOnFirstUse);
@@ -210,6 +232,17 @@ public class SshGitUploadCommand implements Command {
                 exitCallback.onExit(exitCode);
             }
         }
+    }
+
+    private void count(
+            String providerId,
+            String owner,
+            String repo,
+            FetchActivity.Result result,
+            FetchRefusal refusal,
+            String ruleId) {
+        fetchActivity.record(
+                providerId, owner, repo, FetchActivity.Transport.SSH, ProxyMode.SERVER, result, refusal, ruleId);
     }
 
     private void writeError(String message) {

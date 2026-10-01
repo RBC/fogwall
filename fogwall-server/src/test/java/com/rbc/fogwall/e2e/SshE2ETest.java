@@ -3,6 +3,9 @@ package com.rbc.fogwall.e2e;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.rbc.fogwall.db.model.AccessRule;
+import com.rbc.fogwall.db.model.FetchActivity;
+import com.rbc.fogwall.db.model.FetchActivityQuery;
+import com.rbc.fogwall.db.model.FetchRefusal;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
 import com.rbc.fogwall.db.model.PushQuery;
@@ -11,6 +14,7 @@ import com.rbc.fogwall.git.UpstreamFailure;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.*;
@@ -223,6 +227,15 @@ class SshE2ETest {
 
         assertTrue(Files.isDirectory(repo.resolve(".git")), "Expected a valid git repo to be cloned via SSH");
         runCmd(repo, "git", "log", "-1"); // throws if HEAD doesn't resolve to a real commit
+
+        List<FetchActivity> rows = proxy.flushFetchActivity()
+                .find(FetchActivityQuery.builder()
+                        .transport(FetchActivity.Transport.SSH)
+                        .result(FetchActivity.Result.ALLOWED)
+                        .owner(GiteaContainer.TEST_ORG)
+                        .repoName(GiteaContainer.TEST_REPO)
+                        .build());
+        assertFalse(rows.isEmpty(), "an allowed SSH clone must be counted");
     }
 
     @Test
@@ -312,6 +325,16 @@ class SshE2ETest {
         assertTrue(
                 ex.getMessage().contains("denied") || ex.getMessage().contains("not permitted"),
                 "Expected URL-rule denial in clone failure output:\n" + ex.getMessage());
+
+        List<FetchActivity> rows = proxy.flushFetchActivity()
+                .find(FetchActivityQuery.builder()
+                        .transport(FetchActivity.Transport.SSH)
+                        .result(FetchActivity.Result.BLOCKED)
+                        .owner(GiteaContainer.TEST_ORG)
+                        .repoName(GiteaContainer.TEST_REPO)
+                        .build());
+        assertEquals(1, rows.size(), rows.toString());
+        assertEquals(FetchRefusal.DENY_RULE, rows.getFirst().getRefusal());
     }
 
     // ── static utilities ──────────────────────────────────────────────────────

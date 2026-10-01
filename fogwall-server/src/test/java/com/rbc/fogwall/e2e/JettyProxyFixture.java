@@ -1,6 +1,7 @@
 package com.rbc.fogwall.e2e;
 
 import com.rbc.fogwall.config.FogwallConfigLoader;
+import com.rbc.fogwall.db.FetchStore;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.model.AccessRule;
 import com.rbc.fogwall.jetty.FogwallContext;
@@ -353,6 +354,12 @@ class JettyProxyFixture implements AutoCloseable {
     /** The server's assembled runtime, for a test that seeds state the dashboard would otherwise create. */
     FogwallContext getContext() {
         return running.ctx();
+    }
+
+    /** Writes the fetch counts held in memory, and returns the store they were written to. */
+    FetchStore flushFetchActivity() {
+        running.ctx().fetchActivity().flush();
+        return running.ctx().fetchStore();
     }
 
     String getProviderId() {

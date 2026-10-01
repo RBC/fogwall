@@ -56,6 +56,12 @@ public final class FogwallTelemetry {
     /** SCM API action outcome: {@code FORWARDED}, {@code DENIED}, {@code REJECTED}, {@code ERROR}. Low cardinality. */
     public static final AttributeKey<String> SCM_API_OUTCOME = AttributeKey.stringKey("fogwall.scmapi.outcome");
 
+    /** Fetch decision: {@code ALLOWED} or {@code BLOCKED}. Low cardinality. */
+    public static final AttributeKey<String> FETCH_RESULT = AttributeKey.stringKey("fogwall.fetch.result");
+
+    /** Why a fetch was refused, from a fixed set; {@code none} when it was allowed. Low cardinality. */
+    public static final AttributeKey<String> FETCH_REFUSAL = AttributeKey.stringKey("fogwall.fetch.refusal");
+
     private final boolean enabled;
     private final OpenTelemetry openTelemetry;
     private final Tracer tracer;
@@ -65,6 +71,7 @@ public final class FogwallTelemetry {
     private final LongCounter forwards;
     private final DoubleHistogram scmApiDuration;
     private final LongCounter scmApiActions;
+    private final LongCounter fetchDecisions;
 
     private FogwallTelemetry(OpenTelemetry openTelemetry, boolean enabled) {
         this.enabled = enabled;
@@ -94,6 +101,10 @@ public final class FogwallTelemetry {
         this.scmApiActions = meter.counterBuilder("fogwall.scmapi.actions")
                 .setUnit("{action}")
                 .setDescription("SCM API proxy mutations and refusals by operation and outcome")
+                .build();
+        this.fetchDecisions = meter.counterBuilder("fogwall.fetch.decisions")
+                .setUnit("{fetch}")
+                .setDescription("Clones and fetches by decision and refusal reason")
                 .build();
     }
 
@@ -171,5 +182,11 @@ public final class FogwallTelemetry {
      */
     public void recordScmApiAction(String provider, String operation, String outcome) {
         scmApiActions.add(1, Attributes.of(PROVIDER, provider, SCM_API_OPERATION, operation, SCM_API_OUTCOME, outcome));
+    }
+
+    /** Record fogwall's decision on one clone or fetch. {@code mode} uses the {@link #MODE} values. */
+    public void recordFetchDecision(String provider, String mode, String result, String refusal) {
+        fetchDecisions.add(
+                1, Attributes.of(PROVIDER, provider, MODE, mode, FETCH_RESULT, result, FETCH_REFUSAL, refusal));
     }
 }

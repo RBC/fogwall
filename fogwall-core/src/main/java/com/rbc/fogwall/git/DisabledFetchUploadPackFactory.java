@@ -1,5 +1,7 @@
 package com.rbc.fogwall.git;
 
+import com.rbc.fogwall.db.model.FetchRefusal;
+import com.rbc.fogwall.servlet.FetchDecision;
 import jakarta.servlet.http.HttpServletRequest;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.transport.UploadPack;
@@ -23,6 +25,7 @@ public class DisabledFetchUploadPackFactory implements UploadPackFactory<HttpSer
 
     @Override
     public UploadPack create(HttpServletRequest req, Repository db) throws ServiceNotEnabledException {
+        FetchDecision.blocked(req, FetchRefusal.FETCH_DISABLED, null);
         throw new ServiceNotEnabledException(MESSAGE);
     }
 }

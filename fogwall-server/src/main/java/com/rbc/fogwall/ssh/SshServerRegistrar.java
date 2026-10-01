@@ -57,6 +57,7 @@ public class SshServerRegistrar {
                 ctx.serverCache(),
                 ctx.userStore(),
                 ctx.urlRuleRegistry(),
+                ctx.fetchActivity(),
                 configBuilder.buildUpstreamKnownHosts());
         server.start();
         return server;

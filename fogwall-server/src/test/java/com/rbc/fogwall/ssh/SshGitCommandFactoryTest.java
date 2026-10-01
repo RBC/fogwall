@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 
+import com.rbc.fogwall.db.FetchActivityRecorder;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.git.ServerReceivePackFactory;
@@ -29,6 +30,7 @@ class SshGitCommandFactoryTest {
                 mock(LocalRepositoryCache.class),
                 mock(FogwallProxyAgentFactory.class),
                 mock(UrlRuleRegistry.class),
+                mock(FetchActivityRecorder.class),
                 null,
                 false);
         channel = mock(ChannelSession.class);

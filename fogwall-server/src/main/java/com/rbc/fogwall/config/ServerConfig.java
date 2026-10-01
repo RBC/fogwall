@@ -88,6 +88,26 @@ public class ServerConfig {
      */
     private ThreadsConfig threads = new ThreadsConfig();
 
+    /** How clone and fetch decisions are counted ({@code server.fetch-activity.*}). */
+    private FetchActivityConfig fetchActivity = new FetchActivityConfig();
+
+    /**
+     * Fetch decisions are counted in memory and written as hourly totals, never once per request, so a clone never
+     * waits on the database.
+     */
+    @Data
+    public static class FetchActivityConfig {
+        /** Seconds between writes of the in-memory counts. A crash loses at most this much. */
+        private int flushIntervalSeconds = 60;
+        /** Days hourly totals are kept before they are pruned. */
+        private int retentionDays = 30;
+        /**
+         * Distinct (hour, repository, outcome) combinations held between writes. Past it, a new combination is counted
+         * without its repository, which bounds memory against requests for made-up repositories.
+         */
+        private int maxKeys = 10_000;
+    }
+
     /** Platform thread-pool sizing ({@code server.threads.*}). */
     @Data
     public static class ThreadsConfig {

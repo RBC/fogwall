@@ -18,7 +18,6 @@ import com.rbc.fogwall.config.FogwallConfig;
 import com.rbc.fogwall.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.config.ScmOAuthConfig;
 import com.rbc.fogwall.config.SecretScanConfig;
-import com.rbc.fogwall.db.FetchStore;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.PushStoreFactory;
 import com.rbc.fogwall.db.UrlRuleRegistry;
@@ -122,7 +121,6 @@ class SelfApprovalWiringTest {
                         mock(PushIdentityResolver.class),
                         mock(RepoPermissionService.class),
                         policy,
-                        mock(FetchStore.class),
                         mock(UrlRuleRegistry.class),
                         ScmOAuthConfig.defaultConfig())
                 .stream()

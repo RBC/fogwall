@@ -6,6 +6,7 @@ import com.rbc.fogwall.approval.AutoApprovalGateway;
 import com.rbc.fogwall.approval.UiApprovalGateway;
 import com.rbc.fogwall.config.*;
 import com.rbc.fogwall.db.PushStoreFactory;
+import com.rbc.fogwall.db.memory.InMemoryFetchStore;
 import com.rbc.fogwall.db.model.AccessRule;
 import com.rbc.fogwall.db.model.MatchType;
 import com.rbc.fogwall.permission.RepoPermission;
@@ -17,6 +18,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class JettyConfigurationBuilderTest {
 
@@ -881,5 +884,30 @@ class JettyConfigurationBuilderTest {
         var ex = assertThrows(
                 IllegalStateException.class, () -> new JettyConfigurationBuilder(config).buildScmOAuthTokenService());
         assertTrue(ex.getMessage().contains("scm-oauth.max-link-age"), ex.getMessage());
+    }
+
+    // ---- fetch activity ----
+
+    @ParameterizedTest
+    @ValueSource(strings = {"flush", "retention", "keys"})
+    void buildFetchActivityRecorder_withASettingBelowOne_failsStartup(String setting) {
+        var config = new FogwallConfig();
+        var fetchActivity = config.getServer().getFetchActivity();
+        switch (setting) {
+            case "flush" -> fetchActivity.setFlushIntervalSeconds(0);
+            case "retention" -> fetchActivity.setRetentionDays(0);
+            default -> fetchActivity.setMaxKeys(-1);
+        }
+
+        var ex = assertThrows(
+                IllegalStateException.class,
+                () -> new JettyConfigurationBuilder(config).buildFetchActivityRecorder(new InMemoryFetchStore()));
+        assertTrue(ex.getMessage().contains("server.fetch-activity"), ex.getMessage());
+    }
+
+    @Test
+    void buildFetchActivityRecorder_withTheDefaults_builds() {
+        assertNotNull(new JettyConfigurationBuilder(new FogwallConfig())
+                .buildFetchActivityRecorder(new InMemoryFetchStore()));
     }
 }

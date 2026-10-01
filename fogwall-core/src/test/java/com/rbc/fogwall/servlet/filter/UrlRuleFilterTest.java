@@ -4,10 +4,10 @@ import static com.rbc.fogwall.servlet.FogwallServlet.GIT_REQUEST_ATTR;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import com.rbc.fogwall.db.FetchStore;
 import com.rbc.fogwall.db.memory.InMemoryUrlRuleRegistry;
 import com.rbc.fogwall.db.model.AccessRule;
-import com.rbc.fogwall.db.model.FetchRecord;
+import com.rbc.fogwall.db.model.FetchActivity;
+import com.rbc.fogwall.db.model.FetchRefusal;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
 import com.rbc.fogwall.git.GitRequestDetails;
@@ -15,6 +15,7 @@ import com.rbc.fogwall.git.HttpOperation;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.GenericProxyProvider;
 import com.rbc.fogwall.provider.GitHubProvider;
+import com.rbc.fogwall.servlet.FetchDecision;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.ServletOutputStream;
@@ -29,7 +30,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 class UrlRuleFilterTest {
 
@@ -119,6 +119,24 @@ class UrlRuleFilterTest {
         return req;
     }
 
+    private HttpServletRequest mockUploadPackRequest(GitRequestDetails details) throws IOException {
+        Map<String, Object> attrs = new HashMap<>();
+        attrs.put(GIT_REQUEST_ATTR, details);
+        HttpServletRequest req = mock(HttpServletRequest.class);
+        when(req.getMethod()).thenReturn("POST");
+        when(req.getContentType()).thenReturn("application/x-git-upload-pack-request");
+        when(req.getRequestURI()).thenReturn("/proxy/github.com/owner/repo.git/git-upload-pack");
+        when(req.getInputStream()).thenReturn(emptyServletInputStream());
+        doAnswer(inv -> {
+                    attrs.put(inv.getArgument(0), inv.getArgument(1));
+                    return null;
+                })
+                .when(req)
+                .setAttribute(anyString(), any());
+        when(req.getAttribute(anyString())).thenAnswer(inv -> attrs.get(inv.getArgument(0)));
+        return req;
+    }
+
     private HttpServletRequest mockInfoRefsRequest(GitRequestDetails details, String service) throws IOException {
         Map<String, Object> attrs = new HashMap<>();
         attrs.put(GIT_REQUEST_ATTR, details);
@@ -143,6 +161,17 @@ class UrlRuleFilterTest {
     private GitRequestDetails makeDetails(String owner, String name, String slug) {
         GitRequestDetails details = new GitRequestDetails();
         details.setOperation(HttpOperation.PUSH);
+        details.setRepoRef(GitRequestDetails.RepoRef.builder()
+                .owner(owner)
+                .name(name)
+                .slug(slug)
+                .build());
+        return details;
+    }
+
+    private GitRequestDetails makeFetchDetails(String owner, String name, String slug) {
+        GitRequestDetails details = new GitRequestDetails();
+        details.setOperation(HttpOperation.FETCH);
         details.setRepoRef(GitRequestDetails.RepoRef.builder()
                 .owner(owner)
                 .name(name)
@@ -390,82 +419,116 @@ class UrlRuleFilterTest {
         assertDenied(resp, 403);
     }
 
-    // --- Gap 2: recordFetch on blocked /info/refs ---
+    // --- The fetch decision each evaluation leaves for FetchActivityFilter to count ---
 
-    @Test
-    void infoRefs_fetchBlocked_notAllowed_recordsFetch() throws Exception {
-        FetchStore fetchStore = mock(FetchStore.class);
-        var registry = new InMemoryUrlRuleRegistry();
-        var aggregate = new UrlRuleAggregateFilter(GITHUB, fetchStore, registry);
-        GitRequestDetails details = makeInfoDetails("owner", "repo", "/owner/repo");
-        FakeResponse resp = new FakeResponse();
-
-        aggregate.doHttpFilter(mockInfoRefsRequest(details, "git-upload-pack"), resp.mock);
-
-        assertDenied(resp, 403);
-        ArgumentCaptor<FetchRecord> captor = ArgumentCaptor.forClass(FetchRecord.class);
-        verify(fetchStore).record(captor.capture());
-        assertEquals(FetchRecord.Result.BLOCKED, captor.getValue().getResult());
-    }
-
-    @Test
-    void infoRefs_fetchBlocked_denyRule_recordsFetch() throws Exception {
-        FetchStore fetchStore = mock(FetchStore.class);
-        var registry = new InMemoryUrlRuleRegistry();
-        registry.save(AccessRule.builder()
+    private static AccessRule rule(AccessRule.Access access) {
+        return AccessRule.builder()
                 .ruleOrder(100)
-                .access(AccessRule.Access.DENY)
+                .access(access)
                 .operation(AccessRule.Operation.BOTH)
                 .target(MatchTarget.SLUG)
                 .value("/owner/repo")
                 .matchType(MatchType.LITERAL)
-                .build());
-        var aggregate = new UrlRuleAggregateFilter(GITHUB, fetchStore, registry);
-        GitRequestDetails details = makeInfoDetails("owner", "repo", "/owner/repo");
-        FakeResponse resp = new FakeResponse();
-
-        aggregate.doHttpFilter(mockInfoRefsRequest(details, "git-upload-pack"), resp.mock);
-
-        assertDenied(resp, 403);
-        ArgumentCaptor<FetchRecord> captor = ArgumentCaptor.forClass(FetchRecord.class);
-        verify(fetchStore).record(captor.capture());
-        assertEquals(FetchRecord.Result.BLOCKED, captor.getValue().getResult());
+                .build();
     }
 
     @Test
-    void infoRefs_pushBlocked_doesNotRecordFetch() throws Exception {
-        FetchStore fetchStore = mock(FetchStore.class);
-        var registry = new InMemoryUrlRuleRegistry();
-        var aggregate = new UrlRuleAggregateFilter(GITHUB, fetchStore, registry);
-        GitRequestDetails details = makeInfoDetails("owner", "repo", "/owner/repo");
-        FakeResponse resp = new FakeResponse();
+    void infoRefs_fetchNotAllowed_decidesBlockedWithNoRule() throws Exception {
+        var aggregate = new UrlRuleAggregateFilter(GITHUB, new InMemoryUrlRuleRegistry());
+        var req = mockInfoRefsRequest(makeInfoDetails("owner", "repo", "/owner/repo"), "git-upload-pack");
 
-        aggregate.doHttpFilter(mockInfoRefsRequest(details, "git-receive-pack"), resp.mock);
+        aggregate.doHttpFilter(req, new FakeResponse().mock);
 
-        assertDenied(resp, 403);
-        verify(fetchStore, never()).record(any());
+        FetchDecision decision = FetchDecision.of(req).orElseThrow();
+        assertEquals(FetchActivity.Result.BLOCKED, decision.result());
+        assertNull(decision.ruleId());
+        assertEquals(FetchRefusal.NOT_IN_ALLOW_LIST, decision.refusal());
     }
 
     @Test
-    void infoRefs_fetchAllowed_doesNotRecordFetch() throws Exception {
-        FetchStore fetchStore = mock(FetchStore.class);
+    void infoRefs_fetchDenied_decidesBlockedNamingTheRule() throws Exception {
         var registry = new InMemoryUrlRuleRegistry();
-        registry.save(AccessRule.builder()
-                .ruleOrder(100)
-                .access(AccessRule.Access.ALLOW)
-                .operation(AccessRule.Operation.BOTH)
-                .target(MatchTarget.SLUG)
-                .value("/owner/repo")
-                .matchType(MatchType.LITERAL)
-                .build());
-        var aggregate = new UrlRuleAggregateFilter(GITHUB, fetchStore, registry);
-        GitRequestDetails details = makeInfoDetails("owner", "repo", "/owner/repo");
+        AccessRule deny = rule(AccessRule.Access.DENY);
+        registry.save(deny);
+        var aggregate = new UrlRuleAggregateFilter(GITHUB, registry);
+        var req = mockInfoRefsRequest(makeInfoDetails("owner", "repo", "/owner/repo"), "git-upload-pack");
+
+        aggregate.doHttpFilter(req, new FakeResponse().mock);
+
+        FetchDecision decision = FetchDecision.of(req).orElseThrow();
+        assertEquals(FetchActivity.Result.BLOCKED, decision.result());
+        assertEquals(deny.getId(), decision.ruleId());
+        assertEquals(FetchRefusal.DENY_RULE, decision.refusal());
+    }
+
+    @Test
+    void infoRefs_pushBlocked_decidesNoFetch() throws Exception {
+        var aggregate = new UrlRuleAggregateFilter(GITHUB, new InMemoryUrlRuleRegistry());
+        var req = mockInfoRefsRequest(makeInfoDetails("owner", "repo", "/owner/repo"), "git-receive-pack");
+
+        aggregate.doHttpFilter(req, new FakeResponse().mock);
+
+        assertTrue(FetchDecision.of(req).isEmpty());
+    }
+
+    @Test
+    void infoRefs_fetchAllowed_decidesAllowedNamingTheRule() throws Exception {
+        var registry = new InMemoryUrlRuleRegistry();
+        AccessRule allow = rule(AccessRule.Access.ALLOW);
+        registry.save(allow);
+        var aggregate = new UrlRuleAggregateFilter(GITHUB, registry);
+        var req = mockInfoRefsRequest(makeInfoDetails("owner", "repo", "/owner/repo"), "git-upload-pack");
         FakeResponse resp = new FakeResponse();
 
-        aggregate.doHttpFilter(mockInfoRefsRequest(details, "git-upload-pack"), resp.mock);
+        aggregate.doHttpFilter(req, resp.mock);
 
         assertFalse(resp.committed.get(), "an allowed discovery request must reach the servlet");
-        verify(fetchStore, never()).record(any());
+        FetchDecision decision = FetchDecision.of(req).orElseThrow();
+        assertEquals(FetchActivity.Result.ALLOWED, decision.result());
+        assertEquals(allow.getId(), decision.ruleId());
+    }
+
+    @Test
+    void uploadPack_allowed_decidesAllowedNamingTheRule() throws Exception {
+        var registry = new InMemoryUrlRuleRegistry();
+        AccessRule allow = rule(AccessRule.Access.ALLOW);
+        registry.save(allow);
+        var aggregate = new UrlRuleAggregateFilter(GITHUB, registry);
+        var req = mockUploadPackRequest(makeFetchDetails("owner", "repo", "/owner/repo"));
+
+        aggregate.doHttpFilter(req, new FakeResponse().mock);
+
+        FetchDecision decision = FetchDecision.of(req).orElseThrow();
+        assertEquals(FetchActivity.Result.ALLOWED, decision.result());
+        assertEquals(allow.getId(), decision.ruleId());
+    }
+
+    @Test
+    void uploadPack_denied_decidesBlockedNamingTheRule() throws Exception {
+        var registry = new InMemoryUrlRuleRegistry();
+        AccessRule deny = rule(AccessRule.Access.DENY);
+        registry.save(deny);
+        var aggregate = new UrlRuleAggregateFilter(GITHUB, registry);
+        var req = mockUploadPackRequest(makeFetchDetails("owner", "repo", "/owner/repo"));
+
+        aggregate.doHttpFilter(req, new FakeResponse().mock);
+
+        FetchDecision decision = FetchDecision.of(req).orElseThrow();
+        assertEquals(FetchActivity.Result.BLOCKED, decision.result());
+        assertEquals(deny.getId(), decision.ruleId());
+        assertEquals(FetchRefusal.DENY_RULE, decision.refusal());
+    }
+
+    @Test
+    void uploadPack_notAllowed_decidesBlocked() throws Exception {
+        var aggregate = new UrlRuleAggregateFilter(GITHUB, new InMemoryUrlRuleRegistry());
+        var req = mockUploadPackRequest(makeFetchDetails("owner", "repo", "/owner/repo"));
+
+        aggregate.doHttpFilter(req, new FakeResponse().mock);
+
+        FetchDecision decision = FetchDecision.of(req).orElseThrow();
+        assertEquals(FetchActivity.Result.BLOCKED, decision.result());
+        assertEquals(FetchRefusal.NOT_IN_ALLOW_LIST, decision.refusal());
     }
 
     @Test

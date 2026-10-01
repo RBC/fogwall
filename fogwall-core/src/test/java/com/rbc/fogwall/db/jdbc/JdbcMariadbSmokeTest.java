@@ -5,8 +5,11 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.rbc.fogwall.db.PackChunks;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.PushStoreFactory;
+import com.rbc.fogwall.db.model.FetchActivity;
+import com.rbc.fogwall.db.model.FetchActivityQuery;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
+import com.rbc.fogwall.git.ProxyMode;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -122,5 +125,31 @@ class JdbcMariadbSmokeTest {
                     () -> st.executeUpdate("INSERT INTO access_rules (id, access, operation) VALUES ('"
                             + UUID.randomUUID() + "', 'ALLOW', 'BOTH')"));
         }
+    }
+
+    /** V21 (mysql variant) gives the timestamps an explicit default, so an increment never rewrites the hour. */
+    @Test
+    void migrate_fetchActivity_incrementKeepsTheHour() {
+        var fetchStore = new JdbcFetchStore(dataSource);
+        Instant hour = Instant.parse("2026-09-30T14:00:00Z");
+        var key = new FetchActivity.Key(
+                hour,
+                "github/" + "a".repeat(280),
+                "acme",
+                "widgets",
+                FetchActivity.Transport.SSH,
+                ProxyMode.SERVER,
+                FetchActivity.Result.ALLOWED,
+                null,
+                null);
+
+        fetchStore.add(List.of(key.toActivity(1, hour.plusSeconds(10))));
+        fetchStore.add(List.of(key.toActivity(2, hour.plusSeconds(20))));
+
+        FetchActivity row =
+                fetchStore.find(FetchActivityQuery.builder().build()).getFirst();
+        assertEquals(3, row.getFetchCount());
+        assertEquals(hour, row.getBucketStart());
+        assertEquals(hour.plusSeconds(20), row.getLastSeen());
     }
 }

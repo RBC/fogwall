@@ -3,8 +3,12 @@ package com.rbc.fogwall.e2e;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.rbc.fogwall.db.model.AccessRule;
+import com.rbc.fogwall.db.model.FetchActivity;
+import com.rbc.fogwall.db.model.FetchActivityQuery;
+import com.rbc.fogwall.db.model.FetchRefusal;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
+import com.rbc.fogwall.git.ProxyMode;
 import com.rbc.fogwall.git.UpstreamFailure;
 import com.rbc.fogwall.servlet.filter.UrlRuleEvaluator;
 import java.net.URLEncoder;
@@ -88,6 +92,35 @@ class UrlRuleE2ETest {
         assertTrue(result.output().contains("The requested URL returned error: 403"), result.output());
     }
 
+    /** The fetch counts for one repository, mode and result, written out of memory first. */
+    private static List<FetchActivity> fetchActivity(
+            String owner, String repo, ProxyMode mode, FetchActivity.Result result) {
+        return proxy
+                .flushFetchActivity()
+                .find(FetchActivityQuery.builder()
+                        .owner(owner)
+                        .repoName(repo)
+                        .result(result)
+                        .build())
+                .stream()
+                .filter(r -> r.getMode() == mode)
+                .toList();
+    }
+
+    private static void assertCountedAllowed(String owner, String repo, ProxyMode mode) {
+        List<FetchActivity> rows = fetchActivity(owner, repo, mode, FetchActivity.Result.ALLOWED);
+        assertFalse(rows.isEmpty(), "an allowed clone through " + mode + " must be counted");
+        assertNotNull(rows.getFirst().getRuleId(), "an allowed clone names the rule that allowed it");
+    }
+
+    private static void assertCountedDenied(String owner, String repo, ProxyMode mode) {
+        List<FetchActivity> rows = fetchActivity(owner, repo, mode, FetchActivity.Result.BLOCKED);
+        assertEquals(1, rows.size(), rows.toString());
+        assertEquals(1, rows.getFirst().getFetchCount());
+        assertEquals(FetchRefusal.DENY_RULE, rows.getFirst().getRefusal());
+        assertNotNull(rows.getFirst().getRuleId());
+    }
+
     // ── URL helpers ──────────────────────────────────────────────────────────
 
     private String proxyUrl(String org, String repo) {
@@ -159,6 +192,7 @@ class UrlRuleE2ETest {
                         GiteaContainer.TEST_REPO,
                         "feat: allowed by slug rule"),
                 "push to /test-owner/test-repo should be allowed");
+        assertCountedAllowed(GiteaContainer.TEST_ORG, GiteaContainer.TEST_REPO, ProxyMode.TRANSPARENT);
     }
 
     @Test
@@ -171,6 +205,7 @@ class UrlRuleE2ETest {
                         GiteaContainer.TEST_REPO,
                         "feat: allowed by slug rule in server mode"),
                 "push to /test-owner/test-repo should be allowed in server mode");
+        assertCountedAllowed(GiteaContainer.TEST_ORG, GiteaContainer.TEST_REPO, ProxyMode.SERVER);
     }
 
     @Test
@@ -305,6 +340,7 @@ class UrlRuleE2ETest {
     void proxy_denySlug_cloneRefused() throws Exception {
         var result = new GitHelper(tempDir).cloneWithResult(proxyUrl("otherorg", "other-secret"), "proxy-clone-deny");
         assertRefused(result, DENIED);
+        assertCountedDenied("otherorg", "other-secret", ProxyMode.TRANSPARENT);
     }
 
     /** A refused clone must not reach the upstream: the refusal comes before any ref is listed. */
@@ -313,6 +349,7 @@ class UrlRuleE2ETest {
     void sf_denySlug_cloneRefused() throws Exception {
         var result = new GitHelper(tempDir).cloneWithResult(pushUrl("otherorg", "other-secret"), "sf-clone-deny");
         assertRefused(result, DENIED);
+        assertCountedDenied("otherorg", "other-secret", ProxyMode.SERVER);
     }
 
     // ── Upstream failures, server mode ────────────────────────────────────────

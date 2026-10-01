@@ -43,6 +43,17 @@ server:
   # mirror. Override per provider with providers.<name>.serve-fetch.
   serve-fetch: true
 
+  # Clone and fetch decisions are counted in memory and written as hourly totals per
+  # repository, transport, mode, result and refusal reason — never one row per request.
+  # See "Fetch activity" in the Access rules guide.
+  fetch-activity:
+    flush-interval-seconds: 60 # how often counts are written; a crash loses at most this much
+    retention-days: 30 # hourly totals older than this are pruned
+    # Distinct (hour, repository, outcome) combinations held between writes. Past it, a
+    # new combination is counted without its repository, so requests for made-up
+    # repositories cannot grow memory without bound.
+    max-keys: 10000
+
   # Maximum number of requests handled concurrently on virtual threads. Requests over
   # the limit wait for a slot. Each in-flight push holds its buffered pack data in
   # memory until the request completes, so size this to heap capacity and typical pack
