@@ -2,7 +2,7 @@ import { NavLink } from 'react-router'
 
 const TABS = [
   { to: '/contributions', label: 'Activity', end: true },
-  { to: '/contributions/issues', label: 'Report an issue' },
+  { to: '/contributions/issues', label: 'Report an issue', writes: true },
 ]
 
 /**
@@ -10,11 +10,11 @@ const TABS = [
  * the page as well as in the rail, which hides its sub-destinations when collapsed. The caller owns the width and
  * gutter it sits in.
  */
-export function ContributionsTabs() {
+export function ContributionsTabs({ readOnly = false }: { readOnly?: boolean }) {
   return (
     <div className="border-b border-gray-200 dark:border-slate-700">
       <nav aria-label="Contributions" className="-mb-px flex gap-6">
-        {TABS.map((tab) => (
+        {TABS.filter((tab) => !(tab.writes && readOnly)).map((tab) => (
           <NavLink
             key={tab.to}
             to={tab.to}

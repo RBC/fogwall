@@ -168,6 +168,70 @@ class ApiAuthorizationMatrixTest {
         }
     }
 
+    /**
+     * The access records an auditor reads. Everything else under {@code /api/users}, {@code /api/groups} is admin's.
+     */
+    private static final List<String> AUDIT_READS = List.of(
+            "/api/users",
+            "/api/users/user",
+            "/api/users/user/permissions",
+            "/api/users/user/permissions/groups",
+            "/api/groups",
+            "/api/groups/probe",
+            "/api/groups/probe/permissions");
+
+    /** Admin reads that are operational or credential-bearing rather than access records. */
+    private static final List<String> ADMIN_ONLY_READS =
+            List.of("/api/users/user/git-credentials", "/api/admin/cache", "/api/admin/connectivity");
+
+    @Test
+    void auditorReadsAccessRecordsAndChangesNothing() throws Exception {
+        try (var dashboard = DashboardFixture.withLocalUsers(seededUsers())) {
+            String baseUrl = dashboard.getBaseUrl();
+            Session auditor = login(baseUrl, "auditor");
+
+            for (String path : AUDIT_READS) {
+                assertNotEquals(403, get(auditor, baseUrl, path), "An auditor must be able to read " + path);
+            }
+            assertEquals(200, get(auditor, baseUrl, "/api/users"));
+            assertEquals(200, get(auditor, baseUrl, "/api/groups"));
+            for (String path : ADMIN_ONLY_READS) {
+                assertEquals(403, get(auditor, baseUrl, path), "An auditor must not read " + path);
+            }
+            assertReadOnly(auditor, baseUrl, "An auditor");
+
+            // The auditor role makes a session read-only even alongside ADMIN.
+            Session adminAuditor = login(baseUrl, "admin-auditor");
+            assertReadOnly(adminAuditor, baseUrl, "An admin who is also an auditor");
+            for (String path : AUDIT_READS) {
+                assertNotEquals(403, get(adminAuditor, baseUrl, path), "An admin-auditor must be able to read " + path);
+            }
+
+            Session user = login(baseUrl, "user");
+            for (String path : AUDIT_READS) {
+                assertEquals(403, get(user, baseUrl, path), "A normal user must not read " + path);
+            }
+            Session admin = login(baseUrl, "admin");
+            for (String path : AUDIT_READS) {
+                assertNotEquals(403, get(admin, baseUrl, path), "An admin must be able to read " + path);
+            }
+        }
+    }
+
+    /** Linking an SCM account happens over GET, so it is a write an auditor is refused too. */
+    private static final List<String> WRITING_GETS =
+            List.of("GET /api/scm-oauth/{providerId}/link", "GET /api/scm-oauth/{providerId}/callback");
+
+    /** Every mutation, user-facing ones and the auditor's own profile included, answers 403. */
+    private static void assertReadOnly(Session session, String baseUrl, String who) throws Exception {
+        Set<String> all = new TreeSet<>(ADMIN_MUTATIONS);
+        all.addAll(USER_MUTATIONS);
+        all.addAll(WRITING_GETS);
+        for (String endpoint : all) {
+            assertEquals(403, probeMutation(session, baseUrl, endpoint), who + " must be forbidden from " + endpoint);
+        }
+    }
+
     // ── discovery ─────────────────────────────────────────────────────────────
 
     private static Set<String> discoverMutatingEndpoints() {
@@ -223,6 +287,16 @@ class ApiAuthorizationMatrixTest {
                         .username("admin")
                         .passwordHash(enc.encode(PASSWORD))
                         .roles(List.of("USER", "ADMIN"))
+                        .build(),
+                UserEntry.builder()
+                        .username("admin-auditor")
+                        .passwordHash(enc.encode(PASSWORD))
+                        .roles(List.of("USER", "ADMIN", "AUDITOR"))
+                        .build(),
+                UserEntry.builder()
+                        .username("auditor")
+                        .passwordHash(enc.encode(PASSWORD))
+                        .roles(List.of("USER", "AUDITOR"))
                         .build(),
                 UserEntry.builder()
                         .username("user")

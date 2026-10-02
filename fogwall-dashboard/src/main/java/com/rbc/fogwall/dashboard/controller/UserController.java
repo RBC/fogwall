@@ -21,7 +21,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "Users", description = "User management — requires ROLE_ADMIN")
+@Tag(
+        name = "Users",
+        description = "User management — reads require ROLE_AUDITOR or ROLE_ADMIN, changes require ROLE_ADMIN")
 @RestController
 @RequestMapping("/api/users")
 @PreAuthorize("hasRole('ADMIN')")
@@ -41,6 +43,7 @@ public class UserController {
             summary = "List all users",
             description = "Returns all users with their primary email, SCM provider links, and push counts by status.")
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'AUDITOR')")
     public List<UserSummary> list() {
         Map<String, Map<String, Long>> allPushCounts = pushStore.countPushStatusByUser();
         return userStore.findAll().stream()
@@ -50,6 +53,7 @@ public class UserController {
 
     @Operation(operationId = "getUser", summary = "Get user details")
     @GetMapping("/{username}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'AUDITOR')")
     public ResponseEntity<UserDetail> get(@PathVariable String username) {
         return userStore
                 .findByUsername(username)

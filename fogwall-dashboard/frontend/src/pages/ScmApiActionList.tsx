@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchScmApiActions } from '../api'
 import { ContributionsTabs } from '../components/ContributionsTabs'
+import { isReadOnly } from '../roles'
 import { StatusBadge } from '../components/StatusBadge'
 import type {
   ScmApiActionOrigin,
@@ -131,7 +132,7 @@ export function ScmApiActionList({ currentUser }: ScmApiActionListProps) {
         </p>
       </div>
       <div className="max-w-6xl px-6">
-        <ContributionsTabs />
+        <ContributionsTabs readOnly={isReadOnly(currentUser)} />
       </div>
 
       {/* Status filter chips */}

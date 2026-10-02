@@ -212,10 +212,11 @@ the token.
 `auth.role-mappings` applies to LDAP, AD, and OIDC. Keys are role names (without the `ROLE_` prefix); values are lists
 of group names or claim values from the IdP.
 
-| Role    | Dashboard access                                                               |
-| ------- | ------------------------------------------------------------------------------ |
-| `USER`  | View and act on pushes awaiting approval                                       |
-| `ADMIN` | All USER permissions + create/delete users, reset passwords, manage identities |
+| Role      | Dashboard access                                                                   |
+| --------- | ---------------------------------------------------------------------------------- |
+| `USER`    | View and act on pushes awaiting approval                                           |
+| `AUDITOR` | View pushes + read users, groups and permissions; changes nothing, even with ADMIN |
+| `ADMIN`   | All USER permissions + create/delete users, reset passwords, manage identities     |
 
 When `role-mappings` is empty, the operator has not configured group-based access control: `ROLE_USER` is granted to
 every authenticated user (open mode). When `role-mappings` is non-empty, access is **deny-by-default** — a user whose
@@ -227,6 +228,8 @@ auth:
   role-mappings:
     ADMIN:
       - git-admins
+    AUDITOR:
+      - git-auditors
   # Deny-by-default is the correct posture for regulated environments and is the default.
   # Set to false to treat the IdP purely as an authentication mechanism (SSO convenience): any
   # user who authenticates successfully is granted ROLE_USER even if no group mapping matches.

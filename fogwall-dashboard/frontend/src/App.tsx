@@ -22,6 +22,7 @@ import { Issues } from './pages/Issues'
 import { Legal } from './pages/Legal'
 import { Users } from './pages/Users'
 import { UserDetail } from './pages/UserDetail'
+import { isReadOnly } from './roles'
 import type { CurrentUser } from './types'
 
 export default function App() {
@@ -74,14 +75,22 @@ export default function App() {
                   path="/contributions"
                   element={<ScmApiActionList currentUser={currentUser} />}
                 />
-                <Route path="/contributions/issues" element={<Issues />} />
+                <Route
+                  path="/contributions/issues"
+                  element={
+                    isReadOnly(currentUser) ? <Navigate to="/contributions" replace /> : <Issues />
+                  }
+                />
                 <Route path="/profile" element={<Profile />} />
-                <Route path="/users" element={<Users authProvider={authProvider} />} />
+                <Route
+                  path="/users"
+                  element={<Users authProvider={authProvider} currentUser={currentUser} />}
+                />
                 <Route
                   path="/users/:username"
                   element={<UserDetail authProvider={authProvider} currentUser={currentUser} />}
                 />
-                <Route path="/groups" element={<Groups />} />
+                <Route path="/groups" element={<Groups currentUser={currentUser} />} />
                 <Route path="/operations" element={<Operations />} />
                 <Route path="/mirror-cache" element={<MirrorCache />} />
                 <Route path="/legal" element={<Legal />} />

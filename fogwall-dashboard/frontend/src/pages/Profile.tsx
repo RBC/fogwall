@@ -18,6 +18,7 @@ import type { UserGroupView } from '../api'
 import { OperationsBadge, PathTypeBadge } from '../components/PermissionBadges'
 import { GitCredentials } from '../components/GitCredentials'
 import { useToast } from '../components/Toast'
+import { isReadOnly } from '../roles'
 import type {
   CurrentUser,
   EmailEntry,
@@ -325,6 +326,9 @@ export function Profile() {
     )
   if (!profile) return null
 
+  // An auditor's session is read-only: their own profile included.
+  const readOnly = isReadOnly(profile)
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
       <div>
@@ -341,9 +345,11 @@ export function Profile() {
               const colour =
                 label === 'ADMIN'
                   ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
-                  : label === 'SELF_CERTIFY'
-                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
-                    : 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-300'
+                  : label === 'AUDITOR'
+                    ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300'
+                    : label === 'SELF_CERTIFY'
+                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                      : 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-300'
               const isSelfCertify = label === 'SELF_CERTIFY'
               return (
                 <span key={a} className="relative group inline-flex">
@@ -410,7 +416,7 @@ export function Profile() {
                       <span className="text-gray-400 italic dark:text-gray-500">Not linked</span>
                     )}
                   </span>
-                  {linked ? (
+                  {readOnly ? null : linked ? (
                     <span className="flex items-center gap-3">
                       {status?.usableUntil && (
                         <a
@@ -455,7 +461,7 @@ export function Profile() {
             'emails',
             'identities',
             'sshkeys',
-            ...(brokeredPushProviders.length > 0 ? (['credentials'] as const) : []),
+            ...(brokeredPushProviders.length > 0 && !readOnly ? (['credentials'] as const) : []),
             'permissions',
           ] as const
         ).map((t) => (
@@ -509,7 +515,7 @@ export function Profile() {
                       entry.locked && <LockedBadge source={entry.source} />
                     )}
                   </span>
-                  {!entry.locked && (
+                  {!entry.locked && !readOnly && (
                     <button
                       onClick={() => handleRemoveEmail(entry)}
                       className="text-gray-400 hover:text-red-500 transition-colors text-xs dark:text-gray-500 dark:hover:text-red-400"
@@ -523,27 +529,29 @@ export function Profile() {
             </ul>
           )}
 
-          <form onSubmit={handleAddEmail} className="flex gap-2">
-            <input
-              type="email"
-              value={newEmail}
-              onChange={(e) => setNewEmail(e.target.value)}
-              placeholder="you@example.com"
-              className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400"
-            />
-            <button
-              type="submit"
-              disabled={emailBusy || !newEmail.trim()}
-              className="px-4 py-2 rounded bg-slate-700 text-white text-sm hover:bg-slate-600 disabled:opacity-50 transition-colors"
-            >
-              Add
-            </button>
-          </form>
+          {!readOnly && (
+            <form onSubmit={handleAddEmail} className="flex gap-2">
+              <input
+                type="email"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400"
+              />
+              <button
+                type="submit"
+                disabled={emailBusy || !newEmail.trim()}
+                className="px-4 py-2 rounded bg-slate-700 text-white text-sm hover:bg-slate-600 disabled:opacity-50 transition-colors"
+              >
+                Add
+              </button>
+            </form>
+          )}
         </div>
       )}
 
       {/* Git credentials tab */}
-      {tab === 'credentials' && <GitCredentials providers={brokeredPushProviders} />}
+      {tab === 'credentials' && !readOnly && <GitCredentials providers={brokeredPushProviders} />}
 
       {/* SSH Keys tab */}
       {tab === 'sshkeys' && (
@@ -582,7 +590,7 @@ export function Profile() {
                           <VerifiedBadge source={key.source} />
                         ))}
                     </span>
-                    {!key.locked && (
+                    {!key.locked && !readOnly && (
                       <button
                         onClick={() => handleRemoveSshKey(key)}
                         className="text-gray-400 hover:text-red-500 transition-colors text-xs dark:text-gray-500 dark:hover:text-red-400"
@@ -606,41 +614,43 @@ export function Profile() {
             </ul>
           )}
 
-          <form onSubmit={handleAddSshKey} className="space-y-2">
-            <textarea
-              value={newSshKey}
-              onChange={(e) => {
-                const val = e.target.value
-                setNewSshKey(val)
-                if (!sshLabelTouched) {
-                  const comment = val.trim().split(/\s+/)[2] ?? ''
-                  setNewSshLabel(comment)
-                }
-              }}
-              placeholder="ssh-ed25519 AAAA... or ssh-rsa AAAA..."
-              rows={3}
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm font-mono focus:border-slate-500 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400"
-            />
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newSshLabel}
+          {!readOnly && (
+            <form onSubmit={handleAddSshKey} className="space-y-2">
+              <textarea
+                value={newSshKey}
                 onChange={(e) => {
-                  setNewSshLabel(e.target.value)
-                  setSshLabelTouched(true)
+                  const val = e.target.value
+                  setNewSshKey(val)
+                  if (!sshLabelTouched) {
+                    const comment = val.trim().split(/\s+/)[2] ?? ''
+                    setNewSshLabel(comment)
+                  }
                 }}
-                placeholder="Label (optional)"
-                className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400"
+                placeholder="ssh-ed25519 AAAA... or ssh-rsa AAAA..."
+                rows={3}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm font-mono focus:border-slate-500 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400"
               />
-              <button
-                type="submit"
-                disabled={sshBusy || !newSshKey.trim()}
-                className="px-4 py-2 rounded bg-slate-700 text-white text-sm hover:bg-slate-600 disabled:opacity-50 transition-colors"
-              >
-                Add
-              </button>
-            </div>
-          </form>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newSshLabel}
+                  onChange={(e) => {
+                    setNewSshLabel(e.target.value)
+                    setSshLabelTouched(true)
+                  }}
+                  placeholder="Label (optional)"
+                  className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400"
+                />
+                <button
+                  type="submit"
+                  disabled={sshBusy || !newSshKey.trim()}
+                  className="px-4 py-2 rounded bg-slate-700 text-white text-sm hover:bg-slate-600 disabled:opacity-50 transition-colors"
+                >
+                  Add
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       )}
 
@@ -792,7 +802,7 @@ export function Profile() {
                     {id.verified ? <VerifiedBadge /> : null}
                     {id.source === 'config' && <LockedBadge source="config" />}
                   </span>
-                  {!id.verified && id.source !== 'config' && (
+                  {!id.verified && id.source !== 'config' && !readOnly && (
                     <button
                       onClick={() => handleRemoveIdentity(id)}
                       className="text-gray-400 hover:text-red-500 transition-colors text-xs dark:text-gray-500 dark:hover:text-red-400"
@@ -806,7 +816,7 @@ export function Profile() {
             </ul>
           )}
 
-          {scmIdentityMode === 'strict' ? (
+          {readOnly ? null : scmIdentityMode === 'strict' ? (
             <p className="text-xs text-gray-400 italic dark:text-gray-500">
               This deployment requires an OAuth-verified SCM identity — manual entry is disabled.
               Use the "Link via OAuth" button above.

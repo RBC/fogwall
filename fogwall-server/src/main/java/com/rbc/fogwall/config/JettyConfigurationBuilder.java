@@ -88,6 +88,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
@@ -747,9 +748,10 @@ public class JettyConfigurationBuilder {
         store.initialize();
         cachedGroupPermissionStore = buildGroupPermissionStore();
         cachedGroupPermissionStore.initialize();
-        cachedRepoPermissionService = new RepoPermissionService(store, cachedGroupPermissionStore);
+        cachedRepoPermissionService = new RepoPermissionService(store, cachedGroupPermissionStore, buildUserStore());
 
         List<RepoPermission> configPerms = buildConfigPermissions(config);
+        refuseConfigAuditorGrants(config, configPerms);
         ensurePermissionUsersExist(configPerms);
         cachedRepoPermissionService.seedFromConfig(configPerms);
 
@@ -766,6 +768,33 @@ public class JettyConfigurationBuilder {
             return requireMongoStoreFactory().groupPermissionStore();
         }
         return new JdbcGroupPermissionStore(requireJdbcDataSource());
+    }
+
+    /**
+     * Fails startup when the config grants a repository permission, directly or through a group, to a user the config
+     * itself declares an auditor. Such a grant would never take effect, so it is a mistake to surface rather than seed.
+     */
+    public static void refuseConfigAuditorGrants(FogwallConfig cfg, List<RepoPermission> configPerms) {
+        Set<String> auditors = cfg.getUsers().stream()
+                .filter(u -> u.getRoles().contains(RepoPermissionService.AUDITOR_ROLE))
+                .map(UserConfig::getUsername)
+                .collect(Collectors.toSet());
+        if (auditors.isEmpty()) return;
+        List<String> problems = new ArrayList<>();
+        configPerms.stream()
+                .map(RepoPermission::getUsername)
+                .filter(auditors::contains)
+                .distinct()
+                .forEach(u -> problems.add("permissions[] grants to auditor '" + u + "'"));
+        for (GroupConfig gc : cfg.getGroups()) {
+            gc.getMembers().stream()
+                    .filter(auditors::contains)
+                    .forEach(u -> problems.add("groups[" + gc.getName() + "] includes auditor '" + u + "'"));
+        }
+        if (!problems.isEmpty()) {
+            throw new IllegalStateException("An auditor holds no repository permission; remove these from the config: "
+                    + String.join("; ", problems));
+        }
     }
 
     private void ensurePermissionUsersExist(List<RepoPermission> permissions) {

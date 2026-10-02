@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { createUser, fetchUsers } from '../api'
+import { canAdminister } from '../roles'
 import { useToast } from '../components/Toast'
-import type { PushStatus, UserSummary } from '../types'
+import type { CurrentUser, PushStatus, UserSummary } from '../types'
 
 interface UsersProps {
   authProvider: string
+  currentUser: CurrentUser | null
 }
+
+/** The dashboard role a new user is created with, on top of USER. */
+type DashboardRole = 'USER' | 'AUDITOR' | 'ADMIN'
 
 const PUSH_STAT_CONFIG: {
   status: PushStatus
@@ -71,7 +76,7 @@ function AddUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [email, setEmail] = useState('')
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [role, setRole] = useState<DashboardRole>('USER')
   const [selfCertify, setSelfCertify] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const toast = useToast()
@@ -81,7 +86,7 @@ function AddUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
     setSubmitting(true)
     try {
       const roles = ['USER']
-      if (isAdmin) roles.push('ADMIN')
+      if (role !== 'USER') roles.push(role)
       if (selfCertify) roles.push('SELF_CERTIFY')
       await createUser(username.trim(), password, email.trim() || undefined, roles)
       onCreated()
@@ -132,15 +137,20 @@ function AddUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
               className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"
             />
           </div>
-          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer dark:text-gray-300">
-            <input
-              type="checkbox"
-              checked={isAdmin}
-              onChange={(e) => setIsAdmin(e.target.checked)}
-              className="rounded"
-            />
-            Grant admin role
-          </label>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-400">
+              Role
+            </label>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value as DashboardRole)}
+              className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"
+            >
+              <option value="USER">User</option>
+              <option value="AUDITOR">Auditor — reads users, groups and permissions</option>
+              <option value="ADMIN">Admin</option>
+            </select>
+          </div>
           <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer dark:text-gray-300">
             <input
               type="checkbox"
@@ -172,7 +182,7 @@ function AddUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   )
 }
 
-export function Users({ authProvider }: UsersProps) {
+export function Users({ authProvider, currentUser }: UsersProps) {
   const navigate = useNavigate()
   const [users, setUsers] = useState<UserSummary[]>([])
   const [loading, setLoading] = useState(true)
@@ -217,7 +227,7 @@ export function Users({ authProvider }: UsersProps) {
       )}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Users</h2>
-        {isLocalAuth && (
+        {isLocalAuth && canAdminister(currentUser) && (
           <button
             onClick={() => setShowAddModal(true)}
             className="px-3 py-1.5 rounded bg-slate-700 text-white text-sm hover:bg-slate-800"

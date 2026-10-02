@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
+import com.rbc.fogwall.user.StaticUserStore;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,7 +22,7 @@ class RepoPermissionServiceTest {
 
     @BeforeEach
     void setUp() {
-        svc = new RepoPermissionService(new InMemoryRepoPermissionStore());
+        svc = new RepoPermissionService(new InMemoryRepoPermissionStore(), new StaticUserStore(List.of()));
     }
 
     private RepoPermission grant(String username, String provider, String value) {

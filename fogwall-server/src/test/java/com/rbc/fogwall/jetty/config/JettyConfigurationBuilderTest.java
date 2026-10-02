@@ -57,6 +57,35 @@ class JettyConfigurationBuilderTest {
     }
 
     @Test
+    void refuseConfigAuditorGrants_failsOnPermissionOrGroupForAuditor() {
+        var config = configWithGithub();
+        var auditor = new UserConfig();
+        auditor.setUsername("audrey");
+        auditor.setRoles(List.of("USER", "AUDITOR"));
+        config.setUsers(List.of(auditor));
+        config.setPermissions(
+                List.of(slugPerm("audrey", "github", "/org/repo"), slugPerm("alice", "github", "/org/a")));
+        var group = new GroupConfig();
+        group.setName("devs");
+        group.setMembers(List.of("alice", "audrey"));
+        config.setGroups(List.of(group));
+        var builder = new JettyConfigurationBuilder(config);
+
+        var ex = assertThrows(
+                IllegalStateException.class,
+                () -> JettyConfigurationBuilder.refuseConfigAuditorGrants(
+                        config, builder.buildConfigPermissions(config)));
+        assertTrue(ex.getMessage().contains("permissions[] grants to auditor 'audrey'"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("groups[devs] includes auditor 'audrey'"), ex.getMessage());
+        assertFalse(ex.getMessage().contains("alice"), ex.getMessage());
+
+        config.setPermissions(List.of(slugPerm("alice", "github", "/org/a")));
+        config.setGroups(List.of());
+        assertDoesNotThrow(() ->
+                JettyConfigurationBuilder.refuseConfigAuditorGrants(config, builder.buildConfigPermissions(config)));
+    }
+
+    @Test
     void validateProviderReferences_unknownPermissionProvider_throws() {
         var config = configWithGithub();
         config.setPermissions(List.of(slugPerm("alice", "not-a-provider", "/org/repo")));
