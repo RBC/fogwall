@@ -6,7 +6,7 @@ buildscript {
             // Jackson 2.x on the *plugin* classpath (gradle-node-plugin, cyclonedx-gradle-plugin).
             // The runtime pin in the subprojects eachDependency table does not reach this
             // configuration, and the dependency graph submitted to GitHub includes it.
-            // CVE fix: GHSA-r7wm-3cxj-wff9, GHSA-5gvw-p9qm-jgwh, GHSA-5jmj-h7xm-6q6v
+            // CVE fix: GHSA-r7wm-3cxj-wff9, GHSA-5gvw-p9qm-jgwh, GHSA-5jmj-h7xm-6q6v, GHSA-cxp5-3px4-pw24, GHSA-wv8q-qhhj-9h54
             force 'com.fasterxml.jackson.core:jackson-core:2.22.3'
             force 'com.fasterxml.jackson.core:jackson-databind:2.22.3'
         }
@@ -183,8 +183,8 @@ subprojects {
             // Jackson 2.x — pulled in by various plugins & swagger-core; fogwall itself is on the Jackson 3.x
             // com.fasterxml.jackson.core:jackson-annotations is the only one which doesn't follow the usual jackson bom
             if (r.group.startsWith('com.fasterxml.jackson') && r.name != 'jackson-annotations') {
-                details.useVersion '2.22.2'
-                details.because 'CVE fix: GHSA-r7wm-3cxj-wff9, GHSA-5gvw-p9qm-jgwh, GHSA-5jmj-h7xm-6q6v'
+                details.useVersion '2.22.3'
+                details.because 'CVE fix: GHSA-r7wm-3cxj-wff9, GHSA-5gvw-p9qm-jgwh, GHSA-5jmj-h7xm-6q6v, GHSA-cxp5-3px4-pw24, GHSA-wv8q-qhhj-9h54'
             }
         }
     }
