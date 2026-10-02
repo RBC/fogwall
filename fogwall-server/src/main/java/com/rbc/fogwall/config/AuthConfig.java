@@ -42,25 +42,32 @@ public class AuthConfig {
      * <pre>
      * auth:
      *   role-mappings:
-     *     APPROVER:
-     *       - "git-approvers"
-     *       - "security-team"
+     *     USER:
+     *       - "fogwall-users"
      *     ADMIN:
-     *       - "git-admins"
+     *       - "fogwall-admins"
      * </pre>
+     *
+     * <p>A mapping grants the role it names; {@code ADMIN} also brings {@code USER}.
      */
     private Map<String, List<String>> roleMappings = new HashMap<>();
 
     /**
-     * When {@code role-mappings} is non-empty, controls whether a user whose IdP groups match none of the mappings is
-     * denied access. Defaults to {@code true} — deny-by-default, the correct posture for regulated environments.
-     *
-     * <p>Set to {@code false} to restore open-access behaviour: any user who authenticates successfully against the IdP
-     * is granted {@code ROLE_USER} unconditionally, and {@code role-mappings} (if present) only grant additional roles
-     * on top. This is a no-op when {@code role-mappings} is empty, since open mode is already the behaviour in that
-     * case.
+     * The role an IdP user receives when their {@code role-mappings} grant no session role: {@code NONE} (refused, the
+     * default), {@code READER}, {@code USER} or {@code AUDITOR}. It applies to a user matching no mapping and to one
+     * matched only by a modifier such as {@code SELF_CERTIFY}, and is added to what they did match. Startup fails when
+     * it resolves to {@code NONE} with {@code role-mappings} empty, since no one could sign in.
      */
-    private boolean requireRoleMapping = true;
+    private String defaultRole;
+
+    /**
+     * Replaced by {@link #defaultRole}: {@code true} reads as {@code NONE}, {@code false} as {@code READER}. Accepted
+     * with a startup warning; setting both keys fails startup.
+     *
+     * @deprecated use {@code auth.default-role}.
+     */
+    @Deprecated
+    private Boolean requireRoleMapping;
 
     /**
      * OIDC claim name that contains the user's group memberships. Defaults to {@code groups}, which is standard for

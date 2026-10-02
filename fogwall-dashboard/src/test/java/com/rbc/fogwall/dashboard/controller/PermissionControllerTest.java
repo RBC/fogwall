@@ -423,7 +423,8 @@ class PermissionControllerTest {
     void test_notGranted_returnsDeniedWithNoneSource() {
         when(userStore.findByUsername("alice")).thenReturn(Optional.of(ALICE));
         when(permissionService.evaluateGrant("alice", "github", "/acme/repo", RepoPermission.Grant.PUSH))
-                .thenReturn(new RepoPermissionService.GrantResult.NotGranted());
+                .thenReturn(new RepoPermissionService.GrantResult.NotGranted(
+                        RepoPermissionService.GrantResult.Reason.NO_MATCHING_GRANT));
 
         var resp = controller.test("alice", testReq("github", "/acme/repo", "PUSH"));
 
@@ -431,13 +432,30 @@ class PermissionControllerTest {
         var body = (PermissionController.PermissionTestResponse) resp.getBody();
         assertEquals(false, body.allowed());
         assertEquals("NONE", body.source());
+        assertEquals("NO_MATCHING_GRANT", body.reason());
+    }
+
+    @Test
+    void test_grantInertForRole_reportsWhy() {
+        when(userStore.findByUsername("alice")).thenReturn(Optional.of(ALICE));
+        when(permissionService.evaluateGrant("alice", "github", "/acme/repo", RepoPermission.Grant.PUSH))
+                .thenReturn(new RepoPermissionService.GrantResult.NotGranted(
+                        RepoPermissionService.GrantResult.Reason.ROLE_CANNOT_ACT));
+
+        var body = (PermissionController.PermissionTestResponse) controller
+                .test("alice", testReq("github", "/acme/repo", "PUSH"))
+                .getBody();
+
+        assertEquals(false, body.allowed());
+        assertEquals("ROLE_CANNOT_ACT", body.reason());
     }
 
     @Test
     void test_defaultGrant_isPush() {
         when(userStore.findByUsername("alice")).thenReturn(Optional.of(ALICE));
         when(permissionService.evaluateGrant("alice", "github", "/acme/repo", RepoPermission.Grant.PUSH))
-                .thenReturn(new RepoPermissionService.GrantResult.NotGranted());
+                .thenReturn(new RepoPermissionService.GrantResult.NotGranted(
+                        RepoPermissionService.GrantResult.Reason.NO_MATCHING_GRANT));
 
         var resp = controller.test("alice", testReq("github", "/acme/repo", null));
 

@@ -886,7 +886,9 @@ function TestPermissionModal({ username, onClose }: { username: string; onClose:
             )}
             {!result.allowed && (
               <div className="mt-1 text-xs opacity-80">
-                No direct or group permission grants this user access.
+                {result.reason === 'ROLE_CANNOT_ACT'
+                  ? 'A permission matches, but this user’s roles cannot act. A grant counts only for USER or ADMIN, and never for AUDITOR.'
+                  : 'No direct or group permission grants this user access.'}
               </div>
             )}
           </div>

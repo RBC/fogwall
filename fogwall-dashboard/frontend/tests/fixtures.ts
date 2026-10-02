@@ -11,6 +11,7 @@ export const USERS = {
   dev: { username: 'dev', password: 'password' },
   reviewer: { username: 'reviewer', password: 'password' },
   observer: { username: 'observer', password: 'password' },
+  newcomer: { username: 'newcomer', password: 'password' },
 } as const
 
 export type Role = keyof typeof USERS

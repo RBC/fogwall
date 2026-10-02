@@ -1,12 +1,12 @@
 import { test, expect, FIXTURE } from './fixtures'
 
-// Users list + user detail: the four fixture users, dev's identities, and per-user permission rules
+// Users list + user detail: the fixture users, dev's identities, and per-user permission rules
 // (direct + inherited from groups) with every grant type and match type the profile declares.
 test.describe('users', () => {
   test('lists every fixture user', async ({ page }) => {
     await page.goto('/dashboard/users')
     await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible()
-    for (const u of ['admin', 'dev', 'reviewer', 'observer']) {
+    for (const u of ['admin', 'dev', 'reviewer', 'observer', 'newcomer']) {
       await expect(page.getByRole('cell', { name: u, exact: true })).toBeVisible()
     }
   })

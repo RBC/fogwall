@@ -34,6 +34,7 @@ class LdapAuthE2ETest {
 
         var config = new FogwallConfig();
         config.getAuth().setProvider("ldap");
+        config.getAuth().setDefaultRole("READER");
         config.getAuth().getLdap().setUrl(ldap.getLdapUrl());
         config.getAuth().getLdap().setUserDnPatterns(OpenLdapContainer.USER_DN_PATTERN);
 

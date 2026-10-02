@@ -200,10 +200,12 @@ test.describe('review panel by role', () => {
     await expect(page.getByRole('button', { name: 'Cancel push' })).toBeVisible()
   })
 
-  test('observer (no grants) gets no review panel actions enabled', async ({ asRole }) => {
+  test('a reader gets no review panel or cancel', async ({ asRole }) => {
     const { id } = scenario('pending-branch')
     const page = await asRole('observer')
     await openPush(page, id)
+    await expect(page.getByRole('button', { name: '✓ Approve' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: '✗ Reject' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Cancel push' })).toHaveCount(0)
   })
 })

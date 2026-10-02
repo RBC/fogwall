@@ -194,7 +194,9 @@ export function Sidebar({ currentUser, dark, toggleDark, collapsed }: SidebarPro
     ? 'admin'
     : hasRole(currentUser, 'AUDITOR')
       ? 'auditor'
-      : 'user'
+      : hasRole(currentUser, 'USER')
+        ? 'user'
+        : 'reader'
 
   return (
     <aside
@@ -373,7 +375,7 @@ export function Sidebar({ currentUser, dark, toggleDark, collapsed }: SidebarPro
           </button>
         </div>
 
-        {/* Profile — name and role (admin, auditor or user, from the mapped authorities), links to the profile page. */}
+        {/* Profile — name and role (admin, auditor, user or reader, from the mapped authorities), links to the profile page. */}
         {currentUser && (
           <NavLink
             to="/profile"

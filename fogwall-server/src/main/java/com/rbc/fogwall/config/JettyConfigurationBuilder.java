@@ -68,6 +68,7 @@ import com.rbc.fogwall.user.JdbcGitCredentialStore;
 import com.rbc.fogwall.user.JdbcScmOAuthTokenStore;
 import com.rbc.fogwall.user.JdbcUserStore;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
+import com.rbc.fogwall.user.Roles;
 import com.rbc.fogwall.user.ScmIdentity;
 import com.rbc.fogwall.user.ScmOAuthTokenStore;
 import com.rbc.fogwall.user.SshKeyEntry;
@@ -776,7 +777,7 @@ public class JettyConfigurationBuilder {
      */
     public static void refuseConfigAuditorGrants(FogwallConfig cfg, List<RepoPermission> configPerms) {
         Set<String> auditors = cfg.getUsers().stream()
-                .filter(u -> u.getRoles().contains(RepoPermissionService.AUDITOR_ROLE))
+                .filter(u -> u.getRoles().contains(Roles.AUDITOR))
                 .map(UserConfig::getUsername)
                 .collect(Collectors.toSet());
         if (auditors.isEmpty()) return;

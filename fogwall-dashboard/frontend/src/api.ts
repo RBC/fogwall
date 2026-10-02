@@ -558,6 +558,8 @@ export interface PermissionTestResponse {
   source: 'DIRECT' | 'GROUP' | 'NONE'
   entryId: string | null
   groupName: string | null
+  /** Set on a denial. */
+  reason?: 'NO_MATCHING_GRANT' | 'ROLE_CANNOT_ACT' | null
 }
 
 export async function testUserPermission(

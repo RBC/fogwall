@@ -37,11 +37,10 @@ users:
 **LDAP / AD:** users are provisioned automatically on first login. The proxy creates a user record from the directory
 attributes returned at bind time. The `mail` attribute (if present) is stored as a locked email — locked means it cannot
 be edited from the profile UI, since the directory is the source of truth. Roles are assigned via `auth.role-mappings`
-(LDAP group CNs → role names). When `role-mappings` is configured, a user who does not match any mapped group is
-**denied access entirely** — they authenticate successfully against the directory but are refused by the proxy. This is
-intentional: the proxy is not open to all directory users by default. To grant baseline access, map a broad group (e.g.
-all-staff) to `USER`, or set `auth.require-role-mapping: false` to treat the directory purely as an authentication
-mechanism and grant `ROLE_USER` to anyone who authenticates. See
+(LDAP group CNs → role names). By default, a user who does not match any mapped group is **denied access entirely** —
+they authenticate successfully against the directory but are refused by the proxy. This is intentional: the proxy is not
+open to all directory users by default. To grant baseline access, map a broad group (e.g. all-staff) to `READER` or
+`USER`, or set `auth.default-role` to admit anyone who authenticates. See
 [Role mappings](../configuration/authentication.md#role-mappings).
 
 SCM identities and permissions still need to be set up after first login — either by the user themselves from their
@@ -58,14 +57,20 @@ Roles control what a user can do in the dashboard and REST API:
 
 | Role             | What it grants                                                                                                                                                   |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `READER`         | View push records, repositories, providers, and fetch and SCM API activity. Changes nothing                                                                      |
 | `USER` (default) | View push records; approve or reject pushes they have `REVIEW` permission on; manage their own profile (emails, SCM identities)                                  |
 | `AUDITOR`        | View push records, plus read-only access to users, groups and their permissions. Changes nothing, even alongside `ADMIN`                                         |
 | `ADMIN`          | Everything USER can do, plus: create/delete users, reset passwords, manage any user's profile, view all push records                                             |
 | `SELF_CERTIFY`   | Grants the **capability** to self-approve pushes. This is the prerequisite gate — it must be present before any per-repo `SELF_CERTIFY` permission takes effect. |
 
-`ROLE_USER` is granted to every authenticated user automatically when no `role-mappings` are configured (open mode).
-When `role-mappings` are configured, access is deny-by-default — a user must belong to at least one mapped group or they
-are refused login entirely. Map a broad group to `USER` to grant baseline access to all directory members.
+Every session holds at least one of `READER`, `USER`, `AUDITOR` or `ADMIN`; `SELF_CERTIFY` alone admits no one. Acting
+needs `USER` or `ADMIN`. With an IdP, a mapping grants the role it names and `ADMIN` brings `USER` with it; a user
+matching no mapping is refused, or signs in with `auth.default-role` when that names a role. Map a broad group to
+`USER`, or set `default-role: USER`, to let all directory members act.
+
+`READER` makes a transparent deployment possible: anyone can see what is going on without being able to review, cancel,
+forward, file issues or edit a profile. It is additive, so `READER` with `USER` acts as `USER`. A repository permission
+does nothing for a user who holds neither `USER` nor `ADMIN`, and Test Permission on their Permissions tab says so.
 
 `AUDITOR` lets someone read the evidence of who was permitted to do what without being able to change it. An auditor's
 session is read-only: every change answers 403, including approving, rejecting, cancelling or forwarding a push, filing

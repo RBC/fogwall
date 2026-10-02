@@ -199,7 +199,7 @@ public class PermissionController {
                 switch (result) {
                     case RepoPermissionService.GrantResult.GrantedDirect d ->
                         new PermissionTestResponse(
-                                true, "DIRECT", d.permission().getId(), null);
+                                true, "DIRECT", d.permission().getId(), null, null);
                     case RepoPermissionService.GrantResult.GrantedByGroup g -> {
                         String groupId = g.rule().getGroupId();
                         String groupName = permissionService
@@ -207,10 +207,11 @@ public class PermissionController {
                                 .findGroupById(groupId)
                                 .map(PermissionGroup::getName)
                                 .orElse(groupId);
-                        yield new PermissionTestResponse(true, "GROUP", g.rule().getId(), groupName);
+                        yield new PermissionTestResponse(true, "GROUP", g.rule().getId(), groupName, null);
                     }
-                    case RepoPermissionService.GrantResult.NotGranted _ ->
-                        new PermissionTestResponse(false, "NONE", null, null);
+                    case RepoPermissionService.GrantResult.NotGranted n ->
+                        new PermissionTestResponse(
+                                false, "NONE", null, null, n.reason().name());
                 };
         return ResponseEntity.ok(response);
     }
@@ -221,5 +222,7 @@ public class PermissionController {
 
     public record PermissionTestRequest(String provider, String path, String grant) {}
 
-    public record PermissionTestResponse(boolean allowed, String source, String entryId, String groupName) {}
+    /** {@code reason} is set on a denial: {@code NO_MATCHING_GRANT} or {@code ROLE_CANNOT_ACT}. */
+    public record PermissionTestResponse(
+            boolean allowed, String source, String entryId, String groupName, String reason) {}
 }

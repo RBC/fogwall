@@ -146,12 +146,12 @@ class LdapRoleMappingE2ETest {
     }
 
     /**
-     * Verifies {@code auth.require-role-mapping: false}: a user whose LDAP groups match none of the configured mappings
-     * is still granted {@code ROLE_USER} instead of being denied.
+     * Verifies {@code auth.default-role: READER}: a user whose LDAP groups match none of the configured mappings signs
+     * in as {@code READER} instead of being denied, and does not act.
      */
     @Test
     @Order(4)
-    void userNotInMappedGroup_requireRoleMappingFalse_loginGrantsRoleUser() throws Exception {
+    void userNotInMappedGroup_defaultRoleReader_loginGrantsReader() throws Exception {
         var config = new FogwallConfig();
         config.getAuth().setProvider("ldap");
         config.getAuth().getLdap().setUrl(ldap.getLdapUrl());
@@ -161,7 +161,7 @@ class LdapRoleMappingE2ETest {
         config.getAuth().getLdap().setGroupSearchBase(OpenLdapContainer.GROUP_SEARCH_BASE);
         // Map a group the test user is NOT a member of, but disable deny-by-default.
         config.getAuth().setRoleMappings(Map.of("ADMIN", List.of("no-such-group")));
-        config.getAuth().setRequireRoleMapping(false);
+        config.getAuth().setDefaultRole("READER");
 
         try (var openDashboard = new DashboardFixture(config)) {
             var openBaseUrl = openDashboard.getBaseUrl();
@@ -188,12 +188,10 @@ class LdapRoleMappingE2ETest {
                             .build(),
                     HttpResponse.BodyHandlers.ofString());
             assertEquals(
-                    200,
-                    meResp.statusCode(),
-                    "User not in mapped group must still log in when require-role-mapping=false");
+                    200, meResp.statusCode(), "User not in mapped group must still log in when default-role is READER");
             assertTrue(
-                    meResp.body().contains("ROLE_USER"),
-                    "Expected ROLE_USER to be granted unconditionally; got: " + meResp.body());
+                    meResp.body().contains("ROLE_READER") && !meResp.body().contains("ROLE_USER"),
+                    "Expected ROLE_READER and no ROLE_USER for an unmapped user; got: " + meResp.body());
         }
     }
 }

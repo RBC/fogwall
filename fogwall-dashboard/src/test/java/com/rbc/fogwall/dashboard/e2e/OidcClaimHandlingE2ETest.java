@@ -72,6 +72,7 @@ class OidcClaimHandlingE2ETest {
     private static FogwallConfig entraShapedConfig(String issuerUri) {
         var config = new FogwallConfig();
         config.getAuth().setProvider("oidc");
+        config.getAuth().setDefaultRole("READER");
         config.getAuth().getOidc().setIssuerUri(issuerUri);
         config.getAuth().getOidc().setClientId(MockOAuth2Container.CLIENT_ID);
         config.getAuth().getOidc().setClientSecret(MockOAuth2Container.CLIENT_SECRET);
@@ -154,6 +155,7 @@ class OidcClaimHandlingE2ETest {
         // Default user-name-attribute (sub) — this test is about token validation, not claim mapping.
         var config = new FogwallConfig();
         config.getAuth().setProvider("oidc");
+        config.getAuth().setDefaultRole("READER");
         config.getAuth().getOidc().setIssuerUri(mockOAuth2.getIssuerUri("wrong-aud"));
         config.getAuth().getOidc().setClientId(MockOAuth2Container.CLIENT_ID);
         config.getAuth().getOidc().setClientSecret(MockOAuth2Container.CLIENT_SECRET);
