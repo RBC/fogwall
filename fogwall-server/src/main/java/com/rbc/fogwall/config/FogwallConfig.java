@@ -88,4 +88,7 @@ public class FogwallConfig {
      * Defaults to all features disabled.
      */
     private DashboardConfig dashboard = new DashboardConfig();
+
+    /** Secrets sourcing policies and configuration. */
+    private SecretsConfig secrets = new SecretsConfig();
 }

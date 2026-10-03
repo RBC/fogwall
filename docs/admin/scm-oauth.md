@@ -75,8 +75,8 @@ With `scm-oauth.identity-mode: strict`, `CheckUserPushPermissionHook` only honor
 authorization — on both HTTP and SSH transports. A user whose only SCM identity is manually/free-text entered (or who
 hasn't linked one at all) gets a clear push-time rejection pointing them at the profile page to link via OAuth. There is
 no fallback to permissive behavior if OAuth linking becomes unavailable (see token encryption key handling below) — the
-two are deliberately decoupled: a token-encryption problem disables the _link/callback_ endpoints, never push
-authorization, so `strict` mode's guarantee can't be silently weakened by an infrastructure fault.
+two are deliberately decoupled: a problem with the auto-generated development key disables the _link/callback_
+endpoints, never push authorization, so `strict` mode's guarantee can't be silently weakened by an infrastructure fault.
 
 `POST /api/me/identities` (manually adding an SCM identity) is also disabled in `strict` mode, both in the dashboard UI
 and server-side on the endpoint itself — a manually-entered identity would never actually be usable for push
@@ -143,6 +143,9 @@ openssl rand -base64 32 > fogwall-scm-oauth-key
 scm-oauth:
   token-encryption-key-path: /run/secrets/fogwall-scm-oauth-key
 ```
+
+The file may hold the base64 text above or the 32 raw bytes. A configured key that cannot be read, or is in neither
+form, fails startup.
 
 If this is left unset while some provider has `oauth.enabled`, fogwall auto-generates and persists a key under
 `./.data/` and logs a loud `WARN` on every startup — fine for local development, but that file may not survive a

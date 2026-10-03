@@ -4,6 +4,7 @@ import com.rbc.fogwall.approval.ApprovalGateway;
 import com.rbc.fogwall.approval.AutoApprovalGateway;
 import com.rbc.fogwall.approval.SelfApprovalPolicy;
 import com.rbc.fogwall.approval.UiApprovalGateway;
+import com.rbc.fogwall.crypto.AesGcmTokenCipher;
 import com.rbc.fogwall.crypto.TokenCipherProvider;
 import com.rbc.fogwall.db.CompositeUrlRuleRegistry;
 import com.rbc.fogwall.db.FetchActivityRecorder;
@@ -77,6 +78,7 @@ import com.rbc.fogwall.user.UserEntry;
 import com.rbc.fogwall.user.UserStore;
 import java.io.IOException;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -1227,17 +1229,22 @@ public class JettyConfigurationBuilder {
     }
 
     /**
-     * Builds the {@link TokenCipherProvider} that encrypts linked OAuth tokens at rest. The key is loaded, or generated
-     * for local development, only when some provider offers account linking; otherwise there is nothing to encrypt and
-     * no key file is touched.
+     * Builds the {@link TokenCipherProvider} that encrypts linked OAuth tokens at rest, from the key resolved while the
+     * configuration loaded. A key is generated for local development only when some provider offers account linking and
+     * none is configured; with no provider offering linking there is nothing to encrypt.
      */
     public TokenCipherProvider buildTokenCipherProvider() {
         if (cachedTokenCipherProvider != null) return cachedTokenCipherProvider;
         boolean linkingOffered = config.getProviders().values().stream()
                 .anyMatch(p -> p.getOauth().isEnabled());
+        String configuredKey = config.getScmOauth().getTokenEncryptionKey();
         cachedTokenCipherProvider = linkingOffered
                 ? TokenCipherProvider.initialize(
-                        config.getScmOauth().getTokenEncryptionKeyPath(), Path.of("./.data/scm-oauth-token-key"))
+                        configuredKey.isBlank()
+                                ? Optional.empty()
+                                : Optional.of(
+                                        AesGcmTokenCipher.decodeKey(configuredKey.getBytes(StandardCharsets.US_ASCII))),
+                        Path.of("./.data/scm-oauth-token-key"))
                 : TokenCipherProvider.unavailable();
         return cachedTokenCipherProvider;
     }
@@ -1346,10 +1353,7 @@ public class JettyConfigurationBuilder {
         config.getProviders().forEach((name, providerConfig) -> {
             OAuthProviderSettings oauth = providerConfig.getOauth();
             if (oauth.isEnabled() && !oauth.getClientId().isBlank()) {
-                clients.put(
-                        name,
-                        new ScmOAuthTokenService.OAuthClient(
-                                oauth.getClientId(), Path.of(oauth.getClientSecretPath())));
+                clients.put(name, new ScmOAuthTokenService.OAuthClient(oauth.getClientId(), oauth.getClientSecret()));
             }
         });
         cachedScmOAuthTokenService = new ScmOAuthTokenService(

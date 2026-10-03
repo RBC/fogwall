@@ -3,6 +3,7 @@ package com.rbc.fogwall.config;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Data;
+import lombok.ToString;
 
 /** Binds the {@code server:} block in fogwall.yml. */
 @Data
@@ -236,7 +237,11 @@ public class ServerConfig {
     public static class RedisConfig {
         private String host = "localhost";
         private int port = 6379;
+
+        @ToString.Exclude
         private String password = "";
+
+        private String passwordPath = "";
         private boolean ssl = false;
     }
 }

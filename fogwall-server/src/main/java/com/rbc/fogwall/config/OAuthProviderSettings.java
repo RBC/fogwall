@@ -1,6 +1,7 @@
 package com.rbc.fogwall.config;
 
 import lombok.Data;
+import lombok.ToString;
 
 /**
  * OAuth account-linking settings for a single provider instance (#40), nested under {@code providers.<name>.oauth}.
@@ -18,7 +19,11 @@ public class OAuthProviderSettings {
     /** OAuth app/client ID. */
     private String clientId = "";
 
-    /** Path to a file holding the OAuth app/client secret. */
+    /** OAuth app/client secret. */
+    @ToString.Exclude
+    private String clientSecret = "";
+
+    /** Path to a file holding the OAuth app/client secret. Mutually exclusive with {@link #clientSecret}. */
     private String clientSecretPath = "";
 
     /**

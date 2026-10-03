@@ -1,6 +1,7 @@
 package com.rbc.fogwall.config;
 
 import lombok.Data;
+import lombok.ToString;
 
 /**
  * Binds the {@code server.tls:} block in fogwall.yml.
@@ -87,7 +88,11 @@ public class TlsConfig {
     @Data
     public static class KeystoreConfig {
         private String path;
+
+        @ToString.Exclude
         private String password;
+
+        private String passwordPath;
         /** Keystore type. Common values: {@code PKCS12} (default), {@code JKS}. */
         private String type = "PKCS12";
     }
