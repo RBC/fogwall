@@ -10,6 +10,7 @@ import com.rbc.fogwall.git.Commit;
 import com.rbc.fogwall.git.Contributor;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import jakarta.servlet.FilterChain;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.ServletOutputStream;
@@ -125,7 +126,7 @@ class ContentPatternMessageFilterTest {
         var filter = new ContentPatternMessageFilter(ContentPatternConfig.defaultConfig());
         FakeResponse resp = new FakeResponse();
 
-        filter.doHttpFilter(mockRequest(details), resp.mock);
+        filter.doFilter(mockRequest(details), resp.mock, mock(FilterChain.class));
 
         assertTrue(details.getSteps().isEmpty());
     }
@@ -141,7 +142,7 @@ class ContentPatternMessageFilterTest {
         var filter = new ContentPatternMessageFilter(config);
         FakeResponse resp = new FakeResponse();
 
-        filter.doHttpFilter(mockRequest(details), resp.mock);
+        filter.doFilter(mockRequest(details), resp.mock, mock(FilterChain.class));
 
         assertTrue(details.getSteps().isEmpty());
     }

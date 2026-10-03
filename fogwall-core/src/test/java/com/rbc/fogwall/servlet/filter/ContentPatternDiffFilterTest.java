@@ -8,6 +8,7 @@ import com.rbc.fogwall.config.ContentPatternConfig;
 import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import jakarta.servlet.FilterChain;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.ServletOutputStream;
@@ -156,7 +157,7 @@ class ContentPatternDiffFilterTest {
         var filter = new ContentPatternDiffFilter(ContentPatternConfig.defaultConfig());
         FakeResponse resp = new FakeResponse();
 
-        filter.doHttpFilter(mockRequest(details), resp.mock);
+        filter.doFilter(mockRequest(details), resp.mock, mock(FilterChain.class));
 
         assertTrue(details.getSteps().isEmpty());
     }
@@ -172,7 +173,7 @@ class ContentPatternDiffFilterTest {
         var filter = new ContentPatternDiffFilter(config);
         FakeResponse resp = new FakeResponse();
 
-        filter.doHttpFilter(mockRequest(details), resp.mock);
+        filter.doFilter(mockRequest(details), resp.mock, mock(FilterChain.class));
 
         assertTrue(details.getSteps().isEmpty());
     }

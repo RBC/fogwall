@@ -289,7 +289,7 @@ Diffs are generated in both modes but through different code paths:
 | Mode        | Component                        | When                            | What                                     |
 | ----------- | -------------------------------- | ------------------------------- | ---------------------------------------- |
 | server mode | `DiffGenerationHook` (order 280) | Pre-receive, post-validation    | Push diff + optional default-branch diff |
-| Proxy       | `ScanDiffFilter` (order 300)     | After `EnrichPushCommitsFilter` | Push diff only                           |
+| Proxy       | `DiffGenerationFilter`           | After `EnrichPushCommitsFilter` | Push diff only                           |
 
 Both ultimately call `CommitInspectionService.getFormattedDiff(repo, fromCommit, toCommit)`.
 

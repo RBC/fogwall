@@ -58,12 +58,13 @@ public final class BinaryBlobFilter extends AbstractFogwallFilter {
     }
 
     @Override
+    public boolean enabled() {
+        return binaryBlobConfigSupplier.get().isEnabled();
+    }
+
+    @Override
     public void doHttpFilter(HttpServletRequest request, HttpServletResponse response) throws IOException {
         BinaryBlobConfig config = binaryBlobConfigSupplier.get();
-        if (!config.isEnabled()) {
-            return;
-        }
-
         var requestDetails = (GitRequestDetails) request.getAttribute(GIT_REQUEST_ATTR);
         if (requestDetails == null) {
             log.warn("GitRequestDetails not found in request attributes");
