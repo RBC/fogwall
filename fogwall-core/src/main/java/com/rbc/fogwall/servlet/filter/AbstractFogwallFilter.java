@@ -28,6 +28,7 @@ public abstract sealed class AbstractFogwallFilter implements MandatoryFogwallFi
                 CommitAttributionPolicyFilter,
                 ContentPatternDiffFilter,
                 ContentPatternMessageFilter,
+                DiffGenerationFilter,
                 FetchFinalizerFilter,
                 GpgSignatureFilter,
                 PushFinalizerFilter,

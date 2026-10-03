@@ -38,16 +38,12 @@ public final class BinaryBlobDetectionHook implements MandatoryFogwallHook {
     private final PushContext pushContext;
 
     @Override
-    public void onPreReceive(ReceivePack rp, Collection<ReceiveCommand> commands) {
-        if (!binaryBlobConfig.isEnabled()) {
-            pushContext.addStep(PushStep.builder()
-                    .stepName(getStepName())
-                    .stepOrder(displayOrder())
-                    .status(StepStatus.SKIPPED)
-                    .build());
-            return;
-        }
+    public boolean enabled() {
+        return binaryBlobConfig.isEnabled();
+    }
 
+    @Override
+    public void onPreReceive(ReceivePack rp, Collection<ReceiveCommand> commands) {
         Repository repo = rp.getRepository();
         BinaryBlobCheck check = new BinaryBlobCheck(binaryBlobConfig);
         List<String> logs = new ArrayList<>();

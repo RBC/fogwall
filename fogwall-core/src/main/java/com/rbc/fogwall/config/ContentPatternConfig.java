@@ -52,6 +52,16 @@ public class ContentPatternConfig {
     @Builder.Default
     private boolean scanScmApi = true;
 
+    /** Whether pushed diffs are scanned: enabled, at least one bundle selected, and {@code scanDiff} on. */
+    public boolean scansDiff() {
+        return enabled && !bundles.isEmpty() && scanDiff;
+    }
+
+    /** Whether commit and tag messages are scanned: enabled, at least one bundle selected, and that source on. */
+    public boolean scansCommitMessages() {
+        return enabled && !bundles.isEmpty() && scanCommitMessages;
+    }
+
     public static ContentPatternConfig defaultConfig() {
         return ContentPatternConfig.builder().build();
     }

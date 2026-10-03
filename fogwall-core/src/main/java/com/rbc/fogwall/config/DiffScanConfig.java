@@ -20,6 +20,11 @@ public class DiffScanConfig {
     @Builder.Default
     private BlockConfig block = BlockConfig.builder().build();
 
+    /** Whether any block rule is configured. With none, diff scanning is off. */
+    public boolean hasRules() {
+        return !block.getRules().isEmpty();
+    }
+
     public static DiffScanConfig defaultConfig() {
         return DiffScanConfig.builder().build();
     }

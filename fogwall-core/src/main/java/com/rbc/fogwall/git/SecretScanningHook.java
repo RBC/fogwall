@@ -45,6 +45,11 @@ public final class SecretScanningHook implements MandatoryFogwallHook {
     }
 
     @Override
+    public boolean enabled() {
+        return config.isEnabled();
+    }
+
+    @Override
     public void onPreReceive(ReceivePack rp, Collection<ReceiveCommand> commands) {
         Path repoDir = rp.getRepository().getDirectory().toPath();
         // In server mode the push is received into a quarantine whose objects live outside the mirror's own object
@@ -89,18 +94,9 @@ public final class SecretScanningHook implements MandatoryFogwallHook {
         }
 
         if (scannerUnavailable) {
-            if (config.isEnabled()) {
-                String msg = "Secret scanning failed — scanner error or unavailable. "
-                        + "Push blocked because secret-scan is enabled. Check server logs for details.";
-                allViolations.add(new Violation(msg, msg, sym(CROSS_MARK) + "  " + msg + "\n" + REMEDIATION_HINT));
-            } else {
-                pushContext.addStep(PushStep.builder()
-                        .stepName(getStepName())
-                        .stepOrder(displayOrder())
-                        .status(StepStatus.SKIPPED)
-                        .build());
-                return;
-            }
+            String msg = "Secret scanning failed — scanner error or unavailable. "
+                    + "Push blocked because secret-scan is enabled. Check server logs for details.";
+            allViolations.add(new Violation(msg, msg, sym(CROSS_MARK) + "  " + msg + "\n" + REMEDIATION_HINT));
         }
 
         if (allViolations.isEmpty()) {

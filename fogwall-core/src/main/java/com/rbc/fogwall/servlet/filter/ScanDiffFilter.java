@@ -17,6 +17,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -27,7 +28,8 @@ import org.eclipse.jgit.lib.Repository;
 /**
  * Filter that scans the diff content of incoming pushes for blocked literals and patterns. Runs in the transparent
  * proxy pipeline after {@link EnrichPushCommitsFilter} (which has already cloned the repo and unpacked push objects),
- * so the local repository is available as a cache hit.
+ * so the local repository is available as a cache hit, and after {@link DiffGenerationFilter}, whose recorded diff the
+ * aggregate pass scans. Off when no block rule is configured.
  *
  * <p>Only added lines (prefixed with {@code +} in the unified diff, excluding the {@code +++} header) are scanned.
  * Deletions and context lines are ignored.
@@ -58,6 +60,11 @@ public final class ScanDiffFilter extends AbstractFogwallFilter {
     @Override
     public Optional<PushStepKind> stepKind() {
         return Optional.of(PushStepKind.DIFF_SCAN);
+    }
+
+    @Override
+    public boolean enabled() {
+        return diffScanConfigSupplier.get().hasRules();
     }
 
     @Override
@@ -92,18 +99,16 @@ public final class ScanDiffFilter extends AbstractFogwallFilter {
                 return;
             }
 
-            // Pass 1: aggregate scan of the net old..new diff
-            String diff = CommitInspectionService.getFormattedDiff(repository, fromCommit, toCommit);
-
-            // Always record the diff so the dashboard can display it
-            PushStep diffStep = PushStep.builder()
-                    .pushId(requestDetails.getId().toString())
-                    .stepName(DiffGenerationHook.STEP_NAME_PUSH_DIFF)
-                    .stepOrder(PushStepKind.DIFF_GENERATION.displayOrder())
-                    .status(StepStatus.PASS)
-                    .content(diff)
-                    .build();
-            requestDetails.getSteps().add(diffStep);
+            // Pass 1: aggregate scan of the net old..new diff, as DiffGenerationFilter recorded it
+            Optional<String> recordedDiff = requestDetails.getSteps().stream()
+                    .filter(s -> DiffGenerationHook.STEP_NAME_PUSH_DIFF.equals(s.getStepName()))
+                    .filter(s -> s.getStatus() == StepStatus.PASS)
+                    .map(PushStep::getContent)
+                    .filter(Objects::nonNull)
+                    .findFirst();
+            String diff = recordedDiff.isPresent()
+                    ? recordedDiff.get()
+                    : CommitInspectionService.getFormattedDiff(repository, fromCommit, toCommit);
 
             List<Violation> violations = check.check(diff).orElse(List.of());
             if (!violations.isEmpty()) {
