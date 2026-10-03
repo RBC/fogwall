@@ -89,6 +89,7 @@ const STEP_DISPLAY_NAMES: Record<string, string> = {
   trailers: 'Commit trailers',
   'empty-branch': 'Empty branch',
   'hidden-commits': 'Hidden commits',
+  'diff-generation': 'Diff generation',
   'diff-scan': 'Diff scan',
   'secret-scan': 'Secret scanning',
   'content-pattern-diff': 'PII/identifier scan (diff)',
