@@ -62,16 +62,18 @@ class ContentPatternCommitMessageHookTest {
     }
 
     @Test
-    void disabled_recordsSkippedStep() throws Exception {
-        Git git = Git.open(tempDir.toFile());
-        ObjectId commit = createCommit(git, "ssn: 212-96-7431", "Dev", "dev@example.com");
-        PushContext pushCtx = new PushContext();
-        var hook = new ContentPatternCommitMessageHook(ContentPatternConfig.defaultConfig(), pushCtx);
+    void disabled_isOff() {
+        var hook = new ContentPatternCommitMessageHook(ContentPatternConfig.defaultConfig(), new PushContext());
 
-        hook.onPreReceive(new ReceivePack(repo), List.of(newBranchCommand(commit)));
+        assertFalse(hook.enabled());
+    }
 
-        assertEquals(1, pushCtx.getSteps().size());
-        assertEquals(StepStatus.SKIPPED, pushCtx.getSteps().get(0).getStatus());
+    @Test
+    void enabledWithNoBundles_isOff() {
+        ContentPatternConfig config =
+                ContentPatternConfig.builder().enabled(true).bundles(List.of()).build();
+
+        assertFalse(new ContentPatternCommitMessageHook(config, new PushContext()).enabled());
     }
 
     @Test
@@ -91,21 +93,15 @@ class ContentPatternCommitMessageHookTest {
     }
 
     @Test
-    void scanCommitMessagesDisabled_recordsSkippedStep_evenWhenEnabled() throws Exception {
-        Git git = Git.open(tempDir.toFile());
-        ObjectId commit = createCommit(git, "ssn: 212-96-7431", "Dev", "dev@example.com");
-        PushContext pushCtx = new PushContext();
+    void scanCommitMessagesDisabled_isOff_evenWhenEnabled() {
         ContentPatternConfig config = ContentPatternConfig.builder()
                 .enabled(true)
                 .bundles(List.of("national-id-us"))
                 .scanCommitMessages(false)
                 .build();
-        var hook = new ContentPatternCommitMessageHook(config, pushCtx);
 
-        hook.onPreReceive(new ReceivePack(repo), List.of(newBranchCommand(commit)));
-
-        assertEquals(1, pushCtx.getSteps().size());
-        assertEquals(StepStatus.SKIPPED, pushCtx.getSteps().get(0).getStatus());
+        assertFalse(new ContentPatternCommitMessageHook(config, new PushContext()).enabled());
+        assertTrue(new ContentPatternCommitMessageHook(enabledConfig(), new PushContext()).enabled());
     }
 
     @Test

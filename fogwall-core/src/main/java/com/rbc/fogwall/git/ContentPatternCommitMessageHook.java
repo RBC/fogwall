@@ -1,8 +1,6 @@
 package com.rbc.fogwall.git;
 
 import com.rbc.fogwall.config.ContentPatternConfig;
-import com.rbc.fogwall.db.model.PushStep;
-import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.validation.ContentPatternBundleResolver;
 import com.rbc.fogwall.validation.ContentPatternFinding;
 import com.rbc.fogwall.validation.PatternBundleScanner;
@@ -32,16 +30,12 @@ public final class ContentPatternCommitMessageHook implements MandatoryFogwallHo
     private final PushContext pushContext;
 
     @Override
-    public void onPreReceive(ReceivePack rp, Collection<ReceiveCommand> commands) {
-        if (!config.isEnabled() || !config.isScanCommitMessages()) {
-            pushContext.addStep(PushStep.builder()
-                    .stepName(getStepName())
-                    .stepOrder(displayOrder())
-                    .status(StepStatus.SKIPPED)
-                    .build());
-            return;
-        }
+    public boolean enabled() {
+        return config.scansCommitMessages();
+    }
 
+    @Override
+    public void onPreReceive(ReceivePack rp, Collection<ReceiveCommand> commands) {
         var scanner = new PatternBundleScanner(ContentPatternBundleResolver.resolve(config));
         List<ContentPatternFinding> allFindings = new ArrayList<>();
         Repository repo = rp.getRepository();

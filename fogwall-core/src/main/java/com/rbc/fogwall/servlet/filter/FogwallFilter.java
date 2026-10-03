@@ -87,6 +87,15 @@ public sealed interface FogwallFilter extends Filter permits MandatoryFogwallFil
     }
 
     /**
+     * Whether this filter's check is turned on for the current request. A filter that is off is passed over by
+     * {@link #doFilter}: it does not run and records no step, so it appears neither in the client output nor on the
+     * push record. Filters backed by a live config supplier read it here, so a reload takes effect on the next push.
+     */
+    default boolean enabled() {
+        return true;
+    }
+
+    /**
      * The persisted {@code step_order} for this filter's audit step — a stable display-ordering value, distinct from
      * chain execution order. Derived from {@link #stepKind()} so a step sorts identically in both proxy modes.
      */
@@ -127,6 +136,12 @@ public sealed interface FogwallFilter extends Filter permits MandatoryFogwallFil
             throws IOException, ServletException {
         HttpServletRequest httpRequest = (HttpServletRequest) request;
         HttpServletResponse httpResponse = (HttpServletResponse) response;
+
+        // A check turned off in config does not run and records no step, not even the automatic PASS below.
+        if (!enabled()) {
+            chain.doFilter(request, response);
+            return;
+        }
 
         // Fail-fast: once an earlier filter recorded a rejection, skip remaining processing-stage filters. Pre- and
         // post-stage filters (parse/enrich, summary/finalizers) still run so the response is finalized correctly.

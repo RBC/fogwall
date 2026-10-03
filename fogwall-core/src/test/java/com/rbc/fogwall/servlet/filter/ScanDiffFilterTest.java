@@ -11,6 +11,7 @@ import com.rbc.fogwall.db.model.PushStep;
 import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import jakarta.servlet.FilterChain;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.ServletOutputStream;
@@ -176,17 +177,55 @@ class ScanDiffFilterTest {
         assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
     }
 
-    // ---- diff always stored as a step (for dashboard display) ----
+    // ---- no block rules → off: does not run, records no step ----
 
     @Test
-    void diffAlwaysStoredAsStep() throws Exception {
+    void noRules_isOff_recordsNoStep_andContinuesChain() throws Exception {
+        GitRequestDetails details = pushDetails(cleanCommit, blockedCommit);
+        FakeResponse resp = new FakeResponse();
+        FilterChain chain = mock(FilterChain.class);
+        HttpServletRequest req = mockRequest(details);
+
+        filterNoRules().doFilter(req, resp.mock, chain);
+
+        assertFalse(filterNoRules().enabled());
+        assertTrue(details.getSteps().isEmpty(), "a diff scan with no rules must record no step, not even PASS");
+        assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
+        verify(chain).doFilter(req, resp.mock);
+    }
+
+    // ---- the aggregate pass scans the diff DiffGenerationFilter recorded ----
+
+    @Test
+    void aggregatePass_scansRecordedDiff() throws Exception {
         GitRequestDetails details = pushDetails(baseCommit, cleanCommit);
+        details.getSteps()
+                .add(PushStep.builder()
+                        .stepName("diff")
+                        .status(StepStatus.PASS)
+                        .content("+++ b/x.txt\n+supersecret\n")
+                        .build());
         FakeResponse resp = new FakeResponse();
 
-        filterNoRules().doHttpFilter(mockRequest(details), resp.mock);
+        filterWithLiteral("supersecret").doHttpFilter(mockRequest(details), resp.mock);
 
-        boolean hasDiffStep = details.getSteps().stream().anyMatch(s -> "diff".equals(s.getStepName()));
-        assertTrue(hasDiffStep, "diff step should always be recorded for dashboard");
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+    }
+
+    // ---- scan error → SKIPPED still recorded: the check was on but could not run ----
+
+    @Test
+    void enabledButUnreadableRange_recordsSkipped() throws Exception {
+        GitRequestDetails details = pushDetails(baseCommit, "0123456789abcdef0123456789abcdef01234567");
+        FakeResponse resp = new FakeResponse();
+        FilterChain chain = mock(FilterChain.class);
+
+        filterWithLiteral("supersecret").doFilter(mockRequest(details), resp.mock, chain);
+
+        assertTrue(
+                details.getSteps().stream()
+                        .anyMatch(s -> "diff-scan".equals(s.getStepName()) && s.getStatus() == StepStatus.SKIPPED),
+                "an enabled scan that could not run must still show");
     }
 
     // ---- blocked literal → REJECTED ----
@@ -272,22 +311,6 @@ class ScanDiffFilterTest {
                 "content should include the matching line, got: " + scanStep.getContent());
     }
 
-    // ---- tag push → skipped entirely, no diff step ----
-
-    @Test
-    void tagPush_skipsDiffGeneration() throws Exception {
-        GitRequestDetails details = pushDetails(baseCommit, cleanCommit);
-        details.setBranch("refs/tags/v1.0.0");
-        FakeResponse resp = new FakeResponse();
-
-        filterNoRules().doHttpFilter(mockRequest(details), resp.mock);
-
-        assertFalse(resp.committed.get());
-        boolean hasDiffStep = details.getSteps().stream().anyMatch(s -> "diff".equals(s.getStepName()));
-        assertFalse(hasDiffStep, "tag push must not generate a diff step");
-        assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
-    }
-
     // ---- per-commit scan catches content smuggled in an intermediate commit ----
 
     @Test
@@ -313,22 +336,5 @@ class ScanDiffFilterTest {
                 GitRequestDetails.GitResult.REJECTED,
                 details.getResult(),
                 "content smuggled in an intermediate commit must still be caught even though the aggregate diff is clean");
-    }
-
-    // ---- diff step content contains the actual diff text ----
-
-    @Test
-    void diffStepContainsDiffContent() throws Exception {
-        GitRequestDetails details = pushDetails(baseCommit, cleanCommit);
-        FakeResponse resp = new FakeResponse();
-
-        filterNoRules().doHttpFilter(mockRequest(details), resp.mock);
-
-        PushStep diffStep = details.getSteps().stream()
-                .filter(s -> "diff".equals(s.getStepName()))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("pushDiff step not found"));
-        assertNotNull(diffStep.getContent(), "diff step must have content");
-        assertFalse(diffStep.getContent().isBlank(), "diff step content must not be blank");
     }
 }

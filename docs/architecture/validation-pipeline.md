@@ -47,3 +47,6 @@ surfaces a finding on the push record for the reviewer's attention. The content-
 WARN-only by design on this pipeline, where a reviewer sees the finding; the SCM API surface runs the same bundles as a
 blocking check, having no reviewer to show a warning to. Author attribution (commit-email attribution) can also run in
 `warn` mode via `commit.attribution-policy`.
+
+A check that is turned off in config records no step in either mode, so it appears neither in the git client output nor
+on the push record. Whether a check is on is read per push, so a config reload takes effect on the next push.

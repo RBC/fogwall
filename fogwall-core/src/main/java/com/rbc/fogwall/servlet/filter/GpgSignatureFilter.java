@@ -27,15 +27,22 @@ import lombok.extern.slf4j.Slf4j;
 public final class GpgSignatureFilter extends AbstractFogwallFilter {
 
     private final GpgSignatureCheck check;
+    private final boolean enabled;
 
     public GpgSignatureFilter(GpgConfig config) {
         super(LifecycleStage.MANDATORY_PROCESSING, Set.of(HttpOperation.PUSH));
         this.check = new GpgSignatureCheck(config);
+        this.enabled = config != null && config.isEnabled();
     }
 
     @Override
     public Optional<PushStepKind> stepKind() {
         return Optional.of(PushStepKind.GPG_SIGNATURE);
+    }
+
+    @Override
+    public boolean enabled() {
+        return enabled;
     }
 
     @Override

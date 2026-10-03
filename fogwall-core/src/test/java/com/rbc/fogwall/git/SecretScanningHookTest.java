@@ -134,6 +134,32 @@ class SecretScanningHookTest {
         assertTrue(validationContext.hasIssues(), "secret finding must become a validation issue");
     }
 
+    // ---- on/off ----
+
+    @Test
+    void enabledFollowsConfig() {
+        assertFalse(hook().enabled());
+        config = SecretScanConfig.builder().enabled(true).build();
+        assertTrue(hook().enabled());
+    }
+
+    // ---- scanner unavailable: an enabled scan that could not run blocks and shows ----
+
+    @Test
+    void scannerUnavailable_addsValidationIssue() throws Exception {
+        RevCommit c1 = createCommit("A");
+        RevCommit c2 = createCommit("B");
+        ReceivePack rp = new ReceivePack(repo);
+        ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
+        config = SecretScanConfig.builder().enabled(true).build();
+        when(runner.scanGit(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+
+        hook().onPreReceive(rp, List.of(cmd));
+
+        assertTrue(validationContext.hasIssues(), "an unavailable scanner must block, not pass or skip");
+        assertTrue(pushContext.getSteps().isEmpty(), "no PASS step may be recorded for a scan that did not run");
+    }
+
     // ---- delete command skipped ----
 
     @Test

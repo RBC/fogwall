@@ -28,16 +28,12 @@ public final class ContentPatternDiffHook implements MandatoryFogwallHook {
     private final PushContext pushContext;
 
     @Override
-    public void onPreReceive(ReceivePack rp, Collection<ReceiveCommand> commands) {
-        if (!config.isEnabled() || !config.isScanDiff()) {
-            pushContext.addStep(PushStep.builder()
-                    .stepName(getStepName())
-                    .stepOrder(displayOrder())
-                    .status(StepStatus.SKIPPED)
-                    .build());
-            return;
-        }
+    public boolean enabled() {
+        return config.scansDiff();
+    }
 
+    @Override
+    public void onPreReceive(ReceivePack rp, Collection<ReceiveCommand> commands) {
         String aggregateDiff = pushContext
                 .getStepContent(DiffGenerationHook.STEP_NAME_PUSH_DIFF)
                 .orElse(null);
