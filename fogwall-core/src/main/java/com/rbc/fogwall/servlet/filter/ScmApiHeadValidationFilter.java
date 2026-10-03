@@ -39,10 +39,12 @@ public class ScmApiHeadValidationFilter implements Filter {
 
     /**
      * Resolves a caller-supplied head ref to the tip commit SHA it currently names — differs per dialect in both the
-     * fork-encoding it parses and the credential it presents upstream. Empty means unresolvable.
+     * fork-encoding it parses and the credential it presents upstream. {@code body} is the parsed create body, for a
+     * dialect that names the head repository in a field of its own. Empty means unresolvable.
      */
     public interface HeadShaResolution {
-        Optional<String> resolve(HttpServletRequest request, ScmApiRequestContext context, String headRef);
+        Optional<String> resolve(
+                HttpServletRequest request, ScmApiRequestContext context, JsonNode body, String headRef);
     }
 
     /**
@@ -77,7 +79,7 @@ public class ScmApiHeadValidationFilter implements Filter {
             return;
         }
 
-        Optional<String> headSha = shaResolver.resolve(httpRequest, context, headRef.get());
+        Optional<String> headSha = shaResolver.resolve(httpRequest, context, body, headRef.get());
         if (headSha.isEmpty()) {
             fail(context, response, "Could not resolve head branch '" + headRef.get() + "' to a commit upstream");
             return;

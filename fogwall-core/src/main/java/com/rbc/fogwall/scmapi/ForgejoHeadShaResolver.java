@@ -6,7 +6,9 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.hc.client5.http.HttpResponseException;
 import org.apache.hc.client5.http.fluent.Request;
+import org.apache.hc.core5.http.HttpStatus;
 import org.apache.hc.core5.util.Timeout;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -15,40 +17,61 @@ import tools.jackson.databind.json.JsonMapper;
  * Resolves a {@code pulls.create} request's {@code head} field to the tip commit SHA it currently names, for
  * {@code providers.<name>.scm-api.require-validated-head} (see {@link HeadCommitValidator}).
  *
- * <p>{@code head} carries the fork as an {@code owner:branch} prefix, the same shape GitHub uses; the base repository
- * named in the URL path is otherwise assumed (see the "Fork PRs address the upstream" section of the SCM API proxy
- * notes).
+ * <p>{@code head} carries the fork only as an {@code owner:branch} prefix, the same shape GitHub uses; the base
+ * repository is named in the URL path (see the "Fork PRs address the upstream" section of the SCM API proxy notes). A
+ * fork may be renamed away from the base repository's name, so the owner alone does not name a repository. It is
+ * resolved the way Gitea/Forgejo pair a head owner with a base repository, in this order:
+ *
+ * <ol>
+ *   <li>The head owner's repository of the base repository's name, only when it is a fork whose parent is the base.
+ *   <li>The base repository's own parent, when the head owner owns it — a PR from upstream into a fork.
+ *   <li>The head owner's forks, most recently updated first, bounded to {@link #MAX_FORK_PAGES} pages — the one whose
+ *       parent is the base.
+ * </ol>
+ *
+ * <p>The base repository's fork list is never paged through: a popular upstream has thousands of forks, and this lookup
+ * sits inline on the request. A head repository none of these finds resolves empty, which the caller refuses.
  */
 @Slf4j
 public class ForgejoHeadShaResolver {
+
+    /** Pages of the head owner's forks searched before giving up — each page is one inline API call. */
+    static final int MAX_FORK_PAGES = 3;
+
+    /**
+     * Gitea/Forgejo's default {@code MAX_RESPONSE_ITEMS}. A server configured lower returns shorter pages, so only an
+     * empty page ends the search early.
+     */
+    static final int FORK_PAGE_SIZE = 50;
 
     private static final JsonMapper MAPPER = new JsonMapper();
     private static final Timeout RESOLVE_TIMEOUT = Timeout.ofSeconds(10);
 
     /**
-     * Resolves {@code head} to its tip SHA, using {@code callerToken} — the caller's own upstream credential, per the
-     * BYO-token model. Empty means the branch could not be resolved and must be treated as "no push record", never
-     * skipped.
+     * Resolves {@code head} to its tip SHA in the head repository, using {@code callerToken} — the caller's own
+     * upstream credential, per the BYO-token model. Empty means the head repository or branch could not be resolved and
+     * must be treated as "no push record", never skipped.
      */
     public Optional<String> resolveHeadSha(
             ForgejoProvider provider, OwnerRepo baseRepo, String head, String callerToken) {
         int colon = head.indexOf(':');
         String owner = colon < 0 ? baseRepo.owner() : head.substring(0, colon);
-        String branch = colon < 0 ? head : head.substring(colon + 1);
-        String encodedBranch = URLEncoder.encode(branch, StandardCharsets.UTF_8);
+        String branch = head.substring(colon + 1);
         try {
-            var request = Request.get(
-                    provider.getApiUrl() + "/repos/" + owner + "/" + baseRepo.name() + "/branches/" + encodedBranch);
-            if (callerToken != null) {
-                request.addHeader("Authorization", "token " + callerToken);
+            Optional<OwnerRepo> headRepo = owner.equalsIgnoreCase(baseRepo.owner())
+                    ? Optional.of(baseRepo)
+                    : resolveHeadRepository(provider, baseRepo, owner, callerToken);
+            if (headRepo.isEmpty()) {
+                log.warn(
+                        "No repository owned by '{}' is a fork of {}/{} for provider '{}'",
+                        owner,
+                        baseRepo.owner(),
+                        baseRepo.name(),
+                        provider.getProviderId());
+                return Optional.empty();
             }
-            ScmApiUserAgent.self(request);
-            String response = request.connectTimeout(RESOLVE_TIMEOUT)
-                    .responseTimeout(RESOLVE_TIMEOUT)
-                    .execute(FogwallHttpExecutor.instance())
-                    .returnContent()
-                    .asString();
-            return extractSha(MAPPER.readTree(response));
+            return get(provider, repoPath(headRepo.get()) + "/branches/" + encode(branch), callerToken)
+                    .flatMap(ForgejoHeadShaResolver::extractSha);
         } catch (Exception e) {
             log.warn(
                     "Failed to resolve head '{}' for provider '{}': {}",
@@ -56,6 +79,105 @@ public class ForgejoHeadShaResolver {
                     provider.getProviderId(),
                     e.getMessage());
             return Optional.empty();
+        }
+    }
+
+    private Optional<OwnerRepo> resolveHeadRepository(
+            ForgejoProvider provider, OwnerRepo baseRepo, String headOwner, String callerToken) throws Exception {
+        String baseFullName = baseRepo.owner() + "/" + baseRepo.name();
+
+        Optional<JsonNode> sameName = get(provider, repoPath(new OwnerRepo(headOwner, baseRepo.name())), callerToken);
+        if (sameName.isPresent() && isForkOf(sameName.get(), baseFullName)) {
+            return toOwnerRepo(sameName.get());
+        }
+
+        Optional<JsonNode> base = get(provider, repoPath(baseRepo), callerToken);
+        if (base.isPresent()) {
+            JsonNode parent = base.get().path("parent");
+            JsonNode parentOwner = parent.path("owner").path("login");
+            if (parentOwner.isString() && parentOwner.asString().equalsIgnoreCase(headOwner)) {
+                return toOwnerRepo(parent);
+            }
+        }
+
+        return searchOwnerForks(provider, baseFullName, headOwner, callerToken);
+    }
+
+    /**
+     * {@code /repos/search} filters by numeric owner ID only, so the owner's ID is looked up first; its
+     * {@code mode=fork} keeps the owner's non-fork repositories out of the bounded page budget.
+     */
+    private Optional<OwnerRepo> searchOwnerForks(
+            ForgejoProvider provider, String baseFullName, String headOwner, String callerToken) throws Exception {
+        Optional<JsonNode> user = get(provider, "/users/" + encode(headOwner), callerToken);
+        if (user.isEmpty() || !user.get().path("id").canConvertToLong()) {
+            return Optional.empty();
+        }
+        long uid = user.get().path("id").asLong();
+        for (int page = 1; page <= MAX_FORK_PAGES; page++) {
+            String query = "/repos/search?uid=" + uid + "&exclusive=true&mode=fork&sort=updated&order=desc&limit="
+                    + FORK_PAGE_SIZE + "&page=" + page;
+            Optional<JsonNode> result = get(provider, query, callerToken);
+            if (result.isEmpty() || result.get().path("data").isEmpty()) {
+                return Optional.empty();
+            }
+            for (JsonNode fork : result.get().path("data")) {
+                if (isForkOf(fork, baseFullName)) {
+                    return toOwnerRepo(fork);
+                }
+            }
+        }
+        log.warn(
+                "Stopped searching '{}' for a fork of {} after {} pages of {}",
+                headOwner,
+                baseFullName,
+                MAX_FORK_PAGES,
+                FORK_PAGE_SIZE);
+        return Optional.empty();
+    }
+
+    private static boolean isForkOf(JsonNode repository, String baseFullName) {
+        JsonNode parent = repository.path("parent").path("full_name");
+        return repository.path("fork").asBoolean(false)
+                && parent.isString()
+                && parent.asString().equalsIgnoreCase(baseFullName);
+    }
+
+    private static Optional<OwnerRepo> toOwnerRepo(JsonNode repository) {
+        JsonNode owner = repository.path("owner").path("login");
+        JsonNode name = repository.path("name");
+        return owner.isString() && name.isString()
+                ? Optional.of(new OwnerRepo(owner.asString(), name.asString()))
+                : Optional.empty();
+    }
+
+    private static String repoPath(OwnerRepo repo) {
+        return "/repos/" + encode(repo.owner()) + "/" + encode(repo.name());
+    }
+
+    private static String encode(String segment) {
+        return URLEncoder.encode(segment, StandardCharsets.UTF_8);
+    }
+
+    /** GETs {@code path} under the API root. Empty on 404; any other failure throws, ending the resolution. */
+    private static Optional<JsonNode> get(ForgejoProvider provider, String path, String callerToken) throws Exception {
+        var request = Request.get(provider.getApiUrl() + path);
+        if (callerToken != null) {
+            request.addHeader("Authorization", "token " + callerToken);
+        }
+        ScmApiUserAgent.self(request);
+        try {
+            String response = request.connectTimeout(RESOLVE_TIMEOUT)
+                    .responseTimeout(RESOLVE_TIMEOUT)
+                    .execute(FogwallHttpExecutor.instance())
+                    .returnContent()
+                    .asString();
+            return Optional.of(MAPPER.readTree(response));
+        } catch (HttpResponseException e) {
+            if (e.getStatusCode() == HttpStatus.SC_NOT_FOUND) {
+                return Optional.empty();
+            }
+            throw e;
         }
     }
 

@@ -66,6 +66,10 @@ the gap where a contributor pushes straight to their fork, never touching fogwal
 it. The lookup is keyed on the commit SHA alone, not the repository, since a fork push and the upstream pull/merge
 request are two different repositories.
 
+A fork pull request's head is read from the head owner's fork of the upstream, whatever that fork is named. A renamed
+fork is found among the head owner's forks, searching at most the 300 most recently pushed (GitHub) or 150 most recently
+updated (Gitea/Forgejo); a head fogwall cannot identify is refused.
+
 It defaults on, so a pull/merge request's head must trace to a push fogwall saw. Relax it (set `false`) where these
 workflows are common: a rebase, amend, or force-push after pushing through fogwall changes the SHA a validated push
 recorded, and a commit authored in the SCM's own web UI never went through fogwall at all — each leaves the head with no
