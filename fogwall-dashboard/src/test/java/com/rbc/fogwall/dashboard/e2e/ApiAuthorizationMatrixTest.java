@@ -83,8 +83,8 @@ class ApiAuthorizationMatrixTest {
 
     /**
      * User-facing mutations: self-scoped (a user's own profile or OAuth links) or push-review actions that police their
-     * own identity and permissions inside the controller. Each is an explicit {@code authenticated()} exception ahead
-     * of the admin catch-all in {@code SecurityConfig}.
+     * own identity and permissions inside the controller. Each is an explicit exception, open to {@code USER} and
+     * {@code ADMIN}, ahead of the admin catch-all in {@code SecurityConfig}.
      */
     private static final Set<String> USER_MUTATIONS = Set.of(
             "POST /api/me/emails",
@@ -119,7 +119,7 @@ class ApiAuthorizationMatrixTest {
                 unclassified.isEmpty(),
                 "Mutating endpoint(s) with no access classification. Add each to ADMIN_MUTATIONS or USER_MUTATIONS in"
                         + " this test AND ensure SecurityConfig gates it (admin mutations are covered by the default-deny"
-                        + " catch-all; user-facing ones need an explicit authenticated() matcher): " + unclassified);
+                        + " catch-all; user-facing ones need an explicit WRITER matcher): " + unclassified);
 
         Set<String> stale = new TreeSet<>(known);
         stale.removeAll(discovered);
@@ -218,6 +218,46 @@ class ApiAuthorizationMatrixTest {
         }
     }
 
+    /** Reads every session role is allowed: pushes, repositories, providers, activity and its own profile. */
+    private static final List<String> SESSION_READS = List.of(
+            "/api/me", "/api/push", "/api/repos/rules", "/api/providers", "/api/fetches", "/api/scm-api-actions");
+
+    @Test
+    void readerSeesActivityAndChangesNothing() throws Exception {
+        try (var dashboard = DashboardFixture.withLocalUsers(seededUsers())) {
+            String baseUrl = dashboard.getBaseUrl();
+            Session reader = login(baseUrl, "reader");
+            for (String path : SESSION_READS) {
+                assertEquals(200, get(reader, baseUrl, path), "A reader must be able to read " + path);
+            }
+            for (String path : AUDIT_READS) {
+                assertEquals(403, get(reader, baseUrl, path), "A reader must not read " + path);
+            }
+            assertReadOnly(reader, baseUrl, "A reader");
+        }
+    }
+
+    @Test
+    void adminAloneActsAsUser() throws Exception {
+        try (var dashboard = DashboardFixture.withLocalUsers(seededUsers())) {
+            String baseUrl = dashboard.getBaseUrl();
+            Session admin = login(baseUrl, "admin-only");
+            for (String endpoint : USER_MUTATIONS) {
+                assertNotEquals(403, probeMutation(admin, baseUrl, endpoint), "ADMIN implies USER for " + endpoint);
+            }
+        }
+    }
+
+    @Test
+    void sessionWithNoSessionRoleIsRefused() throws Exception {
+        try (var dashboard = DashboardFixture.withLocalUsers(seededUsers())) {
+            assertNotEquals(
+                    200,
+                    meStatusAfterLogin(dashboard.getBaseUrl(), "self-certify-only"),
+                    "SELF_CERTIFY alone must not admit a session");
+        }
+    }
+
     /** Linking an SCM account happens over GET, so it is a write an auditor is refused too. */
     private static final List<String> WRITING_GETS =
             List.of("GET /api/scm-oauth/{providerId}/link", "GET /api/scm-oauth/{providerId}/callback");
@@ -302,11 +342,49 @@ class ApiAuthorizationMatrixTest {
                         .username("user")
                         .passwordHash(enc.encode(PASSWORD))
                         .roles(List.of("USER"))
+                        .build(),
+                UserEntry.builder()
+                        .username("admin-only")
+                        .passwordHash(enc.encode(PASSWORD))
+                        .roles(List.of("ADMIN"))
+                        .build(),
+                UserEntry.builder()
+                        .username("reader")
+                        .passwordHash(enc.encode(PASSWORD))
+                        .roles(List.of("READER"))
+                        .build(),
+                UserEntry.builder()
+                        .username("self-certify-only")
+                        .passwordHash(enc.encode(PASSWORD))
+                        .roles(List.of("SELF_CERTIFY"))
                         .build());
     }
 
     /** An authenticated HTTP session: a cookie-backed client plus the raw CSRF token to echo on mutations. */
     private record Session(HttpClient client, String csrf) {}
+
+    /** The status of {@code /api/me} after a login attempt, whether or not the login succeeded. */
+    private static int meStatusAfterLogin(String baseUrl, String username) throws Exception {
+        var client = HttpClient.newBuilder()
+                .cookieHandler(new CookieManager(null, CookiePolicy.ACCEPT_ALL))
+                .followRedirects(HttpClient.Redirect.NORMAL)
+                .build();
+        client.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(baseUrl + "/login"))
+                        .header("Content-Type", "application/x-www-form-urlencoded")
+                        .POST(HttpRequest.BodyPublishers.ofString(
+                                "username=" + username + "&password=" + PASSWORD, StandardCharsets.UTF_8))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        return client.send(
+                        HttpRequest.newBuilder()
+                                .uri(URI.create(baseUrl + "/api/me"))
+                                .GET()
+                                .build(),
+                        HttpResponse.BodyHandlers.ofString())
+                .statusCode();
+    }
 
     private static Session login(String baseUrl, String username) throws Exception {
         var cookieManager = new CookieManager(null, CookiePolicy.ACCEPT_ALL);

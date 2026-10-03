@@ -165,11 +165,11 @@ class OidcRoleMappingE2ETest {
     }
 
     /**
-     * Verifies {@code auth.require-role-mapping: false}: a user whose OIDC groups claim matches none of the configured
-     * mappings is still granted a session with {@code ROLE_USER}, instead of being denied.
+     * Verifies {@code auth.default-role: READER}: a user whose OIDC groups claim matches none of the configured
+     * mappings signs in as {@code READER} instead of being denied, and does not act.
      */
     @Test
-    void userNotInMappedGroup_requireRoleMappingFalse_loginGrantsRoleUser() throws Exception {
+    void userNotInMappedGroup_defaultRoleReader_loginGrantsReader() throws Exception {
         var config = new FogwallConfig();
         config.getAuth().setProvider("oidc");
         config.getAuth().getOidc().setIssuerUri(mockOAuth2.getIssuerUri());
@@ -177,7 +177,7 @@ class OidcRoleMappingE2ETest {
         config.getAuth().getOidc().setClientSecret(MockOAuth2Container.CLIENT_SECRET);
         config.getAuth().setGroupsClaim("groups");
         config.getAuth().setRoleMappings(Map.of("ADMIN", List.of(ADMIN_GROUP)));
-        config.getAuth().setRequireRoleMapping(false);
+        config.getAuth().setDefaultRole("READER");
 
         try (var openDashboard = new DashboardFixture(config)) {
             String openBaseUrl = openDashboard.getBaseUrl();
@@ -229,10 +229,10 @@ class OidcRoleMappingE2ETest {
             assertEquals(
                     200,
                     meResp.statusCode(),
-                    "User not matching any group mapping must still log in when require-role-mapping=false");
+                    "User not matching any group mapping must still log in when default-role is READER");
             assertTrue(
-                    meResp.body().contains("ROLE_USER"),
-                    "Expected ROLE_USER to be granted unconditionally; got: " + meResp.body());
+                    meResp.body().contains("ROLE_READER") && !meResp.body().contains("ROLE_USER"),
+                    "Expected ROLE_READER and no ROLE_USER for an unmapped user; got: " + meResp.body());
         }
     }
 

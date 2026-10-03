@@ -93,7 +93,8 @@ auth:
 # admin    — ADMIN role; approves anything.
 # dev      — the pusher. SELF_CERTIFY role + grant on the primary test repo. All captured pushes resolve to this user.
 # reviewer — no roles; REVIEW grant on the fixture-dev org via permissions + a group.
-# observer — no roles, no grants; exists so a "can see but can't act" login is available to specs.
+# observer — READER, no grants; the "can see but can't act" login.
+# newcomer — no roles (so USER), no grants; the clean slate for specs that grant to or act as a plain user.
 users:
   - username: admin
     password-hash: '{noop}admin'
@@ -103,7 +104,7 @@ users:
 
   - username: dev
     password-hash: '{noop}password'
-    roles: [SELF_CERTIFY]
+    roles: [USER, SELF_CERTIFY]
     # github and gitlab identities are deliberately NOT declared here: capture.py has you link them via OAuth
     # before the pushes, so their rows are OAuth-verified in the dump. gitea stays config-declared as the
     # "locked (config)" example. codeberg is not linked until after the pushes — the "unmapped identity" rejection
@@ -122,6 +123,10 @@ users:
       - reviewer@example.com
 
   - username: observer
+    password-hash: '{noop}password'
+    roles: [READER]
+
+  - username: newcomer
     password-hash: '{noop}password'
 
 groups:

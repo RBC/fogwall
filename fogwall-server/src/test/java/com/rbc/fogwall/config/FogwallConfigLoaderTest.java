@@ -149,6 +149,21 @@ class FogwallConfigLoaderTest {
     }
 
     @Test
+    void loadWithOverride_authDefaultRole_andDeprecatedRequireRoleMapping() throws GestaltException, IOException {
+        assertNull(FogwallConfigLoader.load().getAuth().getDefaultRole(), "unset unless configured");
+        assertNull(FogwallConfigLoader.load().getAuth().getRequireRoleMapping(), "unset unless configured");
+
+        Path override = writeYaml("""
+                auth:
+                  default-role: READER
+                  require-role-mapping: false
+                """);
+        var auth = FogwallConfigLoader.loadWithOverride(override).getAuth();
+        assertEquals("READER", auth.getDefaultRole());
+        assertEquals(Boolean.FALSE, auth.getRequireRoleMapping());
+    }
+
+    @Test
     void loadWithOverride_diffScan_deprecatedObjectShape_foldsToMatchers() throws GestaltException, IOException {
         // The old { literals, patterns } object still loads, folded into matchers and flagged deprecated.
         Path override = writeYaml("""

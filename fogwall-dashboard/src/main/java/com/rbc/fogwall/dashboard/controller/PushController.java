@@ -15,6 +15,7 @@ import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.ProviderRegistry;
+import com.rbc.fogwall.user.Roles;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;
@@ -26,6 +27,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -591,7 +593,7 @@ public class PushController {
 
     /** Whether {@code auth} may forward {@code record} now: the pusher or an admin, on a forwardable parked push. */
     private boolean canForward(PushRecord record, Authentication auth) {
-        if (auth == null || isReadOnly(auth) || !isForwardable(record)) return false;
+        if (auth == null || !canAct(auth) || !isForwardable(record)) return false;
         return isAdmin(auth) || auth.getName().equals(record.getResolvedUser());
     }
 
@@ -606,7 +608,7 @@ public class PushController {
      * repository, not a review grant. A push with no resolved pusher is still cancelable by a collaborator.
      */
     private boolean canCancel(PushRecord record, Authentication auth) {
-        if (auth == null || isReadOnly(auth)) return false;
+        if (auth == null || !canAct(auth)) return false;
         if (isAdmin(auth)) return true;
         String user = auth.getName();
         if (user == null) return false;
@@ -617,10 +619,15 @@ public class PushController {
     }
 
     /**
-     * An auditor's session acts on no push; {@code SecurityConfig} refuses the requests, this keeps the flags honest.
+     * Only a session that may act touches a push; {@code SecurityConfig} refuses the requests, this keeps the flags
+     * honest.
      */
-    private static boolean isReadOnly(Authentication auth) {
-        return auth.getAuthorities().stream().anyMatch(a -> "ROLE_AUDITOR".equals(a.getAuthority()));
+    private static boolean canAct(Authentication auth) {
+        return Roles.canAct(auth.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .filter(a -> a.startsWith("ROLE_"))
+                .map(a -> a.substring(5))
+                .toList());
     }
 
     private static boolean isAdmin(Authentication auth) {

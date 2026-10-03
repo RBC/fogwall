@@ -326,7 +326,7 @@ export function Profile() {
     )
   if (!profile) return null
 
-  // An auditor's session is read-only: their own profile included.
+  // A reader's or auditor's session is read-only: their own profile included.
   const readOnly = isReadOnly(profile)
 
   return (

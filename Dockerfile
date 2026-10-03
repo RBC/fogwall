@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1@sha256:2780b5c3bab67f1f76c781860de469442999ed1a0d7992a5efdf2cffc0e3d769
 
 # ── Build stage ──────────────────────────────────────────────────────────────
-FROM docker.io/eclipse-temurin:25-jdk-noble@sha256:5b14970485a676b41faa08f4a7bc8716cc20915daa1d581d7a75f37a8ebaf9a8 AS builder
+FROM docker.io/eclipse-temurin:25-jdk-noble@sha256:0d623ea18d7b0fe1e12a2c0a920f7e950cad433387e5a49d3611e1507fa07602 AS builder
 
 # Install Node.js directly from the official distribution with SHA256 verification.
 # To update: download the new tarball, verify against nodejs.org/dist/vX.Y.Z/SHASUMS256.txt,
@@ -65,17 +65,12 @@ RUN sed -i \
 # ── Runtime stage: standalone server (no dashboard, no Spring, no Node) ────────
 # Not built by default — `docker build --target server .` opts in explicitly.
 # Lighter footprint: no React/Node build step, no Spring/dashboard dependencies.
-FROM docker.io/eclipse-temurin:25-jre-noble@sha256:30772b161c319f9a10c82e30fd77b7b6702c6b051e44e0e9f3d7ab5dd389a5ab AS server
-
-ARG SECURITY_UPGRADE_PKGS="libssl3t64 openssl"
+FROM docker.io/eclipse-temurin:25-jre-noble@sha256:398f810215757dc1926390014272579fb0e57c41ef1c8aa4f64ae761613a168b AS server
 
 WORKDIR /app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git \
-    && if [ -n "${SECURITY_UPGRADE_PKGS}" ]; then \
-         apt-get install -y --only-upgrade ${SECURITY_UPGRADE_PKGS}; \
-       fi \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder \
@@ -110,20 +105,12 @@ USER 1000
 ENTRYPOINT ["/app/bin/fogwall-server"]
 
 # ── Runtime stage: dashboard (default) ──────────────────────────────────────────
-FROM docker.io/eclipse-temurin:25-jre-noble@sha256:30772b161c319f9a10c82e30fd77b7b6702c6b051e44e0e9f3d7ab5dd389a5ab AS dashboard
-
-# Packages to upgrade beyond what the base image ships, space-separated.
-# Used to patch CVEs that are fixed in Ubuntu's repos but not yet picked up by
-# the upstream temurin image rebuild. Clear once the base image catches up.
-ARG SECURITY_UPGRADE_PKGS="libssl3t64 openssl"
+FROM docker.io/eclipse-temurin:25-jre-noble@sha256:398f810215757dc1926390014272579fb0e57c41ef1c8aa4f64ae761613a168b AS dashboard
 
 WORKDIR /app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git \
-    && if [ -n "${SECURITY_UPGRADE_PKGS}" ]; then \
-         apt-get install -y --only-upgrade ${SECURITY_UPGRADE_PKGS}; \
-       fi \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the built distribution

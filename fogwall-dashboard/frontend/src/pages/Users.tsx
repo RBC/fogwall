@@ -11,7 +11,7 @@ interface UsersProps {
 }
 
 /** The dashboard role a new user is created with, on top of USER. */
-type DashboardRole = 'USER' | 'AUDITOR' | 'ADMIN'
+type DashboardRole = 'READER' | 'USER' | 'AUDITOR' | 'ADMIN'
 
 const PUSH_STAT_CONFIG: {
   status: PushStatus
@@ -78,6 +78,7 @@ function AddUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<DashboardRole>('USER')
   const [selfCertify, setSelfCertify] = useState(false)
+  const canAct = role === 'USER' || role === 'ADMIN'
   const [submitting, setSubmitting] = useState(false)
   const toast = useToast()
 
@@ -85,9 +86,8 @@ function AddUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
     e.preventDefault()
     setSubmitting(true)
     try {
-      const roles = ['USER']
-      if (role !== 'USER') roles.push(role)
-      if (selfCertify) roles.push('SELF_CERTIFY')
+      const roles: string[] = role === 'ADMIN' ? ['USER', 'ADMIN'] : [role]
+      if (selfCertify && canAct) roles.push('SELF_CERTIFY')
       await createUser(username.trim(), password, email.trim() || undefined, roles)
       onCreated()
       onClose()
@@ -146,20 +146,23 @@ function AddUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
               onChange={(e) => setRole(e.target.value as DashboardRole)}
               className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"
             >
+              <option value="READER">Reader — sees pushes, repositories and activity</option>
               <option value="USER">User</option>
               <option value="AUDITOR">Auditor — reads users, groups and permissions</option>
               <option value="ADMIN">Admin</option>
             </select>
           </div>
-          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer dark:text-gray-300">
-            <input
-              type="checkbox"
-              checked={selfCertify}
-              onChange={(e) => setSelfCertify(e.target.checked)}
-              className="rounded"
-            />
-            Grant self-certify role
-          </label>
+          {canAct && (
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer dark:text-gray-300">
+              <input
+                type="checkbox"
+                checked={selfCertify}
+                onChange={(e) => setSelfCertify(e.target.checked)}
+                className="rounded"
+              />
+              Grant self-certify role
+            </label>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"

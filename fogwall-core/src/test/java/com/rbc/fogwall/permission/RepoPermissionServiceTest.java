@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
 import com.rbc.fogwall.user.StaticUserStore;
+import com.rbc.fogwall.user.UserEntry;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,11 +19,16 @@ import org.junit.jupiter.api.Timeout;
  */
 class RepoPermissionServiceTest {
 
+    /** The users the tests grant to. Each holds the default {@code USER} role, so their grants count. */
+    private static final StaticUserStore USERS = new StaticUserStore(List.of(
+            UserEntry.builder().username("alice").build(),
+            UserEntry.builder().username("bob").build()));
+
     RepoPermissionService svc;
 
     @BeforeEach
     void setUp() {
-        svc = new RepoPermissionService(new InMemoryRepoPermissionStore(), new StaticUserStore(List.of()));
+        svc = new RepoPermissionService(new InMemoryRepoPermissionStore(), USERS);
     }
 
     private RepoPermission grant(String username, String provider, String value) {

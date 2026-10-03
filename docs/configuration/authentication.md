@@ -51,7 +51,7 @@ auth:
   # When a user is a member of any listed group, the role is granted.
   role-mappings:
     ADMIN:
-      - git-admins
+      - fogwall-admins
       - security-team
 ```
 
@@ -79,7 +79,7 @@ auth:
 
   role-mappings:
     ADMIN:
-      - CN=git-admins,OU=Groups,DC=corp,DC=example,DC=com
+      - CN=fogwall-admins,OU=Groups,DC=corp,DC=example,DC=com
 ```
 
 <!-- prettier-ignore-start -->
@@ -146,7 +146,7 @@ auth:
   # Map fogwall role names to lists of OIDC group values from the claim above.
   role-mappings:
     ADMIN:
-      - git-admins
+      - fogwall-admins
 ```
 
 ### Entra ID (Azure AD)
@@ -212,28 +212,60 @@ the token.
 `auth.role-mappings` applies to LDAP, AD, and OIDC. Keys are role names (without the `ROLE_` prefix); values are lists
 of group names or claim values from the IdP.
 
-| Role      | Dashboard access                                                                   |
-| --------- | ---------------------------------------------------------------------------------- |
-| `USER`    | View and act on pushes awaiting approval                                           |
-| `AUDITOR` | View pushes + read users, groups and permissions; changes nothing, even with ADMIN |
-| `ADMIN`   | All USER permissions + create/delete users, reset passwords, manage identities     |
+| Role           | Dashboard access                                                                   |
+| -------------- | ---------------------------------------------------------------------------------- |
+| `READER`       | View pushes, repositories, providers, and fetch and SCM API activity               |
+| `USER`         | View and act on pushes awaiting approval                                           |
+| `AUDITOR`      | View pushes + read users, groups and permissions; changes nothing, even with ADMIN |
+| `ADMIN`        | All USER permissions + create/delete users, reset passwords, manage identities     |
+| `SELF_CERTIFY` | The capability to self-approve; admits no one on its own                           |
 
-When `role-mappings` is empty, the operator has not configured group-based access control: `ROLE_USER` is granted to
-every authenticated user (open mode). When `role-mappings` is non-empty, access is **deny-by-default** — a user whose
-IdP groups don't match any mapping authenticates successfully against the directory/IdP but is refused access by
-fogwall.
+A mapping grants the role it names and nothing else, except that `ADMIN` brings `USER` with it. A user needs `USER` or
+`ADMIN` to act, so map the group whose members push and review to `USER`.
 
 ```yaml
 auth:
   role-mappings:
+    USER:
+      - fogwall-users
     ADMIN:
-      - git-admins
+      - fogwall-admins
     AUDITOR:
-      - git-auditors
-  # Deny-by-default is the correct posture for regulated environments and is the default.
-  # Set to false to treat the IdP purely as an authentication mechanism (SSO convenience): any
-  # user who authenticates successfully is granted ROLE_USER even if no group mapping matches.
-  # role-mappings (if present) then only grant additional roles on top. No-op when role-mappings
-  # is empty, since open mode is already the behaviour in that case.
-  require-role-mapping: true
+      - fogwall-auditors
+    SELF_CERTIFY:
+      - fogwall-trusted
+  default-role: NONE
 ```
+
+### Default role
+
+`auth.default-role` decides what happens to a user whose mappings give them none of `READER`, `USER`, `AUDITOR` or
+`ADMIN`: one matching no group, or one matched only by `SELF_CERTIFY`. The default role is added to whatever they did
+match.
+
+| `default-role`   | A user with no mapped session role                                 |
+| ---------------- | ------------------------------------------------------------------ |
+| `NONE` (default) | Is refused sign-in                                                 |
+| `READER`         | Signs in, sees what is going on and changes nothing                |
+| `USER`           | Signs in and acts, subject to repository permissions like any user |
+| `AUDITOR`        | Signs in read-only, and also reads users, groups and permissions   |
+
+Startup fails when `role-mappings` is empty and `default-role` is `NONE`, since no one could sign in. It also warns
+about each mapping that admits no one alone, such as `SELF_CERTIFY`, unless `default-role` is `USER`.
+
+`auth.require-role-mapping` is deprecated in favour of `default-role` and still accepted with a startup warning: `true`
+reads as `NONE`, `false` as `READER`. Setting both fails startup.
+
+### Upgrading from 1.4
+
+Earlier releases granted `USER` with every mapping and to every user admitted without one. A deployment that relied on
+that loses the ability to act until it maps a `USER` group or sets `default-role: USER`:
+
+- with an empty `role-mappings`, startup fails until `default-role` is set to a role;
+- users admitted by `require-role-mapping: false` now sign in as `READER`;
+- users matched only by a `SELF_CERTIFY` mapping are refused, or sign in as `READER` with `require-role-mapping: false`;
+- users matched only by an `AUDITOR` mapping are unaffected, since an auditor never acts.
+
+A configured local user with no `roles:` is still a `USER`, and one with a list holds exactly that list. A local user
+listed as `roles: [SELF_CERTIFY]` alone is now refused sign-in and needs `roles: [USER, SELF_CERTIFY]`; startup logs a
+warning naming each such user.

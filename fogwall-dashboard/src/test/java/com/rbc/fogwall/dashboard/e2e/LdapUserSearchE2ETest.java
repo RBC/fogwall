@@ -42,6 +42,7 @@ class LdapUserSearchE2ETest {
 
         var config = new FogwallConfig();
         config.getAuth().setProvider("ldap");
+        config.getAuth().setDefaultRole("READER");
         config.getAuth().getLdap().setUrl(ldap.getLdapUrl());
         // Deliberately leave userDnPatterns at its default — userSearchFilter takes precedence.
         config.getAuth().getLdap().setUserSearchFilter(OpenLdapContainer.USER_SEARCH_FILTER);
@@ -143,6 +144,7 @@ class LdapUserSearchE2ETest {
 
         var config = new FogwallConfig();
         config.getAuth().setProvider("ldap");
+        config.getAuth().setDefaultRole("READER");
         config.getAuth().getLdap().setUrl(ldap.getLdapUrl());
         config.getAuth().getLdap().setUserSearchFilter(OpenLdapContainer.USER_SEARCH_FILTER);
         config.getAuth().getLdap().setUserSearchBase(OpenLdapContainer.USER_SEARCH_BASE);

@@ -30,9 +30,9 @@ test.describe('group CRUD', () => {
       .locator('div')
       .filter({ has: page.getByRole('heading', { name: 'Members' }) })
       .last()
-    await members.getByRole('combobox').selectOption('observer')
+    await members.getByRole('combobox').selectOption('newcomer')
     await members.getByRole('button', { name: 'Add', exact: true }).click()
-    await expect(members.getByText('observer', { exact: true })).toBeVisible()
+    await expect(members.getByText('newcomer', { exact: true })).toBeVisible()
 
     // rule
     const rules = page
@@ -56,7 +56,7 @@ test.describe('group CRUD', () => {
     await page.getByText(name).click()
 
     // the member inherits it: visible on their Permissions tab and honoured by the evaluator
-    await page.goto('/dashboard/users/observer')
+    await page.goto('/dashboard/users/newcomer')
     await page.getByRole('button', { name: 'Permissions', exact: true }).click()
     await expect(page.getByText(name)).toBeVisible()
     await expect(page.getByRole('row').filter({ hasText: value })).toBeVisible()
@@ -80,7 +80,7 @@ test.describe('group CRUD', () => {
     await expect(rules.getByRole('row').filter({ hasText: value })).toHaveCount(0)
     await members
       .locator('li')
-      .filter({ hasText: 'observer' })
+      .filter({ hasText: 'newcomer' })
       .getByRole('button', { name: 'Remove' })
       .click()
     await expect(members.getByText('No members.')).toBeVisible()

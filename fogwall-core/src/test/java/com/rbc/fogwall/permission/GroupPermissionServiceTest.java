@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
 import com.rbc.fogwall.user.StaticUserStore;
+import com.rbc.fogwall.user.UserEntry;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,13 +13,18 @@ import org.junit.jupiter.api.Test;
 /** Tests for {@link RepoPermissionService} group-union semantics using in-memory stores. */
 class GroupPermissionServiceTest {
 
+    /** The users the tests grant to. Each holds the default {@code USER} role, so their grants count. */
+    private static final StaticUserStore USERS = new StaticUserStore(List.of(
+            UserEntry.builder().username("alice").build(),
+            UserEntry.builder().username("bob").build()));
+
     RepoPermissionService svc;
     InMemoryGroupPermissionStore groupStore;
 
     @BeforeEach
     void setUp() {
         groupStore = new InMemoryGroupPermissionStore();
-        svc = new RepoPermissionService(new InMemoryRepoPermissionStore(), groupStore, new StaticUserStore(List.of()));
+        svc = new RepoPermissionService(new InMemoryRepoPermissionStore(), groupStore, USERS);
     }
 
     private PermissionGroup group(String name) {
@@ -216,8 +222,7 @@ class GroupPermissionServiceTest {
 
     @Test
     void noGroupStore_noDirectPermissions_denied() {
-        RepoPermissionService noGroupSvc =
-                new RepoPermissionService(new InMemoryRepoPermissionStore(), new StaticUserStore(List.of()));
+        RepoPermissionService noGroupSvc = new RepoPermissionService(new InMemoryRepoPermissionStore(), USERS);
         assertFalse(noGroupSvc.isAllowedToPush("alice", "github", "/acme/repo"));
     }
 

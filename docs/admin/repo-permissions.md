@@ -32,8 +32,9 @@ it, pushes in `ui` approval mode wait indefinitely for someone else to approve t
 
 Self-approval requires **two** things — both must be in place:
 
-1. The `SELF_CERTIFY` role (capability gate) — granted via `auth.role-mappings` or `roles: [SELF_CERTIFY]` in local
-   config. This is the org-level attestation that the user is trusted to self-certify at all.
+1. The `SELF_CERTIFY` role (capability gate), alongside `USER` — granted via `auth.role-mappings` or
+   `roles: [USER, SELF_CERTIFY]` in local config. This is the org-level attestation that the user is trusted to
+   self-certify at all.
 2. A `SELF_CERTIFY` permission entry for the specific repo — the per-repo entitlement.
 
 To set up a trusted solo contributor who approves their own work:
@@ -43,7 +44,7 @@ To set up a trusted solo contributor who approves their own work:
 users:
   - username: bob
     password-hash: "{bcrypt}$2a$12$..."
-    roles: [SELF_CERTIFY] # or via auth.role-mappings for LDAP/AD/OIDC
+    roles: [USER, SELF_CERTIFY] # or via auth.role-mappings for LDAP/AD/OIDC
 
 # Step 2: grant the per-repo entitlement
 permissions:

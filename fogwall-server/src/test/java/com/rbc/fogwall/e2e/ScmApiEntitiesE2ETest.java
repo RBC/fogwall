@@ -200,7 +200,7 @@ class ScmApiEntitiesE2ETest {
                 .matchType(MatchType.REGEX)
                 .grant(RepoPermission.Grant.PROPOSE)
                 .build());
-        var permissionService = new RepoPermissionService(permissionStore, new StaticUserStore(List.of()));
+        var permissionService = new RepoPermissionService(permissionStore, userStore);
 
         var block = BlockConfig.builder()
                 .rules(List.of(MatchRule.literal(BLOCKED_TERM)))

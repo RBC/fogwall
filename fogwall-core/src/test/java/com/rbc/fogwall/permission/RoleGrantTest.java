@@ -11,8 +11,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
-/** An auditor holds no repository grant, however the grant reaches them. */
-class AuditorGrantTest {
+/** A repository grant counts only for a user whose roles permit acting, however the grant reaches them. */
+class RoleGrantTest {
 
     private static final String PROVIDER = "github";
     private static final String REPO = "/acme/repo";
@@ -26,7 +26,10 @@ class AuditorGrantTest {
         var users = new StaticUserStore(List.of(
                 user("auditor", "USER", "AUDITOR"),
                 user("admin-auditor", "USER", "ADMIN", "AUDITOR"),
-                user("dev", "USER")));
+                user("dev", "USER"),
+                user("admin", "ADMIN"),
+                user("reader", "READER"),
+                user("self-certifier", "SELF_CERTIFY")));
         svc = new RepoPermissionService(new InMemoryRepoPermissionStore(), groupStore, users);
     }
 
@@ -85,6 +88,72 @@ class AuditorGrantTest {
     void auditorRole_winsOverAdmin() {
         grantDirect("admin-auditor", RepoPermission.Grant.PUSH);
         assertFalse(svc.isAllowedToPush("admin-auditor", PROVIDER, REPO));
+    }
+
+    @ParameterizedTest
+    @EnumSource(RepoPermission.Grant.class)
+    void directGrant_ignoredForReader(RepoPermission.Grant grant) {
+        grantDirect("reader", grant);
+        assertEquals(
+                new RepoPermissionService.GrantResult.NotGranted(
+                        RepoPermissionService.GrantResult.Reason.ROLE_CANNOT_ACT),
+                svc.evaluateGrant("reader", PROVIDER, REPO, grant));
+        assertEquals(
+                new RepoPermissionService.GrantResult.NotGranted(
+                        RepoPermissionService.GrantResult.Reason.NO_MATCHING_GRANT),
+                svc.evaluateGrant("reader", PROVIDER, "/acme/other", grant),
+                "With nothing matching, the reason is the missing grant, not the role");
+        assertFalse(svc.hasAnyGrant("reader", PROVIDER, REPO));
+    }
+
+    @Test
+    void readerWithUser_actsAsUser() {
+        svc = new RepoPermissionService(
+                new InMemoryRepoPermissionStore(),
+                groupStore,
+                new StaticUserStore(List.of(user("reader-user", "READER", "USER"))));
+        grantDirect("reader-user", RepoPermission.Grant.PUSH);
+        assertTrue(svc.isAllowedToPush("reader-user", PROVIDER, REPO));
+    }
+
+    @Test
+    void groupGrant_ignoredForReader() {
+        PermissionGroup g = PermissionGroup.builder()
+                .name("readers")
+                .source(PermissionGroup.Source.DB)
+                .build();
+        groupStore.saveGroup(g);
+        groupStore.saveRule(GroupPermissionRule.builder()
+                .groupId(g.getId())
+                .provider(PROVIDER)
+                .value(REPO)
+                .matchType(MatchType.LITERAL)
+                .grant(RepoPermission.Grant.PUSH)
+                .build());
+        groupStore.addMember(g.getId(), "reader");
+        assertFalse(svc.isAllowedToPush("reader", PROVIDER, REPO));
+    }
+
+    @Test
+    void adminAlone_actsAsUser() {
+        grantDirect("admin", RepoPermission.Grant.PUSH_AND_REVIEW);
+        assertTrue(svc.isAllowedToPush("admin", PROVIDER, REPO));
+        assertTrue(svc.isAllowedToReview("admin", PROVIDER, REPO));
+    }
+
+    @Test
+    void selfCertifyAlone_holdsNoGrant() {
+        grantDirect("self-certifier", RepoPermission.Grant.SELF_CERTIFY);
+        grantDirect("self-certifier", RepoPermission.Grant.PUSH);
+        assertFalse(svc.isAllowedToPush("self-certifier", PROVIDER, REPO));
+        assertFalse(svc.isBypassReviewAllowed("self-certifier", PROVIDER, REPO));
+    }
+
+    @Test
+    void userWithNoRecord_holdsNoGrant() {
+        grantDirect("ghost", RepoPermission.Grant.PUSH);
+        assertFalse(svc.isAllowedToPush("ghost", PROVIDER, REPO));
+        assertFalse(svc.hasAnyGrant("ghost", PROVIDER, REPO));
     }
 
     @Test

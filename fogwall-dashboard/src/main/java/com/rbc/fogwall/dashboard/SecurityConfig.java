@@ -10,6 +10,7 @@ import com.rbc.fogwall.config.LdapAuthConfig;
 import com.rbc.fogwall.config.OidcAuthConfig;
 import com.rbc.fogwall.user.EmailConflictException;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
+import com.rbc.fogwall.user.Roles;
 import com.rbc.fogwall.user.UserStore;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,6 +36,7 @@ import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -45,7 +47,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.authorization.AuthenticatedAuthorizationManager;
 import org.springframework.security.authorization.AuthorityAuthorizationManager;
 import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.authorization.AuthorizationManagers;
@@ -156,22 +157,18 @@ public class SecurityConfig {
                         (req, res, e) -> res.sendError(401),
                         req -> req.getServletPath().startsWith("/api/")));
 
+        Optional<String> defaultRole = Optional.empty();
+        if ("local".equals(provider)) {
+            warnOnLocalUsersWithoutSessionRole();
+        } else {
+            defaultRole = IdpRoleMapper.defaultRole(authCfg);
+            logUnmappedAccess(authCfg.getRoleMappings(), defaultRole);
+        }
         var successHandler = idpProvisioningSuccessHandler();
         switch (provider) {
             case "ldap" ->
-                configureLdapAuth(
-                        http,
-                        authCfg.getLdap(),
-                        successHandler,
-                        authCfg.getRoleMappings(),
-                        authCfg.isRequireRoleMapping());
-            case "ad" ->
-                configureAdAuth(
-                        http,
-                        authCfg.getAd(),
-                        successHandler,
-                        authCfg.getRoleMappings(),
-                        authCfg.isRequireRoleMapping());
+                configureLdapAuth(http, authCfg.getLdap(), successHandler, authCfg.getRoleMappings(), defaultRole);
+            case "ad" -> configureAdAuth(http, authCfg.getAd(), successHandler, authCfg.getRoleMappings(), defaultRole);
             case "oidc" ->
                 configureOidcAuth(
                         http,
@@ -179,7 +176,7 @@ public class SecurityConfig {
                         successHandler,
                         authCfg.getRoleMappings(),
                         authCfg.getGroupsClaim(),
-                        authCfg.isRequireRoleMapping());
+                        defaultRole);
             case "local" -> configureLocalAuth(http, successHandler);
             default ->
                 throw new IllegalStateException(
@@ -194,14 +191,15 @@ public class SecurityConfig {
      * one place (see {@code ApiAuthorizationMatrixTest}, which discovers every controller endpoint by reflection and
      * asserts each mutating one is either admin-gated or an intentional user-facing exception).
      *
-     * <p>The model is default-deny for mutations: reads fall through to {@code authenticated()}, but every
-     * {@code POST/PUT/PATCH/DELETE} under {@code /api} that is not explicitly granted to users requires
-     * {@code ROLE_ADMIN}. A session holding {@code ROLE_AUDITOR} reads the access records and is refused every
-     * mutation, its own profile included, even when it also holds {@code ROLE_ADMIN}. A newly added mutating endpoint
-     * that nobody classified therefore fails closed (a non-admin gets 403) rather than inheriting any-authenticated
-     * access — a forgotten gate becomes a visible functional bug, not a silent privilege-escalation hole. The explicit
-     * user-facing mutations below are self-scoped (a user's own profile, OAuth links) or run their own
-     * identity/permission checks inside the controller (push approve, reject, cancel).
+     * <p>The model is default-deny for mutations: reads need any session role ({@code READER}, {@code USER},
+     * {@code AUDITOR} or {@code ADMIN}), the user-facing mutations need {@code ROLE_USER} or {@code ROLE_ADMIN}, and
+     * every other {@code POST/PUT/PATCH/DELETE} under {@code /api} requires {@code ROLE_ADMIN}. A session holding
+     * {@code ROLE_AUDITOR} reads the access records and is refused every mutation, its own profile included, even when
+     * it also holds {@code ROLE_ADMIN}. A newly added mutating endpoint that nobody classified therefore fails closed
+     * (a non-admin gets 403) rather than inheriting any-authenticated access — a forgotten gate becomes a visible
+     * functional bug, not a silent privilege-escalation hole. The explicit user-facing mutations below are self-scoped
+     * (a user's own profile, OAuth links) or run their own identity/permission checks inside the controller (push
+     * approve, reject, cancel).
      */
     private static void authorizeApiRequests(
             AuthorizeHttpRequestsConfigurer<HttpSecurity>.AuthorizationManagerRequestMatcherRegistry auth) {
@@ -255,8 +253,8 @@ public class SecurityConfig {
         for (HttpMethod method : MUTATIONS) {
             auth.requestMatchers(method, "/api/**").access(ADMIN_WRITER);
         }
-        // Reads and the login/logout/OAuth endpoints: any authenticated user.
-        auth.anyRequest().authenticated();
+        // Reads and the login/logout/OAuth endpoints: any session holding a known role.
+        auth.anyRequest().access(SESSION);
     }
 
     private static final List<HttpMethod> MUTATIONS =
@@ -266,11 +264,49 @@ public class SecurityConfig {
     private static final AuthorizationManager<RequestAuthorizationContext> NOT_AUDITOR =
             AuthorizationManagers.not(AuthorityAuthorizationManager.hasRole("AUDITOR"));
 
+    /** A signed-in session holding one of the session roles; {@code SELF_CERTIFY} alone admits nothing. */
+    private static final AuthorizationManager<RequestAuthorizationContext> SESSION =
+            AuthorityAuthorizationManager.hasAnyRole(Roles.SESSION_ROLES.toArray(String[]::new));
+
+    /** A session that may act: {@code USER} or {@code ADMIN}, and not {@code AUDITOR}. */
     private static final AuthorizationManager<RequestAuthorizationContext> WRITER =
-            AuthorizationManagers.allOf(AuthenticatedAuthorizationManager.authenticated(), NOT_AUDITOR);
+            AuthorizationManagers.allOf(AuthorityAuthorizationManager.hasAnyRole(Roles.USER, Roles.ADMIN), NOT_AUDITOR);
 
     private static final AuthorizationManager<RequestAuthorizationContext> ADMIN_WRITER =
             AuthorizationManagers.allOf(AuthorityAuthorizationManager.hasRole("ADMIN"), NOT_AUDITOR);
+
+    /** Names each configured local user whose roles admit no session, so the refusal at sign-in is not a surprise. */
+    private void warnOnLocalUsersWithoutSessionRole() {
+        fogwallConfig.getUsers().stream()
+                .filter(u -> !u.getRoles().isEmpty() && !Roles.admitsSession(u.getRoles()))
+                .forEach(u -> log.warn(
+                        "users[{}] has roles {} and will be refused sign-in: add one of {}, e.g. roles: [USER, {}]",
+                        u.getUsername(),
+                        u.getRoles(),
+                        Roles.SESSION_ROLES,
+                        String.join(", ", u.getRoles())));
+    }
+
+    /**
+     * Logs what happens to IdP users whose mappings admit no session, and warns about each mapping that admits no one
+     * alone while the default role does not let its users act.
+     */
+    private static void logUnmappedAccess(Map<String, List<String>> roleMappings, Optional<String> defaultRole) {
+        if (!defaultRole.equals(Optional.of(Roles.USER))) {
+            for (String role : IdpRoleMapper.rolesAdmittingNoSession(roleMappings)) {
+                log.warn(
+                        "auth.role-mappings.{} grants no USER role: users matched only by it are {} until a USER"
+                                + " mapping covers them",
+                        role,
+                        defaultRole
+                                .map(r -> "signed in as " + r + " and cannot act")
+                                .orElse("refused sign-in"));
+            }
+        }
+        log.info(
+                "IdP users matching no session-role mapping {}",
+                defaultRole.map(r -> "sign in as " + r).orElse("are refused (auth.default-role: NONE)"));
+    }
 
     @Bean
     HttpSessionListener sessionTimeoutListener() {
@@ -309,7 +345,7 @@ public class SecurityConfig {
             LdapAuthConfig ldapCfg,
             AuthenticationSuccessHandler successHandler,
             Map<String, List<String>> roleMappings,
-            boolean requireRoleMapping)
+            Optional<String> defaultRole)
             throws Exception {
         if (ldapCfg.getUrl().isBlank()) {
             throw new IllegalStateException("auth.provider=ldap requires auth.ldap.url to be set in fogwall.yml");
@@ -342,8 +378,6 @@ public class SecurityConfig {
             populator.setConvertToUpperCase(false);
             populator.setSearchSubtree(true);
             ldapProvider = new LdapAuthenticationProvider(authenticator, populator);
-            ldapProvider.setAuthoritiesMapper(
-                    ldapAuthorities -> mapIdpGroupsToRoles(ldapAuthorities, roleMappings, requireRoleMapping));
             log.info(
                     "LDAP group search enabled: base={}, filter={}",
                     ldapCfg.getGroupSearchBase(),
@@ -351,6 +385,8 @@ public class SecurityConfig {
         } else {
             ldapProvider = new LdapAuthenticationProvider(authenticator);
         }
+        ldapProvider.setAuthoritiesMapper(
+                ldapAuthorities -> mapIdpGroupsToRoles(ldapAuthorities, roleMappings, defaultRole));
         ldapProvider.setUserDetailsContextMapper(new LdapEmailContextMapper());
 
         http.authenticationProvider(ldapProvider)
@@ -385,7 +421,7 @@ public class SecurityConfig {
             AdAuthConfig adCfg,
             AuthenticationSuccessHandler successHandler,
             Map<String, List<String>> roleMappings,
-            boolean requireRoleMapping)
+            Optional<String> defaultRole)
             throws Exception {
         if (adCfg.getDomain().isBlank()) {
             throw new IllegalStateException("auth.provider=ad requires auth.ad.domain to be set in fogwall.yml");
@@ -413,14 +449,14 @@ public class SecurityConfig {
             populator.setConvertToUpperCase(false);
             populator.setSearchSubtree(true);
             adProvider.setAuthoritiesPopulator(populator);
-            adProvider.setAuthoritiesMapper(
-                    ldapAuthorities -> mapIdpGroupsToRoles(ldapAuthorities, roleMappings, requireRoleMapping));
             log.info(
                     "AD group search enabled: base={}, filter={}",
                     adCfg.getGroupSearchBase(),
                     adCfg.getGroupSearchFilter());
         }
 
+        adProvider.setAuthoritiesMapper(
+                ldapAuthorities -> mapIdpGroupsToRoles(ldapAuthorities, roleMappings, defaultRole));
         adProvider.setUserDetailsContextMapper(new LdapEmailContextMapper());
 
         http.authenticationProvider(adProvider)
@@ -445,7 +481,7 @@ public class SecurityConfig {
             AuthenticationSuccessHandler successHandler,
             Map<String, List<String>> roleMappings,
             String groupsClaim,
-            boolean requireRoleMapping)
+            Optional<String> defaultRole)
             throws Exception {
         if (oidcCfg.getIssuerUri().isBlank() || oidcCfg.getClientId().isBlank()) {
             throw new IllegalStateException(
@@ -481,7 +517,7 @@ public class SecurityConfig {
                             .successHandler(successHandler)
                             .failureUrl("/login.html?error")
                             .userInfoEndpoint(userInfo -> userInfo.oidcUserService(buildOidcUserService(
-                                    roleMappings, groupsClaim, oidcCfg.isSkipUserInfo(), requireRoleMapping)));
+                                    roleMappings, groupsClaim, oidcCfg.isSkipUserInfo(), defaultRole)));
 
                     if (usePrivateKeyJwt) {
                         RSAKey rsaKey =
@@ -565,7 +601,6 @@ public class SecurityConfig {
                 .filter(a -> a.startsWith("ROLE_"))
                 .map(a -> a.substring(5))
                 .toList();
-        if (roles.isEmpty()) roles = List.of("USER");
         jdbc.upsertUser(username, roles);
         if (email != null && !email.isBlank()) {
             try {
@@ -589,17 +624,13 @@ public class SecurityConfig {
      * {@code groupsClaim} is read from the OIDC token; any group present in {@code roleMappings} results in a
      * corresponding {@code ROLE_xxx} authority being added to the session.
      *
-     * <p>If {@code roleMappings} is empty, {@code ROLE_USER} is granted to every authenticated user (open mode). If
-     * {@code roleMappings} is non-empty and {@code requireRoleMapping} is {@code true} (default), access is
-     * <em>deny-by-default</em>: the user must belong to at least one mapped group, otherwise authentication is
-     * rejected. If {@code requireRoleMapping} is {@code false}, a user matching no mapped group is still granted
-     * {@code ROLE_USER} instead of being denied.
+     * <p>{@link IdpRoleMapper} decides the roles and whether the login is refused.
      */
     private OidcUserService buildOidcUserService(
             Map<String, List<String>> roleMappings,
             String groupsClaim,
             boolean skipUserInfo,
-            boolean requireRoleMapping) {
+            Optional<String> defaultRole) {
         OidcUserService service = new OidcUserService() {
             @Override
             public OidcUser loadUser(OidcUserRequest userRequest) {
@@ -640,40 +671,20 @@ public class SecurityConfig {
                 if (oidcUser.getClaims().get(nameAttributeKey) == null) {
                     throw missingNameAttribute(nameAttributeKey, "merged token", oidcUser.getClaims(), null);
                 }
-                if (roleMappings.isEmpty()) {
-                    Set<GrantedAuthority> authorities = new LinkedHashSet<>(oidcUser.getAuthorities());
-                    authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
-                    return new DefaultOidcUser(
-                            authorities, oidcUser.getIdToken(), oidcUser.getUserInfo(), nameAttributeKey);
-                }
                 List<String> groups = oidcUser.getClaimAsStringList(groupsClaim);
                 if (groups == null) groups = List.of();
-                Set<GrantedAuthority> authorities = new LinkedHashSet<>();
-                for (Map.Entry<String, List<String>> entry : roleMappings.entrySet()) {
-                    List<String> mappedGroups = entry.getValue();
-                    if (groups.stream().anyMatch(mappedGroups::contains)) {
-                        String role = entry.getKey().toUpperCase(java.util.Locale.ROOT);
-                        authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
-                        authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
-                        log.debug("Granted ROLE_{} to OIDC user '{}' via group membership", role, oidcUser.getName());
-                    }
-                }
-                if (authorities.isEmpty()) {
-                    if (!requireRoleMapping) {
-                        log.debug(
-                                "OIDC user '{}' matched no authorised group; granting ROLE_USER (require-role-mapping=false)",
-                                oidcUser.getName());
-                        authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
-                        return new DefaultOidcUser(
-                                authorities, oidcUser.getIdToken(), oidcUser.getUserInfo(), nameAttributeKey);
-                    }
-                    log.warn("OIDC login denied for '{}': not a member of any authorised group", oidcUser.getName());
-                    throw new OAuth2AuthenticationException(
-                            new OAuth2Error("access_denied"),
-                            "Access not granted: your account is not a member of any authorised group");
-                }
+                Set<String> roles = IdpRoleMapper.rolesFor(groups, roleMappings, defaultRole)
+                        .orElseThrow(() -> {
+                            log.warn(
+                                    "OIDC login denied for '{}': not a member of any authorised group",
+                                    oidcUser.getName());
+                            return new OAuth2AuthenticationException(
+                                    new OAuth2Error("access_denied"),
+                                    "Access not granted: your account is not a member of any authorised group");
+                        });
+                log.debug("OIDC user '{}' signed in with roles {}", oidcUser.getName(), roles);
                 return new DefaultOidcUser(
-                        authorities, oidcUser.getIdToken(), oidcUser.getUserInfo(), nameAttributeKey);
+                        toAuthorities(roles), oidcUser.getIdToken(), oidcUser.getUserInfo(), nameAttributeKey);
             }
         };
         if (skipUserInfo) {
@@ -736,44 +747,26 @@ public class SecurityConfig {
                 cause);
     }
 
-    /**
-     * Maps IdP-supplied group authorities (from LDAP/AD group search) to fogwall roles using {@code roleMappings}.
-     *
-     * <p>If {@code roleMappings} is empty the operator has not configured group-based access control, so
-     * {@code ROLE_USER} is granted to every authenticated user (open mode). If {@code roleMappings} is non-empty and
-     * {@code requireRoleMapping} is {@code true} (default), access is <em>deny-by-default</em>: the user must be a
-     * member of at least one mapped group, otherwise authentication is rejected with {@link BadCredentialsException}.
-     * If {@code requireRoleMapping} is {@code false}, a user matching no mapped group is still granted
-     * {@code ROLE_USER} instead of being denied.
-     */
+    /** Maps the groups an LDAP or AD bind reports to fogwall roles; {@link IdpRoleMapper} decides. */
     private Set<GrantedAuthority> mapIdpGroupsToRoles(
             Collection<? extends GrantedAuthority> ldapAuthorities,
             Map<String, List<String>> roleMappings,
-            boolean requireRoleMapping) {
-        if (roleMappings.isEmpty()) {
-            return Set.of(new SimpleGrantedAuthority("ROLE_USER"));
-        }
-        Set<GrantedAuthority> mapped = new LinkedHashSet<>();
-        for (GrantedAuthority authority : ldapAuthorities) {
-            String groupName = authority.getAuthority();
-            for (Map.Entry<String, List<String>> entry : roleMappings.entrySet()) {
-                if (entry.getValue().contains(groupName)) {
-                    mapped.add(new SimpleGrantedAuthority("ROLE_USER"));
-                    mapped.add(
-                            new SimpleGrantedAuthority("ROLE_" + entry.getKey().toUpperCase(java.util.Locale.ROOT)));
-                }
-            }
-        }
-        if (mapped.isEmpty()) {
-            if (!requireRoleMapping) {
-                log.debug("IdP user matched no authorised group; granting ROLE_USER (require-role-mapping=false)");
-                return Set.of(new SimpleGrantedAuthority("ROLE_USER"));
-            }
-            log.warn("IdP login denied: user is not a member of any authorised group");
-            throw new BadCredentialsException(
-                    "Access not granted: your account is not a member of any authorised group");
-        }
-        return mapped;
+            Optional<String> defaultRole) {
+        List<String> groups =
+                ldapAuthorities.stream().map(GrantedAuthority::getAuthority).toList();
+        Set<String> roles = IdpRoleMapper.rolesFor(groups, roleMappings, defaultRole)
+                .orElseThrow(() -> {
+                    log.warn("IdP login denied: user is not a member of any authorised group");
+                    return new BadCredentialsException(
+                            "Access not granted: your account is not a member of any authorised group");
+                });
+        return toAuthorities(roles);
+    }
+
+    private static Set<GrantedAuthority> toAuthorities(Set<String> roles) {
+        Set<GrantedAuthority> authorities = new LinkedHashSet<>();
+        roles.forEach(r -> authorities.add(new SimpleGrantedAuthority("ROLE_" + r)));
+        return authorities;
     }
 
     /**
@@ -836,9 +829,18 @@ public class SecurityConfig {
     private UserDetailsService staticUserDetailsService() {
         return username -> userStore
                 .findByUsername(username)
+                .filter(u -> {
+                    if (u.getRoles().isEmpty() || Roles.admitsSession(u.getRoles())) return true;
+                    log.warn(
+                            "Login refused for '{}': roles {} include none of {}",
+                            u.getUsername(),
+                            u.getRoles(),
+                            Roles.SESSION_ROLES);
+                    return false;
+                })
                 .map(u -> {
                     String[] roles = u.getRoles().isEmpty()
-                            ? new String[] {"USER"}
+                            ? new String[] {Roles.USER}
                             : u.getRoles().toArray(String[]::new);
                     return User.withUsername(u.getUsername())
                             .password(u.getPasswordHash())

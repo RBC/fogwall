@@ -6,6 +6,7 @@ import com.rbc.fogwall.db.model.PushQuery;
 import com.rbc.fogwall.user.EmailConflictException;
 import com.rbc.fogwall.user.LockedByConfigException;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
+import com.rbc.fogwall.user.Roles;
 import com.rbc.fogwall.user.ScmIdentity;
 import com.rbc.fogwall.user.ScmIdentityConflictException;
 import com.rbc.fogwall.user.UserEntry;
@@ -74,9 +75,13 @@ public class UserController {
         if (req.password() == null || req.password().isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "password is required"));
         }
+        if (req.roles() != null && !req.roles().isEmpty() && !Roles.admitsSession(req.roles())) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "roles must include one of " + String.join(", ", Roles.SESSION_ROLES)));
+        }
         try {
             String encoded = passwordEncoder.encode(req.password());
-            String roles = (req.roles() == null || req.roles().isEmpty()) ? "USER" : String.join(",", req.roles());
+            String roles = (req.roles() == null || req.roles().isEmpty()) ? Roles.USER : String.join(",", req.roles());
             jdbc.createUser(req.username(), encoded, roles);
             if (req.email() != null && !req.email().isBlank()) {
                 jdbc.addEmail(req.username(), req.email());

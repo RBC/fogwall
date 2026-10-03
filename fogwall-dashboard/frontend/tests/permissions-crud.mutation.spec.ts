@@ -2,7 +2,8 @@ import { test, expect } from './fixtures'
 import type { Page } from '@playwright/test'
 
 // Per-user permission CRUD on the user detail Permissions tab, plus the "Test Permission" evaluator: direct grants,
-// group-inherited grants, denials. `observer` has no grants of its own, so it is the clean slate.
+// group-inherited grants, denials. `newcomer` has no grants of its own, so it is the clean slate; `observer` is a
+// reader, whose grants are inert.
 const modal = (page: Page) => page.locator('.fixed.inset-0')
 
 async function openPermissions(page: Page, user: string) {
@@ -45,7 +46,7 @@ test.describe('per-user permissions', () => {
   test('every grant type and match type can be added, is badged, and is removable', async ({
     page,
   }) => {
-    await openPermissions(page, 'observer')
+    await openPermissions(page, 'newcomer')
     const stamp = Date.now()
     // Only the grant types the form offers by default (Review grants appear with require-review-permission,
     // which the fixture leaves off).
@@ -98,7 +99,7 @@ test.describe('per-user permissions', () => {
   test('Test Permission reports a direct grant, then a denial once it is removed', async ({
     page,
   }) => {
-    await openPermissions(page, 'observer')
+    await openPermissions(page, 'newcomer')
     const path = `/pw-direct-${Date.now()}`
     await addPermission(page, { provider: 'github', path, matchType: 'LITERAL', grant: 'PUSH' })
 
@@ -119,6 +120,26 @@ test.describe('per-user permissions', () => {
       .click()
     m = await testPermission(page, { provider: 'github', path, grant: 'PUSH' })
     await expect(m.getByText('DENIED')).toBeVisible()
+  })
+
+  test("Test Permission explains that a reader's grant does not count", async ({ page }) => {
+    await openPermissions(page, 'observer')
+    const path = `/pw-reader-${Date.now()}`
+    await addPermission(page, { provider: 'github', path, matchType: 'LITERAL', grant: 'PUSH' })
+
+    const m = await testPermission(page, { provider: 'github', path, grant: 'PUSH' })
+    await expect(m.getByText('DENIED')).toBeVisible()
+    await expect(
+      m.getByText(/A permission matches, but this user’s roles cannot act/),
+    ).toBeVisible()
+    await m.getByRole('button', { name: 'Close' }).click()
+
+    await page
+      .locator('tbody tr')
+      .filter({ hasText: path })
+      .getByRole('button', { name: 'Remove' })
+      .click()
+    await expect(page.locator('tbody tr').filter({ hasText: path })).toHaveCount(0)
   })
 
   test('Test Permission attributes a group-inherited grant to the group', async ({ page }) => {

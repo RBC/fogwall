@@ -41,6 +41,7 @@ class OidcAuthE2ETest {
 
         var config = new FogwallConfig();
         config.getAuth().setProvider("oidc");
+        config.getAuth().setDefaultRole("READER");
         config.getAuth().getOidc().setIssuerUri(mockOAuth2.getIssuerUri());
         config.getAuth().getOidc().setClientId(MockOAuth2Container.CLIENT_ID);
         config.getAuth().getOidc().setClientSecret(MockOAuth2Container.CLIENT_SECRET);

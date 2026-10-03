@@ -94,7 +94,7 @@ test.describe('profile self-service', () => {
 
   test('cannot claim an SCM identity another user already holds', async ({ asRole }) => {
     // reviewer holds github:fixture-reviewer (seeded via the API during capture)
-    const page = await asRole('observer')
+    const page = await asRole('newcomer')
     await page.goto('/dashboard/profile')
     await page.getByRole('button', { name: 'SCM Identities' }).click()
     const form = page.locator('form').filter({ has: page.getByPlaceholder('your-username') })
