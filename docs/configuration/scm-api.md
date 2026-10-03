@@ -61,10 +61,19 @@ The caller's `User-Agent` and the CLI version it advertises are recorded on ever
 a CLI upgrade has changed its wire format, which otherwise surfaces only as an unexplained denial. It is not used to
 gate: `User-Agent` is caller-controlled, so nothing branches on it.
 
-`require-validated-head` refuses a pull/merge request create whose head commit fogwall has no push record for — closing
-the gap where a contributor pushes straight to their fork, never touching fogwall, then opens the pull request through
-it. The lookup is keyed on the commit SHA alone, not the repository, since a fork push and the upstream pull/merge
-request are two different repositories.
+`require-validated-head` refuses a pull/merge request create whose head commit fogwall has not approved or forwarded —
+closing the gap where a contributor pushes straight to their fork, never touching fogwall or past a push fogwall
+blocked, then opens the pull request through it. A push that was blocked, rejected, canceled or is still awaiting review
+does not count. The lookup is keyed on the commit SHA alone, not the repository, since a fork push and the upstream
+pull/merge request are two different repositories.
+
+A fork pull request's head is read from the head owner's fork, whatever that fork is named. On GitHub, the head is the
+commit GitHub itself resolves `owner:branch` to against the base branch; when the owner holds several forks of the
+upstream, that is their oldest one, and GitHub refuses a branch that exists only on a newer fork. On Gitea/Forgejo, it
+is the head owner's direct fork of the upstream. For an upstream with at most 50 forks it is found exactly in the
+upstream's fork list; for a larger upstream, the first lookup tries the fork of the upstream's name, then searches the
+owner's 150 most recently updated forks. A fork once found is cached for 6 hours and re-verified on each use. A head
+fogwall cannot resolve is refused.
 
 It defaults on, so a pull/merge request's head must trace to a push fogwall saw. Relax it (set `false`) where these
 workflows are common: a rebase, amend, or force-push after pushing through fogwall changes the SHA a validated push
@@ -100,13 +109,13 @@ resolution, no extra round-trip.
 
 ## SCM API properties
 
-| Property                                          | Type    | Default | Description                                                                                                                              |
-| ------------------------------------------------- | ------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `scm-api.node-id-cache-ttl`                       | string  | `PT5M`  | ISO-8601 duration. See the security note above.                                                                                          |
-| `providers.<name>.scm-api.enabled`                | boolean | `false` | Whether the SCM API proxy is mounted for this provider.                                                                                  |
-| `providers.<name>.scm-api.port`                   | int     | —       | Dedicated listener port. **Required** when `enabled`; startup fails without it.                                                          |
-| `providers.<name>.scm-api.require-validated-head` | boolean | `true`  | Refuse a pull/merge request whose head commit has no fogwall push record. Relax where rebase/amend/force-push/web-UI commits are common. |
-| `providers.<name>.scm-api.merge-enabled`          | boolean | `false` | Allow merging PR/MRs through this provider. Independent of the `MERGE` grant; both are required.                                         |
+| Property                                          | Type    | Default | Description                                                                                                                                         |
+| ------------------------------------------------- | ------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scm-api.node-id-cache-ttl`                       | string  | `PT5M`  | ISO-8601 duration. See the security note above.                                                                                                     |
+| `providers.<name>.scm-api.enabled`                | boolean | `false` | Whether the SCM API proxy is mounted for this provider.                                                                                             |
+| `providers.<name>.scm-api.port`                   | int     | —       | Dedicated listener port. **Required** when `enabled`; startup fails without it.                                                                     |
+| `providers.<name>.scm-api.require-validated-head` | boolean | `true`  | Refuse a pull/merge request whose head commit fogwall has not approved or forwarded. Relax where rebase/amend/force-push/web-UI commits are common. |
+| `providers.<name>.scm-api.merge-enabled`          | boolean | `false` | Allow merging PR/MRs through this provider. Independent of the `MERGE` grant; both are required.                                                    |
 
 ## Token model
 

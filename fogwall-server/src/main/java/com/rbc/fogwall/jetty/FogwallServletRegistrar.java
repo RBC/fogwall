@@ -474,12 +474,19 @@ public final class FogwallServletRegistrar {
                 new ScmApiHeadValidationFilter(
                         "createPullRequest",
                         body -> JsonBodyField.stringField(body.path("variables").path("input"), "headRefName"),
-                        (req, ctx, headRef) -> {
+                        (req, ctx, body, headRef) -> {
                             String callerToken = ScmApiTokenExtractor.extractToken(req);
                             var baseRepo = new OwnerRepo(ctx.getRepoOwner(), ctx.getRepoName());
+                            JsonNode input = body.path("variables").path("input");
                             return callerToken == null
                                     ? Optional.empty()
-                                    : headShaResolver.resolveHeadSha(provider, baseRepo, headRef, callerToken);
+                                    : headShaResolver.resolveHeadSha(
+                                            provider,
+                                            baseRepo,
+                                            JsonBodyField.stringField(input, "baseRefName"),
+                                            headRef,
+                                            JsonBodyField.stringField(input, "headRepositoryId"),
+                                            callerToken);
                         },
                         new HeadCommitValidator(fogwallContext.pushStore()),
                         requireValidatedHead));
@@ -489,7 +496,7 @@ public final class FogwallServletRegistrar {
                 new ScmApiHeadValidationFilter(
                         "mergePullRequest",
                         body -> JsonBodyField.stringField(body.path("variables").path("input"), "pullRequestId"),
-                        (req, ctx, pullRequestNodeId) -> {
+                        (req, ctx, body, pullRequestNodeId) -> {
                             String callerToken = ScmApiTokenExtractor.extractToken(req);
                             return callerToken == null
                                     ? Optional.empty()
@@ -553,7 +560,7 @@ public final class FogwallServletRegistrar {
                 new ScmApiHeadValidationFilter(
                         "merge_requests.create",
                         body -> JsonBodyField.stringField(body, "source_branch"),
-                        (req, ctx, sourceBranch) -> {
+                        (req, ctx, body, sourceBranch) -> {
                             String urlPath = ScmApiRestPath.rawSubPath(req);
                             var match = GitLabRestAllowlist.match(req.getMethod(), urlPath);
                             String authHeaderName = ScmApiTokenExtractor.authHeaderName(req);
@@ -576,7 +583,7 @@ public final class FogwallServletRegistrar {
                         // "could not read the head branch" check; the resolver below ignores it and asks the merge
                         // request directly for its current head.
                         body -> Optional.of("merge_requests.merge"),
-                        (req, ctx, ignoredHeadRef) -> {
+                        (req, ctx, body, ignoredHeadRef) -> {
                             String urlPath = ScmApiRestPath.rawSubPath(req);
                             Matcher iidMatch = GITLAB_MERGE_IID.matcher(urlPath);
                             String authHeaderName = ScmApiTokenExtractor.authHeaderName(req);
@@ -644,7 +651,7 @@ public final class FogwallServletRegistrar {
                 new ScmApiHeadValidationFilter(
                         "pulls.create",
                         body -> JsonBodyField.stringField(body, "head"),
-                        (req, ctx, head) -> {
+                        (req, ctx, body, head) -> {
                             String callerToken = ScmApiTokenExtractor.extractToken(req);
                             var baseRepo = new OwnerRepo(ctx.getRepoOwner(), ctx.getRepoName());
                             return callerToken == null
@@ -662,7 +669,7 @@ public final class FogwallServletRegistrar {
                         // populated (verified live); fj hardcodes it absent. When absent this
                         // fails closed like any unresolvable head ref: denied for provenance, not silently skipped.
                         body -> JsonBodyField.stringField(body, "head_commit_id"),
-                        (req, ctx, headCommitId) -> Optional.of(headCommitId),
+                        (req, ctx, body, headCommitId) -> Optional.of(headCommitId),
                         new HeadCommitValidator(fogwallContext.pushStore()),
                         requireValidatedHead));
         addFilter(
