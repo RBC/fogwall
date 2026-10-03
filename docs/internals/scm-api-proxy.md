@@ -153,6 +153,13 @@ The schema has a separate `input.headRepositoryId` for the head repository, but 
 namespaced `headRefName` instead. It is worth knowing it exists: reading it as the target would authorize the repository
 the contributor already owns.
 
+The owner prefix names an account, not a repository: the fork above is `RBC/coopernetes-test-repo`, not `RBC/test-repo`.
+For `require-validated-head`, `GitHubHeadShaResolver` identifies the head repository in this order: `headRepositoryId`
+when sent; the owner's repository of the upstream's name, only if its `parent` is the upstream; the upstream's own
+`parent`, when the owner owns it; then the owner's forks (`repositoryOwner { repositories(isFork: true) }`, most
+recently pushed first), at most three pages of 100, for the one whose `parent` is the upstream. The upstream's own fork
+list is never paged — a popular upstream has thousands. Anything unidentified is refused.
+
 Subject IDs are safer to cache than repository IDs. A GitHub issue transfer mints a new node ID in the destination and
 leaves the old one as a redirect, so `issueId → repo` has no rename staleness. `repositoryId → owner/name` is the
 mapping that needs a conservative TTL.
@@ -426,6 +433,12 @@ POST https://gitea.com/api/v1/repos/coopernetes/test-repo/pulls
 
 The path segment is the upstream — whatever `--repo` names — and the fork appears only in the body as
 `head: "<user>:<branch>"`, the same shape GitHub uses. No `target_project_id` handling is needed.
+
+Gitea/Forgejo pair `<user>` with the upstream by fork relationship, not by name (`GetForkedRepo(headUser, baseRepo)`),
+so a renamed fork is valid there too. `ForgejoHeadShaResolver` mirrors the GitHub order without `headRepositoryId`,
+which the API lacks: the user's repository of the upstream's name if its `parent` is the upstream; the upstream's own
+`parent` when the user owns it; then `GET /repos/search?uid=…&exclusive=true&mode=fork`, most recently updated first, at
+most three pages of 50.
 
 `fj` behaves the same way by construction: `--head` is forwarded verbatim (`prs.rs`, `Some(head) => Some(head)`) and the
 repo comes from `-r/--repo` into `repo_create_pull_request(owner, repo, …)`.
