@@ -10,6 +10,10 @@ server:
   max-push-bytes: 67108864 # 64MiB
   max-object-size-bytes: 134217728 # 128MiB
 
+# Sensitive keys take a value or a -path file. See docs/configuration/secrets.md.
+secrets:
+  require-file-sourcing: false # true refuses to start when a secret is set by value rather than by file
+
 database:
   type: h2-file # h2-mem | h2-file | postgres | mongo
 

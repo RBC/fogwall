@@ -28,11 +28,15 @@ public final class LoadedConfig {
     @Getter(AccessLevel.PACKAGE)
     private final Map<String, String> environment;
 
+    /** The form that supplied each configured secret, keyed by its config key. */
+    @Getter(AccessLevel.PACKAGE)
+    private final Map<String, SecretsResolver.Source> secretSources;
+
     /**
      * A configuration assembled in code rather than loaded from files. It has no file layers, so a hot reload composes
      * onto nothing: a section the reload document declares binds from the document alone.
      */
     public static LoadedConfig of(FogwallConfig config) {
-        return new LoadedConfig(config, JsonNodeFactory.instance.objectNode(), Map.of());
+        return new LoadedConfig(config, JsonNodeFactory.instance.objectNode(), Map.of(), Map.of());
     }
 }

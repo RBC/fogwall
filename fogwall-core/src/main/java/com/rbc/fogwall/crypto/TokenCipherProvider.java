@@ -5,9 +5,11 @@ import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Resolves the {@link TokenCipher} used to encrypt SCM OAuth tokens at rest (#40), without ever failing startup.
+ * Resolves the {@link TokenCipher} used to encrypt SCM OAuth tokens at rest.
  *
- * <p>A missing or invalid {@code token-encryption-key-path} disables OAuth account <em>linking</em> only — it never
+ * <p>A configured key has already been read and decoded while the configuration loaded, so it either yields a cipher or
+ * fails startup. Only the local-development fallback, a key fogwall generates under {@code ./.data/} when none is
+ * configured, degrades: if it cannot be loaded or written, OAuth account <em>linking</em> is disabled. That never
  * touches push authorization. {@code CheckUserPushPermissionHook}'s strict-mode check reads only the plaintext
  * {@code verified} column on {@code user_scm_identities} and never consults this class or {@code user_scm_tokens}, so a
  * key problem cannot silently downgrade strict mode to permissive.
@@ -24,23 +26,25 @@ public class TokenCipherProvider {
     }
 
     /**
-     * @param configuredKeyPath value of {@code scm-oauth.token-encryption-key-path}, or blank/null if unset
-     * @param defaultKeyPath local-devex fallback location used only when {@code configuredKeyPath} is unset (e.g.
+     * @param configuredKey the 32-byte key resolved from {@code scm-oauth.token-encryption-key} or
+     *     {@code scm-oauth.token-encryption-key-path}, or empty if neither is set
+     * @param defaultKeyPath local-devex fallback location used only when {@code configuredKey} is empty (e.g.
      *     {@code ./.data/scm-oauth-token-key}, mirroring the {@code database.path} default-directory convention)
+     * @throws IllegalArgumentException if {@code configuredKey} is not a 32-byte key
      */
-    public static TokenCipherProvider initialize(String configuredKeyPath, Path defaultKeyPath) {
+    public static TokenCipherProvider initialize(Optional<byte[]> configuredKey, Path defaultKeyPath) {
+        if (configuredKey.isPresent()) {
+            return new TokenCipherProvider(new AesGcmTokenCipher(configuredKey.get()), false);
+        }
         try {
-            if (configuredKeyPath != null && !configuredKeyPath.isBlank()) {
-                byte[] key = AesGcmTokenCipher.loadKeyFromFile(Path.of(configuredKeyPath));
-                return new TokenCipherProvider(new AesGcmTokenCipher(key), false);
-            }
             byte[] key = AesGcmTokenCipher.loadOrGenerateKeyFile(defaultKeyPath);
             log.warn(
-                    "SCM OAuth token encryption key is AUTO-GENERATED at '{}' because 'scm-oauth.token-encryption-key-path' "
-                            + "is not configured. This is fine for local development only. Production deployments MUST set "
-                            + "'scm-oauth.token-encryption-key-path' to a durable, backed-up location — the auto-generated file "
-                            + "may not survive a container restart/redeploy, and losing it requires every linked user to "
-                            + "re-link their SCM account (push authorization is unaffected either way).",
+                    "SCM OAuth token encryption key is AUTO-GENERATED at '{}' because neither "
+                            + "'scm-oauth.token-encryption-key-path' nor 'scm-oauth.token-encryption-key' is configured. "
+                            + "This is fine for local development only. Production deployments MUST configure a durable, "
+                            + "backed-up key — the auto-generated file may not survive a container restart/redeploy, and "
+                            + "losing it requires every linked user to re-link their SCM account (push authorization is "
+                            + "unaffected either way).",
                     defaultKeyPath);
             return new TokenCipherProvider(new AesGcmTokenCipher(key), true);
         } catch (Exception e) {
