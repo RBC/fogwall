@@ -41,6 +41,9 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
  *
  * <p>Hot reload sits above all of these; see {@link #composeReload}.
  *
+ * <p>Once bound, each sensitive key is resolved from its value or {@code -path} file form by {@link SecretsResolver},
+ * so the returned configuration holds resolved secrets.
+ *
  * <p>File layers are merged by fogwall rather than by Gestalt, with one rule: <b>a mapping merges key by key; a list or
  * a scalar is replaced by the last layer that sets it.</b> Gestalt's own cross-source merge combines lists position by
  * position, so a shorter list from a higher layer would keep the lower layer's trailing entries, and each entry would
@@ -75,6 +78,9 @@ public final class FogwallConfigLoader {
     private static final String DEFAULT_CONFIG_FILE_NAME = "fogwall.yml";
     private static final String ENV_PREFIX = "FOGWALL_";
     private static final String PROFILES_ENV_VAR = "FOGWALL_CONFIG_PROFILES";
+
+    /** Deprecated alias for {@code auth.api-key}. Under the env var rule it would bind to {@code api.key}. */
+    private static final String API_KEY_ALIAS_ENV_VAR = "FOGWALL_API_KEY";
 
     // Parses every layer and backs Gestalt's own YamlLoader. A plain YAMLMapper doesn't expand a YAML alias resolving
     // to a collection before the binder sees it (FasterXML/jackson-dataformats-text#98); YAMLAnchorReplayingFactory
@@ -167,11 +173,14 @@ public final class FogwallConfigLoader {
         }
 
         Map<String, String> envOverrides = buildEnvOverrides(environment);
+        applyApiKeyAlias(envOverrides, tree);
         if (!envOverrides.isEmpty()) {
             log.info("Applied {} environment variable override(s) with prefix {}", envOverrides.size(), ENV_PREFIX);
         }
 
-        return new LoadedConfig(bind(tree, envOverrides), tree, envOverrides);
+        FogwallConfig config = bind(tree, envOverrides);
+        Map<String, SecretsResolver.Source> secretSources = SecretsResolver.resolve(config, tree);
+        return new LoadedConfig(config, tree, envOverrides, secretSources);
     }
 
     /**
@@ -196,6 +205,9 @@ public final class FogwallConfigLoader {
      * other path still applies.
      *
      * <p>Composition always starts from {@code startup}, never from a previous reload.
+     *
+     * <p>Sensitive keys are resolved again, without a provenance log, because building the reloaded sections constructs
+     * the provider registry. A reload applies only policy sections, so a changed secret still takes effect on restart.
      */
     public static FogwallConfig composeReload(LoadedConfig startup, ObjectNode reloadTree) throws GestaltException {
         ObjectNode reload = normalize(reloadTree);
@@ -211,7 +223,9 @@ public final class FogwallConfigLoader {
                 envOverrides.put(path, value);
             }
         });
-        return bind(tree, envOverrides);
+        FogwallConfig config = bind(tree, envOverrides);
+        SecretsResolver.resolveQuietly(config, tree);
+        return config;
     }
 
     /**
@@ -383,6 +397,40 @@ public final class FogwallConfigLoader {
             }
         });
         return overrides;
+    }
+
+    /**
+     * Moves the deprecated {@code FOGWALL_API_KEY} override onto {@code auth.api-key}, with a warning. Setting it
+     * alongside either {@code auth.api-key} form, in a file or the environment, fails like any other secret set twice.
+     */
+    private static void applyApiKeyAlias(Map<String, String> envOverrides, ObjectNode fileTree) {
+        String alias = envOverrides.remove(envVarToConfigPath(API_KEY_ALIAS_ENV_VAR));
+        if (alias == null || alias.isBlank()) {
+            return;
+        }
+        for (String key : List.of("auth.api-key", "auth.api-key-path")) {
+            if (hasValue(fileTree, key) || isSet(envOverrides.get(key))) {
+                throw new IllegalStateException(
+                        "Both " + API_KEY_ALIAS_ENV_VAR + " and " + key + " are set; set only " + key);
+            }
+        }
+        log.warn(
+                "{} is deprecated; set auth.api-key-path or auth.api-key instead (FOGWALL_AUTH__API_KEY_PATH, "
+                        + "FOGWALL_AUTH__API_KEY)",
+                API_KEY_ALIAS_ENV_VAR);
+        envOverrides.put("auth.api-key", alias);
+    }
+
+    private static boolean hasValue(ObjectNode tree, String path) {
+        JsonNode node = tree;
+        for (String segment : path.split("\\.")) {
+            node = node.path(segment);
+        }
+        return node.isValueNode() && isSet(node.asString());
+    }
+
+    private static boolean isSet(String s) {
+        return s != null && !s.isBlank();
     }
 
     static String envVarToConfigPath(String varName) {

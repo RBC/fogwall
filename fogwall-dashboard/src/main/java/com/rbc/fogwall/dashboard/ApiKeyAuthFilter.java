@@ -16,9 +16,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * Authenticates requests that carry a valid {@code X-Api-Key} header. The expected key is read from the
- * {@code FOGWALL_API_KEY} environment variable at startup. If the variable is not set the filter is a no-op and every
- * request passes through unauthenticated (relying on form login instead).
+ * Authenticates requests that carry a valid {@code X-Api-Key} header. The expected key is {@code auth.api-key},
+ * resolved while the configuration loaded, or the break-glass key generated under IdP auth; without either the filter
+ * is not installed and requests rely on form login instead.
  *
  * <p>Intended for CI/test scripts that call {@code /api/**} endpoints without a browser session.
  */

@@ -1,6 +1,7 @@
 package com.rbc.fogwall.config;
 
 import lombok.Data;
+import lombok.ToString;
 
 /**
  * Binds the {@code server.outbound-proxy:} block in fogwall.yml.
@@ -72,7 +73,11 @@ public class OutboundProxyConfig {
         private String username;
 
         /** Proxy password. Required when {@link #type} is {@code basic}. */
+        @ToString.Exclude
         private String password;
+
+        /** Path to a file holding the proxy password. Mutually exclusive with {@link #password}. */
+        private String passwordPath;
 
         /**
          * Path to a Kerberos keytab file. Only used when {@link #type} is {@code kerberos}. When unset (the default),

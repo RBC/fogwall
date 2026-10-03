@@ -148,9 +148,12 @@ The REST API accepts a single shared API key for machine-to-machine calls (e.g. 
 before going to production:
 
 ```yaml
-# In config or via env var:
-FOGWALL_API_KEY: "your-secret-key"
+auth:
+  api-key-path: /run/secrets/fogwall-api-key
 ```
+
+`auth.api-key` takes the key itself instead; see [Secrets](../configuration/secrets.md). The `FOGWALL_API_KEY`
+environment variable still works as a deprecated alias.
 
 The shared key is a stopgap for automation until proper machine auth is available. It carries no user identity — all
 calls made with it are unattributed. Prefer session-based access (log in as a named service account) for any automation

@@ -20,16 +20,20 @@ reload:
 
 ### Git source authentication
 
-For private repositories, set these environment variables — no config file changes needed:
+For private repositories, set `reload.git.auth`. The password takes either form described in [Secrets](secrets.md):
 
-```
-FOGWALL_RELOAD_GIT_AUTH_USERNAME=<username or token placeholder>
-FOGWALL_RELOAD_GIT_AUTH_PASSWORD=<personal access token or password>
+```yaml
+reload:
+  git:
+    auth:
+      username: git
+      password-path: /run/secrets/fogwall-config-repo-token # or password: <personal access token or password>
 ```
 
-Both variables must be set together; if only one is present a warning is logged and the clone/pull proceeds without
-credentials. For token-only auth (GitHub, GitLab, Gitea PATs) the username can be any non-empty string — `git` or
-`x-token` are common placeholders.
+As environment variables these are `FOGWALL_RELOAD_GIT_AUTH_USERNAME` with `FOGWALL_RELOAD_GIT_AUTH_PASSWORD` or
+`FOGWALL_RELOAD__GIT__AUTH__PASSWORD_PATH`. The username and password are set together or not at all; one without the
+other fails startup. For token-only auth (GitHub, GitLab, Gitea PATs) the username can be any non-empty string — `git`
+or `x-token` are common placeholders.
 
 ## Reloadable sections
 

@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.Data;
+import lombok.ToString;
 
 /**
  * Binds the {@code auth:} block in fogwall.yml. Selects the active authentication provider and holds its settings.
@@ -89,4 +90,14 @@ public class AuthConfig {
 
     /** The git credentials fogwall issues for server-mode pushes on providers with {@code oauth.brokered-push}. */
     private GitCredentialsConfig gitCredentials = new GitCredentialsConfig();
+
+    /**
+     * Shared key accepted in the {@code X-Api-Key} header for REST automation. It carries no user identity. Mutually
+     * exclusive with {@link #apiKeyPath}. The {@code FOGWALL_API_KEY} environment variable is a deprecated alias.
+     */
+    @ToString.Exclude
+    private String apiKey = "";
+
+    /** Path to a file holding the API key. Mutually exclusive with {@link #apiKey}. */
+    private String apiKeyPath = "";
 }

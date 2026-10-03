@@ -76,7 +76,7 @@ credential belongs to, never commit metadata. With `scm-oauth.identity-mode: str
 - **OAuth application secret** (`providers.<name>.oauth.client-secret-path`): used for the code exchange and token
   refresh of linked OAuth tokens.
 - **Token encryption key** (`scm-oauth.token-encryption-key-path`): encrypts linked OAuth tokens at rest.
-- **Dashboard API key** (`FOGWALL_API_KEY`): a shared key for REST automation, carrying no user identity.
+- **Dashboard API key** (`auth.api-key-path`): a shared key for REST automation, carrying no user identity.
 
 Each is read from a file or the environment and is under the operator's custody.
 
