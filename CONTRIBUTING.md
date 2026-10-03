@@ -489,20 +489,20 @@ This sets `core.hooksPath` to `.githooks/`. The hook runs on every `git commit`:
 
 ## Releases
 
-Releases follow a two-phase process to ensure every published image is identical to what was already scanned and running
-as `:edge`.
+Releases follow a two-phase process so every published image is identical to one CI already built and scanned. `main`
+and each `release/X.Y.x` maintenance branch sit at a `-SNAPSHOT` version between releases.
 
-**Phase 1 — version bump.** Create a `release/<version>` branch, update `version` in `build.gradle`, open a PR, and
-enable auto-merge. The PR must pass all CI, CodeQL, CVE, and container scan checks before it can merge. Use the
-`/release` Claude command to automate this.
+**Phase 1 — release commit.** Strip `-SNAPSHOT` from `version` in `build.gradle` and set the chart's `appVersion`. On
+`main` this goes up as a PR with auto-merge; on a `release/X.Y.x` branch it is pushed directly. Use the `/release`
+Claude command.
 
-**Phase 2 — tag.** Once the version bump lands on `main`, push an annotated tag (`v<version>`). The tag ruleset enforces
-the same checks must have passed on that commit. The publish workflow then promotes the already-built `:edge` image
-directly to the release tags (`:v1.0.0`, `:latest`, etc.) — no rebuild occurs. Use the `/release-tag` Claude command for
-this step.
-
-This means every release image is byte-for-byte identical to the `:edge` image that was scanned when the version bump
-merged.
+**Phase 2 — tag.** Once the release commit is on its branch and its checks are green, push a signed annotated tag
+(`v<version>`). The tag ruleset refuses the tag until the required checks have passed on that commit.
+`release-publish.yml` then promotes that commit's `build-<sha>` images to the release tags — no rebuild occurs. Every
+image is labelled `org.opencontainers.image.version` with the `build.gradle` version it was built from, and the
+promotion is refused unless that label matches the tag. The release always gets `:X.Y.Z`; `:X.Y`, `:X` and `:latest`
+move only when the release is at least as new as the image each points at now, so a patch on an older line never pulls
+them backwards. Use the `/release-tag` Claude command, which also moves the branch to the next `-SNAPSHOT`.
 
 ### Documenting new config surface
 

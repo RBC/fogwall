@@ -1,0 +1,87 @@
+name: Release Publish
+
+# Promotes the commit-pinned build-<sha> images for a release tag to the release image tags. No
+# rebuild: the tag ruleset refuses a tag until Container Scan (per image) has passed on the commit,
+# so the image promoted is exactly the one CI built and scanned. scripts/release_image_tags.py
+# refuses an image whose version label is not the release's, and moves each convenience tag
+# (X.Y, X, latest) only when the release is at least as new as the image it points at now, so a
+# patch on an older release line never pulls them backwards.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+# One release promotion at a time across all tags: each run reads the convenience tags before
+# writing them, so two releases pushed close together must not interleave. cleanup-interim-images
+# shares the group so it never deletes a build-* image mid-promotion. Never cancelled.
+concurrency:
+  group: release-publish
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: Publish Release
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: dashboard
+          - name: server
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v7.0.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # ratchet:docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # ratchet:docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set image name
+        run: |
+          SUFFIX="${{ matrix.name == 'server' && '-server' || '' }}"
+          echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')${SUFFIX}" >> "$GITHUB_ENV"
+
+      # The commit-pinned build tag (not :edge) is the exact image for this release regardless of
+      # how many commits have landed on the branch since.
+      - name: Resolve build image digest
+        id: build
+        run: |
+          TAG="build-${GITHUB_SHA::7}"
+          DIGEST=$(docker buildx imagetools inspect \
+            "${IMAGE}:${TAG}" \
+            --format '{{.Manifest.Digest}}')
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "Promoting ${TAG} @ ${DIGEST}"
+
+      - name: Select image tags
+        id: tags
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          TAGS=$(./scripts/release_image_tags.py "${IMAGE}" "${DIGEST}" "${GITHUB_REF_NAME}")
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
+          echo "Release ${GITHUB_REF_NAME} moves: ${TAGS}"
+
+      - name: Promote build image to release tags
+        env:
+          TAGS: ${{ steps.tags.outputs.tags }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          TAG_ARGS=()
+          for tag in ${TAGS}; do
+            TAG_ARGS+=(--tag "${IMAGE}:${tag}")
+          done
+          docker buildx imagetools create "${TAG_ARGS[@]}" "${IMAGE}@${DIGEST}"
