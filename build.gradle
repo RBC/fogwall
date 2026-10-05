@@ -14,7 +14,7 @@ buildscript {
 }
 
 plugins {
-    id 'com.diffplug.spotless' version '8.10.2' apply false
+    id 'com.diffplug.spotless' version '8.10.3' apply false
     id 'org.cyclonedx.bom' version '3.4.1'
     id 'com.github.node-gradle.node' version '7.1.0' apply false
     id 'com.github.jk1.dependency-license-report' version '3.1.4' apply false
@@ -41,11 +41,11 @@ ext {
 
     // Database
     hikariVersion = '7.1.0'
-    h2Version = '2.5.250'
+    h2Version = '2.5.252'
     postgresVersion = '42.7.13'
     mysqlVersion = '26.7.0'
     mariadbVersion = '3.5.10'
-    mongoVersion = '5.12.0'
+    mongoVersion = '5.13.0'
 
     // Jackson
     jacksonBomVersion = '3.2.3'
@@ -69,7 +69,7 @@ ext {
     bouncyCastleVersion = '1.86'
 
     // Apache MINA SSHD
-    minaSshdVersion = '2.19.0'
+    minaSshdVersion = '2.20.0'
 
     // Lombok
     lombokVersion = '1.18.48'
