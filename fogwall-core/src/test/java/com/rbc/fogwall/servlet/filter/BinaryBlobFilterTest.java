@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 import com.rbc.fogwall.config.BinaryBlobConfig;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
+import jakarta.servlet.FilterChain;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.ServletOutputStream;
@@ -163,7 +164,7 @@ class BinaryBlobFilterTest {
         GitRequestDetails details = pushDetails(baseCommit, tip.name());
         FakeResponse resp = new FakeResponse();
 
-        disabledFilter().doHttpFilter(mockRequest(details), resp.mock);
+        disabledFilter().doFilter(mockRequest(details), resp.mock, mock(FilterChain.class));
 
         assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
         assertTrue(details.getSteps().isEmpty());

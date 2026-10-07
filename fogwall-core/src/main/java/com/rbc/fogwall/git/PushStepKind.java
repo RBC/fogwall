@@ -46,8 +46,7 @@ public enum PushStepKind {
             "content-pattern-message", 14, StepVisibility.SUMMARY, ProxyMode.SERVER, ProxyMode.TRANSPARENT),
     /** JGit commit inspection specific to the pre-receive transport; no transparent-proxy object model for it. */
     COMMIT_INSPECTION("commit-inspection", 15, StepVisibility.INTERNAL, ProxyMode.SERVER),
-    /** Generates the diff server mode's own hooks scan; the proxy computes diffs inline in its filters instead. */
-    DIFF_GENERATION("diff-generation", 16, StepVisibility.INTERNAL, ProxyMode.SERVER),
+    DIFF_GENERATION("diff-generation", 16, StepVisibility.INTERNAL, ProxyMode.SERVER, ProxyMode.TRANSPARENT),
     BINARY_BLOB("binary-blob", 17, StepVisibility.SUMMARY, ProxyMode.SERVER, ProxyMode.TRANSPARENT),
     DIFF_SCAN("diff-scan", 18, StepVisibility.SUMMARY, ProxyMode.SERVER, ProxyMode.TRANSPARENT),
     GPG_SIGNATURE("gpg-signature", 19, StepVisibility.SUMMARY, ProxyMode.SERVER, ProxyMode.TRANSPARENT),

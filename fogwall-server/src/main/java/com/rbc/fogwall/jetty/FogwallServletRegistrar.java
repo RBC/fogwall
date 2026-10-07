@@ -992,6 +992,7 @@ public final class FogwallServletRegistrar {
         filters.add(new CheckTrailersFilter(commitConfigSupplier));
         filters.add(new CheckCommitMessagesFilter(commitConfigSupplier));
         filters.add(new ContentPatternMessageFilter(contentPatternConfigSupplier));
+        filters.add(new DiffGenerationFilter());
         filters.add(new BinaryBlobFilter(binaryBlobConfigSupplier));
         filters.add(new ScanDiffFilter(diffScanConfigSupplier));
         filters.add(new GpgSignatureFilter(GpgConfig.defaultConfig()));

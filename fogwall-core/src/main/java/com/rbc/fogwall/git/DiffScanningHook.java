@@ -45,6 +45,11 @@ public final class DiffScanningHook implements MandatoryFogwallHook {
     private final PushContext pushContext;
 
     @Override
+    public boolean enabled() {
+        return diffScanConfig.hasRules();
+    }
+
+    @Override
     public void onPreReceive(ReceivePack rp, Collection<ReceiveCommand> commands) {
         List<String> logs = new ArrayList<>();
         AtomicBoolean anyFailed = new AtomicBoolean(false);
