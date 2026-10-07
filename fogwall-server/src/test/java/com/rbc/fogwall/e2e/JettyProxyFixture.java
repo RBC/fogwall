@@ -169,6 +169,27 @@ class JettyProxyFixture implements AutoCloseable {
                 giteaUri, ApprovalMode.UI, List.of(), true, DEFAULT_USERS, null, true, oauth, keyPath);
     }
 
+    /**
+     * Auto-approve, fetches served, {@code users} granted everything, and the provider's SCM API proxy enabled on
+     * {@code scmApiPort} with {@code require-validated-head} on. A push adding a line containing {@code blockedLiteral}
+     * is refused by the diff scan.
+     */
+    static JettyProxyFixture scmApi(URI giteaUri, int scmApiPort, List<TestUser> users, String blockedLiteral)
+            throws Exception {
+        String scmApi = """
+                    scm-api:
+                      enabled: true
+                      port: %d
+                      require-validated-head: true
+                """.formatted(scmApiPort);
+        String diffScan = """
+                diff-scan:
+                  block:
+                    - { match: literal, value: "%s" }
+                """.formatted(blockedLiteral);
+        return new JettyProxyFixture(giteaUri, ApprovalMode.AUTO, List.of(), true, users, null, true, scmApi, diffScan);
+    }
+
     private JettyProxyFixture(
             URI giteaUri,
             ApprovalMode approvalMode,

@@ -220,6 +220,19 @@ class GitHelper {
         git(repoDir, "remote", "set-url", remote, url);
     }
 
+    /** Returns the commit SHA {@code HEAD} names in {@code repoDir}. */
+    String headSha(Path repoDir) throws IOException, InterruptedException {
+        ProcessBuilder pb = buildGitCommand(repoDir, "rev-parse", "HEAD");
+        pb.redirectErrorStream(true);
+        Process p = pb.start();
+        String sha = new String(p.getInputStream().readAllBytes()).trim();
+        int code = p.waitFor();
+        if (code != 0) {
+            throw new RuntimeException("git rev-parse HEAD failed (exit " + code + "): " + sha);
+        }
+        return sha;
+    }
+
     // ---- private helpers ----
 
     private String currentBranch(Path repoDir) throws IOException, InterruptedException {
