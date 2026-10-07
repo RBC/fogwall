@@ -7,7 +7,7 @@ on:
   push:
     branches: ["main", "release/*"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "release/*"]
 
 jobs:
   grype-npm:
