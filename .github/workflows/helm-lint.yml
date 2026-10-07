@@ -5,10 +5,10 @@ permissions:
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "release/*"]
     paths: ["charts/**"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "release/*"]
     paths: ["charts/**"]
 
 env:
