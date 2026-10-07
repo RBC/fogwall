@@ -153,6 +153,31 @@ The schema has a separate `input.headRepositoryId` for the head repository, but 
 namespaced `headRefName` instead. It is worth knowing it exists: reading it as the target would authorize the repository
 the contributor already owns.
 
+The owner prefix names an account, not a repository: the fork above is `RBC/coopernetes-test-repo`, not `RBC/test-repo`.
+For `require-validated-head`, `GitHubHeadShaResolver` lets GitHub pair the owner with a repository: one
+`repository { ref(qualifiedName: "refs/heads/<baseRefName>") { compare(headRef: <headRefName>) { headTarget { oid } } } }`
+query on the base repository, with `headRefName` exactly as sent. The provenance check is keyed on the head SHA alone,
+so the fork's name is never needed. A `null` compare (GitHub answers `NOT_FOUND`, "Could not resolve head ref"), any
+GraphQL error, or a missing `baseRefName` is refused.
+
+An owner can hold several forks of the same base. GitHub then pairs `owner:branch` with one of them, the oldest, and
+`compare` and `createPullRequest` agree on it. Observed against `coopernetes/test-repo` with three `RBC` forks, each
+branch carrying a distinct commit per fork:
+
+| Branch on                   | `compare`            | `createPullRequest`                      |
+| --------------------------- | -------------------- | ---------------------------------------- |
+| oldest fork and newer forks | oldest fork's commit | opened from the oldest fork, same commit |
+| newer forks only            | `NOT_FOUND`          | refused ("Head ref must be a branch")    |
+
+Neither searches the owner's other forks, so a branch on a newer fork cannot be proposed through `owner:branch` at all.
+This pairing is observed behaviour, not documented API. The resolver depends on the two agreeing, and every mismatch
+observed fails closed.
+
+`headRepositoryId` names a fork exactly, so the branch is read from that repository's node instead of through `compare`;
+an `owner:` prefix that disagrees with its owner is refused. A `headRefName` with a repository segment
+(`owner:repo:branch`) is refused: `compare` ignores the segment and would read the oldest fork's branch instead. `gh`
+sends neither: its `--head` takes only `branch` or `owner:branch`.
+
 Subject IDs are safer to cache than repository IDs. A GitHub issue transfer mints a new node ID in the destination and
 leaves the old one as a redirect, so `issueId → repo` has no rename staleness. `repositoryId → owner/name` is the
 mapping that needs a conservative TTL.
@@ -426,6 +451,24 @@ POST https://gitea.com/api/v1/repos/coopernetes/test-repo/pulls
 
 The path segment is the upstream — whatever `--repo` names — and the fork appears only in the body as
 `head: "<user>:<branch>"`, the same shape GitHub uses. No `target_project_id` handling is needed.
+
+Gitea/Forgejo pair `<user>` with the upstream by fork relationship, not by name. Their `parseCompareInfo` accepts the
+user's direct fork of the upstream (`GetForkedRepo(headUser, baseRepo)`), else the upstream's own `parent` when the user
+owns it, else the upstream itself; a sibling fork or a fork of a fork is not a valid head. `ForgejoHeadShaResolver`
+mirrors that, since the API has no direct-fork lookup:
+
+1. A fork resolved earlier for the same provider, upstream and user, cached by repository ID for 6 hours:
+   `GET /repositories/{id}`, used only if its `parent` is still the upstream and the user still owns it. Otherwise the
+   entry is dropped and resolution continues.
+2. `GET /repos/{upstream}`; its `parent` when the user owns it.
+3. When its `forks_count` is at most 50, `GET /repos/{upstream}/forks?limit=50&page=1`: the user's entry. This is exact.
+   A page shorter than `forks_count` (a server's lower page cap, forks the caller cannot see) falls through.
+4. Otherwise the user's repository of the upstream's name, if its `parent` is the upstream.
+5. Otherwise `GET /repos/search?uid=…&exclusive=true&mode=fork`, most recently updated first, at most three pages of 50,
+   for the one whose `parent` is the upstream.
+
+A fork found by steps 3 to 5 is cached. A cached branch lookup costs two calls; an uncached one on a small upstream
+three.
 
 `fj` behaves the same way by construction: `--head` is forwarded verbatim (`prs.rs`, `Some(head) => Some(head)`) and the
 repo comes from `-r/--repo` into `repo_create_pull_request(owner, repo, …)`.

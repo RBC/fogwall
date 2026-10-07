@@ -120,9 +120,53 @@ class JettyProxyFixture implements AutoCloseable {
             String committerAttributionPolicy,
             boolean grantAll)
             throws Exception {
+        this(giteaUri, approvalMode, configRules, serveFetch, users, committerAttributionPolicy, grantAll, "", "");
+    }
+
+    /**
+     * Auto-approve, fetches served, {@code users} granted everything, and the provider's SCM API proxy enabled on
+     * {@code scmApiPort} with {@code require-validated-head} on. A push adding a line containing {@code blockedLiteral}
+     * is refused by the diff scan.
+     */
+    static JettyProxyFixture scmApi(URI giteaUri, int scmApiPort, List<TestUser> users, String blockedLiteral)
+            throws Exception {
+        String scmApi = """
+                    scm-api:
+                      enabled: true
+                      port: %d
+                      require-validated-head: true
+                """.formatted(scmApiPort);
+        String diffScan = """
+                diff-scan:
+                  block:
+                    literals:
+                      - "%s"
+                """.formatted(blockedLiteral);
+        return new JettyProxyFixture(giteaUri, ApprovalMode.AUTO, List.of(), true, users, null, true, scmApi, diffScan);
+    }
+
+    private JettyProxyFixture(
+            URI giteaUri,
+            ApprovalMode approvalMode,
+            List<AccessRule> configRules,
+            boolean serveFetch,
+            List<TestUser> users,
+            String committerAttributionPolicy,
+            boolean grantAll,
+            String providerExtras,
+            String topLevelExtras)
+            throws Exception {
         this.giteaHostPort = giteaUri.getHost() + ":" + giteaUri.getPort();
         Path override = writeOverride(
-                giteaUri, approvalMode, configRules, serveFetch, users, committerAttributionPolicy, grantAll);
+                giteaUri,
+                approvalMode,
+                configRules,
+                serveFetch,
+                users,
+                committerAttributionPolicy,
+                grantAll,
+                providerExtras,
+                topLevelExtras);
         try {
             running = FogwallJettyApplication.start(FogwallConfigLoader.loadWithOverride("test-e2e", override));
         } finally {
@@ -142,7 +186,9 @@ class JettyProxyFixture implements AutoCloseable {
             boolean serveFetch,
             List<TestUser> users,
             String committerAttributionPolicy,
-            boolean grantAll)
+            boolean grantAll,
+            String providerExtras,
+            String topLevelExtras)
             throws IOException {
         String rules = configRules.isEmpty()
                 // No explicit rules — open the proxy, so a test about something else is not refused by an access rule.
@@ -168,15 +214,17 @@ class JettyProxyFixture implements AutoCloseable {
                     type: forgejo
                     uri: %s
                     serve-fetch: %s
-                %s%s%s%s""".formatted(
+                %s%s%s%s%s%s""".formatted(
                         approvalMode.configValue,
                         PROVIDER_NAME,
                         giteaUri,
                         serveFetch,
+                        providerExtras,
                         rules,
                         renderUsers(users),
                         renderAttributionPolicy(committerAttributionPolicy),
-                        grantAll ? renderGrants(users) : "");
+                        grantAll ? renderGrants(users) : "",
+                        topLevelExtras);
 
         Path file = Files.createTempFile("fogwall-e2e-override-", ".yml");
         Files.writeString(file, yaml);

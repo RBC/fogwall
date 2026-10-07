@@ -262,6 +262,24 @@ class GiteaContainer extends GenericContainer<GiteaContainer> {
     }
 
     /**
+     * Forks {@code owner/repo} into {@value #TEST_USER}'s account as {@code forkName}, which may differ from the
+     * upstream's name. Must be called after {@link #createTestUser()}.
+     */
+    void forkRepoAsTestUser(String owner, String repo, String forkName) throws IOException, InterruptedException {
+        var client = HttpClient.newHttpClient();
+        String auth = Base64.getEncoder().encodeToString((TEST_USER + ":" + TEST_USER_PASSWORD).getBytes());
+        var resp = apiPost(
+                client,
+                auth,
+                getBaseUrl() + "/api/v1/repos/" + owner + "/" + repo + "/forks",
+                "{\"name\":" + jsonString(forkName) + "}");
+        if (resp.statusCode() >= 400) {
+            throw new RuntimeException("Failed to fork " + owner + "/" + repo + " as " + forkName + " ("
+                    + resp.statusCode() + "): " + resp.body());
+        }
+    }
+
+    /**
      * Registers an SSH public key for the given Gitea user. The {@code publicKeyLine} is the full OpenSSH authorized
      * keys line (e.g. {@code ssh-ed25519 AAAA... comment}). Ignores 422 (key already registered).
      */

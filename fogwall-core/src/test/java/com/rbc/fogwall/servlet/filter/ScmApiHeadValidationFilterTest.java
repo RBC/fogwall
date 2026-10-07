@@ -31,7 +31,7 @@ class ScmApiHeadValidationFilterTest {
         return new ScmApiHeadValidationFilter(
                 CREATE_OP,
                 body -> JsonBodyField.stringField(body, "head"),
-                (req, ctx, headRef) -> resolvedSha,
+                (req, ctx, body, headRef) -> resolvedSha,
                 headCommitValidator,
                 requireValidatedHead);
     }
