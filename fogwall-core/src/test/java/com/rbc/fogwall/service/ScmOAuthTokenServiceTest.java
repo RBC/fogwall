@@ -18,7 +18,6 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
@@ -82,15 +81,14 @@ class ScmOAuthTokenServiceTest {
         });
         server.start();
 
-        cipherProvider = TokenCipherProvider.initialize(null, tempDir.resolve("key"));
+        cipherProvider = TokenCipherProvider.initialize(Optional.empty(), tempDir.resolve("key"));
         cipher = cipherProvider.cipher().orElseThrow();
-        Path secret = Files.writeString(tempDir.resolve("client-secret"), "the-secret\n");
         var gitlab = GitLabProvider.builder()
                 .name(PROVIDER)
                 .uri(URI.create("http://localhost:" + server.getAddress().getPort()))
                 .build();
         registry = new InMemoryProviderRegistry(List.of(gitlab));
-        clients = Map.of(PROVIDER, new OAuthClient("the-client", secret));
+        clients = Map.of(PROVIDER, new OAuthClient("the-client", "the-secret"));
         service = withMaxLinkAge(Optional.empty());
     }
 

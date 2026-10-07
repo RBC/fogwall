@@ -2,6 +2,7 @@ package com.rbc.fogwall.config;
 
 import com.rbc.fogwall.db.jdbc.PoolConfig;
 import lombok.Data;
+import lombok.ToString;
 
 /** Binds the {@code database:} block in fogwall.yml. */
 @Data
@@ -29,7 +30,11 @@ public class DatabaseConfig {
     private int port = 5432;
 
     private String username = "";
+
+    @ToString.Exclude
     private String password = "";
+
+    private String passwordPath = "";
 
     /**
      * Full connection string. When non-blank, takes precedence over individual {@code host}/{@code port}/{@code name}

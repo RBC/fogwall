@@ -751,6 +751,135 @@ class FogwallConfigLoaderTest {
         assertThrows(RuntimeException.class, () -> FogwallConfigLoader.readReloadDocument(file));
     }
 
+    // --- secrets ---
+
+    @Test
+    void secretPathKey_fromYaml_bindsAndResolvesFileContents() throws IOException, GestaltException {
+        Path secret = Files.writeString(tempDir.resolve("db-password"), "from-file\n");
+        Path yaml = writeYaml("database:\n  password-path: " + secret + "\n");
+
+        var loaded = FogwallConfigLoader.loadLayers(null, List.of(yaml), Map.of());
+
+        assertEquals("from-file", loaded.getConfig().getDatabase().getPassword());
+        assertEquals(SecretsResolver.Source.FILE, loaded.getSecretSources().get("database.password"));
+    }
+
+    @Test
+    void secretPathKey_fromEnvironment_bindsAndResolvesFileContents() throws IOException, GestaltException {
+        Path secret = Files.writeString(tempDir.resolve("api-token"), "token-from-file");
+
+        var loaded = FogwallConfigLoader.loadLayers(
+                null, List.of(), Map.of("FOGWALL_PROVIDERS__GITHUB__API_TOKEN_PATH", secret.toString()));
+
+        assertEquals(
+                "token-from-file",
+                loaded.getConfig().getProviders().get("github").getApiToken());
+        assertEquals(SecretsResolver.Source.FILE, loaded.getSecretSources().get("providers.github.api-token"));
+    }
+
+    @Test
+    void secretValue_fromYaml_isAttributedToYaml() throws IOException, GestaltException {
+        Path yaml = writeYaml("database:\n  password: yaml-secret\n");
+
+        var loaded = FogwallConfigLoader.loadLayers(null, List.of(yaml), Map.of());
+
+        assertEquals("yaml-secret", loaded.getConfig().getDatabase().getPassword());
+        assertEquals(SecretsResolver.Source.YAML, loaded.getSecretSources().get("database.password"));
+    }
+
+    @Test
+    void secretValue_overriddenByEnvironment_isAttributedToEnvironment() throws IOException, GestaltException {
+        Path yaml = writeYaml("database:\n  password: yaml-secret\n");
+
+        var loaded =
+                FogwallConfigLoader.loadLayers(null, List.of(yaml), Map.of("FOGWALL_DATABASE_PASSWORD", "env-secret"));
+
+        assertEquals("env-secret", loaded.getConfig().getDatabase().getPassword());
+        assertEquals(
+                SecretsResolver.Source.ENVIRONMENT, loaded.getSecretSources().get("database.password"));
+    }
+
+    @Test
+    void secretValue_onlyInEnvironment_isAttributedToEnvironment() throws GestaltException {
+        var loaded = FogwallConfigLoader.loadLayers(
+                null, List.of(), Map.of("FOGWALL_AUTH__LDAP__BIND_PASSWORD", "env-secret"));
+
+        assertEquals("env-secret", loaded.getConfig().getAuth().getLdap().getBindPassword());
+        assertEquals(
+                SecretsResolver.Source.ENVIRONMENT, loaded.getSecretSources().get("auth.ldap.bind-password"));
+    }
+
+    @Test
+    void secretValueInYaml_andPathInEnvironment_failsStartup() throws IOException {
+        Path secret = Files.writeString(tempDir.resolve("db-password"), "from-file");
+        Path yaml = writeYaml("database:\n  password: yaml-secret\n");
+        Map<String, String> env = Map.of("FOGWALL_DATABASE__PASSWORD_PATH", secret.toString());
+
+        var e = assertThrows(
+                IllegalStateException.class, () -> FogwallConfigLoader.loadLayers(null, List.of(yaml), env));
+        assertTrue(e.getMessage().contains("database.password-path"), e.getMessage());
+    }
+
+    @Test
+    void requireFileSourcing_fromEnvironment_refusesEnvironmentValue() {
+        Map<String, String> env = Map.of(
+                "FOGWALL_SECRETS__REQUIRE_FILE_SOURCING", "true",
+                "FOGWALL_DATABASE_PASSWORD", "env-secret");
+
+        var e = assertThrows(IllegalStateException.class, () -> FogwallConfigLoader.loadLayers(null, List.of(), env));
+        assertTrue(e.getMessage().contains("database.password (environment)"), e.getMessage());
+    }
+
+    @Test
+    void defaults_configureNoSecrets_andDoNotRequireFileSourcing() throws GestaltException {
+        var loaded = FogwallConfigLoader.loadLayers(null, List.of(), Map.of());
+
+        assertTrue(loaded.getSecretSources().isEmpty());
+        assertFalse(loaded.getConfig().getSecrets().isRequireFileSourcing());
+    }
+
+    @Test
+    void secretValue_underMixedCaseProviderName_isAttributedToYaml() throws IOException, GestaltException {
+        Path yaml = writeYaml("""
+                providers:
+                  CorpForge:
+                    api-token: yaml-token
+                """);
+
+        var loaded = FogwallConfigLoader.loadLayers(null, List.of(yaml), Map.of());
+
+        String name = loaded.getConfig().getProviders().keySet().stream()
+                .filter(n -> n.equalsIgnoreCase("corpforge"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("yaml-token", loaded.getConfig().getProviders().get(name).getApiToken());
+        assertEquals(SecretsResolver.Source.YAML, loaded.getSecretSources().get("providers." + name + ".api-token"));
+    }
+
+    @Test
+    void emptyEnvironmentValue_clearsYamlLiteral_soThePathFormApplies() throws IOException, GestaltException {
+        Path secret = Files.writeString(tempDir.resolve("db-password"), "from-file");
+        Path yaml = writeYaml("database:\n  password: yaml-secret\n");
+        Map<String, String> env =
+                Map.of("FOGWALL_DATABASE_PASSWORD", "", "FOGWALL_DATABASE__PASSWORD_PATH", secret.toString());
+
+        var loaded = FogwallConfigLoader.loadLayers(null, List.of(yaml), env);
+
+        assertEquals("from-file", loaded.getConfig().getDatabase().getPassword());
+    }
+
+    @Test
+    void composeReload_resolvesSecretsOnTheReloadedConfig() throws IOException, GestaltException {
+        Path secret = Files.writeString(tempDir.resolve("api-token"), "token-from-file");
+        Path startupFile = writeYaml("providers:\n  github:\n    api-token-path: " + secret + "\n");
+        var startup = FogwallConfigLoader.loadLayers(null, List.of(startupFile), Map.of());
+        var reload = FogwallConfigLoader.readReloadDocument(writeYaml("commit:\n  message:\n    block: ['X']\n"));
+
+        var reloaded = FogwallConfigLoader.composeReload(startup, reload);
+
+        assertEquals("token-from-file", reloaded.getProviders().get("github").getApiToken());
+    }
+
     private Path writeYaml(String yaml) throws IOException {
         Path f = Files.createTempFile(tempDir, "override-", ".yml");
         Files.writeString(f, yaml);
