@@ -7,7 +7,7 @@ on:
   push:
     branches: ["main", "release/*"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "release/*"]
 
 # On main, give every commit its own concurrency group (via SHA) so runs never cancel
 # each other — each landed commit goes through the full CI in parallel. On PR/other refs,

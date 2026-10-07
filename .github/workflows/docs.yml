@@ -5,14 +5,14 @@ permissions:
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "release/*"]
     paths:
       - "docs/**"
       - "book.toml"
       - ".github/docs-tools.sha256"
       - ".github/workflows/docs.yml"
   pull_request:
-    branches: ["main"]
+    branches: ["main", "release/*"]
     paths:
       - "docs/**"
       - "book.toml"
