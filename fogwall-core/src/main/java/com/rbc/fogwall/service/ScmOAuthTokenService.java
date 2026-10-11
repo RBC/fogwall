@@ -10,8 +10,6 @@ import com.rbc.fogwall.user.ScmOAuthToken;
 import com.rbc.fogwall.user.ScmOAuthTokenStore;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -87,7 +85,12 @@ public class ScmOAuthTokenService {
     public record LinkStatus(String provider, Instant authorizedAt, Instant usableUntil, boolean expired) {}
 
     /** The OAuth application fogwall is registered as on one provider instance. */
-    public record OAuthClient(String clientId, Path clientSecretPath) {}
+    public record OAuthClient(String clientId, String clientSecret) {
+        @Override
+        public String toString() {
+            return "OAuthClient[clientId=" + clientId + ", clientSecret=<redacted>]";
+        }
+    }
 
     private final ScmOAuthTokenStore store;
     private final TokenCipherProvider cipherProvider;
@@ -254,18 +257,11 @@ public class ScmOAuthTokenService {
 
     private RefreshOutcome exchange(
             String tokenUrl, OAuthClient client, String provider, String refreshToken, String username) {
-        String clientSecret;
-        try {
-            clientSecret = Files.readString(client.clientSecretPath()).strip();
-        } catch (IOException e) {
-            log.error("Cannot read the OAuth client secret for provider '{}': {}", provider, e.getMessage());
-            return new RefreshOutcome.Failed();
-        }
         var form = Form.form()
                 .add("grant_type", "refresh_token")
                 .add("refresh_token", refreshToken)
                 .add("client_id", client.clientId())
-                .add("client_secret", clientSecret);
+                .add("client_secret", client.clientSecret());
         // GitLab checks the redirect URI on a refresh against the one registered; the others ignore it.
         if (serviceUrl != null && !serviceUrl.isBlank()) {
             form.add("redirect_uri", serviceUrl + "/api/scm-oauth/" + provider + "/callback");

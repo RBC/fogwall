@@ -50,6 +50,7 @@ providers:
     oauth:
       enabled: true
       client-id: playwright-placeholder-client-id # replaced by env override during capture; never used on replay
+      client-secret: playwright-placeholder-client-secret # cleared by env override during capture; never used on replay
   gitlab:
     enabled: true
     scm-api:
@@ -59,6 +60,7 @@ providers:
     oauth:
       enabled: true
       client-id: playwright-placeholder-client-id # replaced by env override during capture; never used on replay
+      client-secret: playwright-placeholder-client-secret # cleared by env override during capture; never used on replay
   codeberg:
     enabled: true
     scm-api:
@@ -68,6 +70,7 @@ providers:
     oauth:
       enabled: true
       client-id: playwright-placeholder-client-id # replaced by env override during capture; never used on replay
+      client-secret: playwright-placeholder-client-secret # cleared by env override during capture; never used on replay
   gitea:
     enabled: true
     scm-api:
@@ -77,6 +80,7 @@ providers:
     oauth:
       enabled: true
       client-id: playwright-placeholder-client-id # replaced by env override during capture; never used on replay
+      client-secret: playwright-placeholder-client-secret # cleared by env override during capture; never used on replay
   bitbucket:
     enabled: false
   corp-forge:

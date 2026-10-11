@@ -1,6 +1,7 @@
 package com.rbc.fogwall.config;
 
 import lombok.Data;
+import lombok.ToString;
 
 /** Binds a single entry under {@code providers:} in fogwall.yml. */
 @Data
@@ -42,7 +43,11 @@ public class ProviderConfig {
      * /api/v1/users/{login}/keys}. Set this to a read-only PAT for a service account with visibility of all users whose
      * keys need to be resolved. GitHub's equivalent endpoint is public and does not need a token.
      */
+    @ToString.Exclude
     private String apiToken = "";
+
+    /** Path to a file holding the API token. Mutually exclusive with {@link #apiToken}. */
+    private String apiTokenPath = "";
 
     /**
      * Provider type. Required for providers configured with custom names or providers with no canonical URI (Forgejo,

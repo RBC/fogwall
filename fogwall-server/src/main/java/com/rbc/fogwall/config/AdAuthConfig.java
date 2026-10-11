@@ -1,6 +1,7 @@
 package com.rbc.fogwall.config;
 
 import lombok.Data;
+import lombok.ToString;
 
 /** Binds the {@code auth.ad} block in fogwall.yml. */
 @Data
@@ -38,5 +39,9 @@ public class AdAuthConfig {
     private String bindDn = "";
 
     /** Password for the bind DN. Ignored when {@code bindDn} is blank. */
+    @ToString.Exclude
     private String bindPassword = "";
+
+    /** Path to a file holding the bind DN's password. Mutually exclusive with {@link #bindPassword}. */
+    private String bindPasswordPath = "";
 }

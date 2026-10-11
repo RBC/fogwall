@@ -1,6 +1,7 @@
 package com.rbc.fogwall.crypto;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
@@ -18,9 +19,10 @@ import javax.crypto.spec.SecretKeySpec;
  * AES-256-GCM {@link TokenCipher}. The stored blob is {@code IV (12 bytes) || ciphertext || GCM tag (16 bytes)} — no
  * separate IV column needed, and GCM's tag authenticates the whole blob so tampering is detected on decrypt.
  *
- * <p>The key is provided once at construction time, sourced from a platform-provided file (never generated or stored by
- * fogwall itself — see {@link #loadKeyFromFile(Path)}), consistent with fogwall's "no KMS custody" stance for
- * credential material.
+ * <p>The key is provided once at construction time, resolved from configuration while it loads (see
+ * {@link #decodeKey(byte[])} for the accepted forms), consistent with fogwall's "no KMS custody" stance for credential
+ * material. The one key fogwall generates and stores itself is the local-development fallback in
+ * {@link #loadOrGenerateKeyFile(Path)}.
  */
 public class AesGcmTokenCipher implements TokenCipher {
 
@@ -40,33 +42,47 @@ public class AesGcmTokenCipher implements TokenCipher {
         this.key = new SecretKeySpec(keyBytes, "AES");
     }
 
-    /** Reads a base64-encoded 32-byte key from a file (e.g. a mounted secret). */
-    public static byte[] loadKeyFromFile(Path path) {
-        try {
-            String encoded = Files.readString(path).strip();
-            byte[] keyBytes = Base64.getDecoder().decode(encoded);
-            if (keyBytes.length != KEY_LENGTH_BYTES) {
-                throw new IllegalStateException("Token encryption key at " + path + " must decode to "
-                        + KEY_LENGTH_BYTES + " bytes, got " + keyBytes.length);
-            }
-            return keyBytes;
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to load token encryption key from " + path, e);
+    /**
+     * Decodes key material in either accepted form: exactly 32 raw bytes, or the base64 text of 32 bytes (44
+     * characters, surrounding whitespace ignored). The two cannot collide, since base64 text of 32 bytes is never 32
+     * bytes long.
+     *
+     * @throws IllegalArgumentException naming both accepted forms when {@code material} is neither
+     */
+    public static byte[] decodeKey(byte[] material) {
+        if (material.length == KEY_LENGTH_BYTES) {
+            return material.clone();
         }
+        byte[] keyBytes;
+        try {
+            keyBytes = Base64.getDecoder().decode(new String(material, StandardCharsets.US_ASCII).strip());
+        } catch (IllegalArgumentException e) {
+            keyBytes = new byte[0];
+        }
+        if (keyBytes.length != KEY_LENGTH_BYTES) {
+            throw new IllegalArgumentException("token encryption key must be either " + KEY_LENGTH_BYTES
+                    + " raw bytes or the base64 encoding of " + KEY_LENGTH_BYTES + " bytes (44 characters), got "
+                    + material.length + " bytes that are neither");
+        }
+        return keyBytes;
     }
 
     /**
      * Loads the key from {@code path} if it exists, otherwise generates a fresh 256-bit key with {@link SecureRandom},
      * base64-encodes it, and writes it to {@code path} (creating parent directories, restricting permissions to owner
      * read/write where the filesystem supports POSIX permissions). Used only for local-devex convenience when no
-     * {@code token-encryption-key-path} is explicitly configured — production deployments should always set that key
-     * explicitly to a durable location instead of relying on this.
+     * {@code scm-oauth.token-encryption-key} or {@code scm-oauth.token-encryption-key-path} is configured — production
+     * deployments should always set that key explicitly to a durable location instead of relying on this.
      *
      * @throws IllegalStateException if a file already exists at {@code path} but does not decode to a valid key
      */
     public static byte[] loadOrGenerateKeyFile(Path path) {
         if (Files.exists(path)) {
-            return loadKeyFromFile(path);
+            try {
+                return decodeKey(Files.readAllBytes(path));
+            } catch (IOException | IllegalArgumentException e) {
+                throw new IllegalStateException("Failed to load token encryption key from " + path, e);
+            }
         }
         byte[] keyBytes = new byte[KEY_LENGTH_BYTES];
         new SecureRandom().nextBytes(keyBytes);

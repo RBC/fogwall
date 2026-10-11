@@ -41,6 +41,9 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
  *
  * <p>Hot reload sits above all of these; see {@link #composeReload}.
  *
+ * <p>Once bound, each sensitive key is resolved from its value or {@code -path} file form by {@link SecretsResolver},
+ * so the returned configuration holds resolved secrets.
+ *
  * <p>File layers are merged by fogwall rather than by Gestalt, with one rule: <b>a mapping merges key by key; a list or
  * a scalar is replaced by the last layer that sets it.</b> Gestalt's own cross-source merge combines lists position by
  * position, so a shorter list from a higher layer would keep the lower layer's trailing entries, and each entry would
@@ -171,7 +174,9 @@ public final class FogwallConfigLoader {
             log.info("Applied {} environment variable override(s) with prefix {}", envOverrides.size(), ENV_PREFIX);
         }
 
-        return new LoadedConfig(bind(tree, envOverrides), tree, envOverrides);
+        FogwallConfig config = bind(tree, envOverrides);
+        Map<String, SecretsResolver.Source> secretSources = SecretsResolver.resolve(config, tree);
+        return new LoadedConfig(config, tree, envOverrides, secretSources);
     }
 
     /**
@@ -196,6 +201,9 @@ public final class FogwallConfigLoader {
      * other path still applies.
      *
      * <p>Composition always starts from {@code startup}, never from a previous reload.
+     *
+     * <p>Sensitive keys are resolved again, without a provenance log, because building the reloaded sections constructs
+     * the provider registry. A reload applies only policy sections, so a changed secret still takes effect on restart.
      */
     public static FogwallConfig composeReload(LoadedConfig startup, ObjectNode reloadTree) throws GestaltException {
         ObjectNode reload = normalize(reloadTree);
@@ -211,7 +219,9 @@ public final class FogwallConfigLoader {
                 envOverrides.put(path, value);
             }
         });
-        return bind(tree, envOverrides);
+        FogwallConfig config = bind(tree, envOverrides);
+        SecretsResolver.resolveQuietly(config, tree);
+        return config;
     }
 
     /**

@@ -75,22 +75,42 @@ class AesGcmTokenCipherTest {
     }
 
     @Test
-    void loadKeyFromFileReadsBase64EncodedKey() throws Exception {
+    void decodeKeyAcceptsRawBytes() {
         byte[] key = randomKey();
-        Path keyFile = tempDir.resolve("token-key");
-        Files.writeString(keyFile, Base64.getEncoder().encodeToString(key));
 
-        byte[] loaded = AesGcmTokenCipher.loadKeyFromFile(keyFile);
-
-        assertArrayEquals(key, loaded);
+        assertArrayEquals(key, AesGcmTokenCipher.decodeKey(key));
     }
 
     @Test
-    void loadKeyFromFileRejectsWrongLength() throws Exception {
-        Path keyFile = tempDir.resolve("token-key");
-        Files.writeString(keyFile, Base64.getEncoder().encodeToString(new byte[16]));
+    void decodeKeyAcceptsBase64WithTrailingNewline() {
+        byte[] key = randomKey();
+        byte[] text = (Base64.getEncoder().encodeToString(key) + "\n").getBytes(StandardCharsets.US_ASCII);
 
-        assertThrows(IllegalStateException.class, () -> AesGcmTokenCipher.loadKeyFromFile(keyFile));
+        assertArrayEquals(key, AesGcmTokenCipher.decodeKey(text));
+    }
+
+    @Test
+    void decodeKeyRejectsBase64OfWrongLength_namingBothForms() {
+        byte[] text = Base64.getEncoder().encodeToString(new byte[16]).getBytes(StandardCharsets.US_ASCII);
+
+        var e = assertThrows(IllegalArgumentException.class, () -> AesGcmTokenCipher.decodeKey(text));
+        assertTrue(e.getMessage().contains("32 raw bytes"), e.getMessage());
+        assertTrue(e.getMessage().contains("base64"), e.getMessage());
+    }
+
+    @Test
+    void decodeKeyRejectsTextThatIsNotBase64() {
+        byte[] text = "not a key at all, and not base64!!!!!!!!!!!".getBytes(StandardCharsets.US_ASCII);
+
+        assertThrows(IllegalArgumentException.class, () -> AesGcmTokenCipher.decodeKey(text));
+    }
+
+    @Test
+    void decodeKeyRejectsRawKeyWithTrailingNewline() {
+        byte[] material = new byte[33];
+        material[32] = '\n';
+
+        assertThrows(IllegalArgumentException.class, () -> AesGcmTokenCipher.decodeKey(material));
     }
 
     @Test

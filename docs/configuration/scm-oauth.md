@@ -20,8 +20,8 @@ scm-oauth:
   # would confirm it is registered there.
   identity-mode: permissive
 
-  # Path to a file holding a base64-encoded 32-byte AES-256-GCM key, used to encrypt linked OAuth tokens at rest.
-  # If unset, a key is auto-generated under ./.data/ for local development only — a loud warning is logged on every
+  # Path to a file holding the 32-byte AES-256-GCM key, raw or base64, used to encrypt linked OAuth tokens at rest.
+  # token-encryption-key takes the key itself instead. If neither is set, a key is auto-generated under ./.data/ for local development only — a loud warning is logged on every
   # startup when this happens. Production deployments MUST set this to a durable, backed-up location (see
   # the administrator guide's production checklist); losing an auto-generated key just means every linked user has to
   # re-link — push authorization itself is never affected by a token-encryption problem.
@@ -76,16 +76,18 @@ providers:
 
 ## SCM OAuth properties
 
-| Property                                     | Type    | Default      | Description                                                                                                                                            |
-| -------------------------------------------- | ------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `identity-mode`                              | string  | `permissive` | `permissive` or `strict` — see above.                                                                                                                  |
-| `token-encryption-key-path`                  | string  | _(none)_     | Path to the base64-encoded 32-byte AES-256-GCM key file. Auto-generated under `./.data/` for local dev if unset and some provider has `oauth.enabled`. |
-| `max-link-age`                               | string  | _(none)_     | ISO-8601 duration after which a linked account must be linked again, counted from when the user authorized it. See the administrator guide.            |
-| `providers.<name>.oauth.enabled`             | boolean | `false`      | Whether "Link via OAuth" is offered for this provider.                                                                                                 |
-| `providers.<name>.oauth.client-id`           | string  | `""`         | OAuth app/client ID.                                                                                                                                   |
-| `providers.<name>.oauth.client-secret-path`  | string  | `""`         | Path to a file holding the OAuth app/client secret.                                                                                                    |
-| `providers.<name>.oauth.brokered-push`       | boolean | `false`      | Forward server-mode pushes made with a fogwall-issued git credential with the pusher's linked OAuth token. Requires `oauth.enabled`. See below.        |
-| `providers.<name>.oauth.deferred-forwarding` | boolean | `false`      | Acknowledge those pushes once received and forward them after approval. Requires `oauth.brokered-push`. Dashboard only. See below.                     |
+| Property                                     | Type    | Default      | Description                                                                                                                                                                        |
+| -------------------------------------------- | ------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `identity-mode`                              | string  | `permissive` | `permissive` or `strict` — see above.                                                                                                                                              |
+| `token-encryption-key-path`                  | string  | _(none)_     | Path to a file holding the 32-byte AES-256-GCM key, raw or base64. Auto-generated under `./.data/` for local dev if neither key form is set and some provider has `oauth.enabled`. |
+| `token-encryption-key`                       | string  | _(none)_     | The key itself, raw or base64. Mutually exclusive with `token-encryption-key-path`, which is preferred. See [Secrets](secrets.md).                                                 |
+| `max-link-age`                               | string  | _(none)_     | ISO-8601 duration after which a linked account must be linked again, counted from when the user authorized it. See the administrator guide.                                        |
+| `providers.<name>.oauth.enabled`             | boolean | `false`      | Whether "Link via OAuth" is offered for this provider.                                                                                                                             |
+| `providers.<name>.oauth.client-id`           | string  | `""`         | OAuth app/client ID.                                                                                                                                                               |
+| `providers.<name>.oauth.client-secret-path`  | string  | `""`         | Path to a file holding the OAuth app/client secret. This or `client-secret` is required once `enabled` and `client-id` are set.                                                    |
+| `providers.<name>.oauth.client-secret`       | string  | `""`         | The OAuth app/client secret itself. Mutually exclusive with `client-secret-path`, which is preferred.                                                                              |
+| `providers.<name>.oauth.brokered-push`       | boolean | `false`      | Forward server-mode pushes made with a fogwall-issued git credential with the pusher's linked OAuth token. Requires `oauth.enabled`. See below.                                    |
+| `providers.<name>.oauth.deferred-forwarding` | boolean | `false`      | Acknowledge those pushes once received and forward them after approval. Requires `oauth.brokered-push`. Dashboard only. See below.                                                 |
 
 **Registering a GitHub App:** account permissions needed are exactly **Email addresses (read-only)** and **Git SSH keys
 (read-only)** — no others, and no private key (a GitHub App's private key is for app/installation-level auth, which this

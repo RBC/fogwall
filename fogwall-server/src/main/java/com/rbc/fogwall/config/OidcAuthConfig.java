@@ -1,6 +1,7 @@
 package com.rbc.fogwall.config;
 
 import lombok.Data;
+import lombok.ToString;
 
 /** Binds the {@code auth.oidc} block in fogwall.yml. */
 @Data
@@ -24,7 +25,11 @@ public class OidcAuthConfig {
      * OAuth2 client secret. Not required when {@code private-key-path} is set (the server authenticates via signed JWT
      * assertion instead).
      */
+    @ToString.Exclude
     private String clientSecret = "";
+
+    /** Path to a file holding the OAuth2 client secret. Mutually exclusive with {@link #clientSecret}. */
+    private String clientSecretPath = "";
 
     /**
      * Optional JWK Set URI for JWT signature verification. When set, the client registration is built from explicit

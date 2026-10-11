@@ -1,6 +1,7 @@
 package com.rbc.fogwall.config;
 
 import lombok.Data;
+import lombok.ToString;
 
 /** Binds the {@code auth.ldap} block in fogwall.yml. */
 @Data
@@ -25,7 +26,11 @@ public class LdapAuthConfig {
     private String bindDn = "";
 
     /** Password for the bind DN. Ignored when {@code bindDn} is blank. */
+    @ToString.Exclude
     private String bindPassword = "";
+
+    /** Path to a file holding the bind DN's password. Mutually exclusive with {@link #bindPassword}. */
+    private String bindPasswordPath = "";
 
     /**
      * Base DN for group search, relative to the base DN in {@code url}. When set, group membership is used to derive
