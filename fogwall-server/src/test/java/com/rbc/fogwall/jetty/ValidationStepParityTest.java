@@ -208,6 +208,7 @@ class ValidationStepParityTest {
         var factory = new ServerReceivePackFactory(
                 provider,
                 CommitConfig.defaultConfig(),
+                mock(PushIdentityResolver.class),
                 mock(PushStore.class),
                 mock(ApprovalGateway.class),
                 mock(SelfApprovalPolicy.class));

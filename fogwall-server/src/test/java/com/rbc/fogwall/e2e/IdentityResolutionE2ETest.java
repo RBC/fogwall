@@ -28,7 +28,8 @@ import org.junit.jupiter.api.*;
  * </ul>
  *
  * <p>A third scenario validates {@link CommitAttributionPolicyFilter} in STRICT mode: commit email must match a
- * registered email for the push user, otherwise the push is rejected.
+ * registered email for the push user, otherwise the push is rejected. A fourth runs a fixture with {@code users: []}
+ * and asserts that a push is refused as "Identity Not Linked" in both the transparent proxy and server mode.
  *
  * <p>Uses a simple username-lookup resolver (no external SCM API calls) to map HTTP Basic-auth usernames to proxy
  * users. Credentials in the clone URL must be valid Gitea credentials: the linked user is
@@ -200,6 +201,34 @@ class IdentityResolutionE2ETest {
             assertTrue(
                     result.output().toLowerCase().contains("commit email"),
                     "output should mention the commit attribution policy. Output:\n" + result.output());
+        }
+    }
+
+    // ── Scenario D: no users configured ───────────────────────────────────────────
+
+    @Test
+    @Order(4)
+    void noUsersConfigured_pushRefused_inBothModes() throws Exception {
+        try (var noUsersProxy = new JettyProxyFixture(gitea.getBaseUri(), List.of(), null)) {
+            String creds = URLEncoder.encode(GiteaContainer.TEST_USER, StandardCharsets.UTF_8)
+                    + ":"
+                    + URLEncoder.encode(testUserToken, StandardCharsets.UTF_8);
+            String repoPath = "/" + GiteaContainer.TEST_ORG + "/" + GiteaContainer.TEST_REPO + ".git";
+            GitHelper git = new GitHelper(tempDir);
+
+            for (String base : List.of(noUsersProxy.getProxyBase(), noUsersProxy.getPushBase())) {
+                String url = base.replace("http://", "http://" + creds + "@") + repoPath;
+                Path repo = git.clone(url, "ident-no-users-" + base.hashCode());
+                git.setAuthor(repo, GiteaContainer.VALID_AUTHOR_NAME, GiteaContainer.TEST_USER_EMAIL);
+                git.writeAndStage(repo, "test-file.txt", "no users test - " + Instant.now());
+                git.commit(repo, "feat: push with no users configured");
+
+                var result = git.pushWithResult(repo);
+                assertFalse(result.succeeded(), "push with no users configured should be refused via " + base);
+                assertTrue(
+                        result.output().contains("Identity Not Linked"),
+                        "output should mention 'Identity Not Linked' via " + base + ". Output:\n" + result.output());
+            }
         }
     }
 }

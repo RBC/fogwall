@@ -16,8 +16,8 @@ import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Objects;
 import java.util.Optional;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -30,11 +30,17 @@ import lombok.extern.slf4j.Slf4j;
  * {@link ScmApiAuditFilter}.
  */
 @Slf4j
-@RequiredArgsConstructor
 public class ScmApiAuthenticateFilter implements Filter {
 
     private final FogwallProvider provider;
     private final PushIdentityResolver pushIdentityResolver;
+
+    public ScmApiAuthenticateFilter(FogwallProvider provider, PushIdentityResolver pushIdentityResolver) {
+        this.provider = provider;
+        this.pushIdentityResolver = Objects.requireNonNull(
+                pushIdentityResolver,
+                "pushIdentityResolver is required: without it no SCM API caller could be matched to a fogwall user");
+    }
 
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
@@ -54,7 +60,7 @@ public class ScmApiAuthenticateFilter implements Filter {
         }
 
         String token = ScmApiTokenExtractor.extractToken(httpRequest);
-        if (token == null || pushIdentityResolver == null) {
+        if (token == null) {
             unauthorized(httpResponse, "Missing or unsupported Authorization or PRIVATE-TOKEN header");
             return;
         }

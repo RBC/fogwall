@@ -46,6 +46,18 @@ class JettyConfigurationBuilderTest {
         assertInstanceOf(AutoApprovalGateway.class, gateway);
     }
 
+    // ---- buildPushIdentityResolver ----
+
+    @Test
+    void buildPushIdentityResolver_noConfiguredUsers_stillBuildsResolver() {
+        var config = new FogwallConfig();
+        config.getDatabase().setName("test-" + UUID.randomUUID());
+        config.setUsers(List.of());
+        var builder = new JettyConfigurationBuilder(config);
+
+        assertNotNull(builder.buildPushIdentityResolver(builder.buildUserStore()));
+    }
+
     // ---- validateProviderReferences ----
 
     @Test

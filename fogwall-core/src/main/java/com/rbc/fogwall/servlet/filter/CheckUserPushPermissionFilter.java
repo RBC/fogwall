@@ -22,6 +22,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
@@ -29,8 +30,8 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Filter that validates a user has permission to push to a repository.
  *
- * <p>Fail-closed: if no permission grants exist for the requested repository the push is denied. A {@code null}
- * {@link PushIdentityResolver} means open mode (no user store configured) and skips all checks.
+ * <p>Fail-closed: a push whose credentials resolve to no fogwall user is denied, and so is a push to a repository with
+ * no permission grant for the resolved user.
  *
  * <p>This filter runs at order 150, which is in the authorization range (0-199).
  */
@@ -51,7 +52,9 @@ public final class CheckUserPushPermissionFilter extends AbstractFogwallFilter {
             RepoPermissionService repoPermissionService,
             ScmOAuthConfig.IdentityMode identityMode) {
         super(LifecycleStage.MANDATORY_PROCESSING, Set.of(HttpOperation.PUSH));
-        this.identityResolver = identityResolver;
+        this.identityResolver = Objects.requireNonNull(
+                identityResolver,
+                "identityResolver is required: without it no push could be matched to a fogwall user");
         this.repoPermissionService = repoPermissionService;
         this.identityMode = identityMode != null ? identityMode : ScmOAuthConfig.IdentityMode.PERMISSIVE;
     }
@@ -82,12 +85,6 @@ public final class CheckUserPushPermissionFilter extends AbstractFogwallFilter {
         var requestDetails = (GitRequestDetails) request.getAttribute(GIT_REQUEST_ATTR);
         if (requestDetails == null) {
             log.warn("GitRequestDetails not found in request attributes");
-            return;
-        }
-
-        // No resolver means open mode — no user store configured, skip the check.
-        if (identityResolver == null) {
-            log.debug("No PushIdentityResolver configured — skipping push permission check (open mode)");
             return;
         }
 

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.LifecycleStage;
+import com.rbc.fogwall.service.PushIdentityResolver;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -72,7 +73,7 @@ class PreApprovedShortCircuitTest {
     @Test
     void authorizationFiltersOptOutOfTheShortCircuit() {
         assertFalse(
-                new CheckUserPushPermissionFilter(null, null).skipWhenPreApproved(),
+                new CheckUserPushPermissionFilter(mock(PushIdentityResolver.class), null).skipWhenPreApproved(),
                 "CheckUserPushPermissionFilter must re-check the pusher on a pre-approved re-push");
         assertFalse(
                 new UrlRuleAggregateFilter(null, null).skipWhenPreApproved(),

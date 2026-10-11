@@ -73,6 +73,7 @@ class SelfApprovalWiringTest {
         when(context.pushStore()).thenReturn(pushStore);
         when(context.approvalGateway()).thenReturn(mock(ApprovalGateway.class));
         when(context.selfApprovalPolicy()).thenReturn(policy);
+        when(context.pushIdentityResolver()).thenReturn(mock(PushIdentityResolver.class));
         var factory = FogwallServletRegistrar.buildReceivePackFactory(
                 context, new JettyConfigurationBuilder(new FogwallConfig()), provider);
 

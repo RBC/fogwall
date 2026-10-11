@@ -51,6 +51,10 @@ without a `password-hash` for IdP-authed users).
 (default: `groups`) are mapped to roles via `auth.role-mappings`. Email comes from the `email` claim in the ID token.
 Users whose token carries no matching group claim are denied access.
 
+Every push must resolve to a fogwall user, in both proxy modes and over SSH: the push credential has to map to a user
+from the `users:` block or the database. A push that maps to none is refused as "Identity not linked". `users: []` with
+no other user source refuses every push.
+
 ## Dashboard roles
 
 Roles control what a user can do in the dashboard and REST API:
