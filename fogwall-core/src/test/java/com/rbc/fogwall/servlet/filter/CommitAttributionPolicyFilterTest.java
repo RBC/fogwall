@@ -12,7 +12,10 @@ import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.GitHubProvider;
+import com.rbc.fogwall.provider.ScmUserInfo;
 import com.rbc.fogwall.service.PushIdentityResolver;
+import com.rbc.fogwall.service.TokenPushIdentityResolver;
+import com.rbc.fogwall.user.StaticUserStore;
 import com.rbc.fogwall.user.UserEntry;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletInputStream;
@@ -162,22 +165,36 @@ class CommitAttributionPolicyFilterTest {
         verifyNoInteractions(resolver);
     }
 
-    // ---- null resolver (open mode) → no-op ----
+    // ---- no fogwall users at all → no PASS is recorded for an unattributable push ----
 
     @Test
-    void nullResolver_doesNothing() throws Exception {
+    void noUsers_tokenOwnerUnknown_recordsNoPass() throws Exception {
+        GitHubProvider github = spy(new GitHubProvider("/proxy"));
+        doReturn(Optional.of(new ScmUserInfo("alice", Optional.empty())))
+                .when(github)
+                .fetchUserFromHttp(any(), any());
+        var emptyUsers = new TokenPushIdentityResolver(new StaticUserStore(List.of()));
         GitRequestDetails details = pushDetailsWithCommits(List.of(commitWith("abc1234", "other@example.com")));
+        details.setProvider(github);
         FakeResponse resp = new FakeResponse();
 
         new CommitAttributionPolicyFilter(
-                        null,
+                        emptyUsers,
                         CommitConfig.CommitAttributionPolicyConfig.builder()
                                 .committer(CommitConfig.CommitAttributionPolicyMode.STRICT)
                                 .build())
-                .doHttpFilter(mockRequest(details, basicAuth("alice-git", "token")), resp.mock);
+                .doHttpFilter(mockRequest(details, basicAuth("me", "tok")), resp.mock);
 
-        assertFalse(resp.committed.get());
-        assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
+        assertTrue(details.getSteps().isEmpty(), "An unresolved push must not be recorded as attribution PASS");
+    }
+
+    @Test
+    void nullResolver_isRejectedAtConstruction() {
+        assertThrows(
+                NullPointerException.class,
+                () -> new CommitAttributionPolicyFilter(
+                        null,
+                        CommitConfig.CommitAttributionPolicyConfig.builder().build()));
     }
 
     // ---- no commits → no-op ----

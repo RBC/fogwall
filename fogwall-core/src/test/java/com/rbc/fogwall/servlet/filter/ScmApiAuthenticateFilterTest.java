@@ -6,9 +6,12 @@ import static org.mockito.Mockito.*;
 
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.GitHubProvider;
+import com.rbc.fogwall.provider.ScmUserInfo;
 import com.rbc.fogwall.service.PushIdentityResolver;
 import com.rbc.fogwall.service.ResolvedScmIdentity;
+import com.rbc.fogwall.service.TokenPushIdentityResolver;
 import com.rbc.fogwall.servlet.ScmApiRequestContext;
+import com.rbc.fogwall.user.StaticUserStore;
 import com.rbc.fogwall.user.UserEntry;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletOutputStream;
@@ -86,15 +89,27 @@ class ScmApiAuthenticateFilterTest {
     }
 
     @Test
-    void nullResolver_returns401() throws Exception {
+    void noUsers_tokenOwnerUnknown_returns401() throws Exception {
+        GitHubProvider github = spy(new GitHubProvider("/scm-api/github.com"));
+        doReturn(Optional.of(new ScmUserInfo("alice", Optional.empty())))
+                .when(github)
+                .fetchUserFromHttp(any(), any());
+        var emptyUsers = new TokenPushIdentityResolver(new StaticUserStore(List.of()));
         HttpServletRequest req = mockRequest("Bearer sometoken");
-        HttpServletResponse resp = mockResponse(new ByteArrayOutputStream());
+        ByteArrayOutputStream body = new ByteArrayOutputStream();
+        HttpServletResponse resp = mockResponse(body);
         FilterChain chain = mock(FilterChain.class);
 
-        new ScmApiAuthenticateFilter(provider, null).doFilter(req, resp, chain);
+        new ScmApiAuthenticateFilter(github, emptyUsers).doFilter(req, resp, chain);
 
         verify(resp).setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        assertTrue(body.toString().contains("did not resolve to a known fogwall identity"), body.toString());
         verifyNoInteractions(chain);
+    }
+
+    @Test
+    void nullResolver_isRejectedAtConstruction() {
+        assertThrows(NullPointerException.class, () -> new ScmApiAuthenticateFilter(provider, null));
     }
 
     @Test

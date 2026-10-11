@@ -23,11 +23,6 @@ providers:
   codeberg:
     enabled: false
 
-# Open mode: with no users configured there is no identity to resolve, so the permission and attribution checks skip.
-# The base config ships an `admin` user, so a fixture that wants open mode has to say so. A fixture that wants the
-# identity path declares its own users in the generated override, which replaces this.
-users: []
-
 commit:
   author:
     email:

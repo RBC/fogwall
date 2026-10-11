@@ -13,6 +13,7 @@ import com.rbc.fogwall.user.UserEntry;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.lib.ObjectId;
@@ -36,8 +37,8 @@ import org.eclipse.jgit.transport.ReceivePack;
  * </ul>
  *
  * <p>Applies to both transports: HTTP pushes resolve the identity from the token; SSH pushes use the public-key
- * pre-authenticated identity. When no {@link PushIdentityResolver} is configured and the push is not pre-authenticated
- * (open/permissive mode) the hook is a no-op.
+ * pre-authenticated identity. A push that resolves to no fogwall user records no result here; the push permission check
+ * refuses it.
  */
 @Slf4j
 public final class CommitAttributionPolicyHook implements MandatoryFogwallHook {
@@ -54,7 +55,8 @@ public final class CommitAttributionPolicyHook implements MandatoryFogwallHook {
             ValidationContext validationContext,
             PushContext pushContext,
             FogwallProvider provider) {
-        this.identityResolver = identityResolver;
+        this.identityResolver = Objects.requireNonNull(
+                identityResolver, "identityResolver is required: without it no commit could be attributed to a user");
         this.config = config != null
                 ? config
                 : CommitConfig.CommitAttributionPolicyConfig.builder().build();
@@ -79,11 +81,6 @@ public final class CommitAttributionPolicyHook implements MandatoryFogwallHook {
         if (preAuthenticated.isPresent()) {
             user = preAuthenticated.get();
         } else {
-            if (identityResolver == null) {
-                log.debug("No identity resolver configured — skipping commit attribution policy (open mode)");
-                recordPass();
-                return;
-            }
             String pushUser = pushContext.getPushUser();
             String pushToken = pushContext.getPushToken();
             if (pushUser == null || pushUser.isEmpty()) {

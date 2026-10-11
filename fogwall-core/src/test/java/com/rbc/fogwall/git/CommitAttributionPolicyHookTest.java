@@ -8,7 +8,10 @@ import com.rbc.fogwall.config.CommitConfig;
 import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.GitHubProvider;
+import com.rbc.fogwall.provider.ScmUserInfo;
 import com.rbc.fogwall.service.PushIdentityResolver;
+import com.rbc.fogwall.service.TokenPushIdentityResolver;
+import com.rbc.fogwall.user.StaticUserStore;
 import com.rbc.fogwall.user.UserEntry;
 import java.io.File;
 import java.nio.file.Path;
@@ -111,24 +114,42 @@ class CommitAttributionPolicyHookTest {
         verifyNoInteractions(resolver);
     }
 
-    // ---- null resolver (open mode) → always passes ----
+    // ---- no fogwall users at all → no PASS is recorded for an unattributable push ----
 
     @Test
-    void nullResolver_skipsCheck() throws Exception {
+    void noUsers_tokenOwnerUnknown_recordsNoPass() throws Exception {
+        GitHubProvider github = spy(new GitHubProvider("/proxy"));
+        doReturn(Optional.of(new ScmUserInfo("alice", Optional.empty())))
+                .when(github)
+                .fetchUserFromHttp(any(), any());
+        var emptyUsers = new TokenPushIdentityResolver(new StaticUserStore(List.of()));
+
         RevCommit c1 = createCommit("init", "other@example.com");
         RevCommit c2 = createCommit("second", "other@example.com");
         ReceivePack rp = new ReceivePack(repo);
         ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
         PushContext pc = new PushContext();
+        pc.setPushUser("me");
+        pc.setPushToken("tok");
         ValidationContext vc = new ValidationContext();
 
         new CommitAttributionPolicyHook(
-                        null, committerOnly(CommitConfig.CommitAttributionPolicyMode.STRICT), vc, pc, GITHUB)
+                        emptyUsers, committerOnly(CommitConfig.CommitAttributionPolicyMode.STRICT), vc, pc, github)
                 .onPreReceive(rp, List.of(cmd));
 
-        assertFalse(vc.hasIssues());
-        assertFalse(pc.getSteps().isEmpty());
-        assertEquals(StepStatus.PASS, pc.getSteps().get(0).getStatus());
+        assertTrue(pc.getSteps().isEmpty(), "An unresolved push must not be recorded as attribution PASS");
+    }
+
+    @Test
+    void nullResolver_isRejectedAtConstruction() {
+        assertThrows(
+                NullPointerException.class,
+                () -> new CommitAttributionPolicyHook(
+                        null,
+                        committerOnly(CommitConfig.CommitAttributionPolicyMode.STRICT),
+                        new ValidationContext(),
+                        new PushContext(),
+                        GITHUB));
     }
 
     // ---- no pushUser in repo config → skip ----
