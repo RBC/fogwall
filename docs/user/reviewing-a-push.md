@@ -10,7 +10,8 @@ page. Pushes awaiting review have status **PENDING**.
 | `RECEIVED`  | Push has arrived and is being processed                                                 |
 | `PENDING`   | Validation passed; awaiting a reviewer's decision                                       |
 | `APPROVED`  | Approved by a reviewer (or self-certified) — will be forwarded                          |
-| `FORWARDED` | Successfully sent to the upstream SCM                                                   |
+| `FORWARDED` | Accepted by the upstream SCM                                                            |
+| `ERROR`     | Forwarding failed — the upstream refused the push or could not be reached               |
 | `REJECTED`  | Reviewer declined the push                                                              |
 | `BLOCKED`   | Validation failed — push will not be forwarded                                          |
 | `CANCELED`  | Canceled by the pusher, an administrator, or anyone with a permission on the repository |

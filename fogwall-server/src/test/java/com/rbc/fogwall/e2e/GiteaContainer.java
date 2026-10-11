@@ -267,6 +267,22 @@ class GiteaContainer extends GenericContainer<GiteaContainer> {
         }
     }
 
+    /** Protects {@code branch} so that no one, administrators included, may push to it. */
+    void protectBranch(String org, String repoName, String branch) throws IOException, InterruptedException {
+        var client = HttpClient.newHttpClient();
+        String auth = Base64.getEncoder().encodeToString((ADMIN_USER + ":" + ADMIN_PASSWORD).getBytes());
+        var resp = apiPost(
+                client,
+                auth,
+                getBaseUrl() + "/api/v1/repos/" + org + "/" + repoName + "/branch_protections",
+                "{\"rule_name\":" + jsonString(branch) + ",\"branch_name\":" + jsonString(branch)
+                        + ",\"enable_push\":false}");
+        if (resp.statusCode() >= 400) {
+            throw new RuntimeException("Failed to protect " + branch + " on " + org + "/" + repoName + " ("
+                    + resp.statusCode() + "): " + resp.body());
+        }
+    }
+
     /**
      * Forks {@code owner/repo} into {@value #TEST_USER}'s account as {@code forkName}, which may differ from the
      * upstream's name. Must be called after {@link #createTestUser()}.

@@ -11,6 +11,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Optional;
 import javax.net.ssl.SSLContext;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jetty.client.BytesRequestContent;
@@ -19,7 +20,10 @@ import org.eclipse.jetty.client.Request;
 import org.eclipse.jetty.client.Response;
 import org.eclipse.jetty.client.transport.HttpClientTransportOverHTTP;
 import org.eclipse.jetty.ee11.proxy.AsyncProxyServlet;
+import org.eclipse.jetty.http.HttpHeader;
+import org.eclipse.jetty.http.HttpStatus;
 import org.eclipse.jetty.io.ClientConnector;
+import org.eclipse.jetty.util.Callback;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 
 @Slf4j
@@ -29,6 +33,8 @@ public class FogwallServlet extends AsyncProxyServlet.Transparent {
     public static final String PRE_APPROVED_ATTR = "fogwall.preApproved";
     /** Request attribute holding the UUID of the original APPROVED push record for a transparent-proxy re-push. */
     public static final String APPROVED_PUSH_ID_ATTR = "fogwall.approvedPushId";
+
+    private static final String REPORT_SCANNER_ATTR = "fogwall.reportScanner";
 
     /**
      * Request attribute holding the OpenTelemetry {@link Context} of the per-request span, set by
@@ -130,8 +136,29 @@ public class FogwallServlet extends AsyncProxyServlet.Transparent {
     }
 
     /**
-     * Called by Jetty on the async thread after the upstream server responds successfully (2xx). Transitions the
-     * original approved push record to {@link PushStatus#FORWARDED}.
+     * For an approved re-push, feeds each chunk of the upstream response to a {@link ReceivePackReportScanner} before
+     * relaying it. The chunk is passed on unchanged and without delay.
+     */
+    @Override
+    protected void onResponseContent(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            Response proxyResponse,
+            byte[] buffer,
+            int offset,
+            int length,
+            Callback callback) {
+        if (request.getAttribute(APPROVED_PUSH_ID_ATTR) != null) {
+            reportScanner(request).accept(buffer, offset, length);
+        }
+        super.onResponseContent(request, response, proxyResponse, buffer, offset, length, callback);
+    }
+
+    /**
+     * Called by Jetty on the async thread once a complete upstream response has been relayed, whatever its status. For
+     * an approved re-push, transitions the original push record to {@link PushStatus#FORWARDED} only when upstream
+     * answered 2xx and its report-status accepted the push; a non-2xx status or a refused ref records
+     * {@link PushStatus#ERROR}. A compressed response cannot be read as report-status, so only its status is judged.
      */
     @Override
     protected void onProxyResponseSuccess(
@@ -139,19 +166,52 @@ public class FogwallServlet extends AsyncProxyServlet.Transparent {
         String pushId = (String) clientRequest.getAttribute(APPROVED_PUSH_ID_ATTR);
         if (pushId != null) {
             try (Scope ignored = otelScope(clientRequest)) {
-                log.info(
-                        "Transparent proxy re-push {} forwarded successfully (upstream HTTP {})",
-                        pushId,
-                        serverResponse.getStatus());
-                pushStore.updateForwardStatus(pushId, PushStatus.FORWARDED, null);
+                recordForwardOutcome(clientRequest, pushId, serverResponse);
             }
         }
         super.onProxyResponseSuccess(clientRequest, proxyResponse, serverResponse);
     }
 
+    private void recordForwardOutcome(HttpServletRequest clientRequest, String pushId, Response serverResponse) {
+        int status = serverResponse.getStatus();
+        if (!HttpStatus.isSuccess(status)) {
+            recordForwardError(pushId, "Upstream returned HTTP " + status);
+            return;
+        }
+        String contentEncoding = serverResponse.getHeaders().get(HttpHeader.CONTENT_ENCODING);
+        if (contentEncoding != null && !contentEncoding.equalsIgnoreCase("identity")) {
+            log.warn(
+                    "Transparent proxy re-push {} upstream response is {}-encoded; report-status not inspected",
+                    pushId,
+                    contentEncoding);
+        } else {
+            Optional<String> refused = reportScanner(clientRequest).failure();
+            if (refused.isPresent()) {
+                recordForwardError(pushId, refused.get());
+                return;
+            }
+        }
+        log.info("Transparent proxy re-push {} forwarded successfully (upstream HTTP {})", pushId, status);
+        pushStore.updateForwardStatus(pushId, PushStatus.FORWARDED, null);
+    }
+
+    private void recordForwardError(String pushId, String errorMessage) {
+        log.warn("Transparent proxy re-push {} failed: {}", pushId, errorMessage);
+        pushStore.updateForwardStatus(pushId, PushStatus.ERROR, errorMessage);
+    }
+
+    private static ReceivePackReportScanner reportScanner(HttpServletRequest request) {
+        if (request.getAttribute(REPORT_SCANNER_ATTR) instanceof ReceivePackReportScanner scanner) {
+            return scanner;
+        }
+        var scanner = new ReceivePackReportScanner();
+        request.setAttribute(REPORT_SCANNER_ATTR, scanner);
+        return scanner;
+    }
+
     /**
-     * Called by Jetty on the async thread when the upstream returns a non-2xx response or a network error. Transitions
-     * the original approved push record to {@link PushStatus#ERROR}.
+     * Called by Jetty on the async thread when the upstream exchange fails before a complete response arrives (timeout,
+     * refused connection, reset). Transitions the original approved push record to {@link PushStatus#ERROR}.
      */
     @Override
     protected void onProxyResponseFailure(
@@ -166,8 +226,7 @@ public class FogwallServlet extends AsyncProxyServlet.Transparent {
                     ? "Upstream returned HTTP " + upstreamStatus
                     : "Upstream error: " + (failure != null ? failure.getMessage() : "unknown");
             try (Scope ignored = otelScope(clientRequest)) {
-                log.warn("Transparent proxy re-push {} failed: {}", pushId, errorMessage);
-                pushStore.updateForwardStatus(pushId, PushStatus.ERROR, errorMessage);
+                recordForwardError(pushId, errorMessage);
             }
         }
         super.onProxyResponseFailure(clientRequest, proxyResponse, serverResponse, failure);

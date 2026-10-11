@@ -98,7 +98,8 @@ git push → /proxy/<provider>/<owner>/<repo>.git
              ▼
      FogwallServlet (Jetty AsyncProxyServlet)
        • HTTP proxy pass-through to upstream
-       • on response: update push record → FORWARDED or ERROR
+       • on response: update push record → FORWARDED (2xx, every ref accepted
+         in the relayed report-status) or ERROR
 ```
 
 ### Per-request object quarantine
