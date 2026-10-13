@@ -28,6 +28,12 @@ repositories: GitHub `repo` + `delete_repo`; GitLab `api`; Codeberg/Gitea `write
 `read:user` — and, for the contributions scenarios, open issues and pull requests: GitHub `repo` plus `read:org`
 (`gh pr edit` queries the org's teams); Gitea `write:issue`. The CLIs are run against throwaway config directories; your real logins are untouched.
 
+fogwall.sql is a static dump: every row's timestamp is frozen at capture time, but the app replaying it runs with
+today's clock. Any config with a day/time-based cutoff that sweeps or expires state (e.g. server.pending-push-expiry-days)
+will eventually fire against rows that were never meant to look that old, failing specs that have nothing to do with
+whatever PR happens to be running CI that day. When adding one, give fogwall-playwright.yml an override long enough to
+outlive any realistic gap between re-captures — don't leave it to inherit the production default.
+
 Env knobs: KEEP_WORK=1 keeps the temp dir on exit; SKIP_OAUTH=1 skips the manual pause (dev's github/gitlab
 identities are then seeded unverified so the run still resolves — never commit such a dump); SKIP_PUSHES=1 runs only
 the contributions scenarios; PUSH_TIMEOUT=<s> caps how long a server-mode push may be held open (default 90).
