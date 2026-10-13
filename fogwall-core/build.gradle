@@ -75,6 +75,13 @@ dependencies {
     // runnable modules (fogwall-server / fogwall-dashboard) and passed in as an OpenTelemetry instance.
     // Exposed as api so those modules share the BOM's version alignment and see the OpenTelemetry type.
     api platform("io.opentelemetry:opentelemetry-bom:${opentelemetryBomVersion}")
+    // opentelemetry-instrumentation-bom-alpha (fogwall-server) pulls its own, older opentelemetry-bom-alpha —
+    // the instrumentation project's alpha releases trail core by a cycle. Importing this platform too forces
+    // the newer alpha artifacts (opentelemetry-api-incubator etc.) to the version that matches opentelemetryBomVersion,
+    // since Gradle resolves conflicting platform constraints to the highest version rather than erroring.
+    // Without it, api-incubator stays pinned to the instrumentation bom's older pairing and breaks against a
+    // newer core opentelemetry-api at runtime (NoClassDefFoundError, e.g. ConfigUtil moved/removed between releases).
+    api platform("io.opentelemetry:opentelemetry-bom-alpha:${opentelemetryBomVersion}-alpha")
     api "io.opentelemetry:opentelemetry-api"
 
     // Spring JDBC (NamedParameterJdbcTemplate, RowMapper) + transaction abstraction

@@ -153,6 +153,11 @@ Mechanical rules (`git add -A`, `--no-verify`, `[ci skip]`, `Claude-Session:` tr
 - Always include `closes #N` / `resolves #N` when addressing a GitHub issue — but grep for the actual implementation
   first. A docs-only PR once closed #83 and an unrelated commit closed #107.
 - `gh pr merge` is always `--merge`.
+- Never write `owner/repo#N` (or anything else GitHub auto-links) when referencing another project's issue or PR — that
+  syntax creates a cross-reference notification on their tracker, which is noise on a repo we have no standing in unless
+  we actually mean to engage with it (e.g. filing our own fix there). Reference it in plain prose instead, e.g.
+  "opentelemetry-java-instrumentation discussion number 13614", so nothing gets linkified. Ask if it's unclear whether a
+  given mention should actually notify the other project.
 
 ## Issue and PR hygiene
 
