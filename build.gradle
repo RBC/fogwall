@@ -14,8 +14,8 @@ buildscript {
 }
 
 plugins {
-    id 'com.diffplug.spotless' version '8.10.3' apply false
-    id 'org.cyclonedx.bom' version '3.4.1'
+    id 'com.diffplug.spotless' version '8.10.4' apply false
+    id 'org.cyclonedx.bom' version '3.5.1'
     id 'com.github.node-gradle.node' version '7.1.0' apply false
     id 'com.github.jk1.dependency-license-report' version '3.1.4' apply false
 }
@@ -29,10 +29,10 @@ ext {
     jgitVersion = '7.8.0.202609011348-r'
 
     // HTTP
-    apacheHttpClientVersion = '5.6.4'
+    apacheHttpClientVersion = '5.6.5'
 
     // Jetty / Servlet
-    jettyVersion = '12.1.13'
+    jettyVersion = '12.1.14'
     jakartaServletVersion = '6.1.0'
 
     // Logging
@@ -42,7 +42,7 @@ ext {
     // Database
     hikariVersion = '7.1.0'
     h2Version = '2.5.252'
-    postgresVersion = '42.7.13'
+    postgresVersion = '42.7.14'
     mysqlVersion = '26.7.0'
     mariadbVersion = '3.5.10'
     mongoVersion = '5.13.0'
@@ -63,7 +63,7 @@ ext {
     snakeyamlVersion = '2.6'
 
     // Gestalt config
-    gestaltVersion = '0.38.1'
+    gestaltVersion = '0.39.0'
 
     // BouncyCastle
     bouncyCastleVersion = '1.86'
@@ -85,11 +85,11 @@ ext {
 
     // OpenAPI spec generation
     swaggerCoreVersion = '2.2.55'
-    swaggerUiVersion = '5.32.15'
+    swaggerUiVersion = '5.33.1'
 
     // OpenTelemetry
     opentelemetryBomVersion = '1.66.0'
-    opentelemetryInstrumentationAlphaBomVersion = '2.31.1-alpha'
+    opentelemetryInstrumentationAlphaBomVersion = '2.32.0-alpha'
 }
 
 allprojects {
