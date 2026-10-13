@@ -27,6 +27,10 @@ server:
     trust-on-first-use: true
   allowed-origins:
     - http://localhost:5173
+  # fogwall.sql is a static dump with real capture-time timestamps; the default 30-day expiry (ServerConfig) would
+  # sweep the pending-* scenarios to CANCELED on replay once the dump outlives it, regardless of what a PR touches.
+  # Set well past any realistic time between re-captures instead of matching prod behavior here.
+  pending-push-expiry-days: 3650
 
 # Four real providers plus one disabled built-in and one custom-typed instance, so the providers page shows every
 # shape: HTTP-only, HTTP+SSH, disabled, custom name/type/uri. The placeholder OAuth client-id keeps the profile page's
