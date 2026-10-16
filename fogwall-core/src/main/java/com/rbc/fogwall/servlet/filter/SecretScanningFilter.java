@@ -72,6 +72,11 @@ public final class SecretScanningFilter extends AbstractFogwallFilter {
     }
 
     @Override
+    public boolean enabled() {
+        return configSupplier.get().isEnabled();
+    }
+
+    @Override
     public void doHttpFilter(HttpServletRequest request, HttpServletResponse response) throws IOException {
         var requestDetails = (GitRequestDetails) request.getAttribute(GIT_REQUEST_ATTR);
         if (requestDetails == null) {
@@ -80,11 +85,6 @@ public final class SecretScanningFilter extends AbstractFogwallFilter {
         }
 
         var config = configSupplier.get();
-        if (!config.isEnabled()) {
-            log.debug("Secret scanning disabled - skipping");
-            return;
-        }
-
         var repo = requestDetails.getLocalRepository();
         if (repo == null) {
             log.warn(

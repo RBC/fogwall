@@ -30,6 +30,15 @@ public sealed interface FogwallHook extends PreReceiveHook permits MandatoryFogw
         return false;
     }
 
+    /**
+     * Whether this hook's check is turned on in the config it was built with. The chain runner does not invoke a hook
+     * that is off, so it records no step and sends nothing to the client. A hook is built per push from the live
+     * config, so a reload takes effect on the next push.
+     */
+    default boolean enabled() {
+        return true;
+    }
+
     /** Returns a human-readable name for this hook, used in logging and diagnostics. */
     String getName();
 

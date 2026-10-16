@@ -63,18 +63,15 @@ class ContentPatternDiffHookTest {
     }
 
     @Test
-    void disabled_recordsSkippedStep() throws Exception {
-        RevCommit c1 = commit("a.txt", "clean");
-        RevCommit c2 = commit("customer.txt", "ssn on file: 212-96-7431");
-
-        PushContext pushCtx = new PushContext();
-        runHooks(ContentPatternConfig.defaultConfig(), pushCtx, c1.getId(), c2.getId());
-
-        var step = pushCtx.getSteps().stream()
-                .filter(s -> s.getStepName().equals("content-pattern-diff"))
-                .findFirst()
-                .orElseThrow();
-        assertEquals(StepStatus.SKIPPED, step.getStatus());
+    void disabled_isOff() {
+        assertFalse(new ContentPatternDiffHook(ContentPatternConfig.defaultConfig(), new PushContext()).enabled());
+        assertFalse(new ContentPatternDiffHook(
+                        ContentPatternConfig.builder()
+                                .enabled(true)
+                                .bundles(List.of())
+                                .build(),
+                        new PushContext())
+                .enabled());
     }
 
     @Test
@@ -96,24 +93,15 @@ class ContentPatternDiffHookTest {
     }
 
     @Test
-    void scanDiffDisabled_recordsSkippedStep_evenWhenEnabled() throws Exception {
-        RevCommit c1 = commit("a.txt", "clean");
-        RevCommit c2 = commit("customer.txt", "ssn on file: 212-96-7431");
-
+    void scanDiffDisabled_isOff_evenWhenEnabled() {
         ContentPatternConfig config = ContentPatternConfig.builder()
                 .enabled(true)
                 .bundles(List.of("national-id-us"))
                 .scanDiff(false)
                 .build();
 
-        PushContext pushCtx = new PushContext();
-        runHooks(config, pushCtx, c1.getId(), c2.getId());
-
-        var step = pushCtx.getSteps().stream()
-                .filter(s -> s.getStepName().equals("content-pattern-diff"))
-                .findFirst()
-                .orElseThrow();
-        assertEquals(StepStatus.SKIPPED, step.getStatus());
+        assertFalse(new ContentPatternDiffHook(config, new PushContext()).enabled());
+        assertTrue(new ContentPatternDiffHook(enabledConfig(), new PushContext()).enabled());
     }
 
     @Test

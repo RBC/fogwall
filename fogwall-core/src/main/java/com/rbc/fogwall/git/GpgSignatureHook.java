@@ -34,6 +34,11 @@ public final class GpgSignatureHook implements MandatoryFogwallHook {
     private final PushContext pushContext;
 
     @Override
+    public boolean enabled() {
+        return config.isEnabled();
+    }
+
+    @Override
     public void onPreReceive(ReceivePack rp, Collection<ReceiveCommand> commands) {
         var check = new GpgSignatureCheck(config);
         Repository repo = rp.getRepository();

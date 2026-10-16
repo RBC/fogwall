@@ -534,6 +534,10 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
                     if (skipValidationHooks && hook instanceof FogwallHook) {
                         continue;
                     }
+                    // A check turned off in config does not run and leaves no trace on the push.
+                    if (hook instanceof FogwallHook fogwallHook && !fogwallHook.enabled()) {
+                        continue;
+                    }
                     // Pause heartbeat dots while the approval hook streams its own progress messages to
                     // the client; dots interleave with gateway messages without this guard.
                     boolean isApprovalHook = hook instanceof ApprovalPreReceiveHook;
