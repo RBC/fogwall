@@ -59,8 +59,7 @@ public class FogwallConfig {
 
     /**
      * Optional list of proxy users. Each entry defines a username, BCrypt password hash, email addresses, and SCM
-     * identities. When non-empty, these users are the authoritative source for authentication and push authorization.
-     * When empty, all pushes are permitted (legacy / open mode).
+     * identities. They join the users held in the database; every push must resolve to one of them or it is refused.
      */
     private List<UserConfig> users = new ArrayList<>();
 

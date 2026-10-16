@@ -146,6 +146,7 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
     public ServerReceivePackFactory(
             FogwallProvider provider,
             CommitConfig commitConfig,
+            PushIdentityResolver pushIdentityResolver,
             PushStore pushStore,
             ApprovalGateway approvalGateway,
             SelfApprovalPolicy selfApprovalPolicy) {
@@ -158,7 +159,7 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
                 ContentPatternConfig::defaultConfig,
                 GpgConfig.defaultConfig(),
                 null,
-                null,
+                pushIdentityResolver,
                 pushStore,
                 approvalGateway,
                 selfApprovalPolicy,
@@ -196,7 +197,9 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
                 : ContentPatternConfig::defaultConfig;
         this.gpgConfig = gpgConfig != null ? gpgConfig : GpgConfig.defaultConfig();
         this.repoPermissionService = repoPermissionService;
-        this.pushIdentityResolver = pushIdentityResolver;
+        this.pushIdentityResolver = Objects.requireNonNull(
+                pushIdentityResolver,
+                "pushIdentityResolver is required: without it no push could be matched to a fogwall user");
         // The push store and approval gateway are security controls, not optional collaborators: without the
         // store there is no push record (no audit trail, no approval state), and without the gateway nothing
         // gates forwarding. Failing here beats assembling a hook chain that silently skips both.

@@ -10,9 +10,12 @@ import com.rbc.fogwall.git.HttpOperation;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.GitHubProvider;
+import com.rbc.fogwall.provider.ScmUserInfo;
 import com.rbc.fogwall.service.PushIdentityResolver;
 import com.rbc.fogwall.service.ResolvedScmIdentity;
+import com.rbc.fogwall.service.TokenPushIdentityResolver;
 import com.rbc.fogwall.user.ScmIdentity;
+import com.rbc.fogwall.user.StaticUserStore;
 import com.rbc.fogwall.user.UserEntry;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletInputStream;
@@ -163,19 +166,30 @@ class CheckUserPushPermissionFilterTest {
         verifyNoInteractions(resolver, permService);
     }
 
-    // ---- null resolver (open mode) → skip check ----
+    // ---- no fogwall users at all → the push is refused, not waved through ----
 
     @Test
-    void nullResolver_skipsCheck_doesNotBlock() throws Exception {
+    void noUsers_tokenOwnerUnknown_refusedAsIdentityNotLinked() throws Exception {
+        GitHubProvider github = spy(new GitHubProvider("/proxy"));
+        doReturn(Optional.of(new ScmUserInfo("alice", Optional.empty())))
+                .when(github)
+                .fetchUserFromHttp(any(), any());
+        var emptyUsers = new TokenPushIdentityResolver(new StaticUserStore(List.of()));
         GitRequestDetails details = pushDetails();
+        details.setProvider(github);
         FakeResponse resp = new FakeResponse();
 
-        new CheckUserPushPermissionFilter(null, permService)
-                .doHttpFilter(mockRequest(details, basicAuth("anyone", "token")), resp.mock);
+        new CheckUserPushPermissionFilter(emptyUsers, permService)
+                .doHttpFilter(mockRequest(details, basicAuth("me", "tok")), resp.mock);
 
-        assertFalse(resp.committed.get(), "Open mode (null resolver) must not block");
-        assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+        assertEquals("Identity not linked", details.getReason());
         verifyNoInteractions(permService);
+    }
+
+    @Test
+    void nullResolver_isRejectedAtConstruction() {
+        assertThrows(NullPointerException.class, () -> new CheckUserPushPermissionFilter(null, permService));
     }
 
     // ---- resolver returns empty → reject ----

@@ -29,22 +29,37 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 
 /**
- * The push store, approval gateway and self-approval policy are security controls: without the store there is no push
- * record and no approval state, without the gateway nothing gates forwarding, and without the policy a self-approval
- * would forward unchecked. Construction must fail loudly rather than assemble a hook chain that silently skips any of
- * them.
+ * The identity resolver, push store, approval gateway and self-approval policy are security controls: without the
+ * resolver no push is matched to a user, without the store there is no push record and no approval state, without the
+ * gateway nothing gates forwarding, and without the policy a self-approval would forward unchecked. Construction must
+ * fail loudly rather than assemble a hook chain that silently skips any of them.
  */
 class ServerReceivePackFactoryTest {
 
     private final GitHubProvider provider = new GitHubProvider("/push");
     private final SelfApprovalPolicy policy = mock(SelfApprovalPolicy.class);
+    private final PushIdentityResolver resolver = mock(PushIdentityResolver.class);
+
+    @Test
+    void nullIdentityResolver_refusedAtConstruction() {
+        var ex = assertThrows(
+                NullPointerException.class,
+                () -> new ServerReceivePackFactory(
+                        provider,
+                        CommitConfig.defaultConfig(),
+                        null,
+                        mock(PushStore.class),
+                        mock(ApprovalGateway.class),
+                        policy));
+        assertTrue(ex.getMessage().startsWith("pushIdentityResolver"), ex.getMessage());
+    }
 
     @Test
     void nullPushStore_refusedAtConstruction() {
         assertThrows(
                 NullPointerException.class,
                 () -> new ServerReceivePackFactory(
-                        provider, CommitConfig.defaultConfig(), null, mock(ApprovalGateway.class), policy));
+                        provider, CommitConfig.defaultConfig(), resolver, null, mock(ApprovalGateway.class), policy));
     }
 
     @Test
@@ -52,13 +67,18 @@ class ServerReceivePackFactoryTest {
         assertThrows(
                 NullPointerException.class,
                 () -> new ServerReceivePackFactory(
-                        provider, CommitConfig.defaultConfig(), mock(PushStore.class), null, policy));
+                        provider, CommitConfig.defaultConfig(), resolver, mock(PushStore.class), null, policy));
     }
 
     @Test
     void bothControlDependenciesPresent_constructs() {
         assertDoesNotThrow(() -> new ServerReceivePackFactory(
-                provider, CommitConfig.defaultConfig(), mock(PushStore.class), mock(ApprovalGateway.class), policy));
+                provider,
+                CommitConfig.defaultConfig(),
+                resolver,
+                mock(PushStore.class),
+                mock(ApprovalGateway.class),
+                policy));
     }
 
     @Test
@@ -68,6 +88,7 @@ class ServerReceivePackFactoryTest {
                 () -> new ServerReceivePackFactory(
                         provider,
                         CommitConfig.defaultConfig(),
+                        resolver,
                         mock(PushStore.class),
                         mock(ApprovalGateway.class),
                         null));
