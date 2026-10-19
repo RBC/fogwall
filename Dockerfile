@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1@sha256:2780b5c3bab67f1f76c781860de469442999ed1a0d7992a5efdf2cffc0e3d769
 
 # ── Build stage ──────────────────────────────────────────────────────────────
-FROM docker.io/eclipse-temurin:25-jdk-noble@sha256:589ff4cc3f71aab462e7048a47a0d10edf57fbccde3fceea2281e610bf5880b4 AS builder
+FROM docker.io/eclipse-temurin:25-jdk-noble@sha256:ba0f0e1a33864105e1d454e88105c617ab40f71062db1f306bf58be32a3f8e5e AS builder
 
 # Install Node.js directly from the official distribution with SHA256 verification.
 # To update: download the new tarball, verify against nodejs.org/dist/vX.Y.Z/SHASUMS256.txt,
@@ -65,7 +65,7 @@ RUN sed -i \
 # ── Runtime stage: standalone server (no dashboard, no Spring, no Node) ────────
 # Not built by default — `docker build --target server .` opts in explicitly.
 # Lighter footprint: no React/Node build step, no Spring/dashboard dependencies.
-FROM docker.io/eclipse-temurin:25-jre-noble@sha256:d9a39a23634650173f1e2bbc176227af9728587ecf0f4b62d53e9355cd7a19ab AS server
+FROM docker.io/eclipse-temurin:25-jre-noble@sha256:3f2223fe04b750aa5a8179e29b5c9a1ddf7665fc9bb08bfe11ad01d143bc13a5 AS server
 
 WORKDIR /app
 
@@ -105,7 +105,7 @@ USER 1000
 ENTRYPOINT ["/app/bin/fogwall-server"]
 
 # ── Runtime stage: dashboard (default) ──────────────────────────────────────────
-FROM docker.io/eclipse-temurin:25-jre-noble@sha256:d9a39a23634650173f1e2bbc176227af9728587ecf0f4b62d53e9355cd7a19ab AS dashboard
+FROM docker.io/eclipse-temurin:25-jre-noble@sha256:3f2223fe04b750aa5a8179e29b5c9a1ddf7665fc9bb08bfe11ad01d143bc13a5 AS dashboard
 
 WORKDIR /app
 
