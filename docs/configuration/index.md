@@ -12,6 +12,7 @@ fogwall uses layered YAML configuration merged at startup. Defaults ship inside 
 - [Configuration files and profiles](files-and-profiles.md) — load order, profiles, and the bundled profile files
 - [Environment variable overrides](environment-variables.md) — mapping a YAML key to a `FOGWALL_*` variable
 - [Server settings](server.md) — ports, service URL, timeouts, and session persistence
+- [Secrets](secrets.md) — the value and file forms of each sensitive key, and requiring the file form
 - [Local mirror cache](mirror-cache.md) — the local clone fogwall keeps of each upstream repo
 - [TLS](tls.md) — the HTTPS listener and trusting a custom upstream CA
 - [Outbound proxy](outbound-proxy.md) — reaching upstreams through a corporate HTTP proxy

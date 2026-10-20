@@ -15,6 +15,10 @@ auth:
   # OAuth → Brokered pushes.
   git-credentials:
     max-lifetime: P90D
+
+  # Shared key for REST automation, sent in the X-Api-Key header. It carries no user identity. Takes api-key or
+  # api-key-path; see Secrets. The FOGWALL_API_KEY environment variable is a deprecated alias for api-key.
+  api-key-path: /run/secrets/fogwall-api-key
 ```
 
 ## Local (default)

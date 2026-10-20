@@ -3,7 +3,7 @@
 # and overrides fogwall's bundled defaults.
 
 # API key for the REST approval endpoints (X-Api-Key header).
-# Set FOGWALL_API_KEY=<strong-secret> in your environment or docker-compose env section.
+# Set auth.api-key-path, or FOGWALL_AUTH__API_KEY=<strong-secret> in your environment or docker-compose env section.
 # Default (dev only): change-me-in-production
 # See: https://github.com/RBC/fogwall/issues/57
 

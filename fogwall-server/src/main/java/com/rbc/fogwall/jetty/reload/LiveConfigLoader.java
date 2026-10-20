@@ -14,6 +14,7 @@ import java.nio.file.*;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.Executors;
@@ -326,32 +327,25 @@ public class LiveConfigLoader {
      * <p>A fresh clone is performed on every call — no local state is retained between reloads. This avoids pull
      * failures caused by force-pushes on the remote branch.
      *
-     * <p>Authentication is opt-in via environment variables — no config fields required:
-     *
-     * <ul>
-     *   <li>{@code FOGWALL_RELOAD_GIT_AUTH_USERNAME} — git username (or a token username placeholder)
-     *   <li>{@code FOGWALL_RELOAD_GIT_AUTH_PASSWORD} — personal access token or password
-     * </ul>
-     *
-     * If neither variable is set the clone proceeds without credentials (suitable for public repos or SSH-based URLs
-     * where the JVM's SSH agent handles auth).
+     * <p>Authentication uses {@code reload.git.auth}, resolved and checked as a pair while the configuration loaded.
+     * With it unset the clone proceeds without credentials (suitable for public repos).
      */
     private Path fetchGitConfig(Path cloneDir) throws GitAPIException, IOException {
         ReloadConfig.GitSourceConfig gitCfg = reloadConfig.getGit();
-        UsernamePasswordCredentialsProvider creds = gitCredentials();
+        Optional<UsernamePasswordCredentialsProvider> creds = gitCredentials();
 
         log.info(
                 "Cloning config repo {} branch={} into {} (auth={})",
                 gitCfg.getUrl(),
                 gitCfg.getBranch(),
                 cloneDir,
-                creds != null ? "yes" : "no");
+                creds.isPresent() ? "yes" : "no");
         var clone = Git.cloneRepository()
                 .setURI(gitCfg.getUrl())
                 .setBranch(gitCfg.getBranch())
                 .setDirectory(cloneDir.toFile())
                 .setDepth(1);
-        if (creds != null) clone.setCredentialsProvider(creds);
+        creds.ifPresent(clone::setCredentialsProvider);
         clone.call().close();
 
         Path configFile = cloneDir.resolve(gitCfg.getFilePath());
@@ -376,21 +370,13 @@ public class LiveConfigLoader {
         }
     }
 
-    /**
-     * Reads {@code FOGWALL_RELOAD_GIT_AUTH_USERNAME} and {@code FOGWALL_RELOAD_GIT_AUTH_PASSWORD} from the environment.
-     * Returns a credentials provider if both are set, or {@code null} if either is absent.
-     */
-    private static UsernamePasswordCredentialsProvider gitCredentials() {
-        String username = System.getenv("FOGWALL_RELOAD_GIT_AUTH_USERNAME");
-        String password = System.getenv("FOGWALL_RELOAD_GIT_AUTH_PASSWORD");
-        if (username != null && !username.isBlank() && password != null && !password.isBlank()) {
-            return new UsernamePasswordCredentialsProvider(username, password);
+    /** A credentials provider for {@code reload.git.auth}, or empty when it is unset. */
+    private Optional<UsernamePasswordCredentialsProvider> gitCredentials() {
+        ReloadConfig.GitAuthConfig auth = reloadConfig.getGit().getAuth();
+        if (auth.getUsername().isBlank()) {
+            return Optional.empty();
         }
-        if ((username != null) != (password != null)) {
-            log.warn("FOGWALL_RELOAD_GIT_AUTH_USERNAME and FOGWALL_RELOAD_GIT_AUTH_PASSWORD must both be set "
-                    + "for git auth to work — proceeding without credentials");
-        }
-        return null;
+        return Optional.of(new UsernamePasswordCredentialsProvider(auth.getUsername(), auth.getPassword()));
     }
 
     // -----------------------------------------------------------------------

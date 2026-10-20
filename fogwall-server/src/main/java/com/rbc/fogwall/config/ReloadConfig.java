@@ -1,6 +1,7 @@
 package com.rbc.fogwall.config;
 
 import lombok.Data;
+import lombok.ToString;
 
 /** Binds the {@code reload:} block in fogwall.yml. */
 @Data
@@ -59,5 +60,23 @@ public class ReloadConfig {
          * disable periodic refresh (reload only via {@code POST /api/config/reload}).
          */
         private int intervalSeconds = 300;
+
+        /** Credentials for cloning a private repository. Unset clones without credentials. */
+        private GitAuthConfig auth = new GitAuthConfig();
+    }
+
+    /** HTTPS credentials for the reload repository: set both or neither. */
+    @Data
+    public static class GitAuthConfig {
+
+        /** Git username, or any non-empty placeholder such as {@code git} for token authentication. */
+        private String username = "";
+
+        /** Personal access token or password. Mutually exclusive with {@link #passwordPath}. */
+        @ToString.Exclude
+        private String password = "";
+
+        /** Path to a file holding the token or password. Mutually exclusive with {@link #password}. */
+        private String passwordPath = "";
     }
 }

@@ -29,7 +29,7 @@ services:
       gitea:
         condition: service_healthy
     environment:
-      FOGWALL_API_KEY: "change-me-in-production"
+      FOGWALL_AUTH__API_KEY: "change-me-in-production"
       # Composed by compose.sh, which knows which overlays are in play. Defaults to the base profile alone.
       FOGWALL_CONFIG_PROFILES: ${FOGWALL_CONFIG_PROFILES:-docker-default}
       # Uncomment together with the volume mount above to activate debug logging:

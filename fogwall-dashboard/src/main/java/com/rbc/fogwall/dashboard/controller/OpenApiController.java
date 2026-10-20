@@ -106,7 +106,7 @@ public class OpenApiController {
                                         .in(SecurityScheme.In.HEADER)
                                         .name("X-Api-Key")
                                         .description(
-                                                "API key for programmatic access. Configured via the FOGWALL_API_KEY environment variable."))
+                                                "API key for programmatic access. Configured via auth.api-key or auth.api-key-path."))
                         .addSecuritySchemes(
                                 "session",
                                 new SecurityScheme()

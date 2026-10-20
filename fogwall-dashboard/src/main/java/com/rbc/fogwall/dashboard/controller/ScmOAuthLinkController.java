@@ -26,8 +26,6 @@ import jakarta.servlet.http.HttpSession;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -328,7 +326,7 @@ public class ScmOAuthLinkController {
                 return;
             }
             String accessToken = new String(cipher.get().decrypt(encrypted.get()), StandardCharsets.UTF_8);
-            String clientSecret = readClientSecret(settings);
+            String clientSecret = settings.getClientSecret();
             if (provider.get() instanceof GitHubProvider github) {
                 String credentials = Base64.getEncoder()
                         .encodeToString((settings.getClientId() + ":" + clientSecret).getBytes(StandardCharsets.UTF_8));
@@ -415,10 +413,9 @@ public class ScmOAuthLinkController {
             String providerId,
             String code)
             throws Exception {
-        String clientSecret = readClientSecret(providerSettings);
         var form = Form.form()
                 .add("client_id", providerSettings.getClientId())
-                .add("client_secret", clientSecret)
+                .add("client_secret", providerSettings.getClientSecret())
                 .add("code", code)
                 .add("redirect_uri", callbackUrl(providerId))
                 .add("grant_type", "authorization_code")
@@ -567,10 +564,6 @@ public class ScmOAuthLinkController {
                 .filter(ForgejoEmailEntry::verified)
                 .map(ForgejoEmailEntry::email)
                 .toList();
-    }
-
-    private String readClientSecret(OAuthProviderSettings providerSettings) throws IOException {
-        return Files.readString(Path.of(providerSettings.getClientSecretPath())).strip();
     }
 
     private String callbackUrl(String providerId) {

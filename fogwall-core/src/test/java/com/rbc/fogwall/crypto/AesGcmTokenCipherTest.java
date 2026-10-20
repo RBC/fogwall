@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.Base64;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -40,7 +41,7 @@ class AesGcmTokenCipherTest {
         byte[] blobA = cipher.encrypt(plaintext);
         byte[] blobB = cipher.encrypt(plaintext);
 
-        assertFalse(java.util.Arrays.equals(blobA, blobB), "random IV should make repeated encryptions differ");
+        assertFalse(Arrays.equals(blobA, blobB), "random IV should make repeated encryptions differ");
     }
 
     @Test
@@ -75,22 +76,75 @@ class AesGcmTokenCipherTest {
     }
 
     @Test
-    void loadKeyFromFileReadsBase64EncodedKey() throws Exception {
+    void decodeKeyAcceptsBase64WithTrailingNewline() {
         byte[] key = randomKey();
-        Path keyFile = tempDir.resolve("token-key");
-        Files.writeString(keyFile, Base64.getEncoder().encodeToString(key));
 
-        byte[] loaded = AesGcmTokenCipher.loadKeyFromFile(keyFile);
-
-        assertArrayEquals(key, loaded);
+        assertArrayEquals(key, AesGcmTokenCipher.decodeKey(Base64.getEncoder().encodeToString(key) + "\n"));
     }
 
     @Test
-    void loadKeyFromFileRejectsWrongLength() throws Exception {
-        Path keyFile = tempDir.resolve("token-key");
-        Files.writeString(keyFile, Base64.getEncoder().encodeToString(new byte[16]));
+    void decodeKeyRejectsBase64OfFewerThan32Bytes() {
+        var e = assertThrows(
+                IllegalArgumentException.class,
+                () -> AesGcmTokenCipher.decodeKey(Base64.getEncoder().encodeToString(new byte[31])));
+        assertTrue(e.getMessage().contains("exactly 32 bytes, got 31"), e.getMessage());
+    }
 
-        assertThrows(IllegalStateException.class, () -> AesGcmTokenCipher.loadKeyFromFile(keyFile));
+    @Test
+    void decodeKeyRejectsBase64OfMoreThan32Bytes_ratherThanTruncating() {
+        var e = assertThrows(
+                IllegalArgumentException.class,
+                () -> AesGcmTokenCipher.decodeKey(Base64.getEncoder().encodeToString(new byte[33])));
+        assertTrue(e.getMessage().contains("exactly 32 bytes, got 33"), e.getMessage());
+    }
+
+    @Test
+    void decodeKeyRejects32CharactersOfText_sinceKeysAreBase64Only() {
+        // 32 characters of base64 alphabet decode to 24 bytes; there is no raw-bytes form to fall back to.
+        var e = assertThrows(
+                IllegalArgumentException.class, () -> AesGcmTokenCipher.decodeKey("0123456789abcdef0123456789abcdef"));
+        assertTrue(e.getMessage().contains("got 24"), e.getMessage());
+    }
+
+    @Test
+    void decodeKeyRejectsTextThatIsNotBase64_withoutQuotingIt() {
+        var e = assertThrows(
+                IllegalArgumentException.class,
+                () -> AesGcmTokenCipher.decodeKey("not a key at all, and not base64!!!!!!!!!!!"));
+        assertTrue(e.getMessage().contains("openssl rand -base64 32"), e.getMessage());
+        assertFalse(e.getMessage().contains("!"), e.getMessage());
+    }
+
+    @Test
+    void decodeKeyRejectsBase64AlphabetWithBrokenPadding() {
+        var e = assertThrows(IllegalArgumentException.class, () -> AesGcmTokenCipher.decodeKey("AAAAA"));
+        assertTrue(e.getMessage().contains("standard base64"), e.getMessage());
+    }
+
+    @Test
+    void decodeKeyRejectsTheUrlSafeAlphabet() {
+        byte[] key = new byte[32];
+        Arrays.fill(key, (byte) 0xff);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> AesGcmTokenCipher.decodeKey(Base64.getUrlEncoder().encodeToString(key)));
+    }
+
+    @Test
+    void decodeKeyRejectsALineBreakInsideTheKey() {
+        String encoded = Base64.getEncoder().encodeToString(randomKey());
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> AesGcmTokenCipher.decodeKey(encoded.substring(0, 20) + "\n" + encoded.substring(20)));
+    }
+
+    @Test
+    void decodeKeyRejectsDataAfterThePadding() {
+        String encoded = Base64.getEncoder().encodeToString(randomKey());
+
+        assertThrows(IllegalArgumentException.class, () -> AesGcmTokenCipher.decodeKey(encoded + "AAAA"));
     }
 
     @Test
