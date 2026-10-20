@@ -52,13 +52,13 @@ public final class ContentPatternMessageFilter extends AbstractFogwallFilter {
     }
 
     @Override
+    public boolean enabled() {
+        return configSupplier.get().scansCommitMessages();
+    }
+
+    @Override
     public void doHttpFilter(HttpServletRequest request, HttpServletResponse response) throws IOException {
         ContentPatternConfig config = configSupplier.get();
-        if (!config.isEnabled() || !config.isScanCommitMessages()) {
-            log.debug("Content pattern message scanning disabled - skipping");
-            return;
-        }
-
         var requestDetails = (GitRequestDetails) request.getAttribute(GIT_REQUEST_ATTR);
         if (requestDetails == null) {
             log.warn("GitRequestDetails not found in request attributes");

@@ -63,17 +63,11 @@ class BinaryBlobDetectionHookTest {
     }
 
     @Test
-    void disabled_skipsEntirely() throws Exception {
-        RevCommit base = commitText(".gitkeep", "");
-        RevCommit tip = commitBytes("big.bin", new byte[2048]);
-
-        ValidationContext ctx = new ValidationContext();
-        PushContext pushCtx = new PushContext();
+    void disabled_isOff() {
         BinaryBlobConfig config =
                 BinaryBlobConfig.builder().enabled(false).maxSizeBytes(1024).build();
-        runHook(config, ctx, pushCtx, base.getId(), tip.getId(), "refs/heads/main");
 
-        assertFalse(ctx.hasIssues());
+        assertFalse(new BinaryBlobDetectionHook(config, new ValidationContext(), new PushContext()).enabled());
     }
 
     @Test

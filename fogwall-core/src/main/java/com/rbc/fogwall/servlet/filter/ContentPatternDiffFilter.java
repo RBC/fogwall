@@ -56,13 +56,13 @@ public final class ContentPatternDiffFilter extends AbstractFogwallFilter {
     }
 
     @Override
+    public boolean enabled() {
+        return configSupplier.get().scansDiff();
+    }
+
+    @Override
     public void doHttpFilter(HttpServletRequest request, HttpServletResponse response) throws IOException {
         ContentPatternConfig config = configSupplier.get();
-        if (!config.isEnabled() || !config.isScanDiff()) {
-            log.debug("Content pattern diff scanning disabled - skipping");
-            return;
-        }
-
         var requestDetails = (GitRequestDetails) request.getAttribute(GIT_REQUEST_ATTR);
         if (requestDetails == null) {
             log.warn("GitRequestDetails not found in request attributes");
