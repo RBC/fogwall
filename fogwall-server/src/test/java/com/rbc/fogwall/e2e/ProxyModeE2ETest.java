@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.model.Attestation;
 import com.rbc.fogwall.db.model.PushQuery;
+import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -171,6 +172,69 @@ class ProxyModeE2ETest {
         // Re-push - should succeed
         var rePush = git.pushWithResult(repo);
         assertTrue(rePush.succeeded(), "re-push should succeed. Output:\n" + rePush.output());
+    }
+
+    @Test
+    void cleanCommit_blockedThenApproved_recordedForwarded() throws Exception {
+        GitHelper git = helper();
+        Path repo = git.clone(repoUrl(), "proxy-pass-recorded");
+        git.setAuthor(repo, GiteaContainer.VALID_AUTHOR_NAME, GiteaContainer.VALID_AUTHOR_EMAIL);
+        git.writeAndStage(repo, "test-file.txt", "recorded forward - " + Instant.now());
+        git.commit(repo, "feat: forward that is recorded");
+        String pushId = git.pushWithResult(repo).extractPushId();
+        approve(pushId);
+
+        var rePush = git.pushWithResult(repo);
+        assertTrue(rePush.succeeded(), "re-push after approval should succeed. Output:\n" + rePush.output());
+        PushRecord record = awaitForwardOutcome(pushId);
+        assertEquals(PushStatus.FORWARDED, record.getStatus(), record.getErrorMessage());
+    }
+
+    @Test
+    void approvedRePush_refusedByUpstream_recordedAsError() throws Exception {
+        GitHelper git = helper();
+        Path repo = git.clone(repoUrl(), "proxy-upstream-refusal");
+        git.setAuthor(repo, GiteaContainer.VALID_AUTHOR_NAME, GiteaContainer.VALID_AUTHOR_EMAIL);
+        git.writeAndStage(repo, "test-file.txt", "upstream refusal - " + Instant.now());
+        git.commit(repo, "feat: push that upstream refuses");
+        String pushId = git.pushWithResult(repo).extractPushId();
+        assertNotNull(pushId, "first push should be held for review");
+        approve(pushId);
+
+        gitea.protectBranch(GiteaContainer.TEST_ORG, repoName, "main");
+        var rePush = git.pushWithResult(repo);
+        assertFalse(rePush.succeeded(), "upstream should refuse the push. Output:\n" + rePush.output());
+
+        PushRecord record = awaitForwardOutcome(pushId);
+        assertEquals(PushStatus.ERROR, record.getStatus(), "an upstream refusal is not a forward");
+        assertTrue(
+                record.getErrorMessage().startsWith("Upstream rejected refs/heads/main"),
+                "the record should carry upstream's reason: " + record.getErrorMessage());
+    }
+
+    private void approve(String pushId) {
+        pushStore()
+                .approve(
+                        pushId,
+                        Attestation.builder()
+                                .pushId(pushId)
+                                .type(Attestation.Type.APPROVAL)
+                                .reviewerUsername("e2e-test-reviewer")
+                                .reason("Approved by e2e test")
+                                .build());
+    }
+
+    /** The forward outcome is written from Jetty's response-complete callback, which may land after git exits. */
+    private PushRecord awaitForwardOutcome(String pushId) throws InterruptedException {
+        Instant deadline = Instant.now().plusSeconds(30);
+        while (Instant.now().isBefore(deadline)) {
+            PushRecord record = pushStore().findById(pushId).orElseThrow();
+            if (record.getStatus() == PushStatus.FORWARDED || record.getStatus() == PushStatus.ERROR) {
+                return record;
+            }
+            Thread.sleep(100);
+        }
+        throw new AssertionError("push " + pushId + " has no forward outcome");
     }
 
     // ---- failing tests (mirrors test-proxy-fail.sh) ----
