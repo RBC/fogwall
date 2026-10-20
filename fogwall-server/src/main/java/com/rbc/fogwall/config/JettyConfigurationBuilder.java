@@ -1123,9 +1123,9 @@ public class JettyConfigurationBuilder {
     }
 
     /**
-     * Builds the {@link PushIdentityResolver}. When users are configured, returns a token-based resolver that calls the
-     * SCM provider API to map a PAT to an SCM login, then looks up the proxy user via SCM identity. Returns null when
-     * no users are configured (open/permissive mode).
+     * Builds the {@link PushIdentityResolver}: a token-based resolver that calls the SCM provider API to map a PAT to
+     * an SCM login, then looks up the proxy user via SCM identity. Never null: a push that resolves to no user in the
+     * store is refused.
      *
      * <p>HTTP Basic-auth username is intentionally NOT used for identity resolution — it is an unverifiable claim and
      * would violate compliance guarantees. Bitbucket is a known exception (the Bitbucket API does not return a login
@@ -1136,8 +1136,6 @@ public class JettyConfigurationBuilder {
      * {@code FOGWALL_SCM_CACHE_MAX_AGE_DAYS} environment variable.
      */
     public PushIdentityResolver buildPushIdentityResolver(ReadOnlyUserStore userStore) {
-        if (config.getUsers().isEmpty()) return null;
-
         PushIdentityResolver tokenResolver = new TokenPushIdentityResolver(userStore);
 
         ScmTokenCache tokenCache = cachedTokenCache != null ? cachedTokenCache : buildTokenCache();

@@ -17,6 +17,7 @@ import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.GenericProxyProvider;
 import com.rbc.fogwall.service.GitCredentialService;
+import com.rbc.fogwall.service.PushIdentityResolver;
 import com.rbc.fogwall.service.ScmOAuthTokenService;
 import com.rbc.fogwall.servlet.filter.FogwallCredentialFilter;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
@@ -69,7 +70,7 @@ class ServerPathAliasTest {
                 mock(PushStore.class), // the factory requires its control dependencies even at registration time
                 null, // serviceUrl
                 mock(ApprovalGateway.class),
-                null, // pushIdentityResolver
+                mock(PushIdentityResolver.class),
                 null, // repoPermissionService
                 mock(SelfApprovalPolicy.class),
                 10,
@@ -112,7 +113,7 @@ class ServerPathAliasTest {
                 mock(PushStore.class),
                 null,
                 mock(ApprovalGateway.class),
-                null,
+                mock(PushIdentityResolver.class),
                 null,
                 mock(SelfApprovalPolicy.class),
                 10,

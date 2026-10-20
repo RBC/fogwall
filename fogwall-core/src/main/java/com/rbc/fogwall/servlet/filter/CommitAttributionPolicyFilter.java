@@ -18,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -48,7 +49,8 @@ public final class CommitAttributionPolicyFilter extends AbstractFogwallFilter {
     public CommitAttributionPolicyFilter(
             PushIdentityResolver identityResolver, Supplier<CommitConfig> commitConfigSupplier) {
         super(LifecycleStage.MANDATORY_PROCESSING, Set.of(HttpOperation.PUSH));
-        this.identityResolver = identityResolver;
+        this.identityResolver = Objects.requireNonNull(
+                identityResolver, "identityResolver is required: without it no commit could be attributed to a user");
         this.configSupplier = () -> {
             CommitConfig.CommitAttributionPolicyConfig c =
                     commitConfigSupplier.get().getAttributionPolicy();
@@ -62,7 +64,8 @@ public final class CommitAttributionPolicyFilter extends AbstractFogwallFilter {
     public CommitAttributionPolicyFilter(
             PushIdentityResolver identityResolver, CommitConfig.CommitAttributionPolicyConfig config) {
         super(LifecycleStage.MANDATORY_PROCESSING, Set.of(HttpOperation.PUSH));
-        this.identityResolver = identityResolver;
+        this.identityResolver = Objects.requireNonNull(
+                identityResolver, "identityResolver is required: without it no commit could be attributed to a user");
         this.configSupplier = () -> config != null
                 ? config
                 : CommitConfig.CommitAttributionPolicyConfig.builder().build();
@@ -78,11 +81,6 @@ public final class CommitAttributionPolicyFilter extends AbstractFogwallFilter {
         var config = configSupplier.get();
         if (config.isEffectivelyOff()) {
             log.debug("Commit attribution policy disabled (committer=off, author=off)");
-            return;
-        }
-
-        if (identityResolver == null) {
-            log.debug("No identity resolver configured — skipping commit attribution policy (open mode)");
             return;
         }
 

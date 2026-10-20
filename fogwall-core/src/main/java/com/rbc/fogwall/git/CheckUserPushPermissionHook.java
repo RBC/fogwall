@@ -18,6 +18,7 @@ import com.rbc.fogwall.user.ScmIdentity;
 import com.rbc.fogwall.user.UserEntry;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.transport.ReceiveCommand;
@@ -27,8 +28,8 @@ import org.eclipse.jgit.transport.ReceivePack;
  * Pre-receive hook that validates the pushing user has permission to push to this repository. Mirrors the behaviour of
  * {@link CheckUserPushPermissionFilter} for server mode.
  *
- * <p>Fail-closed: if no permission grants exist for the repository the push is denied. Skipped entirely when
- * {@link PushIdentityResolver} is {@code null} (open mode, no user store configured).
+ * <p>Fail-closed: a push whose credentials resolve to no fogwall user is denied, and so is a push to a repository with
+ * no permission grant for the resolved user.
  *
  * <p>The push user is the authenticated HTTP Basic-auth username, stored in the repository config under
  * {@code fogwall.pushUser} by {@link ServerReceivePackFactory}. The repo slug is stored under {@code fogwall.repoSlug}
@@ -96,7 +97,9 @@ public final class CheckUserPushPermissionHook implements MandatoryFogwallHook {
             String serviceUrl,
             SshScmLoginResolver sshLoginResolver,
             ScmOAuthConfig.IdentityMode identityMode) {
-        this.identityResolver = identityResolver;
+        this.identityResolver = Objects.requireNonNull(
+                identityResolver,
+                "identityResolver is required: without it no push could be matched to a fogwall user");
         this.repoPermissionService = repoPermissionService;
         this.validationContext = validationContext;
         this.pushContext = pushContext;
@@ -116,16 +119,6 @@ public final class CheckUserPushPermissionHook implements MandatoryFogwallHook {
         var preAuthenticated = pushContext.getTransport().preAuthenticatedUser();
         if (preAuthenticated.isPresent()) {
             checkRepoPermission(preAuthenticated.get(), repoSlug, null);
-            return;
-        }
-
-        if (identityResolver == null) {
-            log.debug("No identity resolver configured (open mode), skipping permission check");
-            pushContext.addStep(PushStep.builder()
-                    .stepName(getStepName())
-                    .stepOrder(displayOrder())
-                    .status(StepStatus.PASS)
-                    .build());
             return;
         }
 

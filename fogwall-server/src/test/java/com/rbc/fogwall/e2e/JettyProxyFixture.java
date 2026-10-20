@@ -13,6 +13,7 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -66,9 +67,8 @@ class JettyProxyFixture implements AutoCloseable {
      * The registered user a fixture gets unless a test names its own: the Gitea account the suite pushes as, linked to
      * a proxy user of the same name.
      *
-     * <p>There is no such thing as a fixture with no users. The base config ships an {@code admin} entry, so the
-     * identity path is always live — a push whose token resolves to a login no user claims is refused, exactly as it
-     * would be for an operator.
+     * <p>A push whose token resolves to a login no user claims is refused, exactly as it would be for an operator. A
+     * fixture given an empty list renders {@code users: []}, so no user resolves at all.
      */
     private static final List<TestUser> DEFAULT_USERS = List.of(
             new TestUser(GiteaContainer.ADMIN_USER, GiteaContainer.VALID_AUTHOR_EMAIL, GiteaContainer.ADMIN_USER));
@@ -77,7 +77,9 @@ class JettyProxyFixture implements AutoCloseable {
     private final String providerId;
     private final String giteaHostPort;
 
-    /** UI (block-then-approve) approval, fetches served, one catch-all allow rule, no registered users. */
+    /**
+     * UI (block-then-approve) approval, fetches served, one catch-all allow rule, the default user granted everything.
+     */
     JettyProxyFixture(URI giteaUri) throws Exception {
         this(giteaUri, ApprovalMode.UI, List.of(), true, DEFAULT_USERS, null, true);
     }
@@ -276,9 +278,17 @@ class JettyProxyFixture implements AutoCloseable {
         return file;
     }
 
+    /**
+     * An empty list renders {@code users: []} on a database of its own: the in-memory database is otherwise shared by
+     * every fixture in the JVM, and the users and grants another fixture left there would count.
+     */
     private static String renderUsers(List<TestUser> users) {
         if (users.isEmpty()) {
-            return "";
+            return """
+                    users: []
+                    database:
+                      name: e2e-no-users-%s
+                    """.formatted(UUID.randomUUID());
         }
         return "users:\n"
                 + users.stream()

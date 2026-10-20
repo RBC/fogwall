@@ -22,6 +22,10 @@ auth:
 Usernames and BCrypt password hashes are defined directly in the `users:` block. See
 [Provisioning users](../admin/user-accounts.md#how-users-are-provisioned-per-backend) in the administrator guide.
 
+Every push must resolve to a fogwall user, whatever the authentication provider: users from the `users:` block and users
+in the database (created on IdP login or in the dashboard) both count. A push that resolves to none is refused as
+"Identity not linked". `users: []` with no other user source refuses every push.
+
 ## LDAP
 
 Authenticates users against a generic LDAP directory using a bind operation.

@@ -11,13 +11,16 @@ import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.BitbucketProvider;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.GitHubProvider;
+import com.rbc.fogwall.provider.ScmUserInfo;
 import com.rbc.fogwall.service.ImportedKeyIdentityResolver;
 import com.rbc.fogwall.service.PushIdentityResolver;
 import com.rbc.fogwall.service.ResolvedScmIdentity;
 import com.rbc.fogwall.service.SshScmIdentityEnricher;
 import com.rbc.fogwall.service.SshScmLoginResolver;
+import com.rbc.fogwall.service.TokenPushIdentityResolver;
 import com.rbc.fogwall.user.ScmIdentity;
 import com.rbc.fogwall.user.SshKeyEntry;
+import com.rbc.fogwall.user.StaticUserStore;
 import com.rbc.fogwall.user.UserEntry;
 import java.io.File;
 import java.nio.file.Files;
@@ -187,24 +190,40 @@ class CheckUserPushPermissionHookTest {
         assertEquals(StepStatus.PASS, pushContext.getSteps().get(0).getStatus());
     }
 
-    // ---- null resolver (open mode) → always passes, credentials are ignored ----
+    // ---- no fogwall users at all → the push is refused, not waved through ----
 
     @Test
-    void nullResolver_withPushUser_passesInOpenMode() throws Exception {
+    void noUsers_tokenOwnerUnknown_refusedAsIdentityNotLinked() throws Exception {
+        GitHubProvider github = spy(new GitHubProvider("/push"));
+        doReturn(Optional.of(new ScmUserInfo("alice", Optional.empty())))
+                .when(github)
+                .fetchUserFromHttp(any(), any());
+        var emptyUsers = new TokenPushIdentityResolver(new StaticUserStore(List.of()));
+
         RevCommit c1 = createCommit("init");
         RevCommit c2 = createCommit("second");
         ReceivePack rp = new ReceivePack(repo);
         ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
         PushContext pushContext = new PushContext();
+        pushContext.setPushUser("me");
+        pushContext.setPushToken("tok");
+        pushContext.setRepoSlug("/owner/repo");
         ValidationContext validationContext = new ValidationContext();
 
-        new CheckUserPushPermissionHook(null, permService, validationContext, pushContext)
+        new CheckUserPushPermissionHook(emptyUsers, permService, validationContext, pushContext, github, null)
                 .onPreReceive(rp, List.of(cmd));
 
-        assertFalse(
-                validationContext.hasIssues(), "Null resolver (open mode) should pass — no identity check configured");
-        assertFalse(pushContext.getSteps().isEmpty());
-        assertEquals(StepStatus.PASS, pushContext.getSteps().get(0).getStatus());
+        assertTrue(validationContext.hasIssues());
+        assertTrue(validationContext.getIssues().get(0).summary().contains("Identity not linked"));
+        assertTrue(pushContext.getSteps().isEmpty(), "No PASS step should be recorded when no user resolves");
+        verifyNoInteractions(permService);
+    }
+
+    @Test
+    void nullResolver_isRejectedAtConstruction() {
+        assertThrows(
+                NullPointerException.class,
+                () -> new CheckUserPushPermissionHook(null, permService, new ValidationContext(), new PushContext()));
     }
 
     // ---- provider instance is passed through to resolver ----

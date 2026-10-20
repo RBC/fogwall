@@ -84,8 +84,8 @@ public class PushRecord {
 
     /**
      * The actual SCM username on the upstream provider (e.g. GitHub login "coopernetes"). Populated when token-based
-     * identity resolution succeeds; null for config-only resolution or open mode. Use this — not {@link #user} — for
-     * building provider profile links.
+     * identity resolution succeeds; null for config-only resolution. Use this — not {@link #user} — for building
+     * provider profile links.
      */
     private String scmUsername;
 
