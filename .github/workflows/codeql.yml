@@ -47,7 +47,7 @@ jobs:
           cache-dependency-path: fogwall-dashboard/frontend/package-lock.json
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # ratchet:github/codeql-action/init@v4
+        uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # ratchet:github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.language == 'java-kotlin' && 'manual' || 'none' }}
@@ -57,6 +57,6 @@ jobs:
         run: ./gradlew classes testClasses --no-build-cache
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # ratchet:github/codeql-action/analyze@v4
+        uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # ratchet:github/codeql-action/analyze@v4
         with:
           category: "/language:${{matrix.language}}"
