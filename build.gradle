@@ -7,8 +7,8 @@ buildscript {
             // The runtime pin in the subprojects eachDependency table does not reach this
             // configuration, and the dependency graph submitted to GitHub includes it.
             // CVE fix: GHSA-r7wm-3cxj-wff9, GHSA-5gvw-p9qm-jgwh, GHSA-5jmj-h7xm-6q6v, GHSA-cxp5-3px4-pw24, GHSA-wv8q-qhhj-9h54
-            force 'com.fasterxml.jackson.core:jackson-core:2.22.3'
-            force 'com.fasterxml.jackson.core:jackson-databind:2.22.3'
+            force 'com.fasterxml.jackson.core:jackson-core:2.22.4'
+            force 'com.fasterxml.jackson.core:jackson-databind:2.22.4'
         }
     }
 }
@@ -43,19 +43,19 @@ ext {
     hikariVersion = '7.1.0'
     h2Version = '2.5.252'
     postgresVersion = '42.7.14'
-    mysqlVersion = '26.7.0'
-    mariadbVersion = '3.5.10'
+    mysqlVersion = '26.10.0'
+    mariadbVersion = '4.0.0'
     mongoVersion = '5.13.0'
 
     // Jackson
-    jacksonBomVersion = '3.2.3'
+    jacksonBomVersion = '3.2.4'
 
     // GraphQL (SCM API proxy — parses GraphQL request bodies for AST-based mutation allowlisting)
     graphqlJavaVersion = '26.1'
 
     // Spring
-    springVersion = '7.0.9'
-    springSecurityVersion = '7.1.1'
+    springVersion = '7.0.10'
+    springSecurityVersion = '7.1.2'
     springSessionVersion = '4.1.1'
     lettuceVersion = '6.8.2.RELEASE'
 
@@ -85,7 +85,7 @@ ext {
 
     // OpenAPI spec generation
     swaggerCoreVersion = '2.2.55'
-    swaggerUiVersion = '5.33.2'
+    swaggerUiVersion = '5.34.0'
 
     // OpenTelemetry
     opentelemetryBomVersion = '1.67.0'
