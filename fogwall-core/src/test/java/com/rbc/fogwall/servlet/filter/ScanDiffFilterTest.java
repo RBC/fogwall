@@ -212,20 +212,21 @@ class ScanDiffFilterTest {
         assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
     }
 
-    // ---- scan error → SKIPPED still recorded: the check was on but could not run ----
+    // ---- scan error → the push is blocked: the check was on but could not run ----
 
     @Test
-    void enabledButUnreadableRange_recordsSkipped() throws Exception {
+    void enabledButUnreadableRange_blocksThePush() throws Exception {
         GitRequestDetails details = pushDetails(baseCommit, "0123456789abcdef0123456789abcdef01234567");
         FakeResponse resp = new FakeResponse();
         FilterChain chain = mock(FilterChain.class);
 
         filterWithLiteral("supersecret").doFilter(mockRequest(details), resp.mock, chain);
 
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
         assertTrue(
                 details.getSteps().stream()
-                        .anyMatch(s -> "diff-scan".equals(s.getStepName()) && s.getStatus() == StepStatus.SKIPPED),
-                "an enabled scan that could not run must still show");
+                        .anyMatch(s -> "diff-scan".equals(s.getStepName()) && s.getStatus() == StepStatus.FAIL),
+                "an enabled scan that could not run must block the push");
     }
 
     // ---- blocked literal → REJECTED ----
@@ -269,18 +270,18 @@ class ScanDiffFilterTest {
         assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
     }
 
-    // ---- null localRepository → no-op (EnrichPushCommitsFilter didn't run) ----
+    // ---- null localRepository → blocked (EnrichPushCommitsFilter didn't run) ----
 
     @Test
-    void nullRepository_skips() throws Exception {
+    void nullRepository_blocksThePush() throws Exception {
         GitRequestDetails details = pushDetails(baseCommit, cleanCommit);
         details.setLocalRepository(null);
         FakeResponse resp = new FakeResponse();
 
         filterNoRules().doHttpFilter(mockRequest(details), resp.mock);
 
-        assertFalse(resp.committed.get());
-        assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
+        assertFalse(resp.committed.get(), "the block is collected for the summary, not sent here");
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
     }
 
     // ---- blocked step has specific errorMessage and matching line in content ----

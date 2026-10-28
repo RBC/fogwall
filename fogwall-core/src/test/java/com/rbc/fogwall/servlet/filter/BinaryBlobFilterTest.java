@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.rbc.fogwall.config.BinaryBlobConfig;
+import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
 import jakarta.servlet.FilterChain;
@@ -222,10 +223,10 @@ class BinaryBlobFilterTest {
         assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
     }
 
-    // ---- null localRepository → skip ----
+    // ---- the scan cannot run → blocked ----
 
     @Test
-    void nullRepository_skips() throws Exception {
+    void nullRepository_blocksThePush() throws Exception {
         RevCommit tip = commitBytes("big.bin", new byte[2048]);
         GitRequestDetails details = pushDetails(baseCommit, tip.name());
         details.setLocalRepository(null);
@@ -233,7 +234,18 @@ class BinaryBlobFilterTest {
 
         filterWithMaxSize(1024).doHttpFilter(mockRequest(details), resp.mock);
 
-        assertEquals(GitRequestDetails.GitResult.PENDING, details.getResult());
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+    }
+
+    @Test
+    void unreadableRange_blocksThePush() throws Exception {
+        GitRequestDetails details = pushDetails(baseCommit, "0123456789abcdef0123456789abcdef01234567");
+        FakeResponse resp = new FakeResponse();
+
+        filterWithMaxSize(1024).doHttpFilter(mockRequest(details), resp.mock);
+
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+        assertTrue(details.getSteps().stream().anyMatch(s -> s.getStatus() == StepStatus.FAIL));
     }
 
     // ---- per-commit scan catches a blob smuggled in an intermediate commit ----

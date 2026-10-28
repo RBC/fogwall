@@ -89,8 +89,11 @@ public final class BinaryBlobFilter extends AbstractFogwallFilter {
         try {
             Repository repository = requestDetails.getLocalRepository();
             if (repository == null) {
-                log.warn(
-                        "localRepository not set on request - EnrichPushCommitsFilter may not have run; skipping binary blob detection");
+                log.warn("localRepository not set on request - EnrichPushCommitsFilter may not have run");
+                recordIssue(
+                        request,
+                        "binary blob scan could not complete for " + requestDetails.getBranch(),
+                        "binary blob scan error: local repository unavailable");
                 return;
             }
 
@@ -124,8 +127,12 @@ public final class BinaryBlobFilter extends AbstractFogwallFilter {
                 recordStep(request, StepStatus.PASS, "", "");
             }
         } catch (Exception e) {
-            log.warn("Skipping binary blob detection for push {}..{}: {}", fromCommit, toCommit, e.getMessage());
-            recordStep(request, StepStatus.SKIPPED, "", e.getMessage());
+            // Fail closed: a scan that cannot run must not let the push through unchecked.
+            log.warn("Binary blob detection could not run for push {}..{}: {}", fromCommit, toCommit, e.getMessage());
+            recordIssue(
+                    request,
+                    "binary blob scan could not complete for " + requestDetails.getBranch(),
+                    "binary blob scan error: " + e.getMessage());
         }
     }
 }

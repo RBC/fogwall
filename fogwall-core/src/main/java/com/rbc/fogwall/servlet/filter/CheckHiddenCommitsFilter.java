@@ -5,7 +5,6 @@ import static com.rbc.fogwall.git.GitClientUtils.SymbolCodes.*;
 import static com.rbc.fogwall.git.GitClientUtils.sym;
 import static com.rbc.fogwall.servlet.FogwallServlet.GIT_REQUEST_ATTR;
 
-import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.git.Commit;
 import com.rbc.fogwall.git.GitClientUtils;
 import com.rbc.fogwall.git.GitRequestDetails;
@@ -82,8 +81,8 @@ public final class CheckHiddenCommitsFilter extends AbstractFogwallFilter {
         try {
             Repository repository = requestDetails.getLocalRepository();
             if (repository == null) {
-                log.warn(
-                        "localRepository not set on request - EnrichPushCommitsFilter may not have run; skipping hidden commits check");
+                log.warn("localRepository not set on request - EnrichPushCommitsFilter may not have run");
+                recordIssue(request, "Hidden-commit check error", "local repository unavailable");
                 return;
             }
 
@@ -109,8 +108,10 @@ public final class CheckHiddenCommitsFilter extends AbstractFogwallFilter {
             recordIssue(request, "Hidden commits detected", GitClientUtils.format(title, message, RED, null));
 
         } catch (Exception e) {
-            log.warn("Skipping hidden commits check: {}", e.getMessage());
-            recordStep(request, StepStatus.SKIPPED, "", e.getMessage());
+            // Fail closed: this check exists for packs crafted to slip commits past validation, so one that makes it
+            // fail must not be let through unchecked.
+            log.warn("Hidden commits check could not run: {}", e.getMessage());
+            recordIssue(request, "Hidden-commit check error", String.valueOf(e.getMessage()));
         }
     }
 

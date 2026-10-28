@@ -94,8 +94,11 @@ public final class ScanDiffFilter extends AbstractFogwallFilter {
         try {
             Repository repository = requestDetails.getLocalRepository();
             if (repository == null) {
-                log.warn(
-                        "localRepository not set on request - EnrichPushCommitsFilter may not have run; skipping diff scan");
+                log.warn("localRepository not set on request - EnrichPushCommitsFilter may not have run");
+                recordIssue(
+                        request,
+                        "content scan could not complete for " + requestDetails.getBranch(),
+                        "diff scan error: local repository unavailable");
                 return;
             }
 
@@ -140,8 +143,12 @@ public final class ScanDiffFilter extends AbstractFogwallFilter {
             }
 
         } catch (Exception e) {
-            log.warn("Skipping diff scan for push {}..{}: {}", fromCommit, toCommit, e.getMessage());
-            recordStep(request, StepStatus.SKIPPED, "", e.getMessage());
+            // Fail closed: a scan that cannot run must not let the push through unchecked.
+            log.warn("Diff scan could not run for push {}..{}: {}", fromCommit, toCommit, e.getMessage());
+            recordIssue(
+                    request,
+                    "content scan could not complete for " + requestDetails.getBranch(),
+                    "diff scan error: " + e.getMessage());
         }
     }
 }
