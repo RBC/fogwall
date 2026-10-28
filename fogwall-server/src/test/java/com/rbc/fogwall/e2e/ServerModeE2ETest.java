@@ -143,6 +143,10 @@ class ServerModeE2ETest {
             Path repo = git.clone(repoUrl(), "sf-nofetch-push");
             git.setAuthor(repo, GiteaContainer.VALID_AUTHOR_NAME, GiteaContainer.VALID_AUTHOR_EMAIL);
             git.setRemoteUrl(repo, "origin", repoUrlFor(noFetch));
+            // Its own branch: this fixture has its own local repository but shares the push store, so a commit it
+            // forwards to main would be the recorded upstream base for the shared fixture's later pushes to main,
+            // which cannot see it until that fixture's mirror next re-fetches.
+            git.createAndCheckoutBranch(repo, "sf-nofetch-push");
             git.writeAndStage(repo, "nofetch.txt", "push works with fetch disabled - " + Instant.now());
             git.commit(repo, "feat: push still works when fetch serving is disabled");
             assertTrue(git.tryPush(repo), "push should succeed even when serve-fetch is off (receive-pack unaffected)");

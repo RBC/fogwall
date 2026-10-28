@@ -9,6 +9,7 @@ import com.rbc.fogwall.db.model.StepStatus;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.GitleaksRunner;
 import com.rbc.fogwall.git.HttpOperation;
+import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.File;
@@ -70,7 +71,8 @@ class SecretScanningFilterTest {
                 SecretScanConfig.builder().enabled(false).build(), runner);
         GitRequestDetails details = pushDetailsWithRepo();
 
-        disabledFilter.doHttpFilter(requestWith(details), mock(HttpServletResponse.class));
+        disabledFilter.doFilter(requestWith(details), mock(HttpServletResponse.class), mock(FilterChain.class));
+        assertTrue(details.getSteps().isEmpty());
 
         verifyNoInteractions(runner);
     }
