@@ -503,7 +503,8 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
         }
         validationHooks.add(permissionHook);
         validationHooks.add(attributionPolicyHook);
-        validationHooks.add(new PriorPushEnrichmentHook(pushStore, pushContext));
+        validationHooks.add(
+                new PriorPushEnrichmentHook(pushStore, provider.getProviderId(), validationContext, pushContext));
         validationHooks.add(new CheckEmptyBranchHook(validationContext, pushContext));
         validationHooks.add(new CheckHiddenCommitsHook(validationContext, pushContext));
         validationHooks.add(new AuthorEmailValidationHook(commitConfig, validationContext, pushContext));

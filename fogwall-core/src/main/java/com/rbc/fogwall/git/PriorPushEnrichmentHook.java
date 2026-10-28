@@ -8,8 +8,8 @@ import com.rbc.fogwall.db.model.PushStep;
 import com.rbc.fogwall.db.model.StepStatus;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.transport.ReceiveCommand;
@@ -25,19 +25,47 @@ import org.eclipse.jgit.transport.ReceivePack;
  * hook detects that B was never forwarded, sets {@code effectiveFromId("refs/heads/foo", zero)} in the push context,
  * and downstream hooks use that to enumerate A, B, C instead.
  *
+ * <p>The last forwarded push is looked up for this repository only: same provider, owner and name, as {@link RepoPath}
+ * reads them from the push path. Repository names recur across owners and providers, and a forwarded push of another
+ * repository would hand this push a base from a different history. A push whose repository cannot be identified is
+ * blocked rather than given a base it cannot vouch for.
+ *
  * <p>Runs at order 195 — after authorization (150/160) but before content validation (210+). No-ops on truly new
  * branches ({@code cmd.getOldId()} = zero) since the local cache and upstream are both empty for that ref.
  */
 @Slf4j
-@RequiredArgsConstructor
 public final class PriorPushEnrichmentHook implements MandatoryFogwallHook {
 
     private final PushStore pushStore;
+    private final String providerId;
+    private final ValidationContext validationContext;
     private final PushContext pushContext;
+
+    public PriorPushEnrichmentHook(
+            PushStore pushStore, String providerId, ValidationContext validationContext, PushContext pushContext) {
+        this.pushStore = Objects.requireNonNull(pushStore, "pushStore");
+        this.providerId = Objects.requireNonNull(providerId, "providerId");
+        this.validationContext = Objects.requireNonNull(validationContext, "validationContext");
+        this.pushContext = Objects.requireNonNull(pushContext, "pushContext");
+    }
 
     @Override
     public void onPreReceive(ReceivePack rp, Collection<ReceiveCommand> commands) {
-        String repoName = extractRepoName(pushContext.getRepoSlug());
+        Optional<RepoPath> repoPath = RepoPath.parse(pushContext.getRepoSlug());
+        if (repoPath.isEmpty()) {
+            log.warn("Cannot look up prior forwards: unparseable repository path {}", pushContext.getRepoSlug());
+            validationContext.addError(
+                    PushStepKind.PRIOR_PUSH_ENRICHMENT,
+                    "prior-push lookup could not identify the repository",
+                    "Repository could not be identified to find its last forwarded push. Contact an administrator.");
+            pushContext.addStep(PushStep.builder()
+                    .stepName(getStepName())
+                    .stepOrder(displayOrder())
+                    .status(StepStatus.FAIL)
+                    .errorMessage("repository path could not be parsed")
+                    .build());
+            return;
+        }
 
         for (ReceiveCommand cmd : commands) {
             if (cmd.getType() == ReceiveCommand.Type.DELETE) continue;
@@ -47,7 +75,9 @@ public final class PriorPushEnrichmentHook implements MandatoryFogwallHook {
             String localCacheTip = cmd.getOldId().name();
 
             List<PushRecord> lastForwarded = pushStore.find(PushQuery.builder()
-                    .repoName(repoName)
+                    .provider(providerId)
+                    .project(repoPath.get().owner())
+                    .repoName(repoPath.get().name())
                     .branch(refName)
                     .status(PushStatus.FORWARDED)
                     .limit(1)
@@ -93,11 +123,5 @@ public final class PriorPushEnrichmentHook implements MandatoryFogwallHook {
     @Override
     public Optional<PushStepKind> stepKind() {
         return Optional.of(PushStepKind.PRIOR_PUSH_ENRICHMENT);
-    }
-
-    private static String extractRepoName(String slug) {
-        if (slug == null || slug.isEmpty()) return null;
-        int lastSlash = slug.lastIndexOf('/');
-        return lastSlash >= 0 ? slug.substring(lastSlash + 1) : slug;
     }
 }

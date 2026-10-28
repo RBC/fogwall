@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import com.rbc.fogwall.db.PushStore;
+import com.rbc.fogwall.db.PushStoreFactory;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
 import java.io.File;
@@ -25,6 +26,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 class PriorPushEnrichmentHookTest {
 
+    private static final String PROVIDER = "github/github.com";
+
     @TempDir
     Path tempDir;
 
@@ -32,6 +35,7 @@ class PriorPushEnrichmentHookTest {
     Repository repo;
     PushStore pushStore;
     PushContext pushContext;
+    ValidationContext validationContext;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -42,6 +46,23 @@ class PriorPushEnrichmentHookTest {
         pushStore = mock(PushStore.class);
         pushContext = new PushContext();
         pushContext.setRepoSlug("/owner/my-repo");
+        validationContext = new ValidationContext();
+    }
+
+    private PriorPushEnrichmentHook hook(PushStore store) {
+        return new PriorPushEnrichmentHook(store, PROVIDER, validationContext, pushContext);
+    }
+
+    private static PushRecord forwarded(String provider, String owner, String repoName, String commitTo) {
+        return PushRecord.builder()
+                .id(UUID.randomUUID().toString())
+                .status(PushStatus.FORWARDED)
+                .provider(provider)
+                .project(owner)
+                .repoName(repoName)
+                .branch("refs/heads/foo")
+                .commitTo(commitTo)
+                .build();
     }
 
     private RevCommit createCommit(String msg) throws Exception {
@@ -64,7 +85,7 @@ class PriorPushEnrichmentHookTest {
         ReceiveCommand cmd =
                 new ReceiveCommand(ObjectId.zeroId(), c.getId(), "refs/heads/foo", ReceiveCommand.Type.CREATE);
 
-        new PriorPushEnrichmentHook(pushStore, pushContext).onPreReceive(rp, List.of(cmd));
+        hook(pushStore).onPreReceive(rp, List.of(cmd));
 
         assertNull(pushContext.getEffectiveFromId("refs/heads/foo"));
         verifyNoInteractions(pushStore);
@@ -85,12 +106,14 @@ class PriorPushEnrichmentHookTest {
                 .branch("refs/heads/foo")
                 .commitTo(c1.getId().name()) // upstream has c1 (matches cmd.getOldId())
                 .build();
-        when(pushStore.find(argThat(q -> "my-repo".equals(q.getRepoName())
+        when(pushStore.find(argThat(q -> PROVIDER.equals(q.getProvider())
+                        && "owner".equals(q.getProject())
+                        && "my-repo".equals(q.getRepoName())
                         && "refs/heads/foo".equals(q.getBranch())
                         && PushStatus.FORWARDED == q.getStatus())))
                 .thenReturn(List.of(forwarded));
 
-        new PriorPushEnrichmentHook(pushStore, pushContext).onPreReceive(rp, List.of(cmd));
+        hook(pushStore).onPreReceive(rp, List.of(cmd));
 
         assertNull(
                 pushContext.getEffectiveFromId("refs/heads/foo"),
@@ -108,7 +131,7 @@ class PriorPushEnrichmentHookTest {
 
         when(pushStore.find(any())).thenReturn(List.of()); // no forwarded pushes
 
-        new PriorPushEnrichmentHook(pushStore, pushContext).onPreReceive(rp, List.of(cmd));
+        hook(pushStore).onPreReceive(rp, List.of(cmd));
 
         String effectiveFrom = pushContext.getEffectiveFromId("refs/heads/foo");
         assertNotNull(effectiveFrom, "Enrichment should be triggered when nothing was forwarded");
@@ -134,7 +157,7 @@ class PriorPushEnrichmentHookTest {
                 .build();
         when(pushStore.find(any())).thenReturn(List.of(forwarded));
 
-        new PriorPushEnrichmentHook(pushStore, pushContext).onPreReceive(rp, List.of(cmd));
+        hook(pushStore).onPreReceive(rp, List.of(cmd));
 
         assertEquals(
                 c1.getId().name(),
@@ -151,9 +174,98 @@ class PriorPushEnrichmentHookTest {
         ReceiveCommand cmd =
                 new ReceiveCommand(c1.getId(), ObjectId.zeroId(), "refs/heads/foo", ReceiveCommand.Type.DELETE);
 
-        new PriorPushEnrichmentHook(pushStore, pushContext).onPreReceive(rp, List.of(cmd));
+        hook(pushStore).onPreReceive(rp, List.of(cmd));
 
         assertNull(pushContext.getEffectiveFromId("refs/heads/foo"));
         verifyNoInteractions(pushStore);
+    }
+
+    // ---- the lookup is scoped to this repository: provider, owner and name ----
+
+    @Test
+    void forwardedPushOfSameNamedRepoUnderAnotherOwner_isNotUsedAsBase() throws Exception {
+        RevCommit c1 = createCommit("A");
+        RevCommit c2 = createCommit("B");
+        PushStore store = PushStoreFactory.h2InMemory("prior-" + UUID.randomUUID());
+        store.save(forwarded(
+                PROVIDER, "other-org", "my-repo", ObjectId.zeroId().name().replace('0', 'a')));
+        ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/foo", ReceiveCommand.Type.UPDATE);
+
+        hook(store).onPreReceive(new ReceivePack(repo), List.of(cmd));
+
+        assertEquals(
+                ObjectId.zeroId().name(),
+                pushContext.getEffectiveFromId("refs/heads/foo"),
+                "another owner's forward of a same-named repository says nothing about this one");
+    }
+
+    @Test
+    void forwardedPushOfSameRepoPathOnAnotherProvider_isNotUsedAsBase() throws Exception {
+        RevCommit c1 = createCommit("A");
+        RevCommit c2 = createCommit("B");
+        PushStore store = PushStoreFactory.h2InMemory("prior-" + UUID.randomUUID());
+        store.save(forwarded(
+                "gitlab/gitlab.com",
+                "owner",
+                "my-repo",
+                ObjectId.zeroId().name().replace('0', 'b')));
+        ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/foo", ReceiveCommand.Type.UPDATE);
+
+        hook(store).onPreReceive(new ReceivePack(repo), List.of(cmd));
+
+        assertEquals(ObjectId.zeroId().name(), pushContext.getEffectiveFromId("refs/heads/foo"));
+    }
+
+    @Test
+    void forwardedPushOfThisRepo_isUsedAsBase_amongSameNamedOthers() throws Exception {
+        RevCommit c1 = createCommit("A");
+        RevCommit c2 = createCommit("B");
+        RevCommit c3 = createCommit("C");
+        PushStore store = PushStoreFactory.h2InMemory("prior-" + UUID.randomUUID());
+        store.save(forwarded(PROVIDER, "owner", "my-repo", c1.getId().name()));
+        store.save(forwarded(PROVIDER, "other-org", "my-repo", c3.getId().name()));
+        store.save(forwarded("gitlab/gitlab.com", "owner", "my-repo", c3.getId().name()));
+        ReceiveCommand cmd = new ReceiveCommand(c2.getId(), c3.getId(), "refs/heads/foo", ReceiveCommand.Type.UPDATE);
+
+        hook(store).onPreReceive(new ReceivePack(repo), List.of(cmd));
+
+        assertEquals(c1.getId().name(), pushContext.getEffectiveFromId("refs/heads/foo"));
+    }
+
+    @Test
+    void nestedOwner_matchesTheWholeNamespace_notASiblingSubgroup() throws Exception {
+        RevCommit c1 = createCommit("A");
+        RevCommit c2 = createCommit("B");
+        RevCommit c3 = createCommit("C");
+        pushContext.setRepoSlug("/group/sub-a/my-repo");
+        PushStore store = PushStoreFactory.h2InMemory("prior-" + UUID.randomUUID());
+        store.save(forwarded(PROVIDER, "group/sub-b", "my-repo", c3.getId().name()));
+        store.save(forwarded(PROVIDER, "group/sub-a", "my-repo", c1.getId().name()));
+        ReceiveCommand cmd = new ReceiveCommand(c2.getId(), c3.getId(), "refs/heads/foo", ReceiveCommand.Type.UPDATE);
+
+        hook(store).onPreReceive(new ReceivePack(repo), List.of(cmd));
+
+        assertEquals(c1.getId().name(), pushContext.getEffectiveFromId("refs/heads/foo"));
+    }
+
+    @Test
+    void unparseableRepoPath_blocksThePush_withoutAnyLookup() throws Exception {
+        RevCommit c1 = createCommit("A");
+        RevCommit c2 = createCommit("B");
+        pushContext.setRepoSlug("/just-one-segment");
+        ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/foo", ReceiveCommand.Type.UPDATE);
+
+        hook(pushStore).onPreReceive(new ReceivePack(repo), List.of(cmd));
+
+        assertTrue(validationContext.hasIssues(), "a push this hook cannot scope must not proceed");
+        assertNull(pushContext.getEffectiveFromId("refs/heads/foo"));
+        verifyNoInteractions(pushStore);
+    }
+
+    @Test
+    void missingProvider_isRejectedAtConstruction() {
+        assertThrows(
+                NullPointerException.class,
+                () -> new PriorPushEnrichmentHook(pushStore, null, validationContext, pushContext));
     }
 }
