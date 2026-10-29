@@ -6,6 +6,7 @@ import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.PushStoreFactory;
 import com.rbc.fogwall.db.model.PushCommit;
 import com.rbc.fogwall.db.model.PushQuery;
+import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
 import com.rbc.fogwall.db.model.PushStep;
 import com.rbc.fogwall.db.model.StepStatus;
@@ -136,6 +137,68 @@ class PushStorePersistenceHookTest {
         var record = pushStore.findById(pushId).orElseThrow();
         assertEquals("refs/heads/test", record.getBranch());
         assertEquals(commitId.name(), record.getCommitTo());
+    }
+
+    // ---- repository identity, as RepoPath reads it ----
+
+    @Test
+    void validationResultHook_recordsNestedOwnerAsTheWholeNamespace() {
+        pushContext.setRepoSlug("/group/subgroup/my-repo");
+        pushContext.setUpstreamUrl("https://gitlab.example.com/group/subgroup/my-repo.git");
+        String pushId = stampPushId();
+
+        hook.validationResultHook(new ValidationContext())
+                .onPreReceive(makeReceivePack(), List.of(newBranchCommand(commitId)));
+
+        var record = pushStore.findById(pushId).orElseThrow();
+        assertEquals("group/subgroup", record.getProject());
+        assertEquals("my-repo", record.getRepoName());
+        assertEquals("/group/subgroup/my-repo", record.getUrl());
+    }
+
+    @Test
+    void validationResultHook_recordsIdentityFromThePushPath_notTheUpstreamBasePath() {
+        pushContext.setRepoSlug("/acme/app");
+        pushContext.setUpstreamUrl("https://scm.example.com/gitlab/acme/app.git");
+        String pushId = stampPushId();
+
+        hook.validationResultHook(new ValidationContext())
+                .onPreReceive(makeReceivePack(), List.of(newBranchCommand(commitId)));
+
+        var record = pushStore.findById(pushId).orElseThrow();
+        assertEquals("acme", record.getProject());
+        assertEquals("app", record.getRepoName());
+    }
+
+    @Test
+    void validationResultHook_withoutPushPath_fallsBackToUpstreamUrlPath() {
+        pushContext.setUpstreamUrl("https://gitlab.example.com/group/subgroup/my-repo.git");
+        String pushId = stampPushId();
+
+        hook.validationResultHook(new ValidationContext())
+                .onPreReceive(makeReceivePack(), List.of(newBranchCommand(commitId)));
+
+        var record = pushStore.findById(pushId).orElseThrow();
+        assertEquals("group/subgroup", record.getProject());
+        assertEquals("my-repo", record.getRepoName());
+    }
+
+    @Test
+    void recordedIdentity_isWhatThePriorPushLookupMatches() {
+        pushContext.setRepoSlug("/group/subgroup/my-repo");
+        String pushId = stampPushId();
+        hook.validationResultHook(new ValidationContext())
+                .onPreReceive(makeReceivePack(), List.of(newBranchCommand(commitId)));
+        RepoPath path = RepoPath.parse("/group/subgroup/my-repo").orElseThrow();
+
+        var found = pushStore.find(PushQuery.builder()
+                .provider(new GitHubProvider("/push").getProviderId())
+                .project(path.owner())
+                .repoName(path.name())
+                .branch("refs/heads/test")
+                .build());
+
+        assertEquals(List.of(pushId), found.stream().map(PushRecord::getId).toList());
     }
 
     // ---- validation-result hook: no issues → PENDING ----

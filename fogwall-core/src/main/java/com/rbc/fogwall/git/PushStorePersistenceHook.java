@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -367,19 +368,20 @@ public class PushStorePersistenceHook {
         }
         if (upstreamUrl != null) {
             builder.upstreamUrl(upstreamUrl);
-            // Parse repo name from upstream URL (e.g., "https://github.com/owner/repo.git" -> "repo")
-            String path = upstreamUrl.replaceAll("\\.git$", "");
-            int lastSlash = path.lastIndexOf('/');
-            if (lastSlash >= 0) {
-                builder.repoName(path.substring(lastSlash + 1));
-                // Try to extract owner/slug — strip any scheme + authority (handles http, https, ssh)
-                String withoutScheme = path.replaceFirst("\\w+://[^/]+/", "");
-                if (withoutScheme.contains("/")) {
-                    builder.project(withoutScheme.substring(0, withoutScheme.indexOf('/')));
-                    builder.url("/" + withoutScheme);
-                }
-            }
         }
+        // Owner, name and slug as RepoPath reads them from the push path, the same strings the transparent proxy
+        // records
+        // and that later lookups of this repository's pushes match on. The upstream URL's path (scheme and authority
+        // stripped) is the fallback when no push path is available.
+        String upstreamPath = upstreamUrl != null ? upstreamUrl.replaceFirst("^\\w+://[^/]+", "") : null;
+        Optional<RepoPath> repoPath = Optional.ofNullable(pushContext)
+                .flatMap(ctx -> RepoPath.parse(ctx.getRepoSlug()))
+                .or(() -> RepoPath.parse(upstreamPath));
+        repoPath.ifPresent(path -> {
+            builder.project(path.owner());
+            builder.repoName(path.name());
+            builder.url(path.slug());
+        });
 
         // Extract ref info from the first command
         commands.stream().findFirst().ifPresent(cmd -> {
