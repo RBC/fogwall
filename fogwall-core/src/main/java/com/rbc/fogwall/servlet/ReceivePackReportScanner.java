@@ -18,6 +18,12 @@ import java.util.function.Consumer;
  *
  * <p>JGit's {@code PacketLineIn} and {@code SideBandInputStream} pull from a blocking {@code InputStream}, so they
  * cannot consume push-delivered chunks without holding the whole response.
+ *
+ * <p>Formats: gitprotocol-common(5) "pkt-line Format", gitprotocol-pack(5) "Report Status" (including
+ * {@code report-status-v2} option lines and the {@code ERR} error-line), and gitprotocol-capabilities(5) "side-band,
+ * side-band-64k". That the report travels inside sideband channel 1 is not in the protocol docs; git's own
+ * {@code builtin/receive-pack.c} ({@code report()}) sends it that way, and {@code send-pack.c}
+ * ({@code receive_unpack_status}) fails the push without an {@code unpack ok} line.
  */
 final class ReceivePackReportScanner {
 

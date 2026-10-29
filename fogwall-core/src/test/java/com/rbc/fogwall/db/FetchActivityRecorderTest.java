@@ -10,11 +10,9 @@ import com.rbc.fogwall.db.model.FetchActivityQuery;
 import com.rbc.fogwall.db.model.FetchRefusal;
 import com.rbc.fogwall.git.ProxyMode;
 import com.rbc.fogwall.observability.FogwallTelemetry;
-import java.time.Clock;
+import com.rbc.fogwall.testing.MutableClock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -25,28 +23,8 @@ class FetchActivityRecorderTest {
 
     private static final Instant START = Instant.parse("2026-09-30T14:10:00Z");
 
-    /** A clock the test moves by hand. */
-    private static final class TestClock extends Clock {
-        Instant now = START;
-
-        @Override
-        public Instant instant() {
-            return now;
-        }
-
-        @Override
-        public ZoneId getZone() {
-            return ZoneOffset.UTC;
-        }
-
-        @Override
-        public Clock withZone(ZoneId zone) {
-            return this;
-        }
-    }
-
     private final InMemoryFetchStore store = new InMemoryFetchStore();
-    private final TestClock clock = new TestClock();
+    private final MutableClock clock = new MutableClock(START);
 
     private FetchActivityRecorder recorder(FetchStore target, FogwallTelemetry telemetry, int maxKeys) {
         return new FetchActivityRecorder(
@@ -100,7 +78,7 @@ class FetchActivityRecorderTest {
     void flush_writesOneRowPerKey_countingEveryFetch_inItsHour() {
         var recorder = recorder(100);
         allow(recorder, "widgets");
-        clock.now = START.plusSeconds(30);
+        clock.set(START.plusSeconds(30));
         allow(recorder, "widgets");
         refuse(recorder, "widgets");
 
@@ -134,7 +112,7 @@ class FetchActivityRecorderTest {
     void record_acrossAnHourBoundary_countsEachHourSeparately() {
         var recorder = recorder(100);
         allow(recorder, "widgets");
-        clock.now = Instant.parse("2026-09-30T15:00:01Z");
+        clock.set(Instant.parse("2026-09-30T15:00:01Z"));
         allow(recorder, "widgets");
 
         recorder.flush();
@@ -192,9 +170,9 @@ class FetchActivityRecorderTest {
         var recorder = recorder(target, FogwallTelemetry.disabled(), 100);
 
         recorder.flush();
-        clock.now = START.plusSeconds(1800);
+        clock.set(START.plusSeconds(1800));
         recorder.flush();
-        clock.now = START.plusSeconds(3600);
+        clock.set(START.plusSeconds(3600));
         recorder.flush();
 
         verify(target).pruneBefore(START.minus(Duration.ofDays(30)));

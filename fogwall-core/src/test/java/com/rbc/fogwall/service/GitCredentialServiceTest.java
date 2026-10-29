@@ -6,17 +6,15 @@ import static org.mockito.Mockito.*;
 import com.rbc.fogwall.db.jdbc.DataSourceFactory;
 import com.rbc.fogwall.db.jdbc.JdbcPushStore;
 import com.rbc.fogwall.service.GitCredentialService.Issued;
+import com.rbc.fogwall.testing.MutableClock;
 import com.rbc.fogwall.user.GitCredential;
 import com.rbc.fogwall.user.GitCredentialNameConflictException;
 import com.rbc.fogwall.user.GitCredentialStore;
 import com.rbc.fogwall.user.JdbcGitCredentialStore;
 import com.rbc.fogwall.user.JdbcUserStore;
 import com.rbc.fogwall.user.UserEntry;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,34 +28,6 @@ import org.junit.jupiter.api.Test;
 class GitCredentialServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-09-27T12:00:00Z");
-
-    /** A clock the test moves by hand. */
-    private static final class MutableClock extends Clock {
-        private Instant now;
-
-        MutableClock(Instant now) {
-            this.now = now;
-        }
-
-        void advance(Duration by) {
-            now = now.plus(by);
-        }
-
-        @Override
-        public ZoneId getZone() {
-            return ZoneOffset.UTC;
-        }
-
-        @Override
-        public Clock withZone(ZoneId zone) {
-            return this;
-        }
-
-        @Override
-        public Instant instant() {
-            return now;
-        }
-    }
 
     GitCredentialStore store;
     MutableClock clock;
