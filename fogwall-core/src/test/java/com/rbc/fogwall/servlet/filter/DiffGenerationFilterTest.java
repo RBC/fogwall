@@ -99,14 +99,29 @@ class DiffGenerationFilterTest {
     }
 
     @Test
-    void missingLocalRepository_recordsSkipped() throws Exception {
+    void missingLocalRepository_blocksThePush() throws Exception {
         GitRequestDetails details = pushDetails();
         details.setLocalRepository(null);
 
         run(details);
 
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
         assertEquals(1, details.getSteps().size());
         assertEquals("diff-generation", details.getSteps().get(0).getStepName());
-        assertEquals(StepStatus.SKIPPED, details.getSteps().get(0).getStatus());
+        assertEquals(StepStatus.FAIL, details.getSteps().get(0).getStatus());
+    }
+
+    @Test
+    void unreadableRange_blocksThePush() throws Exception {
+        GitRequestDetails details = pushDetails();
+        details.setCommitTo("0123456789abcdef0123456789abcdef01234567");
+
+        run(details);
+
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+        assertTrue(
+                details.getSteps().stream()
+                        .anyMatch(s -> "diff-generation".equals(s.getStepName()) && s.getStatus() == StepStatus.FAIL),
+                "a diff that cannot be produced must block, not let the push through unreviewable");
     }
 }

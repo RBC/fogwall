@@ -49,4 +49,6 @@ blocking check, having no reviewer to show a warning to. Author attribution (com
 `warn` mode via `commit.attribution-policy`.
 
 A check that is turned off in config records no step in either mode, so it appears neither in the git client output nor
-on the push record. Whether a check is on is read per push, so a config reload takes effect on the next push.
+on the push record. Whether a check is on is read per push, so a config reload takes effect on the next push. A check
+that is on but cannot run (the diff cannot be produced, the local repository is unavailable, the scanner fails) blocks
+the push in both modes rather than letting it through unchecked.

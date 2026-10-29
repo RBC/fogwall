@@ -168,4 +168,36 @@ class CheckHiddenCommitsFilterTest {
 
         assertFalse(resp.committed.get(), "Annotated tag push must not throw or reject due to tag object type");
     }
+
+    @Test
+    void nullRepository_blocksThePush() throws Exception {
+        GitRequestDetails details = branchPush(createCommit("tip").name());
+        details.setLocalRepository(null);
+        FakeResponse resp = new FakeResponse();
+
+        new CheckHiddenCommitsFilter().doHttpFilter(mockRequest(details), resp.mock);
+
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+    }
+
+    @Test
+    void checkThatCannotRun_blocksThePush() throws Exception {
+        // A tip the repository does not have: the walk throws, which must not let the push through unchecked.
+        GitRequestDetails details = branchPush("0123456789abcdef0123456789abcdef01234567");
+        FakeResponse resp = new FakeResponse();
+
+        new CheckHiddenCommitsFilter().doHttpFilter(mockRequest(details), resp.mock);
+
+        assertEquals(GitRequestDetails.GitResult.REJECTED, details.getResult());
+    }
+
+    private GitRequestDetails branchPush(String commitTo) {
+        GitRequestDetails details = new GitRequestDetails();
+        details.setOperation(HttpOperation.PUSH);
+        details.setBranch("refs/heads/main");
+        details.setCommitFrom(ObjectId.zeroId().name());
+        details.setCommitTo(commitTo);
+        details.setLocalRepository(repo);
+        return details;
+    }
 }

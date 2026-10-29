@@ -190,9 +190,8 @@ Content matchers use the same shape as `diff-scan.block` — see
 [Content matchers](../configuration/diff-scan.md#content-matchers). With no `scm-api.block` entries configured, only
 secret scanning applies.
 
-Secret scanning **fails closed here**, unlike the push path: if scanning is enabled but the scanner cannot run, the
-request is refused. A push that slips through is still recorded and reviewable afterwards, whereas a forwarded request
-has already published its text upstream where fogwall cannot reach it.
+Secret scanning **fails closed here**, as it does on the push path: if scanning is enabled but the scanner cannot run,
+the request is refused.
 
 ### PII bundles block here, rather than warning
 

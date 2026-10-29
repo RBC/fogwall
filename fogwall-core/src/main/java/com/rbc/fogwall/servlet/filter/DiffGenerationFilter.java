@@ -60,7 +60,10 @@ public final class DiffGenerationFilter extends AbstractFogwallFilter {
         Repository repository = requestDetails.getLocalRepository();
         if (repository == null) {
             log.warn("localRepository not set on request - EnrichPushCommitsFilter may not have run; no diff recorded");
-            recordStep(request, StepStatus.SKIPPED, "", "local repository unavailable");
+            recordIssue(
+                    request,
+                    "diff generation could not complete for " + requestDetails.getBranch(),
+                    "Diff generation error: local repository unavailable");
             return;
         }
 
@@ -76,8 +79,13 @@ public final class DiffGenerationFilter extends AbstractFogwallFilter {
                             .content(diff)
                             .build());
         } catch (Exception e) {
+            // Fail closed: the diff feeds the diff scan and the reviewer's view of the push, so a push whose diff
+            // cannot be produced is blocked rather than forwarded unreviewable.
             log.warn("Could not generate diff for push {}..{}: {}", fromCommit, toCommit, e.getMessage());
-            recordStep(request, StepStatus.SKIPPED, "", e.getMessage());
+            recordIssue(
+                    request,
+                    "diff generation could not complete for " + requestDetails.getBranch(),
+                    "Diff generation error: " + e.getMessage());
         }
     }
 }
