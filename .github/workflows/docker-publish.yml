@@ -15,6 +15,9 @@ on:
 permissions:
   contents: read
 
+env:
+  GRYPE_VERSION: "0.112.0"
+
 # On main, give every commit its own concurrency group (via SHA) so build+scan runs never
 # cancel each other — each landed commit is fully built and scanned in parallel. PR/other refs
 # cancel superseded runs on new pushes.
@@ -103,6 +106,8 @@ jobs:
             BUILD_COMMIT=${{ github.sha }}
           platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           push: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+          # A pull request's image is never pushed; it is written to the runner as an OCI archive and scanned below.
+          outputs: ${{ github.event_name == 'pull_request' && format('type=oci,dest={0}/image.tar', runner.temp) || '' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: mode=max
@@ -113,6 +118,37 @@ jobs:
       - name: Export digest
         id: export
         run: echo "digest_${{ matrix.name }}=${{ steps.push.outputs.digest }}" >> "$GITHUB_OUTPUT"
+
+      # Same gate as the push scan below, on the image this pull request would publish, so a finding fails the
+      # pull request that brings it in rather than the main build after it merges.
+      - name: Install grype
+        if: github.event_name == 'pull_request'
+        run: |
+          cd /tmp
+          curl -sSfL -o "grype_${GRYPE_VERSION}_linux_amd64.tar.gz" \
+            "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_linux_amd64.tar.gz"
+          curl -sSfL -o "grype_${GRYPE_VERSION}_checksums.txt" \
+            "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_checksums.txt"
+          grep "grype_${GRYPE_VERSION}_linux_amd64.tar.gz" "grype_${GRYPE_VERSION}_checksums.txt" | sha256sum --check
+          tar -xzf "grype_${GRYPE_VERSION}_linux_amd64.tar.gz" -C /usr/local/bin grype
+
+      - name: Scan image
+        if: github.event_name == 'pull_request'
+        run: |
+          grype "oci-archive:${RUNNER_TEMP}/image.tar" \
+            --config .grype.yaml \
+            -o "template=grype-report.txt" \
+            -o "json=grype-report.json"
+
+      - name: Upload scan reports
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # ratchet:actions/upload-artifact@v7
+        with:
+          name: grype-container-scan-${{ matrix.name }}
+          path: |
+            grype-report.txt
+            grype-report.json
+          retention-days: 30
 
       - name: Attest image
         if: github.event_name != 'pull_request'
@@ -135,8 +171,6 @@ jobs:
     permissions:
       contents: read
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    env:
-      GRYPE_VERSION: "0.112.0"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v7.0.1
