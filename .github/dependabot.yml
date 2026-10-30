@@ -28,6 +28,11 @@ updates:
       java-dependencies:
         patterns:
           - "*"
+    ignore:
+      # Pinned to a dated master build that carries the Guava fix; every release up to 26.1 ranks above it and
+      # shades the vulnerable Guava. Remove this once the pin returns to a numbered release.
+      - dependency-name: "com.graphql-java:graphql-java"
+        versions: ["< 26.2"]
 
   - package-ecosystem: "npm"
     directory: "/fogwall-dashboard/frontend"

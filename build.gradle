@@ -51,7 +51,9 @@ ext {
     jacksonBomVersion = '3.2.4'
 
     // GraphQL (SCM API proxy — parses GraphQL request bodies for AST-based mutation allowlisting)
-    graphqlJavaVersion = '26.1'
+    // A dated master build from Maven Central: 26.1, the latest release, shades Guava 32.1.2 (GHSA-xxph-c9ww-hj94),
+    // and the Guava 33.7.2 update has not been released yet. Return to a numbered release (26.2+) once one ships.
+    graphqlJavaVersion = '0.0.0-2026-10-30T21-03-17-dde9ebd'
 
     // Spring
     springVersion = '7.0.10'

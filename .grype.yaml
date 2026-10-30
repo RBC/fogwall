@@ -8,3 +8,16 @@ ignore:
   # fixes become available and a base image rebuild will be required at that point.
   - fix-state: "wont-fix"
   - fix-state: "not-fixed"
+  # graphql-java is pinned to a dated master build (see graphqlJavaVersion in build.gradle) whose 0.0.0- version
+  # sorts below every patched release. The build has the v26.0 release in its history, which is past every patched
+  # version listed for these advisories. Scoped to that exact version, so the rule lapses when the pin moves.
+  - vulnerability: GHSA-v62j-cxhh-fq22
+    reason: "Fixed in 17.4/18.3; the pinned master build contains v26.0. False positive from 0.0.0- version ordering."
+    package:
+      name: graphql-java
+      version: 0.0.0-2026-10-30T21-03-17-dde9ebd
+  - vulnerability: GHSA-h9mq-f6q5-6c8m
+    reason: "Fixed in 19.11/20.9/21.5; the pinned master build contains v26.0. False positive from 0.0.0- version ordering."
+    package:
+      name: graphql-java
+      version: 0.0.0-2026-10-30T21-03-17-dde9ebd
