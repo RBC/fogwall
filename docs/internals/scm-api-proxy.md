@@ -178,14 +178,12 @@ an `owner:` prefix that disagrees with its owner is refused. A `headRefName` wit
 (`owner:repo:branch`) is refused: `compare` ignores the segment and would read the oldest fork's branch instead. `gh`
 sends neither: its `--head` takes only `branch` or `owner:branch`.
 
-Subject IDs are safer to cache than repository IDs. A GitHub issue transfer mints a new node ID in the destination and
-leaves the old one as a redirect, so `issueId → repo` has no rename staleness. `repositoryId → owner/name` is the
-mapping that needs a conservative TTL.
+Every node ID is resolved on each request; see [ID stability](#id-stability).
 
-### Fan-out, and what could seed the cache
+### Fan-out
 
 Each mutation is preceded by a read `query` carrying `owner`/`repo`(/`number`) in its variables and returning the target
-node ID in its response — so the cache can be seeded from the caller's own traffic before the mutation arrives:
+node ID in its response:
 
 - `issue create` → `query IssueRepositoryInfo($owner,$name){ repository{ id … } }`. The response's `data.repository.id`
   equals the `createIssue` mutation's `input.repositoryId`.
@@ -344,7 +342,7 @@ Every other GitLab operation in scope is unaffected: `mr update` and `mr note` a
 to the target project, so the URL already names the upstream.
 
 Resolution is cheap. `glab` fires `GET /projects/:path` for both projects immediately before the POST, and each response
-carries `id` alongside `path_with_namespace` — the same seeding opportunity as GitHub's node IDs.
+carries `id` alongside `path_with_namespace`.
 
 > **Capture hazard.** `GLAB_DEBUG_HTTP` redacts `Authorization` but not response bodies, and `GET /projects/:path`
 > returns `runners_token` in plaintext for a project owner. Scrub captures before sharing them.
@@ -499,14 +497,38 @@ Consequences:
 - GitLab reports `opened` / `closed` / `merged` / `locked`; Forgejo `open` / `closed` plus a `merged` boolean.
 - A label or assignee write returns the labels or the issue; the number falls back to the request path.
 
+## ID stability
+
+GitHub node IDs and GitLab project IDs are resolved to `owner/repo` on every request. Observed on 2026-10-30 against
+github.com and gitlab.com with throwaway repositories, resolving each ID with the resolver's own lookup after each move:
+
+| ID                              | repository rename          | repository transfer to another owner | issue transfer                                                                     |
+| ------------------------------- | -------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------- |
+| GitHub `repositoryId` (`R_…`)   | same ID, resolves new name | same ID, resolves new owner          | —                                                                                  |
+| GitHub `issueId` (`I_…`)        | same ID, follows the repo  | same ID, follows the repo            | new ID in the destination; the old ID is `NOT_FOUND`, and so is `addComment` on it |
+| GitHub `pullRequestId` (`PR_…`) | same ID, follows the repo  | same ID, follows the repo            | —                                                                                  |
+| GitLab project ID               | same ID, resolves new path | same ID, resolves new namespace      | —                                                                                  |
+
+`addComment`'s `subjectId` is an issue or pull request ID and behaves as its type does. Fork pull and merge requests
+carry the upstream's repository or project ID and resolve the same way.
+
+Every ID outlives a move while the path it names changes, so a cached mapping would authorize against a grant for a path
+the request no longer reaches and record the wrong repository. An issue transfer is the one move that cannot leave a
+stale mapping.
+
+GitLab keeps a moved project's old path as a redirect for reads only: `GET /projects/<old path>` answers `301` to
+`/projects/<id>`, while `PUT` and `POST` on the old path answer `405`. A mutation authorized against a stale path is
+refused upstream rather than landing on the moved project.
+
+Forgejo and Gitea address the repository as `{owner}/{repo}` in the URL, so there is no ID to resolve.
+
 ## Credential model
 
 ID resolution uses the caller's own token, never an app-level one. fogwall resolves only what the caller can already
 see, so an opaque ID they cannot read is a denial rather than a lookup. That never wrongly blocks: the caller is about
 to operate on that target, and a token that cannot read it cannot operate on it either.
 
-The `id → owner/repo` mapping is an objective fact rather than a per-user one, so the cache is shared across users. Only
-the authorization decision is per-user, and it is never cached.
+Neither the `id → owner/repo` mapping nor the authorization decision is cached; see [ID stability](#id-stability).
 
 A developer's token is always far broader than the operations fogwall proxies with it. Neither provider has a scope that
 means "may open issues and pull requests" — GitHub's `repo` and GitLab's `api` are both full read/write to everything
@@ -545,3 +567,29 @@ scrubbed.
 
 Read the CLI's source alongside any capture. A capture proves what one session did; the source enumerates everything the
 CLI can send, which is what an allowlist has to cover.
+
+## Appendix: re-verifying ID stability
+
+The [ID stability](#id-stability) table is what decides whether a resolved ID may be cached. Re-run it when a provider
+changes its ID format or a new dialect gains an ID resolver.
+
+1. **Use throwaway repositories** in an account that owns a second user or org to transfer into. GitHub needs two
+   repositories under one owner for the issue transfer, since issues only move between repositories with the same owner.
+   Deleting them afterwards needs the `delete_repo` scope on `gh`; `glab`'s `api` scope covers deletion.
+2. **Record each ID before any move.** On GitHub, one query returns the repository, issue and pull request IDs:
+   `repository(owner:,name:){ id issues{nodes{number id}} pullRequests{nodes{number id}} }`. On GitLab, the project ID
+   is `id` on `GET /projects/:path`.
+3. **Resolve with the resolver's own lookup after every step**, not an approximation of it: the
+   [`node(id:)` query](#mutation--node-id-map) on GitHub, `GET /projects/:id` on GitLab.
+4. **Run the moves in order:** rename the repository, transfer it to the other owner, then (GitHub) transfer an issue to
+   the second repository. Transfers complete asynchronously on both providers: an immediate `GET` can still answer with
+   the old owner, so poll until the new owner shows before resolving.
+5. **Try a mutation on any ID that stops resolving.** `addComment` on the pre-transfer issue ID shows whether the old ID
+   is dead or still reachable.
+6. **On GitLab, request the old path without following redirects**
+   (`curl -s -o /dev/null -w '%{http_code} %{redirect_url}'`), once with `GET` and once each with a `PUT` and a `POST`
+   against an issue on it. A redirect on a mutation would let a request authorized against the old path land on the
+   moved project.
+
+An ID belongs in a cache only if a move changes the ID itself; if the ID survives while the path it names changes, it is
+resolved on every request.

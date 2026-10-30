@@ -487,7 +487,7 @@ public final class FogwallServletRegistrar {
             boolean mergeEnabled) {
         String mapping = GITHUB_GRAPHQL_MOUNT;
 
-        var nodeIdResolver = new GitHubNodeIdResolver(fogwallContext.gitHubNodeIdCache());
+        var nodeIdResolver = new GitHubNodeIdResolver();
         var headShaResolver = new GitHubHeadShaResolver();
 
         // Observability filter first (outermost), when enabled, so the per-request span wraps the whole chain and the
@@ -585,10 +585,7 @@ public final class FogwallServletRegistrar {
                 context,
                 mapping,
                 new ScmApiGitLabGateFilter(
-                        provider,
-                        new GitLabProjectIdResolver(fogwallContext.gitLabProjectIdCache()),
-                        fogwallContext.repoPermissionService(),
-                        mergeEnabled));
+                        provider, new GitLabProjectIdResolver(), fogwallContext.repoPermissionService(), mergeEnabled));
         addFilter(
                 context,
                 mapping,

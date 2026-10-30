@@ -47,10 +47,6 @@ import com.rbc.fogwall.permission.PermissionStore;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.*;
-import com.rbc.fogwall.scmapi.GitHubNodeIdCache;
-import com.rbc.fogwall.scmapi.GitLabProjectIdCache;
-import com.rbc.fogwall.scmapi.JdbcGitHubNodeIdCache;
-import com.rbc.fogwall.scmapi.JdbcGitLabProjectIdCache;
 import com.rbc.fogwall.service.CachingTokenPushIdentityResolver;
 import com.rbc.fogwall.service.GitCredentialService;
 import com.rbc.fogwall.service.JdbcScmTokenCache;
@@ -135,8 +131,6 @@ public class JettyConfigurationBuilder {
     private UrlRuleRegistry cachedUrlRuleRegistry;
     private ConfigHolder cachedConfigHolder;
     private ResolvedOutboundProxy cachedOutboundProxy;
-    private GitHubNodeIdCache cachedGitHubNodeIdCache;
-    private GitLabProjectIdCache cachedGitLabProjectIdCache;
     private ScmApiActionStore cachedScmApiActionStore;
     private ScmApiEntityStore cachedScmApiEntityStore;
     private ScmOAuthTokenStore cachedScmOAuthTokenStore;
@@ -660,6 +654,7 @@ public class JettyConfigurationBuilder {
         SelfApprovalPolicy selfApprovalPolicy = new SelfApprovalPolicy(rps, us);
         // Checked for every provider up front, so a misconfiguration fails startup whichever transport it is on.
         config.getProviders().keySet().forEach(this::isDeferredForwarding);
+        warnIfNodeIdCacheTtlSet();
         var deferredForwarder = new DeferredForwarder(
                 ps,
                 buildParkedPushStore(),
@@ -695,8 +690,6 @@ public class JettyConfigurationBuilder {
                 buildUpstreamTls(),
                 buildProviderRegistry(),
                 new SshScmIdentityEnricher(SshScmIdentityEnricher.DEFAULT_TTL, buildSshFingerprintCache()),
-                buildNodeIdCache(),
-                buildGitLabProjectIdCache(),
                 buildScmApiActionStore(),
                 buildScmApiEntityStore(),
                 buildScmOAuthTokenStore(),
@@ -1166,36 +1159,6 @@ public class JettyConfigurationBuilder {
         return new JdbcScmTokenCache(requireJdbcDataSource(), maxAge);
     }
 
-    /**
-     * Builds the {@link GitHubNodeIdCache} for the SCM API proxy — resolves an opaque GraphQL node ID to
-     * {@code owner/repo}. The TTL is a security parameter (see {@link ScmApiSettings#getNodeIdCacheTtl()}), not just a
-     * perf knob, so unlike the pack-window cache it is deliberately operator-configurable.
-     */
-    public GitHubNodeIdCache buildNodeIdCache() {
-        if (cachedGitHubNodeIdCache != null) return cachedGitHubNodeIdCache;
-        Duration ttl = Duration.parse(config.getScmApi().getNodeIdCacheTtl());
-        log.info("SCM API node-ID cache enabled (TTL {})", ttl);
-        cachedGitHubNodeIdCache = "mongo".equals(config.getDatabase().getType())
-                ? requireMongoStoreFactory().nodeIdCache(ttl)
-                : new JdbcGitHubNodeIdCache(requireJdbcDataSource(), ttl);
-        return cachedGitHubNodeIdCache;
-    }
-
-    /**
-     * Builds the {@link GitLabProjectIdCache} — resolves a GitLab numeric project ID to {@code owner/repo}, which is
-     * what lets a fork merge request be authorized against the upstream it targets rather than the fork in its URL.
-     * Shares {@code scm-api.node-id-cache-ttl}: both caches map a provider-scoped opaque ID to a repository, and the
-     * TTL is a security parameter for the same reason in each.
-     */
-    public GitLabProjectIdCache buildGitLabProjectIdCache() {
-        if (cachedGitLabProjectIdCache != null) return cachedGitLabProjectIdCache;
-        Duration ttl = Duration.parse(config.getScmApi().getNodeIdCacheTtl());
-        cachedGitLabProjectIdCache = "mongo".equals(config.getDatabase().getType())
-                ? requireMongoStoreFactory().gitLabProjectIdCache(ttl)
-                : new JdbcGitLabProjectIdCache(requireJdbcDataSource(), ttl);
-        return cachedGitLabProjectIdCache;
-    }
-
     /** Builds the {@link ScmApiActionStore} (the SCM API proxy audit trail) based on the database configuration. */
     public ScmApiActionStore buildScmApiActionStore() {
         if (cachedScmApiActionStore != null) return cachedScmApiActionStore;
@@ -1414,6 +1377,7 @@ public class JettyConfigurationBuilder {
         if (cachedMongoStoreFactory == null) {
             DatabaseConfig db = config.getDatabase();
             cachedMongoStoreFactory = new MongoStoreFactory(db.getUrl(), mongoDbName(db));
+            cachedMongoStoreFactory.dropRetiredCollections();
         }
         return cachedMongoStoreFactory;
     }
@@ -1725,6 +1689,14 @@ public class JettyConfigurationBuilder {
             return URI.create("ssh://git@" + httpUri.getHost());
         }
         return null;
+    }
+
+    @SuppressWarnings("deprecation") // intentionally reads the deprecated node-id-cache-ttl key to warn on it
+    private void warnIfNodeIdCacheTtlSet() {
+        if (config.getScmApi().getNodeIdCacheTtl() != null) {
+            log.warn("Config key 'scm-api.node-id-cache-ttl' is deprecated and IGNORED. The SCM API proxy resolves "
+                    + "every GitHub node ID and GitLab project ID on each request; remove the key.");
+        }
     }
 
     /** Blocked literals and patterns for SCM API content ({@code scm-api.block}). */

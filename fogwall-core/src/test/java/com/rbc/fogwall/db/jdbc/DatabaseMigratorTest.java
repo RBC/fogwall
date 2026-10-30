@@ -27,7 +27,7 @@ class DatabaseMigratorTest {
         assertEquals(
                 Set.of(
                         "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17",
-                        "18", "19", "20", "20.1", "21"),
+                        "18", "19", "20", "20.1", "21", "22"),
                 appliedVersions(dataSource),
                 "H2 must never select MYSQL_ONLY entries, and the 2.1 postgres-only widening migration must not "
                         + "apply to H2 either");
@@ -41,6 +41,21 @@ class DatabaseMigratorTest {
 
         assertDoesNotThrow(() -> DatabaseMigrator.migrate(dataSource));
         assertEquals(firstRun, appliedVersions(dataSource));
+    }
+
+    /** The ID-resolution caches held only derived data; the IDs they mapped are now resolved on every request. */
+    @Test
+    void migrate_dropsTheScmApiIdResolutionCaches() throws Exception {
+        DataSource dataSource = DataSourceFactory.h2InMemory("migrator-test-" + UUID.randomUUID());
+        DatabaseMigrator.migrate(dataSource);
+
+        try (Connection conn = dataSource.getConnection()) {
+            for (String table : Set.of("SCM_API_GITHUB_NODE_CACHE", "SCM_API_GITLAB_PROJECT_CACHE")) {
+                try (ResultSet rs = conn.getMetaData().getTables(null, null, table, null)) {
+                    assertFalse(rs.next(), table + " must be dropped");
+                }
+            }
+        }
     }
 
     private static Set<String> appliedVersions(DataSource dataSource) throws Exception {

@@ -10,9 +10,7 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,13 +18,12 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Exercises {@link GitHubNodeIdResolver} against a local stub GraphQL endpoint, covering the response-parsing and
- * cache-seeding behaviour.
+ * per-request resolution.
  */
 class GitHubNodeIdResolverTest {
 
     private HttpServer server;
     private GitHubProvider provider;
-    private final InMemoryGitHubNodeIdCache cache = new InMemoryGitHubNodeIdCache();
     private String lastResponseBody;
     private final List<String> seenUserAgents = new ArrayList<>();
 
@@ -52,50 +49,61 @@ class GitHubNodeIdResolverTest {
     }
 
     @Test
-    void cacheHit_neverCallsUpstream() {
-        cache.store("github", "R_1", new OwnerRepo("acme", "widgets"));
-        lastResponseBody = "should not be read";
-
-        Optional<OwnerRepo> result =
-                new GitHubNodeIdResolver(cache).resolve(provider, new MutationNodeIdRef("R_1", null), "token");
-
-        assertEquals(Optional.of(new OwnerRepo("acme", "widgets")), result);
-    }
-
-    @Test
-    void cacheMiss_resolvesRepositoryShapeResponse_andPopulatesCache() {
+    void resolvesRepositoryShapeResponse() {
         lastResponseBody = """
                 {"data":{"node":{"name":"widgets","owner":{"login":"acme"}}}}
                 """;
 
         Optional<OwnerRepo> result =
-                new GitHubNodeIdResolver(cache).resolve(provider, new MutationNodeIdRef("R_1", null), "token");
+                new GitHubNodeIdResolver().resolve(provider, new MutationNodeIdRef("R_1", null), "token");
 
         assertEquals(Optional.of(new OwnerRepo("acme", "widgets")), result);
-        assertEquals(Optional.of(new OwnerRepo("acme", "widgets")), cache.lookup("github", "R_1"));
+    }
+
+    /**
+     * Repository, issue and pull request node IDs all survive a rename or transfer, so a repeat lookup must see where
+     * the repository lives now.
+     */
+    @Test
+    void resolvesEveryRequestUpstream_andSeesAMove() {
+        GitHubNodeIdResolver resolver = new GitHubNodeIdResolver();
+        respondWith("""
+                {"data":{"node":{"repository":{"name":"widgets","owner":{"login":"acme"}}}}}
+                """);
+        assertEquals(
+                Optional.of(new OwnerRepo("acme", "widgets")),
+                resolver.resolve(provider, new MutationNodeIdRef("I_1", null), "token"));
+
+        respondWith("""
+                {"data":{"node":{"repository":{"name":"widgets-renamed","owner":{"login":"other-org"}}}}}
+                """);
+        assertEquals(
+                Optional.of(new OwnerRepo("other-org", "widgets-renamed")),
+                resolver.resolve(provider, new MutationNodeIdRef("I_1", null), "token"));
+
+        assertEquals(2, seenUserAgents.size());
     }
 
     @Test
-    void cacheMiss_resolvesIssueShapeResponse_nestedUnderRepository() {
+    void resolvesIssueShapeResponse_nestedUnderRepository() {
         lastResponseBody = """
                 {"data":{"node":{"repository":{"name":"widgets","owner":{"login":"acme"}}}}}
                 """;
 
         Optional<OwnerRepo> result =
-                new GitHubNodeIdResolver(cache).resolve(provider, new MutationNodeIdRef("I_1", null), "token");
+                new GitHubNodeIdResolver().resolve(provider, new MutationNodeIdRef("I_1", null), "token");
 
         assertEquals(Optional.of(new OwnerRepo("acme", "widgets")), result);
     }
 
     @Test
-    void malformedResponse_returnsEmpty_andDoesNotPopulateCache() {
+    void malformedResponse_returnsEmpty() {
         lastResponseBody = "not json";
 
         Optional<OwnerRepo> result =
-                new GitHubNodeIdResolver(cache).resolve(provider, new MutationNodeIdRef("R_1", null), "token");
+                new GitHubNodeIdResolver().resolve(provider, new MutationNodeIdRef("R_1", null), "token");
 
         assertTrue(result.isEmpty());
-        assertTrue(cache.lookup("github", "R_1").isEmpty());
     }
 
     @Test
@@ -105,7 +113,7 @@ class GitHubNodeIdResolverTest {
                 """;
 
         Optional<OwnerRepo> result =
-                new GitHubNodeIdResolver(cache).resolve(provider, new MutationNodeIdRef("R_1", null), "token");
+                new GitHubNodeIdResolver().resolve(provider, new MutationNodeIdRef("R_1", null), "token");
 
         assertTrue(result.isEmpty());
     }
@@ -121,23 +129,14 @@ class GitHubNodeIdResolverTest {
                 {"data":{"node":{"name":"widgets","owner":{"login":"acme"}}}}
                 """;
 
-        new GitHubNodeIdResolver(cache).resolve(provider, new MutationNodeIdRef("R_1", null), "token");
+        new GitHubNodeIdResolver().resolve(provider, new MutationNodeIdRef("R_1", null), "token");
 
         // Pinned to BuildInfo rather than a literal version, so a release bump does not break the assertion.
         assertEquals(List.of("fogwall/" + BuildInfo.get().version()), seenUserAgents);
     }
 
-    private static final class InMemoryGitHubNodeIdCache implements GitHubNodeIdCache {
-        private final Map<String, OwnerRepo> entries = new HashMap<>();
-
-        @Override
-        public Optional<OwnerRepo> lookup(String provider, String nodeId) {
-            return Optional.ofNullable(entries.get(provider + ":" + nodeId));
-        }
-
-        @Override
-        public void store(String provider, String nodeId, OwnerRepo ownerRepo) {
-            entries.put(provider + ":" + nodeId, ownerRepo);
-        }
+    /** Sets what the stub upstream answers next; a method so a sequence of answers reads as one. */
+    private void respondWith(String body) {
+        lastResponseBody = body;
     }
 }

@@ -10,9 +10,7 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,7 +25,6 @@ class GitLabProjectIdResolverTest {
 
     private HttpServer server;
     private GitLabProvider provider;
-    private final InMemoryProjectIdCache cache = new InMemoryProjectIdCache();
     private String responseBody;
     private int responseStatus = 200;
     private final List<String> requestedPaths = new ArrayList<>();
@@ -61,28 +58,34 @@ class GitLabProjectIdResolverTest {
     }
 
     private GitLabProjectIdResolver resolver() {
-        return new GitLabProjectIdResolver(cache);
+        return new GitLabProjectIdResolver();
     }
 
     @Test
-    void cacheHit_neverCallsUpstream() {
-        cache.store("gitlab", "42", new OwnerRepo("acme", "widgets"));
-
-        Optional<OwnerRepo> result = resolver().resolve(provider, "42", "PRIVATE-TOKEN", "glpat-x");
-
-        assertEquals(Optional.of(new OwnerRepo("acme", "widgets")), result);
-        assertTrue(requestedPaths.isEmpty(), "a cache hit must not reach upstream");
-    }
-
-    @Test
-    void cacheMiss_resolvesPathWithNamespace_andPopulatesCache() {
+    void resolvesPathWithNamespace() {
         responseBody = "{\"id\":42,\"path_with_namespace\":\"acme/widgets\"}";
 
         Optional<OwnerRepo> result = resolver().resolve(provider, "42", "PRIVATE-TOKEN", "glpat-x");
 
         assertEquals(Optional.of(new OwnerRepo("acme", "widgets")), result);
         assertEquals(List.of("/api/v4/projects/42"), requestedPaths);
-        assertEquals(Optional.of(new OwnerRepo("acme", "widgets")), cache.lookup("gitlab", "42"));
+    }
+
+    /** A project ID survives a rename or transfer, so a repeat lookup must see where the project lives now. */
+    @Test
+    void resolvesEveryRequestUpstream_andSeesAMove() {
+        GitLabProjectIdResolver resolver = resolver();
+        respondWith("{\"id\":42,\"path_with_namespace\":\"acme/widgets\"}");
+        assertEquals(
+                Optional.of(new OwnerRepo("acme", "widgets")),
+                resolver.resolve(provider, "42", "PRIVATE-TOKEN", "glpat-x"));
+
+        respondWith("{\"id\":42,\"path_with_namespace\":\"other-org/widgets-renamed\"}");
+        assertEquals(
+                Optional.of(new OwnerRepo("other-org", "widgets-renamed")),
+                resolver.resolve(provider, "42", "PRIVATE-TOKEN", "glpat-x"));
+
+        assertEquals(List.of("/api/v4/projects/42", "/api/v4/projects/42"), requestedPaths);
     }
 
     /**
@@ -122,7 +125,7 @@ class GitLabProjectIdResolverTest {
     }
 
     @Test
-    void malformedOrUnexpectedResponse_returnsEmpty_andDoesNotPopulateCache() {
+    void malformedOrUnexpectedResponse_returnsEmpty() {
         responseBody = "{\"id\":42}"; // no path_with_namespace
         assertTrue(resolver().resolve(provider, "42", "PRIVATE-TOKEN", "t").isEmpty());
 
@@ -131,10 +134,6 @@ class GitLabProjectIdResolverTest {
 
         responseBody = "{\"path_with_namespace\":\"noslash\"}";
         assertTrue(resolver().resolve(provider, "44", "PRIVATE-TOKEN", "t").isEmpty());
-
-        assertTrue(cache.lookup("gitlab", "42").isEmpty());
-        assertTrue(cache.lookup("gitlab", "43").isEmpty());
-        assertTrue(cache.lookup("gitlab", "44").isEmpty());
     }
 
     /** A 404 for a project the caller's token cannot see must not resolve — the gate filter then denies. */
@@ -144,20 +143,10 @@ class GitLabProjectIdResolverTest {
         responseBody = "{\"message\":\"404 Project Not Found\"}";
 
         assertTrue(resolver().resolve(provider, "99", "PRIVATE-TOKEN", "t").isEmpty());
-        assertTrue(cache.lookup("gitlab", "99").isEmpty());
     }
 
-    private static final class InMemoryProjectIdCache implements GitLabProjectIdCache {
-        private final Map<String, OwnerRepo> entries = new HashMap<>();
-
-        @Override
-        public Optional<OwnerRepo> lookup(String provider, String projectId) {
-            return Optional.ofNullable(entries.get(provider + ":" + projectId));
-        }
-
-        @Override
-        public void store(String provider, String projectId, OwnerRepo ownerRepo) {
-            entries.put(provider + ":" + projectId, ownerRepo);
-        }
+    /** Sets what the stub upstream answers next; a method so a sequence of answers reads as one. */
+    private void respondWith(String body) {
+        responseBody = body;
     }
 }
