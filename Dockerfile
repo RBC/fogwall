@@ -65,7 +65,7 @@ RUN sed -i \
 # ── Runtime stage: standalone server (no dashboard, no Spring, no Node) ────────
 # Not built by default — `docker build --target server .` opts in explicitly.
 # Lighter footprint: no React/Node build step, no Spring/dashboard dependencies.
-FROM docker.io/eclipse-temurin:25-jre-noble@sha256:3f2223fe04b750aa5a8179e29b5c9a1ddf7665fc9bb08bfe11ad01d143bc13a5 AS server
+FROM docker.io/eclipse-temurin:25-jre-noble@sha256:2ef7a81085e0502d7d4ff7e7c0257b6d4f46433f8ea6021180aa3c8a2b9ca3ec AS server
 
 WORKDIR /app
 
@@ -105,7 +105,7 @@ USER 1000
 ENTRYPOINT ["/app/bin/fogwall-server"]
 
 # ── Runtime stage: dashboard (default) ──────────────────────────────────────────
-FROM docker.io/eclipse-temurin:25-jre-noble@sha256:3f2223fe04b750aa5a8179e29b5c9a1ddf7665fc9bb08bfe11ad01d143bc13a5 AS dashboard
+FROM docker.io/eclipse-temurin:25-jre-noble@sha256:2ef7a81085e0502d7d4ff7e7c0257b6d4f46433f8ea6021180aa3c8a2b9ca3ec AS dashboard
 
 WORKDIR /app
 
