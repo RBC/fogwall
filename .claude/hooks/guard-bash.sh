@@ -34,7 +34,10 @@ is_gh()   { grep -Eq '(^|[;&|] *)gh ' <<<"$cmd"; }
 if grep -Eq 'git +add( +[^;&|]*)? +(-A|--all)\b' <<<"$cmd"; then
     block "never 'git add -A' / '--all'; the working tree may hold sensitive or scratch files. Stage paths explicitly."
 fi
-if is_git && grep -Eq -- '--no-verify|--no-gpg-sign|gpgsign=false|core\.hooksPath' <<<"$cmd"; then
+# Reading core.hooksPath is fine; setting or unsetting it is the bypass.
+if is_git && { grep -Eq -- '--no-verify|--no-gpg-sign|gpgsign=false|core\.hooksPath=' <<<"$cmd" \
+               || grep -Eq 'core\.hooksPath +[^ ;&|]' <<<"$cmd" \
+               || grep -Eq '(--unset(-all)?|unset|set) +core\.hooksPath' <<<"$cmd"; }; then
     block "never bypass commit hooks or signing. The pre-commit hook (format, lint, PMD) is the signal that something is off; fix the cause instead."
 fi
 
@@ -61,14 +64,36 @@ fi
 if grep -Eq 'gh +label +create' <<<"$cmd"; then
     block "only use labels that already exist; never create new ones."
 fi
-if grep -Eq 'gh +(issue|pr) +create( +[^;&|]*)? +(-R|--repo)[ =]' <<<"$cmd" \
-   && ! grep -Eq '(-R|--repo)[ =]["'"'"']?(github\.com/)?RBC/fogwall\b' <<<"$cmd"; then
-    block "never open issues or PRs on external repos on the maintainer's behalf. Note the upstream tracker for manual follow-up instead."
-fi
-if grep -Eq 'gh +api( +[^;&|]*)? +(-X|--method)[ =]POST( +[^;&|]*)? +(repos/)' <<<"$cmd" \
-   && grep -Eq 'repos/[^ /]+/[^ /]+/(issues|pulls)\b' <<<"$cmd" \
-   && ! grep -Eq 'repos/RBC/fogwall/' <<<"$cmd"; then
-    block "never open issues or PRs on external repos on the maintainer's behalf."
-fi
+# Issues and PRs may be opened on fogwall itself and on the maintainer's SCM API sandbox repos:
+# the capture targets named in docs/internals/scm-api-proxy.md, and throwaway repos named
+# fogwall-*probe* under the maintainer's own accounts. Every other repo is someone else's tracker.
+# A host prefix is allowed because gh pointed at a fogwall SCM API listener takes host/owner/repo.
+allowed_repo() {
+    local r="${1#*://}"
+    r="${r%.git}"
+    [[ "$r" == */*/* ]] && r="${r#*/}"
+    [[ "$r" =~ ^RBC/fogwall$ ]] && return 0
+    [[ "$r" =~ ^(coopernetes/test-repo|RBC/coopernetes-test-repo)$ ]] && return 0
+    [[ "$r" =~ ^(coopernetes|RBC|rbc-research)/fogwall-[A-Za-z0-9._-]*probe[A-Za-z0-9._-]*$ ]] && return 0
+    return 1
+}
+external_msg="never open issues or PRs on external repos on the maintainer's behalf. Note the upstream tracker for manual follow-up instead. Sandbox repos for SCM API work are exempt; see CLAUDE.md \"SCM API sandbox repos\"."
+# Judged per command segment, so a read of another repo's issue elsewhere in the same line is not
+# mistaken for the create. gh api sends POST whenever fields are passed and no method is given.
+while read -r seg; do
+    if grep -Eq '(^| )gh +(issue|pr) +create( |$)' <<<"$seg"; then
+        while read -r repo; do
+            allowed_repo "$repo" || block "$external_msg"
+        done < <(grep -oE '(-R|--repo)[ =]["'"'"']?[^ "'"'"']+' <<<"$seg" | sed -E 's/^(-R|--repo)[ =]["'"'"']?//')
+    fi
+    if grep -Eq '(^| )gh +api( |$)' <<<"$seg" \
+       && { grep -Eq '(-X|--method)[ =]["'"'"']?POST\b' <<<"$seg" \
+            || { ! grep -Eq '(-X|--method)[ =]' <<<"$seg" \
+                 && grep -Eq ' (-f|-F|--field|--raw-field|--input)[ =]' <<<"$seg"; }; }; then
+        while read -r repo; do
+            allowed_repo "$repo" || block "$external_msg"
+        done < <(grep -oE 'repos/[^ /]+/[^ /]+/(issues|pulls)\b' <<<"$seg" | sed -E 's#^repos/([^/]+/[^/]+)/.*#\1#')
+    fi
+done < <(sed -E 's/(&&|\|\||[;&|])/\n/g' <<<"$cmd")
 
 exit 0

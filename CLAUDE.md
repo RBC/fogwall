@@ -182,6 +182,12 @@ This is a public repository.
   not the path taken to it — a comment recording what was tried and abandoned on a feature branch is noise once the
   branch merges.
 - Anything that belongs upstream (finos/git-proxy, JGit, Jetty…) is noted for the maintainer to file by hand.
+- **SCM API sandbox repos.** Developing or capturing against the SCM API proxy means opening real issues and PRs, and
+  that is allowed on the maintainer's sandbox repos only: the capture targets in `docs/internals/scm-api-proxy.md`
+  (`coopernetes/test-repo`, its fork `RBC/coopernetes-test-repo`, and their GitLab/Gitea counterparts), plus throwaway
+  repos named `fogwall-*probe*` under `coopernetes`, `RBC` or `rbc-research`. Create, rename, transfer or delete a
+  throwaway repo only after the maintainer agrees to the experiment. `guard-bash.sh` enforces this for `gh`; follow the
+  same rule for `glab`, `tea` and `fj`.
 
 ## Backwards compatibility
 
