@@ -2,10 +2,9 @@ package com.rbc.fogwall.db;
 
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
+import com.mongodb.client.MongoDatabase;
 import com.rbc.fogwall.db.mongo.MongoFetchStore;
 import com.rbc.fogwall.db.mongo.MongoGitCredentialStore;
-import com.rbc.fogwall.db.mongo.MongoGitHubNodeIdCache;
-import com.rbc.fogwall.db.mongo.MongoGitLabProjectIdCache;
 import com.rbc.fogwall.db.mongo.MongoParkedPushStore;
 import com.rbc.fogwall.db.mongo.MongoPushStore;
 import com.rbc.fogwall.db.mongo.MongoScmApiActionStore;
@@ -19,8 +18,6 @@ import com.rbc.fogwall.permission.MongoGroupPermissionStore;
 import com.rbc.fogwall.permission.MongoRepoPermissionStore;
 import com.rbc.fogwall.permission.PermissionStore;
 import com.rbc.fogwall.permission.RepoPermission;
-import com.rbc.fogwall.scmapi.GitHubNodeIdCache;
-import com.rbc.fogwall.scmapi.GitLabProjectIdCache;
 import com.rbc.fogwall.service.ScmTokenCache;
 import com.rbc.fogwall.service.SshFingerprintCache;
 import com.rbc.fogwall.user.GitCredentialStore;
@@ -28,6 +25,7 @@ import com.rbc.fogwall.user.MongoUserStore;
 import com.rbc.fogwall.user.ScmOAuthTokenStore;
 import com.rbc.fogwall.user.UserStore;
 import java.time.Duration;
+import java.util.List;
 
 /**
  * Factory that creates MongoDB-backed stores sharing a single {@link MongoClient}. Callers that need both a
@@ -35,6 +33,10 @@ import java.time.Duration;
  * is shared.
  */
 public final class MongoStoreFactory implements AutoCloseable {
+
+    /** SCM API ID-resolution caches; those IDs are resolved on every request. */
+    static final List<String> RETIRED_COLLECTIONS =
+            List.of("scm_api_github_node_cache", "scm_api_gitlab_project_cache");
 
     private final MongoClient client;
     private final String databaseName;
@@ -52,6 +54,17 @@ public final class MongoStoreFactory implements AutoCloseable {
     /** Returns the configured database name. */
     public String getDatabaseName() {
         return databaseName;
+    }
+
+    /**
+     * Drops collections fogwall no longer reads or writes, the MongoDB counterpart of a JDBC {@code DROP TABLE}
+     * migration. Only collections that held derived data belong here; dropping an absent collection is a no-op.
+     */
+    public void dropRetiredCollections() {
+        MongoDatabase database = client.getDatabase(databaseName);
+        for (String name : RETIRED_COLLECTIONS) {
+            database.getCollection(name).drop();
+        }
     }
 
     /** Create and initialize a {@link PushStore} backed by this factory's client. */
@@ -134,20 +147,6 @@ public final class MongoStoreFactory implements AutoCloseable {
     /** Create and initialize a {@link ScmTokenCache} backed by this factory's client. */
     public ScmTokenCache tokenCache(Duration maxAge) {
         MongoScmTokenCache cache = new MongoScmTokenCache(client, databaseName, maxAge);
-        cache.initialize();
-        return cache;
-    }
-
-    /** Create and initialize a {@link GitHubNodeIdCache} for the SCM API proxy, backed by this factory's client. */
-    public GitHubNodeIdCache nodeIdCache(Duration ttl) {
-        MongoGitHubNodeIdCache cache = new MongoGitHubNodeIdCache(client, databaseName, ttl);
-        cache.initialize();
-        return cache;
-    }
-
-    /** Create and initialize a {@link GitLabProjectIdCache} for the SCM API proxy, backed by this factory's client. */
-    public GitLabProjectIdCache gitLabProjectIdCache(Duration ttl) {
-        MongoGitLabProjectIdCache cache = new MongoGitLabProjectIdCache(client, databaseName, ttl);
         cache.initialize();
         return cache;
     }

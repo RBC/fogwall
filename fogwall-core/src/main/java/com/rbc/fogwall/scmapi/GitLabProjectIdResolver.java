@@ -19,8 +19,8 @@ import tools.jackson.databind.json.JsonMapper;
  * Authorizing on the URL alone would therefore check the fork, which the contributor owns and can always push to,
  * rather than the upstream the merge request is actually opened on.
  *
- * <p>Backed by {@link GitLabProjectIdCache}, whose TTL is a security parameter: an ID outlives a rename or transfer
- * while what it resolves to changes underneath it.
+ * <p>Resolved on every request, never cached: a project ID survives a rename or transfer while the path it resolves to
+ * changes underneath it.
  */
 @Slf4j
 public class GitLabProjectIdResolver {
@@ -33,30 +33,13 @@ public class GitLabProjectIdResolver {
      */
     private static final Timeout RESOLVE_TIMEOUT = Timeout.ofSeconds(10);
 
-    private final GitLabProjectIdCache cache;
-
-    public GitLabProjectIdResolver(GitLabProjectIdCache cache) {
-        this.cache = cache;
-    }
-
     /**
      * Resolves {@code projectId} to the project it names, presenting {@code authHeaderName}/{@code authHeaderValue} —
-     * the caller's own credential, relayed in the header they used, never re-schemed. Cache first; only calls upstream
-     * on a miss. Empty means "could not be resolved", which the caller must treat as a denial rather than falling back
-     * to the URL, since an unresolvable target is precisely the case where the URL names the wrong repository.
+     * the caller's own credential, relayed in the header they used, never re-schemed. Empty means "could not be
+     * resolved", which the caller must treat as a denial rather than falling back to the URL, since an unresolvable
+     * target is precisely the case where the URL names the wrong repository.
      */
     public Optional<OwnerRepo> resolve(
-            GitLabProvider provider, String projectId, String authHeaderName, String authHeaderValue) {
-        Optional<OwnerRepo> cached = cache.lookup(provider.getProviderId(), projectId);
-        if (cached.isPresent()) {
-            return cached;
-        }
-        Optional<OwnerRepo> resolved = resolveUpstream(provider, projectId, authHeaderName, authHeaderValue);
-        resolved.ifPresent(ownerRepo -> cache.store(provider.getProviderId(), projectId, ownerRepo));
-        return resolved;
-    }
-
-    private Optional<OwnerRepo> resolveUpstream(
             GitLabProvider provider, String projectId, String authHeaderName, String authHeaderValue) {
         try {
             var request = Request.get(provider.getApiUrl() + "/projects/" + projectId);

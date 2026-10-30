@@ -9,20 +9,14 @@ permission engine, and audit trail. See [the administrator guide](../admin/scm-a
 it.
 
 The providers use different wire formats under the hood — GitHub's is GraphQL with an opaque node ID that must be
-resolved to `owner/repo`; GitLab's and Forgejo's are REST with the repository addressed directly in the URL, so no
-resolution step exists for them (`node-id-cache-ttl` below is a GitHub-only setting, inert for the others). See
-[docs/internals/scm-api-proxy.md](../internals/scm-api-proxy.md) for the per-provider wire-format detail. Every dialect
-shares the same opt-in config shape — a global settings block, and a per-provider `enabled` flag that actually mounts
-the path:
+resolved to `owner/repo`; GitLab's and Forgejo's are REST with the repository addressed directly in the URL, except for
+a GitLab fork merge request, whose upstream is a numeric project ID that must be resolved too. Each resolution is one
+upstream call with the caller's token, made on every mutation that needs it: the IDs outlive a repository rename or
+transfer, so the result is never cached. See [docs/internals/scm-api-proxy.md](../internals/scm-api-proxy.md) for the
+per-provider wire-format detail. Every dialect shares the same opt-in config shape, a per-provider `enabled` flag that
+actually mounts the path:
 
 ```yaml
-scm-api:
-  # TTL for GitHub's GraphQL node-ID -> owner/repo resolution cache (ISO-8601 duration). A SECURITY parameter, not
-  # just a perf knob: a GraphQL node ID can outlive a repo rename/transfer while what it resolves to changes
-  # underneath it. Conservative default; shorten further for a deployment where repo renames/transfers are unusually
-  # frequent. Has no effect on GitLab, which addresses its target directly in the URL.
-  node-id-cache-ttl: PT5M
-
 providers:
   github:
     enabled: true
@@ -111,7 +105,7 @@ resolution, no extra round-trip.
 
 | Property                                          | Type    | Default | Description                                                                                                                                         |
 | ------------------------------------------------- | ------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `scm-api.node-id-cache-ttl`                       | string  | `PT5M`  | ISO-8601 duration. See the security note above.                                                                                                     |
+| `scm-api.node-id-cache-ttl`                       | string  | —       | Deprecated and ignored, with a startup warning. IDs are resolved on every request; remove the key.                                                  |
 | `providers.<name>.scm-api.enabled`                | boolean | `false` | Whether the SCM API proxy is mounted for this provider.                                                                                             |
 | `providers.<name>.scm-api.port`                   | int     | —       | Dedicated listener port. **Required** when `enabled`; startup fails without it.                                                                     |
 | `providers.<name>.scm-api.require-validated-head` | boolean | `true`  | Refuse a pull/merge request whose head commit fogwall has not approved or forwarded. Relax where rebase/amend/force-push/web-UI commits are common. |

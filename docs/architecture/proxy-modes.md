@@ -109,12 +109,12 @@ Mechanics that carry the actual security decisions:
 - **AST-based mutation allowlisting (GitHub).** The GraphQL request body is parsed (`graphql-java`) into a real AST; the
   allowlist matches on the parsed mutation's schema field name, never a substring of the raw query text — a client alias
   or a string literal containing a mutation name can't spoof the check.
-- **Opaque node-ID resolution (GitHub only).** A GraphQL mutation references its target only by an opaque node ID, never
-  `owner/repo` — `GitHubNodeIdResolver` resolves it (cached, with a TTL that is a security parameter, not just a perf
-  knob: a node ID can outlive a repo rename/transfer) before `RepoPermissionService.isAllowedToPropose` can run. GitLab
-  has no equivalent step: its REST calls carry `owner/repo` directly in the URL (verified from live `glab` captures —
-  see docs/internals/scm-api-proxy.md), so `ScmApiGitLabGateFilter` reads the authorization target straight off the
-  matched path via `GitLabRestAllowlist`.
+- **Opaque ID resolution, on every request.** A GraphQL mutation references its target only by an opaque node ID, never
+  `owner/repo` — `GitHubNodeIdResolver` resolves it before `RepoPermissionService.isAllowedToPropose` can run. GitLab's
+  REST calls carry `owner/repo` in the URL, so `ScmApiGitLabGateFilter` reads the target off the matched path via
+  `GitLabRestAllowlist`, except for a fork merge request, whose upstream arrives only as a numeric `target_project_id`
+  that `GitLabProjectIdResolver` resolves. Neither resolution is cached: every one of these IDs outlives a repository
+  rename or transfer while the path it names changes (observed live — see docs/internals/scm-api-proxy.md).
 - **One dialect for `tea` and `fj`.** The two Gitea/Forgejo CLIs speak the same server API and differ only in which
   subset they use, so `ForgejoRestAllowlist` is the union of both. The union is load-bearing: `tea pr close` sends
   `PATCH /pulls/{n}` while `fj pr close` sends `PATCH /issues/{n}`, so allowlisting one form silently breaks the other

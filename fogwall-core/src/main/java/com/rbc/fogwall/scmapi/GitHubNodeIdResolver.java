@@ -16,6 +16,10 @@ import tools.jackson.databind.json.JsonMapper;
  * authorization step has a concrete permission-check target — mutations reference their subject only by node ID, never
  * by owner/repo (see the SCM API proxy notes).
  *
+ * <p>Resolved on every request, never cached: repository, issue and pull request node IDs all survive a repository
+ * rename or transfer while the {@code owner/repo} they resolve to changes underneath them, so a cached mapping would
+ * authorize against a path the request no longer reaches.
+ *
  * <p>GitHub-specific: the {@code node(id:)} query below is GitHub's own schema shape. GitLab's counterpart is
  * {@link GitLabProjectIdResolver}.
  */
@@ -35,28 +39,12 @@ public class GitHubNodeIdResolver {
      */
     private static final Timeout RESOLVE_TIMEOUT = Timeout.ofSeconds(10);
 
-    private final GitHubNodeIdCache cache;
-
-    public GitHubNodeIdResolver(GitHubNodeIdCache cache) {
-        this.cache = cache;
-    }
-
     /**
      * Resolves {@code ref} to the repository it belongs to, using {@code callerToken} — the CLI caller's own upstream
-     * credential; fogwall never uses its own credential for this lookup, per the BYO-token model. Cache first; only
-     * calls upstream on a miss.
+     * credential; fogwall never uses its own credential for this lookup, per the BYO-token model.
      */
     public Optional<OwnerRepo> resolve(GitHubProvider provider, MutationNodeIdRef ref, String callerToken) {
-        Optional<OwnerRepo> cached = cache.lookup(provider.getProviderId(), ref.nodeId());
-        if (cached.isPresent()) {
-            return cached;
-        }
-        Optional<OwnerRepo> resolved = resolveUpstream(provider, ref.nodeId(), callerToken);
-        resolved.ifPresent(ownerRepo -> cache.store(provider.getProviderId(), ref.nodeId(), ownerRepo));
-        return resolved;
-    }
-
-    private Optional<OwnerRepo> resolveUpstream(GitHubProvider provider, String nodeId, String callerToken) {
+        String nodeId = ref.nodeId();
         try {
             String body = MAPPER.writeValueAsString(Map.of("query", NODE_QUERY, "variables", Map.of("id", nodeId)));
             Request request =

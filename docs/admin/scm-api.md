@@ -212,11 +212,12 @@ database; the recorded reason still names the rule that matched, with the matche
 ## Why reads and mutations are gated differently
 
 Mutations get real per-repo enforcement, checked against that user's `PROPOSE` grants — how the target repo is
-determined differs by dialect: GitHub's GraphQL mutation carries only an opaque node ID, resolved to `owner/repo` via a
-cache (TTL is itself a security parameter — see the configuration reference); GitLab's REST calls carry `owner/repo`
-directly in the URL, so no resolution step is needed. Reads (`gh issue list`, `glab mr list`, etc.) are **not**
-individually resolved or permission-checked in any dialect — they are forwarded for any authenticated caller, which
-keeps read traffic cheap. Per-repo read gating is not currently implemented.
+determined differs by dialect: GitHub's GraphQL mutation carries only an opaque node ID, resolved to `owner/repo` with
+one upstream call per mutation; GitLab's REST calls carry `owner/repo` directly in the URL, except a fork merge
+request's numeric target project ID, which is resolved the same way. Neither is cached, because the IDs outlive a
+repository rename or transfer. Reads (`gh issue list`, `glab mr list`, etc.) are **not** individually resolved or
+permission-checked in any dialect — they are forwarded for any authenticated caller, which keeps read traffic cheap.
+Per-repo read gating is not currently implemented.
 
 ## Audit trail
 

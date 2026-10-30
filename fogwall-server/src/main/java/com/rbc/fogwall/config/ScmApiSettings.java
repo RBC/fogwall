@@ -12,11 +12,15 @@ import lombok.Data;
 public class ScmApiSettings {
 
     /**
-     * TTL for the node-ID → owner/repo resolution cache, an ISO-8601 duration (e.g. {@code PT5M}). This is a security
-     * parameter, not just a perf knob — see the SCM API proxy notes: a node ID can outlive a repo rename/transfer while
-     * the owner/repo it resolves to changes underneath it. Kept conservative by default.
+     * Deprecated, ignored. Kept as a real field (defaulting to {@code null}) only so the key is still accepted by the
+     * config validator instead of failing startup on an unknown property; {@link JettyConfigurationBuilder} logs a
+     * warning when it is set.
+     *
+     * @deprecated GitHub node IDs and GitLab project IDs are resolved on every request, so there is no cache for this
+     *     to bound. Remove the key — this field will be removed in a future release.
      */
-    private String nodeIdCacheTtl = "PT5M";
+    @Deprecated
+    private String nodeIdCacheTtl;
 
     /**
      * Content block refused in the prose an SCM API entity carries — a pull/merge request or issue title or

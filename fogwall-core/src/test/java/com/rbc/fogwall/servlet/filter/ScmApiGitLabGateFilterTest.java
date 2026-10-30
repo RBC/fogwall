@@ -7,7 +7,6 @@ import static org.mockito.Mockito.*;
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.GitLabProvider;
-import com.rbc.fogwall.scmapi.GitLabProjectIdCache;
 import com.rbc.fogwall.scmapi.GitLabProjectIdResolver;
 import com.rbc.fogwall.scmapi.OwnerRepo;
 import com.rbc.fogwall.servlet.ScmApiRequestContext;
@@ -21,6 +20,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -28,12 +28,12 @@ class ScmApiGitLabGateFilterTest {
 
     private final GitLabProvider provider = new GitLabProvider("/scm-api/gitlab.com");
     private RepoPermissionService repoPermissionService;
-    private GitLabProjectIdCache projectIdCache;
+    private GitLabProjectIdResolver projectIdResolver;
 
     @BeforeEach
     void setUp() {
         repoPermissionService = mock(RepoPermissionService.class);
-        projectIdCache = mock(GitLabProjectIdCache.class);
+        projectIdResolver = mock(GitLabProjectIdResolver.class);
     }
 
     private ScmApiGitLabGateFilter filter() {
@@ -41,17 +41,13 @@ class ScmApiGitLabGateFilterTest {
     }
 
     private ScmApiGitLabGateFilter filter(boolean mergeEnabled) {
-        return new ScmApiGitLabGateFilter(
-                provider, new GitLabProjectIdResolver(projectIdCache), repoPermissionService, mergeEnabled);
+        return new ScmApiGitLabGateFilter(provider, projectIdResolver, repoPermissionService, mergeEnabled);
     }
 
-    /**
-     * Pre-populates the resolver's cache so a target-project test never reaches the network. A cache hit is the normal
-     * steady state anyway — the upstream call happens once per project per TTL.
-     */
-    private void cacheProject(String projectId, String owner, String name) {
-        when(projectIdCache.lookup(provider.getProviderId(), projectId))
-                .thenReturn(java.util.Optional.of(new OwnerRepo(owner, name)));
+    /** Stubs the upstream lookup so a target-project test never reaches the network. */
+    private void resolvesProject(String projectId, String owner, String name) {
+        when(projectIdResolver.resolve(eq(provider), eq(projectId), any(), any()))
+                .thenReturn(Optional.of(new OwnerRepo(owner, name)));
     }
 
     /**
@@ -222,7 +218,7 @@ class ScmApiGitLabGateFilterTest {
      */
     @Test
     void forkMergeRequest_authorizesOnTargetProject_notTheForkInTheUrl() throws Exception {
-        cacheProject("53539888", "acme", "widgets");
+        resolvesProject("53539888", "acme", "widgets");
         when(repoPermissionService.isAllowedToPropose("alice", "gitlab", "/acme/widgets"))
                 .thenReturn(true);
         var context = new ScmApiRequestContext();
@@ -248,7 +244,7 @@ class ScmApiGitLabGateFilterTest {
     /** Permission is checked against the upstream, so holding PROPOSE on the fork alone is not enough. */
     @Test
     void forkMergeRequest_deniedWhenUserMayProposeOnlyOnTheFork() throws Exception {
-        cacheProject("53539888", "acme", "widgets");
+        resolvesProject("53539888", "acme", "widgets");
         when(repoPermissionService.isAllowedToPropose("alice", "gitlab", "/alice/widgets-fork"))
                 .thenReturn(true);
         when(repoPermissionService.isAllowedToPropose("alice", "gitlab", "/acme/widgets"))
