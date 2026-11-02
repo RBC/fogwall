@@ -26,4 +26,52 @@ test.describe('issues page', () => {
     await expect(page.getByText(/No providers are available for issue filing/)).toBeVisible()
     await expect(page.getByRole('link', { name: 'Profile' })).toBeVisible()
   })
+
+  test.describe('pasting a URL', () => {
+    test.beforeEach(async ({ page }) => {
+      await page.route('**/api/issues/providers', (r) =>
+        r.fulfill({ json: [{ name: 'github' }, { name: 'gitlab' }] }),
+      )
+      await page.route('**/api/providers', (r) =>
+        r.fulfill({
+          json: [
+            { name: 'github', host: 'github.com' },
+            { name: 'gitlab', host: 'gitlab.com' },
+            { name: 'forgejo', host: 'codeberg.org' },
+          ],
+        }),
+      )
+      await page.goto('/dashboard/contributions/issues')
+    })
+
+    test('a repository URL picks the provider, owner and repository', async ({ page }) => {
+      await page.getByLabel('Paste a repository or issue URL').fill('https://gitlab.com/g/sub/proj')
+      await expect(page.getByText('gitlab · g/sub/proj')).toBeVisible()
+      await expect(page.getByLabel('Provider', { exact: true })).toHaveValue('gitlab')
+      await expect(page.getByLabel('Owner', { exact: true })).toHaveValue('g/sub')
+      await expect(page.getByLabel('Repository', { exact: true })).toHaveValue('proj')
+    })
+
+    test('an issue URL also fills the issue number on the Edit / Close tab', async ({ page }) => {
+      await page.getByRole('button', { name: 'Edit / Close' }).click()
+      await page
+        .getByLabel('Paste a repository or issue URL')
+        .fill('https://github.com/RBC/fogwall/issues/42')
+      await expect(page.getByLabel('Provider', { exact: true })).toHaveValue('github')
+      await expect(page.getByLabel('Owner', { exact: true })).toHaveValue('RBC')
+      await expect(page.getByLabel('Repository', { exact: true })).toHaveValue('fogwall')
+      await expect(page.getByLabel('Issue number')).toHaveValue('42')
+      await expect(page.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+    })
+
+    test('a host with no issue-enabled provider is reported and leaves the form alone', async ({
+      page,
+    }) => {
+      await page.getByLabel('Paste a repository or issue URL').fill('https://codeberg.org/a/b')
+      await expect(
+        page.getByText(/No provider you can file issues on serves codeberg.org/),
+      ).toBeVisible()
+      await expect(page.getByLabel('Owner', { exact: true })).toHaveValue('')
+    })
+  })
 })

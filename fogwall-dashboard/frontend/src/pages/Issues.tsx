@@ -5,12 +5,14 @@ import {
   editIssue,
   fetchCurrentIssue,
   fetchIssueProviders,
+  fetchProviders,
   setIssueState,
 } from '../api'
 import type { IssueDetails, IssueResult } from '../api'
 import { ContributionsTabs } from '../components/ContributionsTabs'
 import { useToast } from '../components/Toast'
 import { ExtIcon } from '../components/ExtIcon'
+import { parseRepoUrl } from '../repoUrl'
 
 type Mode = 'create' | 'comment' | 'edit'
 
@@ -76,6 +78,9 @@ export function Issues() {
   const [current, setCurrent] = useState<IssueDetails | null>(null)
   const [loadedKey, setLoadedKey] = useState<string | null>(null)
   const [loadingCurrent, setLoadingCurrent] = useState(false)
+  const [pasteUrl, setPasteUrl] = useState('')
+  const [pasteNote, setPasteNote] = useState<{ ok: boolean; text: string } | null>(null)
+  const [hostToProvider, setHostToProvider] = useState<Record<string, string>>({})
 
   // Issue numbers are digits only; flag junk input in the number-bearing modes.
   const numberValid = /^\d+$/.test(number.trim())
@@ -94,6 +99,35 @@ export function Issues() {
       owner: pushHistory('owner', owner),
       repo: pushHistory('repo', repo),
       number: pushHistory('number', usedNumber),
+    })
+  }
+
+  function handlePaste(value: string) {
+    setPasteUrl(value)
+    if (!value.trim()) {
+      setPasteNote(null)
+      return
+    }
+    const parsed = parseRepoUrl(value)
+    if (!parsed) {
+      setPasteNote({ ok: false, text: 'Not recognised as a repository or issue URL.' })
+      return
+    }
+    const name = hostToProvider[parsed.host]
+    if (!name) {
+      setPasteNote({
+        ok: false,
+        text: `No provider you can file issues on serves ${parsed.host}.`,
+      })
+      return
+    }
+    setProvider(name)
+    setOwner(parsed.owner)
+    setRepo(parsed.repo)
+    if (parsed.number) setNumber(parsed.number)
+    setPasteNote({
+      ok: true,
+      text: `${name} · ${parsed.owner}/${parsed.repo}${parsed.number ? ` · #${parsed.number}` : ''}`,
     })
   }
 
@@ -124,9 +158,21 @@ export function Issues() {
 
   useEffect(() => {
     fetchIssueProviders()
-      .then((list) => {
+      .then(async (list) => {
         setProviders(list)
         if (list.length > 0) setProvider(list[0].name)
+        // Host lookup is a convenience for URL paste; the form still works without it.
+        try {
+          const all: { name: string; host: string }[] = await fetchProviders()
+          const eligible = new Set(list.map((p) => p.name))
+          const map: Record<string, string> = {}
+          for (const p of all) {
+            if (eligible.has(p.name) && p.host) map[p.host.toLowerCase()] = p.name
+          }
+          setHostToProvider(map)
+        } catch {
+          // paste auto-pick stays unavailable
+        }
       })
       .catch((err) =>
         toast.error(err instanceof Error ? err.message : 'Failed to load issue providers'),
@@ -276,10 +322,37 @@ export function Issues() {
             {MODES.find((m) => m.id === mode)?.hint}
           </p>
 
+          <div>
+            <label htmlFor="issue-paste-url" className={labelClass}>
+              Paste a repository or issue URL
+            </label>
+            <input
+              id="issue-paste-url"
+              value={pasteUrl}
+              onChange={(e) => handlePaste(e.target.value)}
+              placeholder="https://github.com/octocat/hello-world/issues/123"
+              className={`${inputClass} font-mono`}
+            />
+            {pasteNote && (
+              <p
+                className={`mt-1 text-xs ${
+                  pasteNote.ok
+                    ? 'text-green-700 dark:text-green-400'
+                    : 'text-red-600 dark:text-red-400'
+                }`}
+              >
+                {pasteNote.text}
+              </p>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelClass}>Provider</label>
+              <label htmlFor="issue-provider" className={labelClass}>
+                Provider
+              </label>
               <select
+                id="issue-provider"
                 required
                 value={provider}
                 onChange={(e) => setProvider(e.target.value)}
@@ -294,8 +367,11 @@ export function Issues() {
             </div>
             {mode !== 'create' && (
               <div>
-                <label className={labelClass}>Issue number</label>
+                <label htmlFor="issue-number" className={labelClass}>
+                  Issue number
+                </label>
                 <input
+                  id="issue-number"
                   required
                   type="text"
                   inputMode="numeric"
@@ -322,8 +398,11 @@ export function Issues() {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelClass}>Owner</label>
+              <label htmlFor="issue-owner" className={labelClass}>
+                Owner
+              </label>
               <input
+                id="issue-owner"
                 required
                 list="issue-owner-history"
                 value={owner}
@@ -338,8 +417,11 @@ export function Issues() {
               </datalist>
             </div>
             <div>
-              <label className={labelClass}>Repository</label>
+              <label htmlFor="issue-repo" className={labelClass}>
+                Repository
+              </label>
               <input
+                id="issue-repo"
                 required
                 list="issue-repo-history"
                 value={repo}
