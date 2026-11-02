@@ -97,6 +97,18 @@ class GitHubNodeIdResolverTest {
     }
 
     @Test
+    void resolvesIssueCommentShapeResponse_nestedUnderRepository() {
+        lastResponseBody = """
+                {"data":{"node":{"repository":{"name":"widgets","owner":{"login":"acme"}}}}}
+                """;
+
+        Optional<OwnerRepo> result = new GitHubNodeIdResolver()
+                .resolve(provider, new MutationNodeIdRef("IC_1", MutationNodeIdRef.NodeType.ISSUE_COMMENT), "token");
+
+        assertEquals(Optional.of(new OwnerRepo("acme", "widgets")), result);
+    }
+
+    @Test
     void malformedResponse_returnsEmpty() {
         lastResponseBody = "not json";
 

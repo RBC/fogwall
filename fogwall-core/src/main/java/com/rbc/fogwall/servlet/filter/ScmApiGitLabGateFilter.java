@@ -63,6 +63,11 @@ public class ScmApiGitLabGateFilter implements ScmApiRestGateFilter {
     }
 
     @Override
+    public boolean isReadAllowed(String path) {
+        return GitLabRestAllowlist.isReadAllowed(path);
+    }
+
+    @Override
     public String unresolvedTargetMessage() {
         return "Merge request names a target project that could not be resolved to a repository";
     }

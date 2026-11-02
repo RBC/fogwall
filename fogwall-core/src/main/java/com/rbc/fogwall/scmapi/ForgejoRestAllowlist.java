@@ -48,7 +48,39 @@ public final class ForgejoRestAllowlist {
             new Rule("POST", Pattern.compile(REPO + "/issues/\\d+/assignees$"), "issues.assignees.add"),
             new Rule("DELETE", Pattern.compile(REPO + "/issues/\\d+/assignees$"), "issues.assignees.remove"));
 
+    private static final String REPO_PATH = "^/repos/[^/]+/[^/]+";
+
+    /**
+     * The {@code GET} paths {@code tea} and {@code fj} issue to list, view and prepare issue and pull request changes,
+     * from live captures. Reads carry no per-repository check, so this is what bounds them to the contribution surface.
+     * A branch name or file path rides in one encoded segment of {@code compare} and {@code raw}.
+     */
+    private static final List<Pattern> READ_PATHS = List.of(
+            Pattern.compile("^/version$"),
+            Pattern.compile("^/user$"),
+            Pattern.compile("^/repos/search$"),
+            Pattern.compile("^/orgs/[^/]+$"),
+            Pattern.compile(REPO_PATH + "$"),
+            Pattern.compile(REPO_PATH + "/(issues|pulls)$"),
+            Pattern.compile(REPO_PATH + "/issues/\\d+$"),
+            Pattern.compile(REPO_PATH + "/issues/\\d+/(comments|reactions)$"),
+            Pattern.compile(REPO_PATH + "/pulls/\\d+(\\.diff)?$"),
+            Pattern.compile(REPO_PATH + "/pulls/\\d+/(files|commits|reviews)$"),
+            Pattern.compile(REPO_PATH + "/commits/[^/]+/status$"),
+            Pattern.compile(REPO_PATH + "/(labels|milestones|issue_templates|issue_config)$"),
+            Pattern.compile(REPO_PATH + "/compare/[^/]+$"),
+            Pattern.compile(REPO_PATH + "/raw/[^/]+$"));
+
     private ForgejoRestAllowlist() {}
+
+    /**
+     * Whether a {@code GET} to {@code path} (below the dialect's mount, still encoded) is one the SCM API serves. Any
+     * other read, CI and release endpoints among them, is outside it.
+     */
+    public static boolean isReadAllowed(String path) {
+        return path != null
+                && READ_PATHS.stream().anyMatch(rule -> rule.matcher(path).matches());
+    }
 
     /**
      * Matches an incoming {@code method}/{@code path} against the allowlist, where {@code path} is the raw,

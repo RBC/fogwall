@@ -56,6 +56,11 @@ public class ScmApiForgejoGateFilter implements ScmApiRestGateFilter {
     }
 
     @Override
+    public boolean isReadAllowed(String path) {
+        return ForgejoRestAllowlist.isReadAllowed(path);
+    }
+
+    @Override
     public Optional<OwnerRepo> resolveTarget(
             HttpServletRequest request, RequestBodyWrapper wrapper, ScmApiRestMatch match) {
         return Optional.of(match.ownerRepo());

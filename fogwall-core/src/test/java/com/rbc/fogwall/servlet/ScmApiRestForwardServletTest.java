@@ -45,6 +45,8 @@ class ScmApiRestForwardServletTest {
             received.add(exchange.getRequestMethod() + " " + exchange.getRequestURI());
             receivedBodies.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             byte[] body = "{\"ok\":true}".getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("X-Total-Count", "7");
+            exchange.getResponseHeaders().add("X-Internal-Debug", "leak");
             exchange.sendResponseHeaders(200, body.length);
             exchange.getResponseBody().write(body);
             exchange.close();
@@ -143,6 +145,18 @@ class ScmApiRestForwardServletTest {
         var resp = response(new ByteArrayOutputStream());
         assertThrows(IllegalStateException.class, () -> servlet().service(raw, resp));
         assertTrue(received.isEmpty(), "nothing reaches the upstream");
+    }
+
+    /** {@code fj} fails a list that arrives without {@code X-Total-Count}; no other upstream header is passed on. */
+    @Test
+    void relaysPaginationHeadersAndNothingElse() throws Exception {
+        var req = request("GET", "/repos/acme/widgets/issues");
+        var resp = response(new ByteArrayOutputStream());
+
+        servlet().service(req, resp);
+
+        verify(resp).setHeader("X-Total-Count", "7");
+        verify(resp, never()).setHeader(eq("X-Internal-Debug"), anyString());
     }
 
     /** The regression: PATCH reached the servlet and was answered 405 instead of forwarded. */

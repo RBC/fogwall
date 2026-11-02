@@ -51,7 +51,9 @@ import com.rbc.fogwall.scmapi.OwnerRepo;
 import com.rbc.fogwall.scmapi.ScmContentInspector;
 import com.rbc.fogwall.service.PushIdentityResolver;
 import com.rbc.fogwall.servlet.FogwallServlet;
+import com.rbc.fogwall.servlet.ScmApiGitHubMetaServlet;
 import com.rbc.fogwall.servlet.ScmApiGraphQlForwardServlet;
+import com.rbc.fogwall.servlet.ScmApiOutOfScopeServlet;
 import com.rbc.fogwall.servlet.ScmApiRestForwardServlet;
 import com.rbc.fogwall.servlet.ScmApiRestPath;
 import com.rbc.fogwall.servlet.ScmApiRestPathPolicy;
@@ -75,6 +77,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jetty.ee11.servlet.FilterHolder;
+import org.eclipse.jetty.ee11.servlet.FilterMapping;
 import org.eclipse.jetty.ee11.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee11.servlet.ServletHolder;
 import org.eclipse.jetty.http.UriCompliance;
@@ -553,7 +556,39 @@ public final class FogwallServletRegistrar {
         forwardHolder.setName(SCM_API_CONNECTOR_PREFIX + provider.getName());
         context.addServlet(forwardHolder, mapping);
 
+        // gh's version handshake against a non-github.com host; static, so it sits outside the filter chain.
+        context.addServlet(new ServletHolder(new ScmApiGitHubMetaServlet()), ScmApiGitHubMetaServlet.MOUNT);
+
         log.info("Registered SCM API proxy for {} at {}", provider.getName(), mapping);
+    }
+
+    /**
+     * Answers every request on an SCM API listener that no dialect mount matched with an explanation instead of the
+     * container's empty 404. The filters are bound to the servlet by name rather than by path: a path mapping would
+     * also match the dialect mounts and run each of them twice.
+     */
+    static void registerScmApiOutOfScope(
+            ServletContextHandler context, FogwallProvider provider, FogwallContext fogwallContext) {
+        String servletName = SCM_API_CONNECTOR_PREFIX + provider.getName() + "-out-of-scope";
+        var holder = new ServletHolder(servletName, new ScmApiOutOfScopeServlet(provider.getName()));
+        context.addServlet(holder, "/");
+
+        var filters = new ArrayList<Filter>();
+        if (fogwallContext.telemetry().isEnabled()) {
+            filters.add(new ScmApiObservabilityFilter(fogwallContext.telemetry(), provider.getName()));
+        }
+        filters.add(new ScmApiAuditFilter(fogwallContext.scmApiActionStore()));
+        filters.add(new ScmApiAuthenticateFilter(provider, fogwallContext.pushIdentityResolver()));
+        filters.add(new ScmApiUserAgentFilter());
+        for (Filter filter : filters) {
+            var filterHolder = new FilterHolder(filter);
+            filterHolder.setAsyncSupported(true);
+            var filterMapping = new FilterMapping();
+            filterMapping.setFilterName(filterHolder.getName());
+            filterMapping.setServletName(servletName);
+            filterMapping.setDispatcherTypes(EnumSet.of(DispatcherType.REQUEST));
+            context.getServletHandler().addFilter(filterHolder, filterMapping);
+        }
     }
 
     /**
@@ -806,6 +841,8 @@ public final class FogwallServletRegistrar {
                         requireValidatedHead,
                         mergeEnabled);
             }
+
+            registerScmApiOutOfScope(context, provider, fogwallContext);
 
             contexts.addHandler(context);
             log.info(

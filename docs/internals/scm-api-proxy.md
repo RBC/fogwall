@@ -85,21 +85,47 @@ bounds a caller here.
 
 Request headers seen include `X-Github-Api-Version: 2022-11-28` and `Graphql-Features: merge_queue`.
 
+### Version handshake and search
+
+Against any host other than `github.com`, `gh` requests `GET /api/v3/meta` and gates feature selection on its
+`installed_version`; without an answer, `issue list --search`, `pr list --search`, `search issues` and `search prs` all
+fail. The listener answers with a static `3.18.0`, the version from which `gh` uses advanced issue search, and then `gh`
+sends:
+
+- `SearchType_enumValues`, an introspection query (`__type(name: "SearchType")`) that decides between `ISSUE` and
+  `ISSUE_ADVANCED`;
+- `IssueSearch` / `PullRequestSearch`, `search(type:)` queries.
+
+None is a mutation, so all forward as reads over the existing GraphQL mount. `gh search issues` and `gh search prs` use
+REST `GET /search/issues` instead and are outside the SCM API.
+
+### Out-of-scope requests
+
+Requests on a listener that no dialect mount matches (`/api/graphql` for GitHub, `/api/v4/*` for GitLab, `/api/v1/*` for
+Forgejo and Gitea) reach a catch-all handler behind the audit, authentication and user-agent filters. It answers `404`
+with a body naming what the SCM API covers, so the refusal reads as a boundary rather than a fault.
+
 ### Mutation → node-ID map
 
 Each mutation references its target by an opaque global node ID, and **the input key holding that ID differs per
 mutation** — there is no single field name to look for:
 
-| `gh` command       | schema mutation field  | gh `operationName`     | input node-ID key     | node type           |
-| ------------------ | ---------------------- | ---------------------- | --------------------- | ------------------- |
-| `issue create`     | `createIssue`          | `IssueCreate`          | `input.repositoryId`  | Repository (`R_`)   |
-| `pr create`        | `createPullRequest`    | `PullRequestCreate`    | `input.repositoryId`  | Repository (`R_`)   |
-| `issue edit`       | `updateIssue`          | `IssueUpdate`          | `input.id`            | Issue (`I_`)        |
-| `issue close`      | `closeIssue`           | `IssueClose`           | `input.issueId`       | Issue (`I_`)        |
-| `issue/pr comment` | `addComment`           | `CommentCreate`        | `input.subjectId`     | Issue or PR         |
-| `pr edit`          | `updatePullRequest`    | `PullRequestUpdate`    | `input.pullRequestId` | PullRequest (`PR_`) |
-| `pr review`†       | `addPullRequestReview` | `PullRequestReviewAdd` | `input.pullRequestId` | PullRequest (`PR_`) |
-| `pr close`         | `closePullRequest`     | `PullRequestClose`     | `input.pullRequestId` | PullRequest (`PR_`) |
+| `gh` command       | schema mutation field           | gh `operationName`          | input node-ID key     | node type            |
+| ------------------ | ------------------------------- | --------------------------- | --------------------- | -------------------- |
+| `issue create`     | `createIssue`                   | `IssueCreate`               | `input.repositoryId`  | Repository (`R_`)    |
+| `pr create`        | `createPullRequest`             | `PullRequestCreate`         | `input.repositoryId`  | Repository (`R_`)    |
+| `issue edit`       | `updateIssue`                   | `IssueUpdate`               | `input.id`            | Issue (`I_`)         |
+| `issue close`      | `closeIssue`                    | `IssueClose`                | `input.issueId`       | Issue (`I_`)         |
+| `issue reopen`     | `reopenIssue`                   | `IssueReopen`               | `input.issueId`       | Issue (`I_`)         |
+| `issue/pr comment` | `addComment`                    | `CommentCreate`             | `input.subjectId`     | Issue or PR          |
+| `--edit-last`      | `updateIssueComment`            | `CommentUpdate`             | `input.id`            | IssueComment (`IC_`) |
+| `--delete-last`    | `deleteIssueComment`            | `CommentDelete`             | `input.id`            | IssueComment (`IC_`) |
+| `pr edit`          | `updatePullRequest`             | `PullRequestUpdate`         | `input.pullRequestId` | PullRequest (`PR_`)  |
+| `pr review`†       | `addPullRequestReview`          | `PullRequestReviewAdd`      | `input.pullRequestId` | PullRequest (`PR_`)  |
+| `pr close`         | `closePullRequest`              | `PullRequestClose`          | `input.pullRequestId` | PullRequest (`PR_`)  |
+| `pr reopen`        | `reopenPullRequest`             | `PullRequestReopen`         | `input.pullRequestId` | PullRequest (`PR_`)  |
+| `pr ready`         | `markPullRequestReadyForReview` | `PullRequestReadyForReview` | `input.pullRequestId` | PullRequest (`PR_`)  |
+| `pr ready --undo`  | `convertPullRequestToDraft`     | `ConvertPullRequestToDraft` | `input.pullRequestId` | PullRequest (`PR_`)  |
 
 Attribute changes are their own mutations, not fields on the ones above, and each names its target through the generic
 capability it acts on rather than a concrete type:
@@ -118,13 +144,15 @@ Three things follow:
 1. Allowlisting matches the **schema mutation field** parsed from the AST, not `gh`'s `operationName` (which is
    `gh`-specific and can change) and not a substring of the query text.
 2. The mutation carries only the node ID. Resolution to `owner/repo` is mandatory before any permission check.
-3. The resolver handles three node types — `Repository` (`R_…`), `Issue` (`I_…`), `PullRequest` (`PR_…`):
+3. The resolver handles four node types — `Repository` (`R_…`), `Issue` (`I_…`), `PullRequest` (`PR_…`), `IssueComment`
+   (`IC_…`):
 
 ```graphql
 node(id: $id) {
   ... on Repository  { name owner { login } }
   ... on Issue       { repository { name owner { login } } }
   ... on PullRequest { repository { name owner { login } } }
+  ... on IssueComment { repository { name owner { login } } }
 }
 ```
 
@@ -215,9 +243,10 @@ than left out as "metadata".
 ### Allowlist
 
 ```
-createIssue, updateIssue, closeIssue,
-createPullRequest, updatePullRequest, closePullRequest, mergePullRequest,
-addComment,
+createIssue, updateIssue, closeIssue, reopenIssue,
+createPullRequest, updatePullRequest, closePullRequest, reopenPullRequest, mergePullRequest,
+markPullRequestReadyForReview, convertPullRequestToDraft,
+addComment, updateIssueComment, deleteIssueComment,
 replaceActorsForAssignable, addLabelsToLabelable, removeLabelsFromLabelable,
 requestReviewsByLogin
 ```
@@ -316,8 +345,8 @@ GET /users?per_page=30&username=<login>                        once per --assign
 ```
 
 `glab` resolves each login to a numeric ID before it can build the mutation, so refusing `username` stops the command
-before the write is ever attempted. The query-parameter allowlist has to carry all three names or the mutation allowlist
-never gets a say.
+before the write is ever attempted. Reads are not filtered by query parameter, so these lookups pass. A write is refused
+only for a parameter that authenticates or changes the acting identity.
 
 ### Fork MRs address the source project
 

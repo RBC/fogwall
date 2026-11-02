@@ -35,6 +35,11 @@ public class GitHubEntityResponseReader implements EntityResponseReader {
             case "closeIssue" -> Optional.of(new EntityOutcome(Kind.ISSUE, null, null, nodeId, null, State.CLOSED));
             case "closePullRequest" ->
                 Optional.of(new EntityOutcome(Kind.PULL_REQUEST, null, null, nodeId, null, State.CLOSED));
+            case "reopenIssue" -> Optional.of(new EntityOutcome(Kind.ISSUE, null, null, nodeId, null, State.OPEN));
+            case "reopenPullRequest" ->
+                Optional.of(new EntityOutcome(Kind.PULL_REQUEST, null, null, nodeId, null, State.OPEN));
+            // The node ID is the comment's own, which names no tracked entity.
+            case "updateIssueComment", "deleteIssueComment" -> Optional.empty();
             case "updateIssue" -> Optional.of(new EntityOutcome(Kind.ISSUE, null, null, nodeId, title, null));
             case "updatePullRequest" ->
                 Optional.of(new EntityOutcome(Kind.PULL_REQUEST, null, null, nodeId, title, null));

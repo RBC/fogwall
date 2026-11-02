@@ -19,6 +19,14 @@ public final class GitHubMutationAllowlist {
             "closePullRequest",
             "mergePullRequest",
             "addComment",
+            // State and comment changes gh makes through its own commands: reopen, ready for review and back to
+            // draft, and the --edit-last and --delete-last flags on `issue comment` and `pr comment`.
+            "reopenIssue",
+            "reopenPullRequest",
+            "markPullRequestReadyForReview",
+            "convertPullRequestToDraft",
+            "updateIssueComment",
+            "deleteIssueComment",
             // Attribute changes gh sends as follow-ups rather than as fields on the create or update. A label named
             // on `issue create` rides along in createIssue's input, but the same label added by `issue edit` is a
             // separate mutation, as are assignees in every command and reviewers even on create. Denying these

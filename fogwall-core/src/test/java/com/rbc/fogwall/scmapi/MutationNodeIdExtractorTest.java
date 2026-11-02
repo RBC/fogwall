@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import graphql.language.Field;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -67,6 +69,38 @@ class MutationNodeIdExtractorTest {
                 .orElseThrow();
         assertEquals("PR_3", ref.nodeId());
         assertEquals(MutationNodeIdRef.NodeType.PULL_REQUEST, ref.nodeType());
+    }
+
+    @Test
+    void reopenIssue_readsIssueId() {
+        var ref = extract(
+                        "mutation($input: X!) { reopenIssue(input: $input) { issue { id } } }",
+                        "{\"input\":{\"issueId\":\"I_5\"}}")
+                .orElseThrow();
+        assertEquals("I_5", ref.nodeId());
+        assertEquals(MutationNodeIdRef.NodeType.ISSUE, ref.nodeType());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"reopenPullRequest", "markPullRequestReadyForReview", "convertPullRequestToDraft"})
+    void pullRequestStateChanges_readPullRequestId(String field) {
+        var ref = extract(
+                        "mutation($input: X!) { " + field + "(input: $input) { pullRequest { id } } }",
+                        "{\"input\":{\"pullRequestId\":\"PR_6\"}}")
+                .orElseThrow();
+        assertEquals("PR_6", ref.nodeId());
+        assertEquals(MutationNodeIdRef.NodeType.PULL_REQUEST, ref.nodeType());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"updateIssueComment", "deleteIssueComment"})
+    void commentChanges_readTheCommentId(String field) {
+        var ref = extract(
+                        "mutation($input: X!) { " + field + "(input: $input) { clientMutationId } }",
+                        "{\"input\":{\"id\":\"IC_7\",\"body\":\"edited\"}}")
+                .orElseThrow();
+        assertEquals("IC_7", ref.nodeId());
+        assertEquals(MutationNodeIdRef.NodeType.ISSUE_COMMENT, ref.nodeType());
     }
 
     /**
