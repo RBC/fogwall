@@ -124,10 +124,12 @@ export function Issues() {
     setProvider(name)
     setOwner(parsed.owner)
     setRepo(parsed.repo)
-    if (parsed.number) setNumber(parsed.number)
+    setNumber(parsed.number ?? '')
     setPasteNote({
       ok: true,
-      text: `${name} · ${parsed.owner}/${parsed.repo}${parsed.number ? ` · #${parsed.number}` : ''}`,
+      text:
+        `${name} · ${parsed.owner}/${parsed.repo}${parsed.number ? ` · #${parsed.number}` : ''}` +
+        (parsed.changeRequest ? ' · pull request numbers are not issue numbers' : ''),
     })
   }
 

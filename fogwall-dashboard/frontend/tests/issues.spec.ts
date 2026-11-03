@@ -64,6 +64,41 @@ test.describe('issues page', () => {
       await expect(page.getByRole('button', { name: 'Save changes' })).toBeDisabled()
     })
 
+    test('a pull request link fills the repository but never the issue number', async ({
+      page,
+    }) => {
+      await page.getByRole('button', { name: 'Edit / Close' }).click()
+      const paste = page.getByLabel('Paste a repository or issue URL')
+      await paste.fill('https://github.com/RBC/fogwall/issues/42')
+      await expect(page.getByLabel('Issue number')).toHaveValue('42')
+      await paste.fill('https://gitlab.com/g/sub/proj/-/merge_requests/5')
+      await expect(page.getByLabel('Owner', { exact: true })).toHaveValue('g/sub')
+      await expect(page.getByLabel('Repository', { exact: true })).toHaveValue('proj')
+      await expect(page.getByLabel('Issue number')).toHaveValue('')
+      await expect(page.getByText(/pull request numbers are not issue numbers/)).toBeVisible()
+    })
+
+    test('a GitLab work item link fills the issue number', async ({ page }) => {
+      await page.getByRole('button', { name: 'Edit / Close' }).click()
+      await page
+        .getByLabel('Paste a repository or issue URL')
+        .fill('https://gitlab.com/coopernetes/fogwall-fixture/-/work_items/1')
+      await expect(page.getByLabel('Provider', { exact: true })).toHaveValue('gitlab')
+      await expect(page.getByLabel('Owner', { exact: true })).toHaveValue('coopernetes')
+      await expect(page.getByLabel('Repository', { exact: true })).toHaveValue('fogwall-fixture')
+      await expect(page.getByLabel('Issue number')).toHaveValue('1')
+    })
+
+    test('a link to a repository sub-page still resolves owner and repository', async ({
+      page,
+    }) => {
+      await page
+        .getByLabel('Paste a repository or issue URL')
+        .fill('https://github.com/RBC/fogwall/tree/main/docs')
+      await expect(page.getByLabel('Owner', { exact: true })).toHaveValue('RBC')
+      await expect(page.getByLabel('Repository', { exact: true })).toHaveValue('fogwall')
+    })
+
     test('a host with no issue-enabled provider is reported and leaves the form alone', async ({
       page,
     }) => {
