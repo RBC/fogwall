@@ -182,10 +182,6 @@ class ConfigHotReloadE2ETest {
      * Verifies that secret-scan can be enabled with an inline gitleaks config and that disabling it via reload allows
      * the same push through.
      */
-    // println is the established convention for e2e diagnostic breadcrumbs (see GitHelper) — no
-    // test logging config exists here, so a logger call would silently disappear instead of
-    // surfacing in the failure output.
-    @SuppressWarnings("PMD.SystemPrintln")
     @Test
     void secretScanningReload() throws Exception {
         GitHelper git = git();
@@ -208,26 +204,21 @@ class ConfigHotReloadE2ETest {
         proxy.reloadSection(blocking, Section.SECRET_SCAN);
 
         GitHelper.PushResult blocked = git.pushWithResult(repo);
-        if (blocked.succeeded()) {
-            System.out.println(
-                    "[secretScanningReload] gitleaks unavailable — scanner ran fail-open, skipping block assertion");
-        } else {
-            assertTrue(
-                    blocked.output().contains("secret-scan")
-                            || blocked.output().contains("secret")
-                            || blocked.output().contains("blocked"),
-                    "blocked output should mention secret scanning; got: " + blocked.output());
-        }
+        assertFalse(blocked.succeeded(), "the reloaded rule must block the push. Output:\n" + blocked.output());
+        assertTrue(
+                blocked.output().contains("[hotreload-test-custom-secret]  config.txt"),
+                "the refusal must come from the reloaded rule, naming the file. Output:\n" + blocked.output());
 
         // --- Phase 2: reload with secret scanning disabled ---
         Path permissive = writeOverride("""
                 secret-scan:
                   enabled: false
                 """);
-        if (!blocked.succeeded()) {
-            proxy.reloadSection(permissive, Section.SECRET_SCAN);
-            assertTrue(git.tryPush(repo), "push should succeed after secret scanning is disabled");
-        }
+        proxy.reloadSection(permissive, Section.SECRET_SCAN);
+        GitHelper.PushResult allowed = git.pushWithResult(repo);
+        assertTrue(
+                allowed.succeeded(),
+                "push should succeed after secret scanning is disabled. Output:\n" + allowed.output());
     }
 
     /**

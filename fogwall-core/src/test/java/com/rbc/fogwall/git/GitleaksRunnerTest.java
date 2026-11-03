@@ -23,8 +23,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * Tests that GitleaksRunner detects RSA/PKCS#8 private keys via both scanning modes: - scanGit(): git-native mode used
- * by SecretScanningHook and SecretScanningFilter - scan(): --pipe diff mode used by SecretScanCheck
+ * Tests GitleaksRunner's two modes: {@code scanGit()} over git history (push content), and {@code scanText()} /
+ * {@code scanMessages()} over plain text (SCM API prose, commit and tag messages).
  *
  * <p>These tests run the real gitleaks binary bundled in the JAR. They are skipped if the binary is unavailable (CI
  * environments without the bundled resource).
@@ -45,26 +45,6 @@ class GitleaksRunnerTest {
             -----END PRIVATE KEY-----
             """;
 
-    // Same key wrapped in a unified diff (as produced by git diff / git format-patch).
-    // Each content line is prefixed with '+' — this is what GitleaksRunner.scan() receives.
-    private static final String FAKE_KEY_IN_DIFF = """
-            diff --git a/private.key b/private.key
-            new file mode 100644
-            index 0000000..1234567
-            --- /dev/null
-            +++ b/private.key
-            @@ -0,0 +1,12 @@
-            +-----BEGIN PRIVATE KEY-----
-            +MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCWv7Dvs6PjZJZ0
-            +Lh6xvKGwuqCoULGNd75VwkNBLFTEM7ME3jEjPPej3td5BayTIBzRUYnjpU7J1qO0
-            +zkSUDDrhFpPEoJMDyF2Ml1d1r9EjF52tKc0qzmHeJTCbmLmJmEhbNDrwcX5NbCo2
-            +Lv9yNVn4qBMp7mfJEh8i3DSW4mhYuFATnUxEw5KxXyx/t53V52qa2euodWjRl4Llt
-            +eFCZHfqznLo1mi5R5fINwlx1UspD0ItPmQ2eXc0QfUsgTQwj3b1B5VgFzjcBngThI
-            +BknQrajJHzL60QaSkSlkUVEr7+yE2MIMLtD6kIZR58t0yhd81xY7pwETZ6dOykeXP
-            +X0C/AgMBAAEC
-            +-----END PRIVATE KEY-----
-            """;
-
     @TempDir
     Path tempDir;
 
@@ -76,7 +56,7 @@ class GitleaksRunnerTest {
     private GitleaksRunner runnerOrSkip() {
         GitleaksRunner runner = new GitleaksRunner();
         // Probe: if resolveBinaryPath returns null, the binary is unavailable — skip rather than fail.
-        Optional<List<GitleaksRunner.Finding>> probe = runner.scan("probe text", enabledConfig());
+        Optional<List<GitleaksRunner.Finding>> probe = runner.scanText("probe text", enabledConfig());
         assumeTrue(probe.isPresent(), "gitleaks binary not available — skipping");
         return runner;
     }
@@ -208,38 +188,110 @@ class GitleaksRunnerTest {
         }
     }
 
-    // ── scan() — --pipe diff mode ─────────────────────────────────────────────
+    // ── scanText() — plain text ───────────────────────────────────────────────
 
     @Test
-    void scan_pipeMode_detectsPrivateKeyInDiff() {
+    void scanText_detectsPrivateKeyInProse() {
         GitleaksRunner runner = runnerOrSkip();
 
-        Optional<List<GitleaksRunner.Finding>> result = runner.scan(FAKE_KEY_IN_DIFF, enabledConfig());
+        Optional<List<GitleaksRunner.Finding>> result =
+                runner.scanText("Here is the key you asked for:\n" + FAKE_PKCS8_KEY, enabledConfig());
 
-        assertTrue(result.isPresent(), "Scanner must return a result (not fail-open)");
-        assertFalse(
-                result.get().isEmpty(),
-                "gitleaks --pipe mode must detect the PKCS#8 private key embedded in a unified diff. "
-                        + "If this assertion fails, the '+' diff prefix is preventing the private-key regex from matching.");
+        assertTrue(result.isPresent(), "Scanner must return a result");
+        assertFalse(result.get().isEmpty(), "plain-text mode must detect the PKCS#8 private key");
     }
 
     @Test
-    void scan_pipeMode_cleanDiff_noFindings() {
+    void scanText_cleanText_noFindings() {
         GitleaksRunner runner = runnerOrSkip();
 
-        String cleanDiff = """
-                diff --git a/readme.txt b/readme.txt
-                new file mode 100644
-                --- /dev/null
-                +++ b/readme.txt
-                @@ -0,0 +1,1 @@
-                +Hello world
-                """;
-
-        Optional<List<GitleaksRunner.Finding>> result = runner.scan(cleanDiff, enabledConfig());
+        Optional<List<GitleaksRunner.Finding>> result =
+                runner.scanText("Fixes the flaky login test.\n\nNo secrets here.", enabledConfig());
 
         assertTrue(result.isPresent(), "Scanner must return a result");
-        assertTrue(result.get().isEmpty(), "Clean diff must produce no findings");
+        assertTrue(result.get().isEmpty(), "Clean text must produce no findings");
+    }
+
+    // ── readFindings() — a findings exit is never read as clean ──────────────
+
+    @Test
+    void readFindings_missingReport_isScannerError() {
+        assertTrue(GitleaksRunner.readFindings(tempDir.resolve("absent.json")).isEmpty());
+    }
+
+    @Test
+    void readFindings_unparseableReport_isScannerError() throws Exception {
+        Path report = Files.writeString(tempDir.resolve("report.json"), "{not json");
+        assertTrue(GitleaksRunner.readFindings(report).isEmpty());
+    }
+
+    @Test
+    void readFindings_reportListingNothing_isScannerError() throws Exception {
+        assertTrue(GitleaksRunner.readFindings(Files.writeString(tempDir.resolve("a.json"), "[]"))
+                .isEmpty());
+        assertTrue(GitleaksRunner.readFindings(Files.writeString(tempDir.resolve("b.json"), "null"))
+                .isEmpty());
+    }
+
+    @Test
+    void readFindings_validReport_returnsFindings() throws Exception {
+        Path report = Files.writeString(
+                tempDir.resolve("report.json"), "[{\"RuleID\":\"aws-access-token\",\"Secret\":\"AKIA\"}]");
+        Optional<List<GitleaksRunner.Finding>> result = GitleaksRunner.readFindings(report);
+        assertTrue(result.isPresent());
+        assertEquals("aws-access-token", result.get().get(0).getRuleId());
+    }
+
+    // ── scanMessages() — commit and tag messages ──────────────────────────────
+
+    private static final String AWS_KEY = "AKIAZ3MSJV4WXYZQ7KLM";
+
+    @Test
+    void scanMessages_attributesEachFindingToItsMessage() {
+        GitleaksRunner runner = runnerOrSkip();
+        List<GitleaksRunner.ScannedMessage> messages = List.of(
+                GitleaksRunner.ScannedMessage.ofCommit("aaaaaaa1111111", "Add readme\n\nNothing to see here."),
+                GitleaksRunner.ScannedMessage.ofCommit(
+                        "bbbbbbb2222222", "Fix deploy\n\nworked once I exported\nAWS_KEY=" + AWS_KEY + "\n"),
+                GitleaksRunner.ScannedMessage.ofTag("refs/tags/v1.2.0", "Release\n\nkey " + AWS_KEY));
+
+        Optional<List<GitleaksRunner.Finding>> result = runner.scanMessages(messages, enabledConfig());
+
+        assertTrue(result.isPresent(), "Scanner must return a result");
+        List<String> locations = result.get().stream()
+                .map(GitleaksRunner.Finding::getMessageLocation)
+                .toList();
+        assertEquals(List.of("message of commit bbbbbbb", "message of tag v1.2.0"), locations);
+        GitleaksRunner.Finding first = result.get().get(0);
+        assertTrue(first.toMessage().contains("message of commit bbbbbbb"), first.toMessage());
+        assertFalse(first.toMessage().contains(AWS_KEY), "the raw secret must never reach the client message");
+    }
+
+    @Test
+    void scanMessages_cleanMessages_noFindings() {
+        GitleaksRunner runner = runnerOrSkip();
+
+        Optional<List<GitleaksRunner.Finding>> result = runner.scanMessages(
+                List.of(GitleaksRunner.ScannedMessage.ofCommit("aaaaaaa1111111", "Bump version to 1.2.0")),
+                enabledConfig());
+
+        assertTrue(result.isPresent());
+        assertTrue(result.get().isEmpty());
+    }
+
+    @Test
+    void scanMessages_noMessages_doesNotRunScanner() {
+        GitleaksRunner runner = new GitleaksRunner();
+        // A bogus scanner path would fail the run; an empty input must short-circuit before it.
+        SecretScanConfig config = SecretScanConfig.builder()
+                .enabled(true)
+                .scannerPath("/nonexistent/gitleaks")
+                .build();
+
+        assertEquals(Optional.of(List.of()), runner.scanMessages(List.of(), config));
+        assertEquals(
+                Optional.of(List.of()),
+                runner.scanMessages(List.of(GitleaksRunner.ScannedMessage.ofCommit("abc", "  ")), config));
     }
 
     @Test

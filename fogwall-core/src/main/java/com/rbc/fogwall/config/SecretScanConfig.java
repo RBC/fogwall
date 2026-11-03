@@ -46,6 +46,10 @@ public class SecretScanConfig {
      */
     private String inlineConfig;
 
+    /** Also scan commit messages and annotated tag messages, with the same rules as the patch content. */
+    @Builder.Default
+    private boolean includeMetadata = false;
+
     /** Maximum seconds to wait for the gitleaks process before aborting (fail-open). */
     @Builder.Default
     private long timeoutSeconds = 30;

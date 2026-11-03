@@ -48,5 +48,8 @@ public class SecretScanSettings {
      */
     private String inlineConfig = "";
 
+    /** Also scan commit messages and annotated tag messages. */
+    private boolean includeMetadata = false;
+
     private long timeoutSeconds = 30;
 }

@@ -14,6 +14,7 @@ import com.rbc.fogwall.db.model.ScmApiActionQuery;
 import com.rbc.fogwall.db.model.ScmApiActionRecord;
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
 import com.rbc.fogwall.db.model.ScmApiEntityRecord;
+import com.rbc.fogwall.git.GitleaksRunner;
 import com.rbc.fogwall.jetty.FogwallServletRegistrar;
 import com.rbc.fogwall.observability.FogwallTelemetry;
 import com.rbc.fogwall.permission.InMemoryRepoPermissionStore;
@@ -35,7 +36,6 @@ import com.rbc.fogwall.servlet.filter.ScmApiUserAgentFilter;
 import com.rbc.fogwall.user.ScmIdentity;
 import com.rbc.fogwall.user.StaticUserStore;
 import com.rbc.fogwall.user.UserEntry;
-import com.rbc.fogwall.validation.SecretScanCheck;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.Filter;
 import java.net.URI;
@@ -210,8 +210,8 @@ class ScmApiEntitiesE2ETest {
                 .enabled(true)
                 .bundles(List.of("national-id-ca"))
                 .build();
-        var inspector = new ScmContentInspector(
-                () -> block, () -> secretScan, new SecretScanCheck(secretScan), () -> contentPatterns);
+        var inspector =
+                new ScmContentInspector(() -> block, () -> secretScan, new GitleaksRunner(), () -> contentPatterns);
 
         actionStore = new RecordingActionStore();
         entityStore = new RecordingEntityStore();

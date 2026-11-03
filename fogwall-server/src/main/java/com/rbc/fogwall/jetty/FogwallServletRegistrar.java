@@ -17,6 +17,7 @@ import com.rbc.fogwall.db.FetchActivityRecorder;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.git.DisabledFetchUploadPackFactory;
+import com.rbc.fogwall.git.GitleaksRunner;
 import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.git.ProxyMode;
 import com.rbc.fogwall.git.ServerReceivePackFactory;
@@ -63,7 +64,6 @@ import com.rbc.fogwall.servlet.filter.FogwallCredentialFilter;
 import com.rbc.fogwall.servlet.filter.FogwallCredentialRelayGuardFilter;
 import com.rbc.fogwall.tls.SslAwareHttpConnectionFactory;
 import com.rbc.fogwall.tls.SslUtil;
-import com.rbc.fogwall.validation.SecretScanCheck;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.Filter;
 import java.time.Duration;
@@ -782,7 +782,7 @@ public final class FogwallServletRegistrar {
         var contentInspector = new ScmContentInspector(
                 scmApiConfigHolder::getScmApiBlockConfig,
                 scmApiConfigHolder::getSecretScanConfig,
-                new SecretScanCheck(scmApiConfigHolder.getSecretScanConfig()),
+                new GitleaksRunner(),
                 scmApiConfigHolder::getContentPatternConfig);
         var plaintextListeners = new ArrayList<String>();
 

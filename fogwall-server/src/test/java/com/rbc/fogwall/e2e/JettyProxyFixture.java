@@ -149,6 +149,20 @@ class JettyProxyFixture implements AutoCloseable {
     }
 
     /**
+     * Auto-approve, the default user granted everything, and gitleaks secret scanning on with the shipped rules, over
+     * commit and tag messages as well as patch content.
+     */
+    static JettyProxyFixture secretScan(URI giteaUri) throws Exception {
+        String secretScan = """
+                secret-scan:
+                  enabled: true
+                  include-metadata: true
+                """;
+        return new JettyProxyFixture(
+                giteaUri, ApprovalMode.AUTO, List.of(), true, DEFAULT_USERS, null, true, "", secretScan);
+    }
+
+    /**
      * As {@link #brokeredPush}, but with review approval and deferred forwarding: a push made with a fogwall credential
      * is acknowledged once received and forwarded when approved. A test approves through the push store and starts the
      * forward, as the dashboard's approve endpoint does.

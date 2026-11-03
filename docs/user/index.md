@@ -14,7 +14,7 @@ before it reaches the upstream:
 
 - Commit author emails are checked against allowed domains
 - Commit messages are scanned for blocked patterns
-- Diff content is scanned for sensitive data and secrets
+- Diff content is scanned for sensitive data and secrets; commit and tag messages may be scanned for secrets too
 - Commit trailers may be required or restricted (DCO `Signed-off-by`, `Co-authored-by`)
 - Your git identity is verified against your proxy account
 - You may need approval from a reviewer before the push is forwarded

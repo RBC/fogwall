@@ -2,6 +2,7 @@ package com.rbc.fogwall.git;
 
 import static com.rbc.fogwall.git.GitClientUtils.ZERO_OID;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.rbc.fogwall.config.SecretScanConfig;
@@ -28,11 +29,21 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
+import org.eclipse.jgit.lib.Constants;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Runs the gitleaks secret scanner against a unified diff and returns structured findings.
+ * Runs the gitleaks secret scanner and returns structured findings. Two modes, chosen by what is being scanned:
+ *
+ * <ul>
+ *   <li><b>Git history</b> — {@link #scanGit}: {@code gitleaks git} over a commit range in a repository. gitleaks reads
+ *       the patches itself and reports each finding's file, line and commit. This is how pushed content is scanned.
+ *   <li><b>Plain text</b> — {@link #scanText} and {@link #scanMessages}: {@code gitleaks detect --pipe} over text on
+ *       stdin. There is no file or commit to report; {@link #scanMessages} names the message a finding came from. Used
+ *       for SCM API prose (PR and issue bodies) and for commit and tag messages, which {@code gitleaks git} never
+ *       reads.
+ * </ul>
  *
  * <p>Binary resolution order (first match wins):
  *
@@ -46,8 +57,9 @@ import tools.jackson.databind.ObjectMapper;
  *   <li>System PATH - falls back to a {@code gitleaks} binary already installed on the host/container
  * </ol>
  *
- * <p>If no binary is found or the scan errors, an empty {@link Optional} is returned. Whether the push is blocked is
- * determined by the caller — callers with {@code secret-scan: enabled: true} block the push (fail-closed).
+ * <p>Every scan returns {@code Optional<List<Finding>>}. An empty list means gitleaks ran and found nothing.
+ * {@link Optional#empty()} means no verdict — no binary, a timeout, an unexpected exit code, or a findings exit whose
+ * report could not be read — and every caller blocks on it.
  *
  * <p>The bundled binary extracted from the JAR is deleted on JVM shutdown. Binaries downloaded to {@code installDir}
  * persist across restarts.
@@ -88,22 +100,58 @@ public class GitleaksRunner {
     // -------------------------------------------------------------------------
 
     /**
-     * Scans the provided unified diff for secrets using gitleaks.
+     * Scans commit and tag messages in a single {@link #scanText} run over their concatenation, then attributes each
+     * finding to the message it came from via {@link Finding#getMessageLocation()}.
      *
-     * @param diff unified diff text to scan (may be empty)
+     * @param messages the messages to scan, each labelled with where it came from
      * @param config secret scanning configuration
-     * @return {@link Optional#empty()} if the scanner is unavailable or errored (fail-open); otherwise an optional
-     *     containing the (possibly empty) list of findings
+     * @return {@link Optional#empty()} if the scanner is unavailable or errored; otherwise the (possibly empty) list of
+     *     findings
      */
-    public Optional<List<Finding>> scan(String diff, SecretScanConfig config) {
-        if (diff == null || diff.isBlank()) {
+    public Optional<List<Finding>> scanMessages(List<ScannedMessage> messages, SecretScanConfig config) {
+        List<ScannedMessage> nonBlank = messages.stream()
+                .filter(m -> m.text() != null && !m.text().isBlank())
+                .toList();
+        if (nonBlank.isEmpty()) {
             return Optional.of(Collections.emptyList());
         }
 
+        // A blank line between messages keeps a match from spanning two of them; ownerOfLine maps each line of the
+        // concatenation back to its message.
+        StringBuilder text = new StringBuilder();
+        List<String> ownerOfLine = new ArrayList<>();
+        for (ScannedMessage message : nonBlank) {
+            for (String line : message.text().strip().split("\n", -1)) {
+                text.append(line).append('\n');
+                ownerOfLine.add(message.location());
+            }
+            text.append('\n');
+            ownerOfLine.add(null);
+        }
+
+        Optional<List<Finding>> result = scanText(text.toString(), config);
+        result.ifPresent(
+                findings -> attributeToMessages(findings, text.toString().split("\n", -1), ownerOfLine));
+        return result;
+    }
+
+    /**
+     * Scans plain text for secrets with {@code gitleaks detect --pipe}. Findings carry no file or commit; their
+     * {@code StartLine} is relative to {@code text}.
+     *
+     * @param text the text to scan (may be blank)
+     * @param config secret scanning configuration
+     * @return {@link Optional#empty()} if the scanner is unavailable or errored; otherwise the (possibly empty) list of
+     *     findings
+     */
+    public Optional<List<Finding>> scanText(String text, SecretScanConfig config) {
+        if (text == null || text.isBlank()) {
+            return Optional.of(Collections.emptyList());
+        }
         Path binaryPath = resolveBinaryPath(config);
         if (binaryPath == null) {
-            log.warn("gitleaks binary not available - secret scanning skipped (fail-open). "
-                    + "Set commit.secretScanning.auto-install: true or provide scanner-path.");
+            log.warn("gitleaks binary not available - scanner error. "
+                    + "Set secret-scan.auto-install: true or provide secret-scan.scanner-path.");
             return Optional.empty();
         }
 
@@ -112,7 +160,7 @@ public class GitleaksRunner {
         try {
             reportFile = Files.createTempFile("gitleaks-report-", ".json");
             inlineConfigFile = writeInlineConfigIfNeeded(config);
-            List<String> cmd = buildCommand(binaryPath, reportFile, resolveConfigFile(config, inlineConfigFile));
+            List<String> cmd = buildTextCommand(binaryPath, reportFile, resolveConfigFile(config, inlineConfigFile));
             log.debug("Running gitleaks: {}", cmd);
 
             ProcessBuilder pb = new ProcessBuilder(cmd);
@@ -122,11 +170,11 @@ public class GitleaksRunner {
             restrictEnvironment(pb);
             Process process = pb.start();
 
-            // Write diff to stdin in a daemon thread; closing stdin signals EOF to gitleaks
-            final byte[] diffBytes = diff.getBytes(StandardCharsets.UTF_8);
+            // Write the input to stdin in a daemon thread; closing stdin signals EOF to gitleaks
+            final byte[] inputBytes = text.getBytes(StandardCharsets.UTF_8);
             Thread stdinWriter = new Thread(() -> {
                 try (var stdin = process.getOutputStream()) {
-                    stdin.write(diffBytes);
+                    stdin.write(inputBytes);
                 } catch (IOException e) {
                     log.debug("stdin write error (process may have exited early)", e);
                 }
@@ -138,9 +186,7 @@ public class GitleaksRunner {
             if (!completed) {
                 process.destroyForcibly();
                 stdinWriter.interrupt();
-                log.warn(
-                        "gitleaks timed out after {}s - secret scanning skipped (fail-open)",
-                        config.getTimeoutSeconds());
+                log.warn("gitleaks timed out after {}s - scanner error", config.getTimeoutSeconds());
                 return Optional.empty();
             }
 
@@ -149,17 +195,14 @@ public class GitleaksRunner {
                 log.debug("gitleaks: no findings");
                 return Optional.of(Collections.emptyList());
             } else if (exitCode == FINDINGS_EXIT_CODE) {
-                List<Finding> findings = readFindings(reportFile);
-                enrichFindings(findings, diff);
-                log.debug("gitleaks: {} finding(s)", findings.size());
-                return Optional.of(findings);
+                return readFindings(reportFile);
             } else {
                 log.warn("gitleaks exited with code {} - treat as scanner error", exitCode);
                 return Optional.empty();
             }
 
         } catch (Exception e) {
-            log.warn("Failed to run gitleaks - secret scanning skipped (fail-open): {}", e.getMessage(), e);
+            log.warn("Failed to run gitleaks - scanner error: {}", e.getMessage(), e);
             return Optional.empty();
         } finally {
             deleteQuietly(reportFile);
@@ -170,10 +213,9 @@ public class GitleaksRunner {
     /**
      * Scans a commit range in a local git repository for secrets using {@code gitleaks git}.
      *
-     * <p>Unlike {@link #scan(String, SecretScanConfig)}, this mode runs gitleaks natively against the git object graph,
-     * so path-based allowlists and per-file context in gitleaks rules are applied correctly. No post-hoc diff
-     * enrichment is needed - gitleaks populates {@code File}, {@code StartLine}, and {@code Commit} in each finding
-     * directly.
+     * <p>gitleaks walks the git object graph itself, so path-based allowlists and per-file context in gitleaks rules
+     * apply, and it populates {@code File}, {@code StartLine}, and {@code Commit} in each finding. Commit messages are
+     * not read in this mode; see {@link #scanMessages}.
      *
      * <p>For a new-branch push ({@code commitFrom} equals {@link GitClientUtils#ZERO_OID }), the scan covers all
      * commits reachable from {@code commitTo} that are not yet reachable from any existing ref ({@code --not --all}).
@@ -183,8 +225,8 @@ public class GitleaksRunner {
      * @param commitFrom old-tip OID; use {@link GitClientUtils#ZERO_OID} for a new-branch push
      * @param commitTo new-tip OID
      * @param config secret scanning configuration
-     * @return {@link Optional#empty()} if the scanner is unavailable or errored (fail-open); otherwise the (possibly
-     *     empty) list of findings
+     * @return {@link Optional#empty()} if the scanner is unavailable or errored; otherwise the (possibly empty) list of
+     *     findings
      */
     public Optional<List<Finding>> scanGit(Path repoDir, String commitFrom, String commitTo, SecretScanConfig config) {
         return scanGit(repoDir, null, commitFrom, commitTo, config);
@@ -208,8 +250,8 @@ public class GitleaksRunner {
             Path repoDir, Path alternateObjectDir, String commitFrom, String commitTo, SecretScanConfig config) {
         Path binaryPath = resolveBinaryPath(config);
         if (binaryPath == null) {
-            log.warn("gitleaks binary not available - secret scanning skipped (fail-open). "
-                    + "Set commit.secretScanning.auto-install: true or provide scanner-path.");
+            log.warn("gitleaks binary not available - scanner error. "
+                    + "Set secret-scan.auto-install: true or provide secret-scan.scanner-path.");
             return Optional.empty();
         }
 
@@ -259,9 +301,7 @@ public class GitleaksRunner {
             boolean completed = process.waitFor(config.getTimeoutSeconds(), TimeUnit.SECONDS);
             if (!completed) {
                 process.destroyForcibly();
-                log.warn(
-                        "gitleaks timed out after {}s - secret scanning skipped (fail-open)",
-                        config.getTimeoutSeconds());
+                log.warn("gitleaks timed out after {}s - scanner error", config.getTimeoutSeconds());
                 return Optional.empty();
             }
 
@@ -270,16 +310,14 @@ public class GitleaksRunner {
                 log.debug("gitleaks git: no findings");
                 return Optional.of(Collections.emptyList());
             } else if (exitCode == FINDINGS_EXIT_CODE) {
-                List<Finding> findings = readFindings(reportFile);
-                log.debug("gitleaks git: {} finding(s)", findings.size());
-                return Optional.of(findings);
+                return readFindings(reportFile);
             } else {
                 log.warn("gitleaks git exited with code {} - treat as scanner error", exitCode);
                 return Optional.empty();
             }
 
         } catch (Exception e) {
-            log.warn("Failed to run gitleaks git - secret scanning skipped (fail-open): {}", e.getMessage(), e);
+            log.warn("Failed to run gitleaks git - scanner error: {}", e.getMessage(), e);
             return Optional.empty();
         } finally {
             deleteQuietly(reportFile);
@@ -449,7 +487,7 @@ public class GitleaksRunner {
 
         } catch (Exception e) {
             log.warn(
-                    "Failed to auto-install gitleaks {} - secret scanning skipped (fail-open): {}",
+                    "Failed to auto-install gitleaks {} - falling back to the bundled binary: {}",
                     version,
                     e.getMessage());
             return null;
@@ -593,7 +631,7 @@ public class GitleaksRunner {
     // Command building
     // -------------------------------------------------------------------------
 
-    private static List<String> buildCommand(Path binaryPath, Path reportFile, Path configFilePath) {
+    private static List<String> buildTextCommand(Path binaryPath, Path reportFile, Path configFilePath) {
         List<String> cmd = new ArrayList<>();
         cmd.add(binaryPath.toString());
         cmd.add("detect");
@@ -690,85 +728,89 @@ public class GitleaksRunner {
     // JSON parsing
     // -------------------------------------------------------------------------
 
-    private static List<Finding> readFindings(Path reportFile) {
+    /**
+     * Reads the report gitleaks wrote after exiting with {@link #FINDINGS_EXIT_CODE}. gitleaks has said it found
+     * something, so a report that is missing, unparseable or lists nothing is a scanner error, never a clean result.
+     */
+    static Optional<List<Finding>> readFindings(Path reportFile) {
         try {
             if (!Files.exists(reportFile) || Files.size(reportFile) == 0) {
-                return Collections.emptyList();
+                log.error("gitleaks reported findings but wrote no report to {}", reportFile);
+                return Optional.empty();
             }
-            String json = Files.readString(reportFile);
-            if (json.isBlank() || json.trim().equals("null")) {
-                return Collections.emptyList();
+            List<Finding> findings = OBJECT_MAPPER.readValue(Files.readString(reportFile), new TypeReference<>() {});
+            if (findings == null || findings.isEmpty()) {
+                log.error("gitleaks reported findings but its report lists none");
+                return Optional.empty();
             }
-            return OBJECT_MAPPER.readValue(json, new TypeReference<>() {});
+            log.debug("gitleaks: {} finding(s)", findings.size());
+            return Optional.of(findings);
         } catch (Exception e) {
-            log.warn("Failed to parse gitleaks JSON report: {}", e.getMessage());
-            return Collections.emptyList();
+            log.error("gitleaks reported findings but its report could not be parsed: {}", e.getMessage());
+            return Optional.empty();
         }
     }
 
     // -------------------------------------------------------------------------
-    // Diff-line enrichment
+    // Message attribution
     // -------------------------------------------------------------------------
 
     /**
-     * Gitleaks {@code --pipe} mode reports {@code StartLine} as the 0-indexed line number within the raw diff text and
-     * leaves {@code File} empty. This method parses the diff to map each finding back to the actual file path and the
-     * file-relative (1-indexed) line number.
+     * Maps each finding from {@link #scanMessages} back to the message it was found in. gitleaks has reported the
+     * pipe-mode {@code StartLine} both 0-indexed (8.21) and 1-indexed (8.30), so neither convention is trusted: a
+     * candidate line counts only if the secret's first line actually appears on it. A finding that cannot be placed is
+     * still reported, against a generic location.
      */
-    private static void enrichFindings(List<Finding> findings, String diff) {
-        if (findings.isEmpty()) return;
-
-        String[] lines = diff.split("\n", -1);
-        String[] fileAtLine = new String[lines.length];
-        int[] fileLineAtLine = new int[lines.length];
-
-        String currentFile = null;
-        int nextFileLine = 0;
-
-        for (int i = 0; i < lines.length; i++) {
-            String line = lines[i];
-            if (line.startsWith("+++ b/")) {
-                currentFile = line.substring("+++ b/".length());
-            } else if (line.startsWith("+++ /dev/null")) {
-                currentFile = null;
-            } else if (line.startsWith("@@")) {
-                nextFileLine = parseHunkNewStart(line);
-            } else if (line.startsWith("+")) {
-                fileAtLine[i] = currentFile;
-                fileLineAtLine[i] = nextFileLine;
-                nextFileLine++;
-            } else if (line.startsWith(" ")) {
-                nextFileLine++;
-            }
-        }
-
+    private static void attributeToMessages(List<Finding> findings, String[] lines, List<String> ownerOfLine) {
         for (Finding f : findings) {
-            int idx = f.getStartLine(); // 0-indexed line in diff
-            if (idx >= 0 && idx < lines.length && fileAtLine[idx] != null) {
-                f.setFile(fileAtLine[idx]);
-                f.setStartLine(fileLineAtLine[idx]);
-            }
+            f.setMessageLocation(locateMessage(f, lines, ownerOfLine));
+            f.setFile(null);
+            f.setStartLine(0);
+            f.setCommit(null);
         }
     }
 
-    private static int parseHunkNewStart(String hunkHeader) {
-        // "@@ -old_start[,old_count] +new_start[,new_count] @@"
-        int plusIdx = hunkHeader.indexOf(" +");
-        if (plusIdx < 0) return 1;
-        int start = plusIdx + 2;
-        int end = hunkHeader.indexOf(',', start);
-        if (end < 0) end = hunkHeader.indexOf(' ', start);
-        if (end < 0) return 1;
-        try {
-            return Integer.parseInt(hunkHeader.substring(start, end));
-        } catch (NumberFormatException e) {
-            return 1;
+    private static String locateMessage(Finding f, String[] lines, List<String> ownerOfLine) {
+        String matched = f.getSecret() != null && !f.getSecret().isBlank() ? f.getSecret() : f.getMatch();
+        String needle = matched == null || matched.isBlank()
+                ? null
+                : matched.strip().lines().findFirst().orElse(null);
+        for (int candidate : new int[] {f.getStartLine() - 1, f.getStartLine()}) {
+            if (candidate < 0 || candidate >= ownerOfLine.size() || ownerOfLine.get(candidate) == null) {
+                continue;
+            }
+            if (needle == null || lines[candidate].contains(needle)) {
+                return ownerOfLine.get(candidate);
+            }
         }
+        return UNATTRIBUTED_MESSAGE;
     }
 
     // -------------------------------------------------------------------------
     // Finding model
     // -------------------------------------------------------------------------
+
+    /** Location reported for a message finding that could not be traced to one message. */
+    static final String UNATTRIBUTED_MESSAGE = "a commit or tag message";
+
+    /**
+     * A commit or tag message to scan with {@link #scanMessages}.
+     *
+     * @param location where the message came from, as the developer should read it (e.g. {@code message of commit
+     *     abc1234})
+     * @param text the full message
+     */
+    public record ScannedMessage(String location, String text) {
+
+        public static ScannedMessage ofCommit(String sha, String message) {
+            return new ScannedMessage("message of commit " + (sha.length() > 7 ? sha.substring(0, 7) : sha), message);
+        }
+
+        public static ScannedMessage ofTag(String refName, String message) {
+            String name = refName.startsWith(Constants.R_TAGS) ? refName.substring(Constants.R_TAGS.length()) : refName;
+            return new ScannedMessage("message of tag " + name, message);
+        }
+    }
 
     /** A single secret detected by gitleaks. */
     @Data
@@ -805,6 +847,12 @@ public class GitleaksRunner {
         private String secret;
 
         /**
+         * Set instead of {@link #file} for a finding in a commit or tag message (e.g. {@code message of tag v1.2.0}).
+         */
+        @JsonIgnore
+        private String messageLocation;
+
+        /**
          * {@link #match} with the raw {@link #secret} value blanked out - safe to log or show to the pushing user.
          * Mirrors what gitleaks' own {@code --redact} flag used to do, but computed here since we always request raw
          * output now (needed to redact the stored diff).
@@ -825,7 +873,9 @@ public class GitleaksRunner {
 
             // Line 1: rule ID + location
             sb.append("[").append(ruleId != null ? ruleId : "unknown").append("]");
-            if (file != null && !file.isBlank()) {
+            if (messageLocation != null) {
+                sb.append("  ").append(messageLocation);
+            } else if (file != null && !file.isBlank()) {
                 sb.append("  ").append(file);
                 if (startLine > 0) {
                     sb.append(":").append(startLine);

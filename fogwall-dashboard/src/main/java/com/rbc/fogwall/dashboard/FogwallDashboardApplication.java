@@ -12,6 +12,7 @@ import com.rbc.fogwall.dashboard.issues.DashboardIssueService;
 import com.rbc.fogwall.db.MongoStoreFactory;
 import com.rbc.fogwall.db.PendingPushExpiryTask;
 import com.rbc.fogwall.db.UrlRuleRegistry;
+import com.rbc.fogwall.git.GitleaksRunner;
 import com.rbc.fogwall.jetty.BlockingContentHandler;
 import com.rbc.fogwall.jetty.FogwallContext;
 import com.rbc.fogwall.jetty.FogwallJettyApplication;
@@ -25,7 +26,6 @@ import com.rbc.fogwall.provider.ProviderRegistry;
 import com.rbc.fogwall.scmapi.ScmContentInspector;
 import com.rbc.fogwall.ssh.SshGitServer;
 import com.rbc.fogwall.ssh.SshServerRegistrar;
-import com.rbc.fogwall.validation.SecretScanCheck;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.ServletContextEvent;
 import jakarta.servlet.ServletContextListener;
@@ -168,7 +168,7 @@ public class FogwallDashboardApplication {
         var scmContentInspector = new ScmContentInspector(
                 configHolder::getScmApiBlockConfig,
                 configHolder::getSecretScanConfig,
-                new SecretScanCheck(configHolder.getSecretScanConfig()),
+                new GitleaksRunner(),
                 configHolder::getContentPatternConfig);
         registerSpringServlet(
                 context,
