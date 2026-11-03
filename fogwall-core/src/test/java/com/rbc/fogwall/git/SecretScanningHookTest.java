@@ -160,6 +160,117 @@ class SecretScanningHookTest {
         assertTrue(pushContext.getSteps().isEmpty(), "no PASS step may be recorded for a scan that did not run");
     }
 
+    // ---- include-metadata: commit and tag messages ----
+
+    @Test
+    void includeMetadataOff_messagesNotScanned() throws Exception {
+        RevCommit c1 = createCommit("A");
+        RevCommit c2 = createCommit("B");
+        ReceivePack rp = new ReceivePack(repo);
+        ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
+
+        hook().onPreReceive(rp, List.of(cmd));
+
+        verify(runner, never()).scanMessages(any(), any());
+    }
+
+    @Test
+    void includeMetadata_scansMessageOfEveryCommitInTheRange() throws Exception {
+        RevCommit c1 = createCommit("A");
+        RevCommit c2 = createCommit("B");
+        RevCommit c3 = createCommit("C");
+        ReceivePack rp = new ReceivePack(repo);
+        ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c3.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
+        config = SecretScanConfig.builder().enabled(true).includeMetadata(true).build();
+        when(runner.scanMessages(any(), any())).thenReturn(Optional.of(List.of()));
+
+        hook().onPreReceive(rp, List.of(cmd));
+
+        verify(runner)
+                .scanMessages(
+                        argThat(messages -> messages.size() == 2
+                                && messages.contains(GitleaksRunner.ScannedMessage.ofCommit(c2.name(), "B"))
+                                && messages.contains(GitleaksRunner.ScannedMessage.ofCommit(c3.name(), "C"))),
+                        any());
+        assertFalse(validationContext.hasIssues());
+    }
+
+    @Test
+    void includeMetadata_scansAnnotatedTagMessage() throws Exception {
+        RevCommit c1 = createCommit("A");
+        ObjectId tag = git.tag()
+                .setName("v1.0.0")
+                .setAnnotated(true)
+                .setMessage("release notes")
+                .setTagger(new PersonIdent("Dev", "dev@example.com"))
+                .setSigned(false)
+                .setObjectId(c1)
+                .call()
+                .getObjectId();
+        ReceivePack rp = new ReceivePack(repo);
+        ReceiveCommand cmd = new ReceiveCommand(ObjectId.zeroId(), tag, "refs/tags/v1.0.0", ReceiveCommand.Type.CREATE);
+        config = SecretScanConfig.builder().enabled(true).includeMetadata(true).build();
+        when(runner.scanMessages(any(), any())).thenReturn(Optional.of(List.of()));
+
+        hook().onPreReceive(rp, List.of(cmd));
+
+        verify(runner)
+                .scanMessages(
+                        argThat(messages -> messages.contains(
+                                new GitleaksRunner.ScannedMessage("message of tag v1.0.0", "release notes"))),
+                        any());
+    }
+
+    @Test
+    void includeMetadata_messageFinding_blocksAndQueuesRedaction() throws Exception {
+        RevCommit c1 = createCommit("A");
+        RevCommit c2 = createCommit("B");
+        ReceivePack rp = new ReceivePack(repo);
+        ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
+        config = SecretScanConfig.builder().enabled(true).includeMetadata(true).build();
+        GitleaksRunner.Finding finding = new GitleaksRunner.Finding();
+        finding.setRuleId("aws-access-token");
+        finding.setSecret("AKIAZ3MSJV4WXYZQ7KLM");
+        finding.setMatch("AKIAZ3MSJV4WXYZQ7KLM");
+        finding.setMessageLocation("message of commit " + c2.name().substring(0, 7));
+        when(runner.scanMessages(any(), any())).thenReturn(Optional.of(List.of(finding)));
+
+        hook().onPreReceive(rp, List.of(cmd));
+
+        assertTrue(validationContext.hasIssues(), "a secret in a commit message must block the push");
+        assertTrue(validationContext.getIssues().get(0).detail().contains("message of commit"));
+        assertEquals(List.of("AKIAZ3MSJV4WXYZQ7KLM"), pushContext.getSecretsToRedact());
+    }
+
+    @Test
+    void includeMetadata_messageScannerUnavailable_blocks() throws Exception {
+        RevCommit c1 = createCommit("A");
+        RevCommit c2 = createCommit("B");
+        ReceivePack rp = new ReceivePack(repo);
+        ReceiveCommand cmd = new ReceiveCommand(c1.getId(), c2.getId(), "refs/heads/main", ReceiveCommand.Type.UPDATE);
+        config = SecretScanConfig.builder().enabled(true).includeMetadata(true).build();
+        when(runner.scanMessages(any(), any())).thenReturn(Optional.empty());
+
+        hook().onPreReceive(rp, List.of(cmd));
+
+        assertTrue(validationContext.hasIssues(), "a message scan that could not run must block");
+        assertTrue(pushContext.getSteps().isEmpty(), "no PASS step may be recorded for a scan that did not run");
+    }
+
+    @Test
+    void includeMetadata_unreadableRange_blocks() throws Exception {
+        RevCommit c1 = createCommit("A");
+        ReceivePack rp = new ReceivePack(repo);
+        ObjectId missing = ObjectId.fromString("1111111111111111111111111111111111111111");
+        ReceiveCommand cmd = new ReceiveCommand(c1.getId(), missing, "refs/heads/main", ReceiveCommand.Type.UPDATE);
+        config = SecretScanConfig.builder().enabled(true).includeMetadata(true).build();
+
+        hook().onPreReceive(rp, List.of(cmd));
+
+        assertTrue(validationContext.hasIssues(), "messages that could not be read must block, not pass unscanned");
+        verify(runner, never()).scanMessages(any(), any());
+    }
+
     // ---- delete command skipped ----
 
     @Test

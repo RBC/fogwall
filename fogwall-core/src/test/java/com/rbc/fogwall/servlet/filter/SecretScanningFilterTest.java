@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 
 import com.rbc.fogwall.config.SecretScanConfig;
 import com.rbc.fogwall.db.model.StepStatus;
+import com.rbc.fogwall.git.Commit;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.GitleaksRunner;
 import com.rbc.fogwall.git.HttpOperation;
@@ -155,5 +156,86 @@ class SecretScanningFilterTest {
 
         assertFalse(details.getSteps().isEmpty(), "Finding must be recorded as a step");
         assertNotNull(details.getSteps().get(0).getErrorMessage());
+    }
+
+    // ---- include-metadata: commit and tag messages ----
+
+    private SecretScanningFilter metadataFilter() {
+        return new SecretScanningFilter(
+                SecretScanConfig.builder().enabled(true).includeMetadata(true).build(), runner);
+    }
+
+    @Test
+    void includeMetadataOff_messagesNotScanned() throws Exception {
+        GitRequestDetails details = pushDetailsWithRepo();
+        details.getPushedCommits()
+                .add(Commit.builder().sha("1234567890abcdef").message("msg").build());
+        when(runner.scanGit(any(), any(), any(), any(), any())).thenReturn(Optional.of(List.of()));
+
+        filter.doHttpFilter(requestWith(details), mock(HttpServletResponse.class));
+
+        verify(runner, never()).scanMessages(any(), any());
+    }
+
+    @Test
+    void includeMetadata_scansPushedCommitAndTagMessages() throws Exception {
+        GitRequestDetails details = pushDetailsWithRepo();
+        details.setBranch("refs/tags/v2.0.0");
+        details.getPushedCommits()
+                .add(Commit.builder()
+                        .sha("1234567890abcdef")
+                        .message("fix build")
+                        .build());
+        details.setTagMessage("release v2");
+        when(runner.scanGit(any(), any(), any(), any(), any())).thenReturn(Optional.of(List.of()));
+        when(runner.scanMessages(any(), any())).thenReturn(Optional.of(List.of()));
+
+        metadataFilter().doHttpFilter(requestWith(details), mock(HttpServletResponse.class));
+
+        verify(runner)
+                .scanMessages(
+                        eq(List.of(
+                                new GitleaksRunner.ScannedMessage("message of commit 1234567", "fix build"),
+                                new GitleaksRunner.ScannedMessage("message of tag v2.0.0", "release v2"))),
+                        any());
+        assertTrue(details.getSteps().isEmpty());
+    }
+
+    @Test
+    void includeMetadata_messageFinding_recordsIssueAndQueuesRedaction() throws Exception {
+        GitRequestDetails details = pushDetailsWithRepo();
+        details.getPushedCommits()
+                .add(Commit.builder().sha("1234567890abcdef").message("token").build());
+        GitleaksRunner.Finding finding = new GitleaksRunner.Finding();
+        finding.setRuleId("github-pat");
+        finding.setSecret("ghp_secretvalue");
+        finding.setMatch("ghp_secretvalue");
+        finding.setMessageLocation("message of commit 1234567");
+        when(runner.scanGit(any(), any(), any(), any(), any())).thenReturn(Optional.of(List.of()));
+        when(runner.scanMessages(any(), any())).thenReturn(Optional.of(List.of(finding)));
+
+        metadataFilter().doHttpFilter(requestWith(details), mock(HttpServletResponse.class));
+
+        assertTrue(details.getSteps().stream().anyMatch(s -> s.getStatus() == StepStatus.FAIL));
+        assertTrue(details.getSteps().get(0).getErrorMessage().contains("message of commit 1234567"));
+        assertFalse(
+                details.getSteps().get(0).getErrorMessage().contains("ghp_secretvalue"),
+                "the raw secret must never reach the client message");
+        assertEquals(List.of("ghp_secretvalue"), details.getSecretsToRedact());
+    }
+
+    @Test
+    void includeMetadata_messageScannerUnavailable_failClosed() throws Exception {
+        GitRequestDetails details = pushDetailsWithRepo();
+        details.getPushedCommits()
+                .add(Commit.builder().sha("1234567890abcdef").message("msg").build());
+        when(runner.scanGit(any(), any(), any(), any(), any())).thenReturn(Optional.of(List.of()));
+        when(runner.scanMessages(any(), any())).thenReturn(Optional.empty());
+
+        metadataFilter().doHttpFilter(requestWith(details), mock(HttpServletResponse.class));
+
+        assertTrue(
+                details.getSteps().stream().anyMatch(s -> s.getStatus() == StepStatus.FAIL),
+                "a message scan that could not run must block when secret-scan is enabled");
     }
 }

@@ -3,12 +3,11 @@ package com.rbc.fogwall.scmapi;
 import com.rbc.fogwall.config.BlockConfig;
 import com.rbc.fogwall.config.ContentPatternConfig;
 import com.rbc.fogwall.config.SecretScanConfig;
+import com.rbc.fogwall.git.GitleaksRunner;
 import com.rbc.fogwall.validation.BlockedContentScanner;
 import com.rbc.fogwall.validation.ContentPatternBundleResolver;
 import com.rbc.fogwall.validation.ContentPatternFinding;
 import com.rbc.fogwall.validation.PatternBundleScanner;
-import com.rbc.fogwall.validation.SecretScanCheck;
-import com.rbc.fogwall.validation.Violation;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -25,8 +24,8 @@ import lombok.extern.slf4j.Slf4j;
  * it through a pull request description or an issue body when the same text would be blocked in a push. Used by both
  * the SCM API (CLI) proxy and the dashboard issue path — it is not tied to either channel's enablement.
  *
- * <p>Blocked literals and patterns come from {@code scm-api.block}. Secret scanning reuses {@link SecretScanCheck}:
- * gitleaks reads stdin, and scans prose as readily as a diff. Content-pattern bundles reuse
+ * <p>Blocked literals and patterns come from {@code scm-api.block}. Secret scanning is gitleaks' plain-text mode
+ * ({@link GitleaksRunner#scanText}) with the live {@code secret-scan} rules. Content-pattern bundles reuse
  * {@link PatternBundleScanner}, the same structured PII/identifier detection the push path runs, so a national ID
  * number is caught in a merge request description as well as in a pushed line.
  *
@@ -40,7 +39,7 @@ public class ScmContentInspector {
 
     private final Supplier<BlockConfig> blockConfig;
     private final Supplier<SecretScanConfig> secretScanConfig;
-    private final SecretScanCheck secretScanCheck;
+    private final GitleaksRunner gitleaks;
     private final Supplier<ContentPatternConfig> contentPatternConfig;
 
     /**
@@ -98,17 +97,18 @@ public class ScmContentInspector {
 
     /** One scanner invocation for the whole request — both readings together, not one call per field. */
     private List<String> scanForSecrets(EntityPayload payload) {
-        if (!secretScanConfig.get().isEnabled()) {
+        var config = secretScanConfig.get();
+        if (!config.isEnabled()) {
             return List.of();
         }
-        Optional<List<Violation>> result = secretScanCheck.check(payload.combined());
+        Optional<List<GitleaksRunner.Finding>> result = gitleaks.scanText(payload.combined(), config);
         if (result.isEmpty()) {
             log.warn("Secret scanner unavailable — refusing the request rather than forwarding it unscanned");
             return List.of("secret scanning is enabled but the scanner could not run");
         }
         Set<String> violations = new LinkedHashSet<>();
-        for (Violation violation : result.get()) {
-            violations.add("secret detected in submitted content: " + violation.reason());
+        for (GitleaksRunner.Finding finding : result.get()) {
+            violations.add("secret detected in submitted content: " + finding.toMessage());
         }
         return List.copyOf(violations);
     }

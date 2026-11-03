@@ -91,7 +91,7 @@ class SecretRedactionIntegrationTest {
         runner = new GitleaksRunner();
 
         // Skip if the bundled gitleaks binary isn't available in this environment.
-        Optional<List<GitleaksRunner.Finding>> probe = runner.scan("probe text", config);
+        Optional<List<GitleaksRunner.Finding>> probe = runner.scanText("probe text", config);
         assumeTrue(probe.isPresent(), "gitleaks binary not available - skipping");
     }
 

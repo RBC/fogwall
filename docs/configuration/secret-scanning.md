@@ -31,5 +31,21 @@ secret-scan:
   #   id = "my-org-api-key"
   #   regex = '''MY_ORG_[A-Z0-9]{32}'''
 
+  # Also scan commit messages and annotated tag messages, with the same rules.
+  # include-metadata: false
+
   # timeout-seconds: 30
+```
+
+## Commit and tag messages
+
+gitleaks scans patch content only. With `include-metadata: true`, fogwall also scans the message of every commit in the
+push and the message of a pushed annotated tag, in one extra gitleaks run per push, in both proxy modes and over SSH. A
+finding names the message it was found in (`message of commit abc1234`, `message of tag v1.2.0`) instead of a file and
+line, and blocks the push like any other secret. The secret is redacted from the stored push record.
+
+The key defaults to `false`. To preview what it would block, run the same rules over existing history:
+
+```shell
+git log --all --format=%B | gitleaks detect --pipe --config /app/conf/.gitleaks.toml
 ```

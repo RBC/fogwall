@@ -570,9 +570,11 @@ public class JettyConfigurationBuilder {
                 .scannerPath(ss.getScannerPath())
                 .configFile(configFile)
                 .inlineConfig(inlineConfig)
+                .includeMetadata(ss.isIncludeMetadata())
                 .timeoutSeconds(ss.getTimeoutSeconds())
                 .build();
-        log.info("Loaded secret-scan config: enabled={}", cfg.isEnabled());
+        log.info(
+                "Loaded secret-scan config: enabled={}, include-metadata={}", cfg.isEnabled(), cfg.isIncludeMetadata());
         return cfg;
     }
 

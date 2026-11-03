@@ -5,6 +5,7 @@ import static com.rbc.fogwall.git.GitClientUtils.sym;
 import static com.rbc.fogwall.servlet.FogwallServlet.GIT_REQUEST_ATTR;
 
 import com.rbc.fogwall.config.SecretScanConfig;
+import com.rbc.fogwall.git.Commit;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.GitleaksRunner;
 import com.rbc.fogwall.git.HttpOperation;
@@ -15,6 +16,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -30,14 +32,19 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <p>Runs at order 340, after {@link ScanDiffFilter} (order 300), within the content filters range (200-399).
  *
+ * <p>With {@code include-metadata}, the pushed commits' messages and an annotated tag's message are also scanned, in
+ * one {@link GitleaksRunner#scanMessages} run.
+ *
  * <p>If the scanner errors or is unavailable when scanning is enabled, the push is blocked (fail-closed) with a clear
  * error message. Check server logs for the underlying cause.
  */
 @Slf4j
 public final class SecretScanningFilter extends AbstractFogwallFilter {
 
-    private static final String REMEDIATION_HINT =
+    private static final String PATCH_REMEDIATION_HINT =
             "→ Rotate any exposed credentials and remove the secret from your commit history before pushing.";
+    private static final String MESSAGE_REMEDIATION_HINT =
+            "→ Rotate any exposed credentials, then reword the commit or re-create the tag before pushing.";
 
     private final Supplier<SecretScanConfig> configSupplier;
     private final GitleaksRunner runner;
@@ -109,26 +116,51 @@ public final class SecretScanningFilter extends AbstractFogwallFilter {
 
         Optional<List<GitleaksRunner.Finding>> result =
                 runner.scanGit(repo.getDirectory().toPath(), scanObjectDir, commitFrom, commitTo, config);
+        boolean scannerFailed = result.isEmpty();
+        result.ifPresent(findings -> recordFindings(request, requestDetails, findings, PATCH_REMEDIATION_HINT));
 
-        if (result.isEmpty()) {
+        if (config.isIncludeMetadata()) {
+            Optional<List<GitleaksRunner.Finding>> messageResult =
+                    runner.scanMessages(messages(requestDetails), config);
+            scannerFailed |= messageResult.isEmpty();
+            messageResult.ifPresent(
+                    findings -> recordFindings(request, requestDetails, findings, MESSAGE_REMEDIATION_HINT));
+        }
+
+        if (scannerFailed) {
             String msg = "Secret scanning failed — scanner error or unavailable. "
                     + "Push blocked because secret-scan is enabled. Check server logs for details.";
             log.error("Secret scanner returned no result — blocking push (fail-closed)");
             recordIssue(request, msg, sym(CROSS_MARK) + "  " + msg);
-            return;
         }
+    }
 
-        List<GitleaksRunner.Finding> findings = result.get();
+    /** The messages of the pushed commits and, for an annotated tag push, the tag's own message. */
+    private static List<GitleaksRunner.ScannedMessage> messages(GitRequestDetails requestDetails) {
+        List<GitleaksRunner.ScannedMessage> messages = new ArrayList<>();
+        for (Commit commit : requestDetails.getPushedCommits()) {
+            messages.add(GitleaksRunner.ScannedMessage.ofCommit(commit.getSha(), commit.getMessage()));
+        }
+        String tagMessage = requestDetails.getTagMessage();
+        if (tagMessage != null && !tagMessage.isBlank()) {
+            messages.add(GitleaksRunner.ScannedMessage.ofTag(requestDetails.getBranch(), tagMessage));
+        }
+        return messages;
+    }
+
+    private void recordFindings(
+            HttpServletRequest request,
+            GitRequestDetails requestDetails,
+            List<GitleaksRunner.Finding> findings,
+            String hint) {
         if (findings.isEmpty()) {
-            log.debug("Secret scan passed - no findings");
             return;
         }
-
         log.warn("Secret scan found {} finding(s)", findings.size());
         for (GitleaksRunner.Finding f : findings) {
             String msg = f.toMessage();
-            recordIssue(request, msg, sym(CROSS_MARK) + "  " + msg + "\n" + REMEDIATION_HINT);
-            // Raw secret value, for redacting the stored diff only - never used in a message. See SecretRedactor.
+            recordIssue(request, msg, sym(CROSS_MARK) + "  " + msg + "\n" + hint);
+            // Raw secret value, for redacting the stored record only - never used in a message. See SecretRedactor.
             if (f.getSecret() != null && !f.getSecret().isBlank()) {
                 requestDetails.getSecretsToRedact().add(f.getSecret());
             }

@@ -6,13 +6,14 @@ import com.rbc.fogwall.config.BlockConfig;
 import com.rbc.fogwall.config.ContentPatternConfig;
 import com.rbc.fogwall.config.MatchRule;
 import com.rbc.fogwall.config.SecretScanConfig;
-import com.rbc.fogwall.validation.SecretScanCheck;
+import com.rbc.fogwall.git.GitleaksRunner;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -33,8 +34,7 @@ class ScmContentInspectorTest {
 
     private static ScmContentInspector inspector(
             BlockConfig block, SecretScanConfig secretScan, ContentPatternConfig contentPatterns) {
-        return new ScmContentInspector(
-                () -> block, () -> secretScan, new SecretScanCheck(secretScan), () -> contentPatterns);
+        return new ScmContentInspector(() -> block, () -> secretScan, new GitleaksRunner(), () -> contentPatterns);
     }
 
     private static ContentPatternConfig bundles(String... names) {
@@ -139,6 +139,28 @@ class ScmContentInspectorTest {
         var result = inspector(blocking(List.of("internal.corp.example.com"), List.of()), secretScanning(false))
                 .inspect(List.of(), payload("{\"some_future_field\":\"internal.corp.example.com\"}"));
         assertEquals(1, result.size(), result::toString);
+    }
+
+    @Test
+    void secretScan_usesTheCurrentRules_notThoseAtConstruction() {
+        var live = new AtomicReference<>(secretScanning(true));
+        var inspector = new ScmContentInspector(
+                () -> blocking(List.of(), List.of()),
+                live::get,
+                new GitleaksRunner(),
+                ContentPatternConfig::defaultConfig);
+        var body = payload("{\"body\":\"deploy token FOGWALLTEST_Q7ZK3MXW9PLR2VNB\"}");
+        assertTrue(inspector.inspect(List.of(), body).isEmpty(), "default rules know nothing of this token shape");
+
+        live.set(SecretScanConfig.builder().enabled(true).inlineConfig("""
+                        [[rules]]
+                        id = "fogwall-test-token"
+                        regex = '''FOGWALLTEST_[A-Z0-9]{16}'''
+                        """).build());
+
+        var result = inspector.inspect(List.of(), body);
+        assertEquals(1, result.size(), "a reloaded rule must apply without rebuilding the inspector: " + result);
+        assertTrue(result.get(0).contains("fogwall-test-token"), result.get(0));
     }
 
     @Test
