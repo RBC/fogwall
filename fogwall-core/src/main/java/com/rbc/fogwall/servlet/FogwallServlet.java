@@ -5,6 +5,10 @@ import com.rbc.fogwall.db.model.PushStatus;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.net.OutboundProxyJetty;
 import com.rbc.fogwall.net.ResolvedOutboundProxy;
+import com.rbc.fogwall.observability.FogwallTelemetry;
+import com.rbc.fogwall.observability.StageOutcome;
+import com.rbc.fogwall.observability.StageTimer;
+import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
 import jakarta.servlet.ServletException;
@@ -25,6 +29,7 @@ import org.eclipse.jetty.http.HttpStatus;
 import org.eclipse.jetty.io.ClientConnector;
 import org.eclipse.jetty.util.Callback;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
+import org.eclipse.jgit.http.server.GitSmartHttpTools;
 
 @Slf4j
 public class FogwallServlet extends AsyncProxyServlet.Transparent {
@@ -35,6 +40,9 @@ public class FogwallServlet extends AsyncProxyServlet.Transparent {
     public static final String APPROVED_PUSH_ID_ATTR = "fogwall.approvedPushId";
 
     private static final String REPORT_SCANNER_ATTR = "fogwall.reportScanner";
+
+    /** Request attribute holding the {@link StageTimer} of a push's upstream forward, while it is in flight. */
+    private static final String FORWARD_STAGE_ATTR = "fogwall.forwardStage";
 
     /**
      * Request attribute holding the OpenTelemetry {@link Context} of the per-request span, set by
@@ -136,6 +144,58 @@ public class FogwallServlet extends AsyncProxyServlet.Transparent {
     }
 
     /**
+     * Starts timing a push's upstream forward as {@link FogwallTelemetry#FORWARD_STAGE} when the request carries
+     * telemetry. Its span is a client span under the request span, ended by the async response callbacks below.
+     */
+    @Override
+    protected void sendProxyRequest(
+            HttpServletRequest clientRequest, HttpServletResponse proxyResponse, Request proxyRequest) {
+        if (clientRequest.getAttribute(FogwallTelemetry.REQUEST_ATTR) instanceof FogwallTelemetry telemetry
+                && clientRequest.getAttribute(OTEL_CONTEXT_ATTR) instanceof Context parent
+                && GitSmartHttpTools.isReceivePack(clientRequest)) {
+            var details = (GitRequestDetails) clientRequest.getAttribute(GIT_REQUEST_ATTR);
+            String provider = details != null && details.getProvider() != null
+                    ? details.getProvider().getName()
+                    : null;
+            clientRequest.setAttribute(
+                    FORWARD_STAGE_ATTR,
+                    telemetry.startStage(
+                            FogwallTelemetry.FORWARD_STAGE,
+                            FogwallTelemetry.MODE_PROXY,
+                            provider,
+                            parent,
+                            SpanKind.CLIENT));
+        }
+        super.sendProxyRequest(clientRequest, proxyResponse, proxyRequest);
+    }
+
+    /**
+     * Ends the forward stage: {@code pass} for a 2xx whose report-status (when it was read) accepted every ref,
+     * {@code error} otherwise.
+     */
+    private void endForwardStage(HttpServletRequest clientRequest, Response serverResponse) {
+        if (!(clientRequest.getAttribute(FORWARD_STAGE_ATTR) instanceof StageTimer stage)) {
+            return;
+        }
+        boolean refused = clientRequest.getAttribute(APPROVED_PUSH_ID_ATTR) != null
+                && reportStatusReadable(serverResponse)
+                && reportScanner(clientRequest).failure().isPresent();
+        boolean forwarded = HttpStatus.isSuccess(serverResponse.getStatus()) && !refused;
+        stage.end(forwarded ? StageOutcome.PASS : StageOutcome.ERROR);
+    }
+
+    /** Ends the forward stage as {@code error} when the upstream exchange failed before a complete response. */
+    private void failForwardStage(HttpServletRequest clientRequest, Throwable failure) {
+        if (!(clientRequest.getAttribute(FORWARD_STAGE_ATTR) instanceof StageTimer stage)) {
+            return;
+        }
+        if (failure != null) {
+            stage.recordException(failure);
+        }
+        stage.end(StageOutcome.ERROR);
+    }
+
+    /**
      * For an approved re-push, feeds each chunk of the upstream response to a {@link ReceivePackReportScanner} before
      * relaying it. The chunk is passed on unchanged and without delay.
      */
@@ -164,10 +224,14 @@ public class FogwallServlet extends AsyncProxyServlet.Transparent {
     protected void onProxyResponseSuccess(
             HttpServletRequest clientRequest, HttpServletResponse proxyResponse, Response serverResponse) {
         String pushId = (String) clientRequest.getAttribute(APPROVED_PUSH_ID_ATTR);
-        if (pushId != null) {
-            try (Scope ignored = otelScope(clientRequest)) {
-                recordForwardOutcome(clientRequest, pushId, serverResponse);
+        try {
+            if (pushId != null) {
+                try (Scope ignored = otelScope(clientRequest)) {
+                    recordForwardOutcome(clientRequest, pushId, serverResponse);
+                }
             }
+        } finally {
+            endForwardStage(clientRequest, serverResponse);
         }
         super.onProxyResponseSuccess(clientRequest, proxyResponse, serverResponse);
     }
@@ -178,12 +242,11 @@ public class FogwallServlet extends AsyncProxyServlet.Transparent {
             recordForwardError(pushId, "Upstream returned HTTP " + status);
             return;
         }
-        String contentEncoding = serverResponse.getHeaders().get(HttpHeader.CONTENT_ENCODING);
-        if (contentEncoding != null && !contentEncoding.equalsIgnoreCase("identity")) {
+        if (!reportStatusReadable(serverResponse)) {
             log.warn(
                     "Transparent proxy re-push {} upstream response is {}-encoded; report-status not inspected",
                     pushId,
-                    contentEncoding);
+                    serverResponse.getHeaders().get(HttpHeader.CONTENT_ENCODING));
         } else {
             Optional<String> refused = reportScanner(clientRequest).failure();
             if (refused.isPresent()) {
@@ -193,6 +256,12 @@ public class FogwallServlet extends AsyncProxyServlet.Transparent {
         }
         log.info("Transparent proxy re-push {} forwarded successfully (upstream HTTP {})", pushId, status);
         pushStore.updateForwardStatus(pushId, PushStatus.FORWARDED, null);
+    }
+
+    /** A compressed response cannot be read as report-status. */
+    private static boolean reportStatusReadable(Response serverResponse) {
+        String contentEncoding = serverResponse.getHeaders().get(HttpHeader.CONTENT_ENCODING);
+        return contentEncoding == null || contentEncoding.equalsIgnoreCase("identity");
     }
 
     private void recordForwardError(String pushId, String errorMessage) {
@@ -220,14 +289,18 @@ public class FogwallServlet extends AsyncProxyServlet.Transparent {
             Response serverResponse,
             Throwable failure) {
         String pushId = (String) clientRequest.getAttribute(APPROVED_PUSH_ID_ATTR);
-        if (pushId != null) {
-            int upstreamStatus = serverResponse != null ? serverResponse.getStatus() : 0;
-            String errorMessage = upstreamStatus > 0
-                    ? "Upstream returned HTTP " + upstreamStatus
-                    : "Upstream error: " + (failure != null ? failure.getMessage() : "unknown");
-            try (Scope ignored = otelScope(clientRequest)) {
-                recordForwardError(pushId, errorMessage);
+        try {
+            if (pushId != null) {
+                int upstreamStatus = serverResponse != null ? serverResponse.getStatus() : 0;
+                String errorMessage = upstreamStatus > 0
+                        ? "Upstream returned HTTP " + upstreamStatus
+                        : "Upstream error: " + (failure != null ? failure.getMessage() : "unknown");
+                try (Scope ignored = otelScope(clientRequest)) {
+                    recordForwardError(pushId, errorMessage);
+                }
             }
+        } finally {
+            failForwardStage(clientRequest, failure);
         }
         super.onProxyResponseFailure(clientRequest, proxyResponse, serverResponse, failure);
     }

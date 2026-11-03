@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+import com.rbc.fogwall.git.Commit;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
 import com.rbc.fogwall.git.LocalRepositoryCache;
@@ -27,10 +28,13 @@ import java.nio.file.Path;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.List;
 import java.util.Set;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.errors.MissingObjectException;
 import org.eclipse.jgit.internal.storage.pack.PackWriter;
 import org.eclipse.jgit.lib.*;
+import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.transport.CredentialsProvider;
 import org.eclipse.jgit.transport.PacketLineOut;
@@ -689,5 +693,140 @@ class EnrichPushCommitsFilterTest {
     private static void assertSameGitDir(Repository expectedMirror, Repository actual, String message) {
         assertNotNull(actual, message);
         assertEquals(expectedMirror.getDirectory(), actual.getDirectory(), message);
+    }
+
+    // ---- a thin pack whose delta base the mirror has not fetched yet ----
+
+    @TempDir
+    Path thinSourceDir;
+
+    @TempDir
+    Path thinMirrorDir;
+
+    /** A source repository with an upstream commit and a pushed commit that edits one line of its large file. */
+    private record ThinPush(Repository source, RevCommit upstream, RevCommit pushed, byte[] thinPack) {}
+
+    private ThinPush thinPush() throws Exception {
+        Git git = Git.init().setDirectory(thinSourceDir.toFile()).call();
+        git.getRepository().getConfig().setBoolean("commit", null, "gpgsign", false);
+        git.getRepository().getConfig().save();
+        StringBuilder content = new StringBuilder();
+        for (int line = 0; line < 400; line++)
+            content.append("line ").append(line).append(" of a shared file\n");
+        writeString(thinSourceDir.resolve("big.txt"), content);
+        git.add().addFilepattern("big.txt").call();
+        RevCommit upstream = git.commit()
+                .setMessage("upstream")
+                .setAuthor("A", "a@example.com")
+                .call();
+        writeString(thinSourceDir.resolve("big.txt"), content + "one more line\n");
+        git.add().addFilepattern("big.txt").call();
+        RevCommit pushed = git.commit()
+                .setMessage("pushed")
+                .setAuthor("A", "a@example.com")
+                .call();
+
+        // What a client sends: only the pushed commit's objects, its blob a delta against upstream's blob.
+        ByteArrayOutputStream thin = new ByteArrayOutputStream();
+        try (PackWriter writer = new PackWriter(git.getRepository())) {
+            writer.setThin(true);
+            writer.setDeltaBaseAsOffset(false);
+            writer.preparePack(NullProgressMonitor.INSTANCE, Set.of(pushed.getId()), Set.of(upstream.getId()));
+            writer.writePack(NullProgressMonitor.INSTANCE, NullProgressMonitor.INSTANCE, thin);
+        }
+        return new ThinPush(git.getRepository(), upstream, pushed, thin.toByteArray());
+    }
+
+    /** Copies everything reachable from {@code upstream} into the mirror and points its main branch there. */
+    private static void fetchInto(Repository mirror, Repository source, RevCommit upstream) throws IOException {
+        ByteArrayOutputStream full = new ByteArrayOutputStream();
+        try (PackWriter writer = new PackWriter(source)) {
+            writer.preparePack(NullProgressMonitor.INSTANCE, Set.of(upstream.getId()), Set.of());
+            writer.writePack(NullProgressMonitor.INSTANCE, NullProgressMonitor.INSTANCE, full);
+        }
+        try (ObjectInserter inserter = mirror.newObjectInserter()) {
+            inserter.newPackParser(new ByteArrayInputStream(full.toByteArray())).parse(NullProgressMonitor.INSTANCE);
+            inserter.flush();
+        }
+        RefUpdate ref = mirror.updateRef("refs/heads/main");
+        ref.setNewObjectId(upstream.getId());
+        ref.forceUpdate();
+    }
+
+    /** The precondition both tests rely on: the pack cannot be unpacked without the upstream blob. */
+    private static void assertNeedsItsBase(byte[] thinPack, Repository empty) throws IOException {
+        try (ObjectInserter inserter = empty.newObjectInserter()) {
+            var parser = inserter.newPackParser(new ByteArrayInputStream(thinPack));
+            parser.setAllowThin(true);
+            assertThrows(MissingObjectException.class, () -> parser.parse(NullProgressMonitor.INSTANCE));
+        }
+    }
+
+    private GitRequestDetails pushOf(ThinPush push) {
+        GitRequestDetails details =
+                makeDetails(push.upstream().name(), push.pushed().name());
+        details.setBranch("refs/heads/main");
+        return details;
+    }
+
+    private byte[] receivePackBody(ThinPush push) throws IOException {
+        ByteArrayOutputStream body = new ByteArrayOutputStream();
+        PacketLineOut out = new PacketLineOut(body);
+        out.writeString(push.upstream().name() + " " + push.pushed().name() + " refs/heads/main\0 report-status");
+        out.end();
+        body.write(push.thinPack());
+        return body.toByteArray();
+    }
+
+    @Test
+    void thinPackAgainstAStaleMirror_refreshesOnce_andInspectsThePush() throws Exception {
+        ThinPush push = thinPush();
+        Repository mirror = Git.init()
+                .setBare(true)
+                .setDirectory(thinMirrorDir.toFile())
+                .call()
+                .getRepository();
+        assertNeedsItsBase(push.thinPack(), mirror);
+
+        LocalRepositoryCache cache = mock(LocalRepositoryCache.class);
+        when(cache.getOrClone(any(), any(), any(), any())).thenReturn(mirror);
+        // The previous push was just forwarded, so upstream has the base but the mirror is within its fetch cooldown.
+        when(cache.refreshNow(any(), any(), any(), any())).thenAnswer(inv -> {
+            fetchInto(mirror, push.source(), push.upstream());
+            return true;
+        });
+        GitRequestDetails details = pushOf(push);
+
+        new EnrichPushCommitsFilter(new GitHubProvider("/proxy"), cache)
+                .doHttpFilter(wrapRequest(receivePackBody(push), details), fakeResponse());
+
+        assertNotEquals(GitRequestDetails.GitResult.ERROR, details.getResult(), details.getReason());
+        assertEquals(
+                List.of(push.pushed().name()),
+                details.getPushedCommits().stream().map(Commit::getSha).toList());
+        verify(cache, times(1)).refreshNow(any(), any(), any(), any());
+    }
+
+    @Test
+    void thinPackWhoseBaseIsNotUpstream_stillFails_afterOneRefresh() throws Exception {
+        ThinPush push = thinPush();
+        Repository mirror = Git.init()
+                .setBare(true)
+                .setDirectory(thinMirrorDir.toFile())
+                .call()
+                .getRepository();
+        assertNeedsItsBase(push.thinPack(), mirror);
+
+        LocalRepositoryCache cache = mock(LocalRepositoryCache.class);
+        when(cache.getOrClone(any(), any(), any(), any())).thenReturn(mirror);
+        when(cache.refreshNow(any(), any(), any(), any())).thenReturn(true);
+        GitRequestDetails details = pushOf(push);
+
+        new EnrichPushCommitsFilter(new GitHubProvider("/proxy"), cache)
+                .doHttpFilter(wrapRequest(receivePackBody(push), details), fakeResponse());
+
+        assertEquals(GitRequestDetails.GitResult.ERROR, details.getResult());
+        assertTrue(details.getPushedCommits().isEmpty());
+        verify(cache, times(1)).refreshNow(any(), any(), any(), any());
     }
 }

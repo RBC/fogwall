@@ -2,6 +2,7 @@ package com.rbc.fogwall.db.jdbc;
 
 import com.rbc.fogwall.db.PackChunks;
 import com.rbc.fogwall.db.ParkedPushStore;
+import com.rbc.fogwall.db.model.ParkedBacklog;
 import com.rbc.fogwall.db.model.ParkedPush;
 import com.rbc.fogwall.db.model.ParkedRefUpdate;
 import java.io.IOException;
@@ -170,5 +171,13 @@ public class JdbcParkedPushStore implements ParkedPushStore {
                         .addValue("failedBefore", Timestamp.from(failedBefore))
                         .addValue("limit", limit),
                 String.class);
+    }
+
+    @Override
+    public ParkedBacklog backlog() {
+        return jdbc.queryForObject(
+                "SELECT COUNT(*) AS pushes, COALESCE(SUM(pack_bytes), 0) AS bytes FROM parked_pushes",
+                Map.of(),
+                (rs, rowNum) -> new ParkedBacklog(rs.getLong("pushes"), rs.getLong("bytes")));
     }
 }

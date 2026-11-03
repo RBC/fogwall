@@ -4,11 +4,17 @@ import com.rbc.fogwall.approval.SelfApprovalPolicy;
 import com.rbc.fogwall.db.ParkedPushStore;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.model.Attestation;
+import com.rbc.fogwall.db.model.ForwardablePush;
+import com.rbc.fogwall.db.model.ParkedBacklog;
 import com.rbc.fogwall.db.model.ParkedPush;
 import com.rbc.fogwall.db.model.ParkedRefUpdate;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
+import com.rbc.fogwall.observability.FogwallTelemetry;
+import com.rbc.fogwall.observability.StageOutcome;
+import com.rbc.fogwall.observability.StageTimer;
 import com.rbc.fogwall.service.ScmOAuthTokenService;
+import io.opentelemetry.context.Scope;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetAddress;
@@ -18,6 +24,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -77,6 +84,7 @@ public class DeferredForwarder implements AutoCloseable {
     private final Duration failedRetention;
     private final int connectTimeoutSeconds;
     private final Clock clock;
+    private final FogwallTelemetry telemetry;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
     /**
@@ -84,6 +92,7 @@ public class DeferredForwarder implements AutoCloseable {
      * @param claimTtl how long a claim holds if this instance dies mid-forward; longer than any forward takes
      * @param failedRetention how long a push whose forward failed keeps its pack for a retry
      * @param connectTimeoutSeconds upstream transport timeout; 0 for none
+     * @param telemetry times each forward, and receives the backlog and restarts each sweep sees
      */
     public DeferredForwarder(
             PushStore pushStore,
@@ -95,7 +104,8 @@ public class DeferredForwarder implements AutoCloseable {
             Duration claimTtl,
             Duration failedRetention,
             int connectTimeoutSeconds,
-            Clock clock) {
+            Clock clock,
+            FogwallTelemetry telemetry) {
         this.pushStore = pushStore;
         this.parkedPushStore = parkedPushStore;
         this.cache = cache;
@@ -106,6 +116,7 @@ public class DeferredForwarder implements AutoCloseable {
         this.failedRetention = failedRetention;
         this.connectTimeoutSeconds = connectTimeoutSeconds;
         this.clock = clock;
+        this.telemetry = Objects.requireNonNull(telemetry, "telemetry is required; pass FogwallTelemetry.disabled()");
     }
 
     /**
@@ -140,15 +151,28 @@ public class DeferredForwarder implements AutoCloseable {
      * Starts every approved push nobody is forwarding, and deletes the packs nothing can forward any more. Safe to run
      * on every instance at once: the claim decides who forwards, and deleting a pack twice is harmless.
      *
+     * <p>With telemetry enabled, each sweep also reports the parked-push backlog, and counts the forwards it restarts
+     * because the instance forwarding them stopped.
+     *
      * @return how many forwards this call started
      */
     public int sweep() {
         Instant now = clock.instant();
         int started = 0;
-        for (String pushId : pushStore.findForwardable(now, SWEEP_LIMIT)) {
-            if (start(pushId, false)) {
+        for (ForwardablePush forwardable : pushStore.findForwardable(now, SWEEP_LIMIT)) {
+            if (start(forwardable.pushId(), false)) {
                 started++;
+                if (forwardable.claimLapsed()) {
+                    log.info(
+                            "Restarted the forward of push {}: the instance forwarding it stopped",
+                            forwardable.pushId());
+                    telemetry.recordForwardRestart();
+                }
             }
+        }
+        if (telemetry.isEnabled()) {
+            ParkedBacklog backlog = parkedPushStore.backlog();
+            telemetry.observeParkedBacklog(backlog.pushes(), backlog.bytes());
         }
         for (String pushId :
                 parkedPushStore.findReclaimable(now.minus(failedRetention), now.minus(ORPHAN_GRACE), SWEEP_LIMIT)) {
@@ -169,13 +193,23 @@ public class DeferredForwarder implements AutoCloseable {
 
     /** Runs one claimed forward to completion and records its outcome. Package-visible so tests can run it inline. */
     void forwardClaimed(String pushId) {
+        StageTimer stage =
+                telemetry.startDetachedStage(FogwallTelemetry.FORWARD_STAGE, FogwallTelemetry.MODE_SERVER, pushId);
+        try (Scope ignored = stage.makeCurrent()) {
+            forwardClaimed(pushId, stage);
+        }
+    }
+
+    private void forwardClaimed(String pushId, StageTimer stage) {
         ForwardOutcome outcome;
         try {
-            outcome = forward(pushId);
+            outcome = forward(pushId, stage);
         } catch (Exception e) {
             log.error("Deferred forward of push {} failed", pushId, e);
+            stage.recordException(e);
             outcome = new Failed("Forwarding failed: " + e.getMessage());
         }
+        stage.end(outcome instanceof Forwarded ? StageOutcome.PASS : StageOutcome.ERROR);
         boolean recorded =
                 switch (outcome) {
                     case Forwarded() -> pushStore.completeForward(pushId, instanceId, PushStatus.FORWARDED, null);
@@ -202,9 +236,10 @@ public class DeferredForwarder implements AutoCloseable {
 
     private record Failed(String reason) implements ForwardOutcome {}
 
-    private ForwardOutcome forward(String pushId) throws Exception {
+    private ForwardOutcome forward(String pushId, StageTimer stage) throws Exception {
         Optional<PushRecord> record = pushStore.findById(pushId);
         Optional<ParkedPush> parked = parkedPushStore.find(pushId);
+        record.ifPresent(r -> stage.setProvider(r.getProvider()));
         if (record.isEmpty() || parked.isEmpty()) {
             return new Failed("The stored push is no longer available; push again");
         }

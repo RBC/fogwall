@@ -14,6 +14,7 @@ import com.rbc.fogwall.config.SecretScanConfig;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.memory.InMemoryUrlRuleRegistry;
 import com.rbc.fogwall.git.LocalRepositoryCache;
+import com.rbc.fogwall.observability.FogwallTelemetry;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.GenericProxyProvider;
 import com.rbc.fogwall.service.GitCredentialService;
@@ -82,7 +83,8 @@ class ServerPathAliasTest {
                 new InMemoryUrlRuleRegistry(),
                 null, // fetchStore
                 credentialFilter(provider),
-                Optional.empty());
+                Optional.empty(),
+                FogwallTelemetry.disabled());
 
         String servletPath = provider.servletPath();
         Set<String> pathSpecs = registeredPathSpecs(context);
@@ -125,7 +127,8 @@ class ServerPathAliasTest {
                 new InMemoryUrlRuleRegistry(),
                 null,
                 credentialFilter(provider),
-                Optional.empty());
+                Optional.empty(),
+                FogwallTelemetry.disabled());
 
         List<String> gitHolderNames = Arrays.stream(context.getServletHandler().getServlets())
                 .map(ServletHolder::getName)

@@ -1,5 +1,6 @@
 package com.rbc.fogwall.db;
 
+import com.rbc.fogwall.db.model.ParkedBacklog;
 import com.rbc.fogwall.db.model.ParkedPush;
 import com.rbc.fogwall.db.model.ParkedRefUpdate;
 import java.io.IOException;
@@ -58,4 +59,7 @@ public interface ParkedPushStore {
      * </ul>
      */
     List<String> findReclaimable(Instant failedBefore, Instant orphanedBefore, int limit);
+
+    /** Counts the stored packs and their total size, whatever state their push is in. */
+    ParkedBacklog backlog();
 }

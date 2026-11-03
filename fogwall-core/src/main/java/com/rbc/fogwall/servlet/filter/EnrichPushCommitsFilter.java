@@ -157,7 +157,7 @@ public final class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<Fo
             // Step 2: Unpack the inflight push's pack data into the local clone.
             // The pushed objects don't exist upstream yet - this is the equivalent of
             // fogwall's writePack processor that pipes the request body into git receive-pack.
-            unpackPushData(request, repository);
+            unpackRefreshingIfStale(request, repository, remoteUrl, credentials, principal);
 
             if (requestDetails.isTagPush()) {
                 // Peel the tag ref to its target commit so CheckHiddenCommitsFilter can detect
@@ -283,6 +283,31 @@ public final class EnrichPushCommitsFilter extends ProviderAwareFogwallFilter<Fo
         requestDetails.setReason(reason);
         String title = sym(NO_ENTRY) + "  Push Blocked - Commit Inspection Failed";
         sendGitError(request, response, format(title, reason, RED, null));
+    }
+
+    /**
+     * Unpacks the push's pack data, refreshing the mirror once if a delta base the pack needs is not there.
+     *
+     * <p>A client sends a thin pack whose deltas are based on objects upstream already has, and the mirror can be
+     * behind upstream: the fetch cooldown may not have expired since the previous push was forwarded. Refreshing brings
+     * the base in, so the retry succeeds; a pack whose base genuinely is not upstream still fails, one refresh later.
+     */
+    private void unpackRefreshingIfStale(
+            HttpServletRequest request,
+            Repository repository,
+            String remoteUrl,
+            CredentialsProvider credentials,
+            String principal)
+            throws Exception {
+        try {
+            unpackPushData(request, repository);
+        } catch (MissingObjectException e) {
+            log.info(
+                    "Push pack is missing {}; refreshing the mirror before failing",
+                    e.getObjectId() != null ? e.getObjectId().name() : "a delta base");
+            repositoryCache.refreshNow(remoteUrl, credentials, null, principal);
+            unpackPushData(request, repository);
+        }
     }
 
     /**

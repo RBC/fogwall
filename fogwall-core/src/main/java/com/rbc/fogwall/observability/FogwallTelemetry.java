@@ -8,8 +8,11 @@ import io.opentelemetry.api.metrics.LongCounter;
 import io.opentelemetry.api.metrics.LongUpDownCounter;
 import io.opentelemetry.api.metrics.Meter;
 import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanBuilder;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Context;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Central holder for fogwall's OpenTelemetry instruments. Both the request-level {@code ObservabilityFilter} and the
@@ -62,6 +65,40 @@ public final class FogwallTelemetry {
     /** Why a fetch was refused, from a fixed set; {@code none} when it was allowed. Low cardinality. */
     public static final AttributeKey<String> FETCH_REFUSAL = AttributeKey.stringKey("fogwall.fetch.refusal");
 
+    /**
+     * Pipeline stage: a {@code PushStepKind} key, shared by a server-mode hook and its transparent-proxy filter, or one
+     * of the lifecycle stages {@link #APPROVAL_STAGE} and {@link #FORWARD_STAGE}. Low cardinality.
+     */
+    public static final AttributeKey<String> STAGE = AttributeKey.stringKey("fogwall.stage");
+
+    /** How a stage ended: {@code pass}, {@code block} or {@code error} (see {@link StageOutcome}). Low cardinality. */
+    public static final AttributeKey<String> STAGE_OUTCOME = AttributeKey.stringKey("fogwall.stage.outcome");
+
+    /** Push record id — SPAN attribute only; it joins a parked push's forward to the request that received it. */
+    public static final AttributeKey<String> PUSH_ID = AttributeKey.stringKey("fogwall.push.id");
+
+    /** {@link #MODE} value for server mode over HTTP. */
+    public static final String MODE_SERVER = "server";
+
+    /** {@link #MODE} value for the transparent proxy. */
+    public static final String MODE_PROXY = "proxy";
+
+    /** {@link #MODE} value for server mode over SSH. */
+    public static final String MODE_SSH = "ssh";
+
+    /** Stage name for the wait on a push's review, between validation and forwarding. */
+    public static final String APPROVAL_STAGE = "approval";
+
+    /** Stage name for the push to the upstream provider. */
+    public static final String FORWARD_STAGE = "forward";
+
+    /**
+     * Request attribute holding this {@link FogwallTelemetry} on a transparent-proxy request, set by
+     * {@code ObservabilityFilter} only when telemetry is enabled. The filter chain times each filter as a stage when it
+     * is present; when it is absent nothing is timed.
+     */
+    public static final String REQUEST_ATTR = "fogwall.telemetry";
+
     private final boolean enabled;
     private final OpenTelemetry openTelemetry;
     private final Tracer tracer;
@@ -72,6 +109,12 @@ public final class FogwallTelemetry {
     private final DoubleHistogram scmApiDuration;
     private final LongCounter scmApiActions;
     private final LongCounter fetchDecisions;
+    private final DoubleHistogram stageDuration;
+    private final LongCounter stageOutcomes;
+    private final LongCounter forwardRestarts;
+    private final DoubleHistogram approvalToForward;
+    private final AtomicLong parkedPushes = new AtomicLong(-1);
+    private final AtomicLong parkedBytes = new AtomicLong(-1);
 
     private FogwallTelemetry(OpenTelemetry openTelemetry, boolean enabled) {
         this.enabled = enabled;
@@ -106,6 +149,39 @@ public final class FogwallTelemetry {
                 .setUnit("{fetch}")
                 .setDescription("Clones and fetches by decision and refusal reason")
                 .build();
+        this.stageDuration = meter.histogramBuilder("fogwall.stage.duration")
+                .setUnit("s")
+                .setDescription("Wall-clock duration of one pipeline stage of a push")
+                .build();
+        this.stageOutcomes = meter.counterBuilder("fogwall.stage.outcomes")
+                .setUnit("{stage}")
+                .setDescription("Pipeline stages run, by stage and outcome")
+                .build();
+        this.forwardRestarts = meter.counterBuilder("fogwall.deferred.forward.restarts")
+                .setUnit("{push}")
+                .setDescription("Parked-push forwards restarted because the instance forwarding them stopped")
+                .build();
+        this.approvalToForward = meter.histogramBuilder("fogwall.deferred.forward.delay")
+                .setUnit("s")
+                .setDescription("Time from a parked push's approval to its forward completing")
+                .build();
+        // Observed values are -1 until the first deferred-forwarding sweep, and not reported until then.
+        meter.gaugeBuilder("fogwall.deferred.parked")
+                .ofLongs()
+                .setUnit("{push}")
+                .setDescription("Parked pushes whose pack is stored, as of the last sweep")
+                .buildWithCallback(m -> {
+                    long value = parkedPushes.get();
+                    if (value >= 0) m.record(value);
+                });
+        meter.gaugeBuilder("fogwall.deferred.parked.size")
+                .ofLongs()
+                .setUnit("By")
+                .setDescription("Bytes held by stored packs of parked pushes, as of the last sweep")
+                .buildWithCallback(m -> {
+                    long value = parkedBytes.get();
+                    if (value >= 0) m.record(value);
+                });
     }
 
     /** Build instruments backed by a live SDK. */
@@ -188,5 +264,92 @@ public final class FogwallTelemetry {
     public void recordFetchDecision(String provider, String mode, String result, String refusal) {
         fetchDecisions.add(
                 1, Attributes.of(PROVIDER, provider, MODE, mode, FETCH_RESULT, result, FETCH_REFUSAL, refusal));
+    }
+
+    /**
+     * Starts a stage whose span is a child of the current context: a stage running on the request thread, under the
+     * per-request span {@code ObservabilityFilter} made current.
+     */
+    public StageTimer startStage(String stage, String mode, String provider) {
+        if (!enabled) return StageTimer.NOOP;
+        return live(
+                stage, mode, provider, stageSpan(stage, mode, SpanKind.INTERNAL).startSpan());
+    }
+
+    /**
+     * Starts a stage whose span is a child of {@code parent}, for a stage that ends on another thread than the request
+     * thread that started it.
+     */
+    public StageTimer startStage(String stage, String mode, String provider, Context parent, SpanKind kind) {
+        if (!enabled) return StageTimer.NOOP;
+        return live(
+                stage,
+                mode,
+                provider,
+                stageSpan(stage, mode, kind).setParent(parent).startSpan());
+    }
+
+    /**
+     * Starts a stage that records metrics only, for a transport with no per-request span to parent it to (SSH): a span
+     * there would start a new trace per stage.
+     */
+    public StageTimer startUntracedStage(String stage, String mode, String provider) {
+        if (!enabled) return StageTimer.NOOP;
+        return live(stage, mode, provider, Span.getInvalid());
+    }
+
+    /**
+     * Starts a stage that runs after the request that received the push has ended, such as the forward of a parked
+     * push. Its span starts a new trace and carries the push id, which joins it to the receiving request's trace.
+     */
+    public StageTimer startDetachedStage(String stage, String mode, String pushId) {
+        if (!enabled) return StageTimer.NOOP;
+        Span span = stageSpan(stage, mode, SpanKind.INTERNAL)
+                .setNoParent()
+                .setAttribute(PUSH_ID, pushId)
+                .startSpan();
+        return live(stage, mode, null, span);
+    }
+
+    private SpanBuilder stageSpan(String stage, String mode, SpanKind kind) {
+        return tracer.spanBuilder(stage)
+                .setSpanKind(kind)
+                .setAttribute(STAGE, stage)
+                .setAttribute(MODE, mode);
+    }
+
+    private StageTimer live(String stage, String mode, String provider, Span span) {
+        return new StageTimer.Live(this, stage, mode, provider, span);
+    }
+
+    /** Records one completed stage; called by {@link StageTimer} when the stage ends. */
+    void recordStage(double seconds, String stage, String mode, String provider, StageOutcome outcome) {
+        stageDuration.record(seconds, Attributes.of(STAGE, stage, MODE, mode, PROVIDER, provider));
+        stageOutcomes.add(
+                1, Attributes.of(STAGE, stage, MODE, mode, PROVIDER, provider, STAGE_OUTCOME, outcome.label()));
+    }
+
+    /**
+     * Records the parked-push backlog seen by a deferred-forwarding sweep. Every instance sweeps, so every instance
+     * reports the same shared backlog; aggregate it across instances with max, not sum.
+     */
+    public void observeParkedBacklog(long pushes, long bytes) {
+        parkedPushes.set(pushes);
+        parkedBytes.set(bytes);
+    }
+
+    /** Records a parked-push forward the sweep restarted because the claim of the instance forwarding it lapsed. */
+    public void recordForwardRestart() {
+        forwardRestarts.add(1);
+    }
+
+    /** Records the time from a parked push's approval to its forward completing. */
+    public void recordApprovalToForward(double seconds, String provider) {
+        approvalToForward.record(seconds, Attributes.of(PROVIDER, provider));
+    }
+
+    /** The metric label for a provider name: {@code unknown} when there is none. */
+    static String providerLabel(String provider) {
+        return provider == null || provider.isBlank() ? "unknown" : provider;
     }
 }

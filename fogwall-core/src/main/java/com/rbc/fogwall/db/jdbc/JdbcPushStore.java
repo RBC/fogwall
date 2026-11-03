@@ -270,10 +270,10 @@ public class JdbcPushStore implements PushStore {
     }
 
     @Override
-    public List<String> findForwardable(Instant now, int limit) {
-        return jdbc.queryForList(
+    public List<ForwardablePush> findForwardable(Instant now, int limit) {
+        return jdbc.query(
                 """
-                SELECT id FROM push_records
+                SELECT id, forward_claimed_by FROM push_records
                 WHERE status = 'APPROVED' AND deferred = :deferred
                     AND (forward_claimed_by IS NULL OR forward_claim_expires_at < :now)
                 ORDER BY timestamp LIMIT :limit
@@ -282,7 +282,7 @@ public class JdbcPushStore implements PushStore {
                         .addValue("deferred", true)
                         .addValue("now", Timestamp.from(now))
                         .addValue("limit", limit),
-                String.class);
+                (rs, rowNum) -> new ForwardablePush(rs.getString("id"), rs.getString("forward_claimed_by") != null));
     }
 
     @Override

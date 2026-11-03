@@ -92,6 +92,11 @@ public class ObservabilityFilter implements Filter {
         // this scope closes) can re-activate it and keep their log lines correlated to the trace.
         Context spanContext = Context.current().with(span);
         httpRequest.setAttribute(FogwallServlet.OTEL_CONTEXT_ATTR, spanContext);
+        // The transparent proxy's filters time themselves as stages when this is present. Server mode times its JGit
+        // hooks instead, so the few filters ahead of its GitServlet are not timed and no stage is reported twice.
+        if (FogwallTelemetry.MODE_PROXY.equals(mode)) {
+            httpRequest.setAttribute(FogwallTelemetry.REQUEST_ATTR, telemetry);
+        }
 
         long startNanos = System.nanoTime();
         telemetry.recordActive(1, mode);

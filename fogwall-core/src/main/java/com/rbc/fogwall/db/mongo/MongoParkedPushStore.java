@@ -3,6 +3,7 @@ package com.rbc.fogwall.db.mongo;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.model.Accumulators;
 import com.mongodb.client.model.Aggregates;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.IndexOptions;
@@ -12,6 +13,7 @@ import com.mongodb.client.model.Sorts;
 import com.mongodb.client.model.Updates;
 import com.rbc.fogwall.db.PackChunks;
 import com.rbc.fogwall.db.ParkedPushStore;
+import com.rbc.fogwall.db.model.ParkedBacklog;
 import com.rbc.fogwall.db.model.ParkedPush;
 import com.rbc.fogwall.db.model.ParkedRefUpdate;
 import com.rbc.fogwall.db.model.PushStatus;
@@ -150,6 +152,21 @@ public class MongoParkedPushStore implements ParkedPushStore {
             }
         }
         return ids;
+    }
+
+    @Override
+    public ParkedBacklog backlog() {
+        // Only completely stored packs count, as in find(): the push document is written before its chunks.
+        Document totals = pushes().aggregate(List.of(
+                        Aggregates.match(Filters.exists("packSha256")),
+                        Aggregates.group(null, Accumulators.sum("pushes", 1), Accumulators.sum("bytes", "$packBytes"))))
+                .first();
+        if (totals == null) {
+            return new ParkedBacklog(0, 0);
+        }
+        return new ParkedBacklog(
+                totals.get("pushes", Number.class).longValue(),
+                totals.get("bytes", Number.class).longValue());
     }
 
     private static boolean reclaimable(Document doc, Instant failedBefore, Instant orphanedBefore) {

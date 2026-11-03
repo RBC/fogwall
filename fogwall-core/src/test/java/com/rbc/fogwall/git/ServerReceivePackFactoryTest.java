@@ -15,12 +15,20 @@ import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStep;
+import com.rbc.fogwall.db.model.StepStatus;
+import com.rbc.fogwall.observability.FogwallTelemetry;
+import com.rbc.fogwall.observability.InMemoryTelemetry;
+import com.rbc.fogwall.observability.StageOutcome;
+import com.rbc.fogwall.observability.StageTimer;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.GitHubProvider;
 import com.rbc.fogwall.service.PushIdentityResolver;
 import com.rbc.fogwall.service.ScmOAuthTokenService;
 import com.rbc.fogwall.servlet.filter.FogwallCredentialFilter;
 import com.rbc.fogwall.user.UserEntry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.context.Scope;
+import io.opentelemetry.sdk.trace.data.SpanData;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -257,5 +265,182 @@ class ServerReceivePackFactoryTest {
         contentPatterns.set(ContentPatternConfig.defaultConfig());
         Set<String> offAgain = recordedStepNames(factory, pushStore, db);
         assertTrue(offAgain.stream().noneMatch(SWITCHABLE_STEPS::contains), "got " + offAgain);
+    }
+
+    // ---- per-stage telemetry ----
+
+    /**
+     * Runs one credential-authenticated push's pre-receive chain under a request span, as ObservabilityFilter would.
+     */
+    private SpanData runUnderRequestSpan(
+            InMemoryTelemetry otel, boolean allowedToPush, Repository db, PushStore pushStore) throws Exception {
+        RepoPermissionService permissions = mock(RepoPermissionService.class);
+        when(permissions.isAllowedToPush("alice", "github", "/owner/repo")).thenReturn(allowedToPush);
+        var factory = new ServerReceivePackFactory(
+                provider,
+                CommitConfig::defaultConfig,
+                null,
+                null,
+                null,
+                null,
+                null,
+                permissions,
+                mock(PushIdentityResolver.class),
+                pushStore,
+                mock(ApprovalGateway.class),
+                policy,
+                null,
+                Duration.ofSeconds(10),
+                mock(UrlRuleRegistry.class));
+        factory.setTelemetry(otel.telemetry());
+        UserEntry alice = UserEntry.builder()
+                .username("alice")
+                .emails(List.of())
+                .scmIdentities(List.of())
+                .build();
+        HttpServletRequest req = mock(HttpServletRequest.class);
+        when(req.getPathInfo()).thenReturn("/owner/repo.git/git-receive-pack");
+        when(req.getAttribute(FogwallCredentialFilter.AUTHENTICATION_ATTRIBUTE))
+                .thenReturn(new CredentialAuthentication(alice, "abcdefghijklmnop", "laptop"));
+        when(req.getAttribute(ServerRepositoryResolver.CREDENTIALS_ATTRIBUTE))
+                .thenReturn(new ScmOAuthCredentialsProvider(mock(ScmOAuthTokenService.class), "alice", "github"));
+        when(req.getAttribute(ServerRepositoryResolver.UPSTREAM_URL_ATTRIBUTE))
+                .thenReturn("https://github.com/owner/repo.git");
+
+        Span request = otel.telemetry().tracer().spanBuilder("git.push server").startSpan();
+        try (Scope ignored = request.makeCurrent()) {
+            ReceivePack rp = factory.create(req, db);
+            rp.getPreReceiveHook().onPreReceive(rp, List.of());
+        } finally {
+            request.end();
+        }
+        return otel.span("git.push server");
+    }
+
+    @Test
+    void eachHook_isAStageSpanUnderTheRequestSpan() throws Exception {
+        Repository db =
+                Git.init().setBare(true).setDirectory(tempDir.toFile()).call().getRepository();
+        var otel = new InMemoryTelemetry();
+
+        SpanData request = runUnderRequestSpan(otel, true, db, mock(PushStore.class));
+
+        SpanData permission = otel.span(PushStepKind.PUSH_PERMISSION.key());
+        assertEquals(request.getSpanId(), permission.getParentSpanId());
+        assertEquals("pass", permission.getAttributes().get(FogwallTelemetry.STAGE_OUTCOME));
+        assertEquals(
+                1,
+                otel.stageCount(
+                        PushStepKind.PUSH_PERMISSION.key(), FogwallTelemetry.MODE_SERVER, "github", StageOutcome.PASS));
+        assertTrue(otel.spanNames().contains(FogwallTelemetry.APPROVAL_STAGE), "got " + otel.spanNames());
+        assertTrue(
+                otel.spans().stream()
+                        .filter(s -> !s.getName().equals("git.push server"))
+                        .allMatch(s -> s.getParentSpanId().equals(request.getSpanId())),
+                "every stage is a direct child of the request span");
+    }
+
+    @Test
+    void hookThatRefusesThePush_isABlockedStage() throws Exception {
+        Repository db =
+                Git.init().setBare(true).setDirectory(tempDir.toFile()).call().getRepository();
+        var otel = new InMemoryTelemetry();
+
+        runUnderRequestSpan(otel, false, db, mock(PushStore.class));
+
+        assertEquals(
+                "block",
+                otel.span(PushStepKind.PUSH_PERMISSION.key()).getAttributes().get(FogwallTelemetry.STAGE_OUTCOME));
+        assertEquals(
+                1,
+                otel.stageCount(
+                        PushStepKind.PUSH_PERMISSION.key(),
+                        FogwallTelemetry.MODE_SERVER,
+                        "github",
+                        StageOutcome.BLOCK));
+    }
+
+    @Test
+    void sshStages_recordMetricsWithoutSpans() {
+        var otel = new InMemoryTelemetry();
+        UserEntry alice = UserEntry.builder().username("alice").build();
+        var stages = ServerReceivePackFactory.HookStages.of(
+                otel.telemetry(), PushTransport.ssh(alice, "SHA256:x", null, null), "github");
+
+        stages.start(PushStepKind.URL_RULE.key()).end(StageOutcome.PASS);
+
+        assertTrue(otel.spans().isEmpty());
+        assertEquals(
+                1,
+                otel.stageCount(PushStepKind.URL_RULE.key(), FogwallTelemetry.MODE_SSH, "github", StageOutcome.PASS));
+    }
+
+    private long timeForward(InMemoryTelemetry otel, StepStatus recorded, StageOutcome expected) {
+        var pushContext = new PushContext();
+        ForwardingPostReceiveHook forwarding = mock(ForwardingPostReceiveHook.class);
+        doAnswer(inv -> {
+                    pushContext.addStep(PushStep.builder()
+                            .stepName("forward")
+                            .status(recorded)
+                            .build());
+                    return null;
+                })
+                .when(forwarding)
+                .onPostReceive(any(), any());
+        var stages = ServerReceivePackFactory.HookStages.of(otel.telemetry(), PushTransport.http(), "github");
+
+        ServerReceivePackFactory.timedForward(forwarding, stages, pushContext).onPostReceive(null, List.of());
+
+        return otel.stageCount(FogwallTelemetry.FORWARD_STAGE, FogwallTelemetry.MODE_SERVER, "github", expected);
+    }
+
+    @Test
+    void forward_isAPassStage_whenItSucceeds() {
+        assertEquals(1, timeForward(new InMemoryTelemetry(), StepStatus.PASS, StageOutcome.PASS));
+    }
+
+    @Test
+    void forward_isAnErrorStage_whenTheForwardingHookRecordsAFailure() {
+        assertEquals(1, timeForward(new InMemoryTelemetry(), StepStatus.FAIL, StageOutcome.ERROR));
+    }
+
+    @Test
+    void forward_isNotWrapped_whenTelemetryIsOff() {
+        ForwardingPostReceiveHook forwarding = mock(ForwardingPostReceiveHook.class);
+        var stages =
+                ServerReceivePackFactory.HookStages.of(FogwallTelemetry.disabled(), PushTransport.http(), "github");
+
+        assertSame(forwarding, ServerReceivePackFactory.timedForward(forwarding, stages, new PushContext()));
+    }
+
+    @Test
+    void hookOutcome_tellsAnErrorFromARefusal() {
+        var context = new ValidationContext();
+        context.addIssue(PushStepKind.URL_RULE, "earlier", "an issue from a previous hook");
+        int before = context.getIssues().size();
+
+        assertEquals(StageOutcome.PASS, ServerReceivePackFactory.hookOutcome(context, before, false));
+        context.addIssue(PushStepKind.SECRET_SCAN, "secret found", "detail");
+        assertEquals(StageOutcome.BLOCK, ServerReceivePackFactory.hookOutcome(context, before, true));
+        context.addError(PushStepKind.SECRET_SCAN, "scanner failed", "detail");
+        assertEquals(StageOutcome.ERROR, ServerReceivePackFactory.hookOutcome(context, before, true));
+    }
+
+    @Test
+    void hookOutcome_ignoresErrorsFromEarlierHooks() {
+        var context = new ValidationContext();
+        context.addError(PushStepKind.DIFF_SCAN, "earlier error", "detail");
+        int before = context.getIssues().size();
+        context.addIssue(PushStepKind.SECRET_SCAN, "secret found", "detail");
+
+        assertEquals(StageOutcome.BLOCK, ServerReceivePackFactory.hookOutcome(context, before, true));
+    }
+
+    @Test
+    void lifecycleHooksOtherThanApproval_areNotStages() {
+        var stages = ServerReceivePackFactory.HookStages.of(
+                new InMemoryTelemetry().telemetry(), PushTransport.http(), "github");
+
+        assertSame(StageTimer.NOOP, stages.start(new QuarantinePromotionHook(null)));
     }
 }

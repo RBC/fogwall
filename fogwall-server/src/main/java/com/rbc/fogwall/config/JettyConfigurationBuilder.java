@@ -255,10 +255,13 @@ public class JettyConfigurationBuilder {
         return config.getReload();
     }
 
-    /** Returns the service URL for dashboard links, defaulting to {@code http://localhost:<port>/dashboard}. */
+    /**
+     * Returns the origin fogwall is reachable at, defaulting to {@code http://localhost:<port>}. It is a bare origin:
+     * every link built from it appends its own path ({@code /dashboard/push/<id>}, {@code /api/...}).
+     */
     public String getServiceUrl() {
         String url = config.getServer().getServiceUrl();
-        return (url != null && !url.isBlank()) ? url : "http://localhost:" + getServerPort() + "/dashboard";
+        return (url != null && !url.isBlank()) ? url : "http://localhost:" + getServerPort();
     }
 
     /** Creates the list of enabled providers from configuration. Result is cached. */
@@ -667,7 +670,8 @@ public class JettyConfigurationBuilder {
                 DeferredForwarder.DEFAULT_CLAIM_TTL,
                 Duration.ofDays(getPendingPushExpiryDays()),
                 getUpstreamConnectTimeoutSeconds(),
-                Clock.systemUTC());
+                Clock.systemUTC(),
+                telemetry);
         return new FogwallContext(
                 ps,
                 fs,

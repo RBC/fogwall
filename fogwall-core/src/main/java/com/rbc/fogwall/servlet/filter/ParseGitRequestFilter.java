@@ -12,6 +12,9 @@ import com.rbc.fogwall.git.HttpOperation;
 import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.git.PushStepKind;
 import com.rbc.fogwall.git.RepoPath;
+import com.rbc.fogwall.observability.FogwallTelemetry;
+import com.rbc.fogwall.observability.StageOutcome;
+import com.rbc.fogwall.observability.StageTimer;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.servlet.PushTooLargeException;
 import com.rbc.fogwall.servlet.RequestBodyWrapper;
@@ -25,6 +28,7 @@ import java.io.IOException;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
+import org.eclipse.jgit.http.server.GitSmartHttpTools;
 import org.eclipse.jgit.transport.PacketLineIn;
 
 /**
@@ -57,27 +61,36 @@ public final class ParseGitRequestFilter extends ProviderAwareFogwallFilter<Fogw
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
             throws IOException, ServletException {
         HttpServletRequest httpRequest = (HttpServletRequest) request;
+        StageTimer stage = startStage(httpRequest);
 
         // Cheap pre-check: reject a declared over-size body without reading it at all. Clients using chunked
         // encoding declare no length, so this is an optimisation and the wrapper's counting read is the
         // actual bound.
         long declared = httpRequest.getContentLengthLong();
         if (maxPushBytes > 0 && declared > maxPushBytes) {
+            stage.end(StageOutcome.BLOCK);
             sendTooLarge(httpRequest, (HttpServletResponse) response, maxPushBytes, declared);
             return;
         }
 
-        // Create the wrapper to capture the body
+        // Create the wrapper to capture the body, then parse the git request details
         RequestBodyWrapper wrapper;
+        GitRequestDetails requestDetails;
         try {
             wrapper = new RequestBodyWrapper(httpRequest, maxPushBytes);
+            requestDetails = parse(wrapper);
         } catch (PushTooLargeException e) {
+            stage.end(StageOutcome.BLOCK);
             sendTooLarge(httpRequest, (HttpServletResponse) response, e.getLimitBytes(), -1);
             return;
+        } catch (IOException | RuntimeException e) {
+            stage.fail(e);
+            throw e;
         }
-
-        // Parse the git request details
-        GitRequestDetails requestDetails = parse(wrapper);
+        stage.end(
+                requestDetails.getResult() == GitRequestDetails.GitResult.REJECTED
+                        ? StageOutcome.BLOCK
+                        : StageOutcome.PASS);
 
         // Add the details to the request attributes
         wrapper.setAttribute(GIT_REQUEST_ATTR, requestDetails);
@@ -106,6 +119,19 @@ public final class ParseGitRequestFilter extends ProviderAwareFogwallFilter<Fogw
     @Override
     public Optional<PushStepKind> stepKind() {
         return Optional.of(PushStepKind.PARSE_REQUEST);
+    }
+
+    /**
+     * This filter replaces the shared {@link FogwallFilter#doFilter} template, so it times itself: buffering the body
+     * and parsing it are one stage, when the request carries telemetry and is a push.
+     */
+    private StageTimer startStage(HttpServletRequest request) {
+        if (request.getAttribute(FogwallTelemetry.REQUEST_ATTR) instanceof FogwallTelemetry telemetry
+                && GitSmartHttpTools.isReceivePack(request)) {
+            return telemetry.startStage(
+                    PushStepKind.PARSE_REQUEST.key(), FogwallTelemetry.MODE_PROXY, provider.getName());
+        }
+        return StageTimer.NOOP;
     }
 
     @Override

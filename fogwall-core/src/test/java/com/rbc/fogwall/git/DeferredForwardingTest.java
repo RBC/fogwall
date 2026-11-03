@@ -20,12 +20,17 @@ import com.rbc.fogwall.db.model.ParkedRefUpdate;
 import com.rbc.fogwall.db.model.PushQuery;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
+import com.rbc.fogwall.observability.FogwallTelemetry;
+import com.rbc.fogwall.observability.InMemoryTelemetry;
+import com.rbc.fogwall.observability.StageOutcome;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.GitHubProvider;
 import com.rbc.fogwall.service.PushIdentityResolver;
 import com.rbc.fogwall.service.ScmOAuthTokenService;
 import com.rbc.fogwall.servlet.filter.FogwallCredentialFilter;
 import com.rbc.fogwall.user.UserEntry;
+import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.sdk.trace.data.SpanData;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -77,6 +82,7 @@ class DeferredForwardingTest {
     private final ApprovalGateway approvalGateway = mock(ApprovalGateway.class);
     private final ScmOAuthTokenService oauthTokens = mock(ScmOAuthTokenService.class);
     private final SelfApprovalPolicy policy = mock(SelfApprovalPolicy.class);
+    private final InMemoryTelemetry otel = new InMemoryTelemetry();
 
     @BeforeEach
     void setUp() throws Exception {
@@ -122,7 +128,8 @@ class DeferredForwardingTest {
                 Duration.ofMinutes(15),
                 Duration.ofDays(7),
                 0,
-                Clock.systemUTC());
+                Clock.systemUTC(),
+                otel.telemetry());
 
         var rules = new InMemoryUrlRuleRegistry();
         rules.save(AccessRule.builder()
@@ -465,6 +472,81 @@ class DeferredForwardingTest {
         assertEquals(0, forwarder.sweep());
 
         assertTrue(parkedPushStore.find(pushId).isEmpty());
+    }
+
+    // ---- telemetry ----
+
+    @Test
+    void forward_isItsOwnTrace_carryingThePushId() throws Exception {
+        commit("parked change");
+        String pushId = pushThroughFogwall();
+        approve(pushId);
+
+        assertTrue(pushStore.claimForward(pushId, "instance-a", Instant.now(), Duration.ofMinutes(15), false));
+        forwarder.forwardClaimed(pushId);
+
+        SpanData forward = otel.span(FogwallTelemetry.FORWARD_STAGE);
+        assertFalse(forward.getParentSpanContext().isValid(), "the receiving request ended long ago");
+        assertEquals(pushId, forward.getAttributes().get(FogwallTelemetry.PUSH_ID));
+        assertEquals(
+                1,
+                otel.stageCount(
+                        FogwallTelemetry.FORWARD_STAGE, FogwallTelemetry.MODE_SERVER, "github", StageOutcome.PASS));
+    }
+
+    @Test
+    void failedForward_isAnErrorStage() throws Exception {
+        commit("parked change");
+        String pushId = pushThroughFogwall();
+        approve(pushId);
+        parkedPushStore.delete(pushId);
+        assertTrue(pushStore.claimForward(pushId, "instance-a", Instant.now(), Duration.ofMinutes(15), false));
+
+        forwarder.forwardClaimed(pushId);
+
+        assertEquals(
+                1,
+                otel.stageCount(
+                        FogwallTelemetry.FORWARD_STAGE, FogwallTelemetry.MODE_SERVER, "github", StageOutcome.ERROR));
+    }
+
+    @Test
+    void sweep_countsTheForwardsItRestarts_butNotOnesThatNeverStarted() throws Exception {
+        commit("first");
+        String abandoned = pushThroughFogwall();
+        approve(abandoned);
+        // An instance claimed it an hour ago and died: its claim has lapsed.
+        assertTrue(pushStore.claimForward(
+                abandoned, "instance-b", Instant.now().minus(Duration.ofHours(1)), Duration.ofMinutes(15), false));
+        commit("second");
+        String neverStarted = pushThroughFogwall();
+        approve(neverStarted);
+
+        assertEquals(2, forwarder.sweep());
+
+        assertEquals(
+                1L,
+                otel.longValue("fogwall.deferred.forward.restarts", Attributes.empty())
+                        .orElseThrow());
+        awaitTerminal(abandoned);
+        awaitTerminal(neverStarted);
+    }
+
+    @Test
+    void sweep_reportsTheParkedBacklog() throws Exception {
+        commit("parked change");
+        String pushId = pushThroughFogwall();
+        long packBytes = parkedPushStore.find(pushId).orElseThrow().packBytes();
+
+        forwarder.sweep();
+
+        assertEquals(
+                1L,
+                otel.longValue("fogwall.deferred.parked", Attributes.empty()).orElseThrow());
+        assertEquals(
+                packBytes,
+                otel.longValue("fogwall.deferred.parked.size", Attributes.empty())
+                        .orElseThrow());
     }
 
     // ---- replaying forced updates and deletes ----
