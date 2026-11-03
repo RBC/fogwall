@@ -86,16 +86,17 @@ independent `commit.attribution-policy` setting, not `scm-oauth.identity-mode`.
 
 ## Token expiry
 
-GitLab, Forgejo/Gitea and GitHub App user tokens expire, some within hours; a classic GitHub OAuth App token does not.
-When fogwall acts as a user with an expired token, it first renews it with the refresh token, using the provider's
-`oauth.client-id` and `client-secret-path`, and stores the renewed tokens in place of the old ones. A linked token the
-provider refuses to renew, because it was revoked upstream or its refresh token expired, stays unusable until the user
-links the account again.
+GitLab, Forgejo/Gitea and GitHub App user tokens expire, some within hours. A classic GitHub OAuth App token expires
+after 8 hours when the app has user-to-server token expiration turned on (the app's **Optional features** settings), and
+never expires when it is turned off. When fogwall acts as a user with an expired token, it first renews it with the
+refresh token, using the provider's `oauth.client-id` and `client-secret-path`, and stores the renewed tokens in place
+of the old ones. A linked token the provider refuses to renew, because it was revoked upstream or its refresh token
+expired, stays unusable until the user links the account again.
 
-A classic GitHub OAuth App token never expires, and refresh tokens live for months, so a linked account can stay usable
-long after anyone last looked at it. `scm-oauth.max-link-age` bounds that: once the user authorized the link longer ago
-than the limit, fogwall stops using it, and the user links the account again from their profile. Renewing a token does
-not restart the count.
+A classic GitHub OAuth App token without expiration never expires, and refresh tokens live for months, so a linked
+account can stay usable long after anyone last looked at it. `scm-oauth.max-link-age` bounds that: once the user
+authorized the link longer ago than the limit, fogwall stops using it, and the user links the account again from their
+profile. Renewing a token does not restart the count.
 
 ```yaml
 scm-oauth:
