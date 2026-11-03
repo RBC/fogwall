@@ -29,7 +29,8 @@ public class GitHubNodeIdResolver {
     private static final String NODE_QUERY = "query($id: ID!) { node(id: $id) {"
             + " ... on Repository { name owner { login } }"
             + " ... on Issue { repository { name owner { login } } }"
-            + " ... on PullRequest { repository { name owner { login } } } } }";
+            + " ... on PullRequest { repository { name owner { login } } }"
+            + " ... on IssueComment { repository { name owner { login } } } } }";
 
     private static final JsonMapper MAPPER = new JsonMapper();
 
@@ -67,7 +68,10 @@ public class GitHubNodeIdResolver {
         }
     }
 
-    /** {@code node} is either a Repository directly, or an Issue/PullRequest wrapping one under "repository". */
+    /**
+     * {@code node} is either a Repository directly, or an Issue/PullRequest/IssueComment wrapping one under
+     * "repository".
+     */
     private static Optional<OwnerRepo> extractOwnerRepo(JsonNode node) {
         if (node == null || node.isMissingNode() || node.isNull()) {
             return Optional.empty();

@@ -19,6 +19,13 @@ class GitHubMutationAllowlistTest {
                 "closePullRequest",
                 "mergePullRequest",
                 "addComment",
+                // State and comment changes behind reopen, ready, --undo, --edit-last and --delete-last.
+                "reopenIssue",
+                "reopenPullRequest",
+                "markPullRequestReadyForReview",
+                "convertPullRequestToDraft",
+                "updateIssueComment",
+                "deleteIssueComment",
                 // Attribute follow-ups gh sends after the create or update, verified from live traffic.
                 "replaceActorsForAssignable",
                 "addLabelsToLabelable",

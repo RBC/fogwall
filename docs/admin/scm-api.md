@@ -103,6 +103,25 @@ Anything the allowlist does not recognise is denied, so a CLI reaching a new end
 than forwarded. Per-CLI command names are in [User Guide](../user/contributions.md); the endpoint and mutation tables
 behind them are in [docs/internals/scm-api-proxy.md](../internals/scm-api-proxy.md).
 
+## Scope of the SCM API
+
+The SCM API covers the code-contribution leg: issues, pull and merge requests, and the reads the CLIs perform to drive
+them, including `gh issue list --search` and `gh pr list --search`. It does not reimplement features that belong in the
+provider's own interface, and it has no CI endpoints, since the providers expose no consistent equivalent to hold parity
+against.
+
+On the GitLab and Forgejo/Gitea listeners, reads are held to the same boundary: a `GET` is served only for the issue,
+pull/merge request, comment, label, user and repository-lookup paths that `glab`, `tea` and `fj` send, and any other
+path is refused. Query parameters on reads are not filtered; a write is refused only for a parameter that carries a
+credential or changes the acting identity (`access_token`, `private_token`, `token`, `sudo`).
+
+A request outside that surface is refused with a `404` whose message names the SCM API as the boundary, and is recorded
+in the audit trail like any other denial when the caller is authenticated. An unauthenticated request gets the usual
+`401`. The refusal never assumes the caller can reach the provider another way.
+
+On the GitHub listener, `GET /api/v3/meta` answers `gh`'s version handshake with a fixed version, so `gh` selects the
+query shapes the listener forwards. It needs no credential and does not contact the provider.
+
 ## Authorization
 
 Per-repo authorization for mutations goes through the ordinary `permissions:` mechanism — grant a user `PROPOSE` on the

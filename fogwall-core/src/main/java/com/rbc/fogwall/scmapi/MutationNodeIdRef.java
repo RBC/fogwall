@@ -17,6 +17,8 @@ public record MutationNodeIdRef(String nodeId, NodeType nodeType) {
          * distinguish the two in the mutation shape. The resolver's {@code node(id:)} query inline-fragments both
          * types, so the ambiguity does not block resolution.
          */
-        ISSUE_OR_PULL_REQUEST
+        ISSUE_OR_PULL_REQUEST,
+        /** A comment on an issue or pull request; resolves to the repository that holds the thread. */
+        ISSUE_COMMENT
     }
 }

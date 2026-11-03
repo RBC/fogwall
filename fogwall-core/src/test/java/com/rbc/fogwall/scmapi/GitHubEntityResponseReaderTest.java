@@ -97,6 +97,31 @@ class GitHubEntityResponseReaderTest {
     }
 
     @Test
+    void reopen_marksTheAddressedNodeOpen() {
+        EntityOutcome issue = reader.read(
+                        context("reopenIssue", "I_kwDO2", "ISSUE", null),
+                        null,
+                        "{\"data\":{\"reopenIssue\":{\"issue\":{\"id\":\"I_kwDO2\"}}}}")
+                .orElseThrow();
+        assertEquals(Kind.ISSUE, issue.kind());
+        assertEquals(State.OPEN, issue.state());
+        assertEquals("I_kwDO2", issue.nodeId());
+
+        EntityOutcome pr = reader.read(context("reopenPullRequest", "PR_kwDO1", "PULL_REQUEST", null), null, "{}")
+                .orElseThrow();
+        assertEquals(Kind.PULL_REQUEST, pr.kind());
+        assertEquals(State.OPEN, pr.state());
+    }
+
+    @Test
+    void commentEditAndDelete_registerNoEntity() {
+        assertTrue(reader.read(context("updateIssueComment", "IC_1", "ISSUE_COMMENT", null), null, "{}")
+                .isEmpty());
+        assertTrue(reader.read(context("deleteIssueComment", "IC_1", "ISSUE_COMMENT", null), null, "{}")
+                .isEmpty());
+    }
+
+    @Test
     void addComment_hasNoKindWhenTheNodeCouldBeEither() {
         EntityOutcome o = reader.read(context("addComment", "I_kwDO2", "ISSUE_OR_PULL_REQUEST", null), null, "{}")
                 .orElseThrow();

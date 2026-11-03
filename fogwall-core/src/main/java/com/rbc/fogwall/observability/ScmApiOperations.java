@@ -28,6 +28,10 @@ public final class ScmApiOperations {
             Map.entry("updateIssue", "issue.update"),
             Map.entry("closeIssue", "issue.close"),
             Map.entry("addComment", "comment.create"),
+            Map.entry("reopenPullRequest", "pull_request.reopen"),
+            Map.entry("reopenIssue", "issue.reopen"),
+            Map.entry("updateIssueComment", "comment.update"),
+            Map.entry("deleteIssueComment", "comment.delete"),
             // GitLab REST operations
             Map.entry("merge_requests.create", "pull_request.create"),
             Map.entry("merge_requests.update", "pull_request.update"),

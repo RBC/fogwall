@@ -38,6 +38,17 @@ public final class MutationNodeIdExtractor {
             Map.entry("updatePullRequest", new NodeIdKey("pullRequestId", MutationNodeIdRef.NodeType.PULL_REQUEST)),
             Map.entry("closePullRequest", new NodeIdKey("pullRequestId", MutationNodeIdRef.NodeType.PULL_REQUEST)),
             Map.entry("mergePullRequest", new NodeIdKey("pullRequestId", MutationNodeIdRef.NodeType.PULL_REQUEST)),
+            Map.entry("reopenIssue", new NodeIdKey("issueId", MutationNodeIdRef.NodeType.ISSUE)),
+            Map.entry("reopenPullRequest", new NodeIdKey("pullRequestId", MutationNodeIdRef.NodeType.PULL_REQUEST)),
+            Map.entry(
+                    "markPullRequestReadyForReview",
+                    new NodeIdKey("pullRequestId", MutationNodeIdRef.NodeType.PULL_REQUEST)),
+            Map.entry(
+                    "convertPullRequestToDraft",
+                    new NodeIdKey("pullRequestId", MutationNodeIdRef.NodeType.PULL_REQUEST)),
+            // A comment on an issue or a pull request is the same node type, addressed by its own ID.
+            Map.entry("updateIssueComment", new NodeIdKey("id", MutationNodeIdRef.NodeType.ISSUE_COMMENT)),
+            Map.entry("deleteIssueComment", new NodeIdKey("id", MutationNodeIdRef.NodeType.ISSUE_COMMENT)),
             // Attribute follow-ups. Each names its target by the generic capability it acts through, not by the
             // concrete type: an assignable and a labelable are both "issue or pull request", so the same node ID
             // resolution path already covers them.

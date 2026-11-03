@@ -29,6 +29,9 @@ public interface ScmApiRestGateFilter extends ScmApiGateFilter {
 
     Optional<ScmApiRestMatch> matchAllowlist(String method, String path);
 
+    /** Whether this dialect's SCM API serves a {@code GET} to {@code path}. */
+    boolean isReadAllowed(String path);
+
     /**
      * The repository a matched request must be authorized against. Straight off the path for Forgejo; for GitLab a
      * {@code mr create} names the upstream only in the body, so this resolves that. Empty means deny.
@@ -71,6 +74,16 @@ public interface ScmApiRestGateFilter extends ScmApiGateFilter {
         }
 
         if ("GET".equalsIgnoreCase(method)) {
+            if (!isReadAllowed(path)) {
+                deny(
+                        context,
+                        response,
+                        HttpServletResponse.SC_NOT_FOUND,
+                        "'GET " + path + "' is outside the SCM API. fogwall serves issues, pull and merge requests,"
+                                + " and the reads the CLIs perform to drive them; other endpoints are not available"
+                                + " here.");
+                return GateOutcome.REFUSED;
+            }
             context.setReadResource(ScmApiReadResource.fromRestPath(path));
             return GateOutcome.FORWARD;
         }

@@ -419,13 +419,12 @@ class ScmApiEntitiesE2ETest {
     }
 
     /**
-     * A write carrying a query parameter is not a shape any supported CLI produces, so it is refused before the content
-     * it carries matters. This is the same request that would otherwise smuggle a description past body-only
-     * inspection.
+     * A write's query string is content like its body: the same request that would otherwise smuggle a description past
+     * body-only inspection is scanned and refused for what it carries.
      */
     @Test
     @Order(7)
-    void refusesAWriteCarryingAQueryParameter() throws Exception {
+    void scansTheQueryStringOfAWrite() throws Exception {
         createBranch("e2e-query");
         var query = "?body=" + URLEncoder.encode(PII_TEXT, StandardCharsets.UTF_8);
         var body = "{\"title\":\"e2e query\",\"body\":\"clean\",\"head\":\"e2e-query\",\"base\":\"main\"}";
@@ -433,7 +432,8 @@ class ScmApiEntitiesE2ETest {
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build());
 
-        assertEquals(400, response.statusCode(), response.body());
+        assertEquals(403, response.statusCode(), response.body());
+        assertTrue(response.body().contains("Content rejected"), response.body());
     }
 
     @Test
@@ -444,12 +444,13 @@ class ScmApiEntitiesE2ETest {
         assertEquals(200, response.statusCode(), response.body());
     }
 
-    /** A credential in the query string would have the upstream act as someone other than the audited caller. */
+    /** A credential in a write's query string would have the upstream act as someone other than the audited caller. */
     @Test
     @Order(9)
-    void refusesAReadCarryingACredentialParameter() throws Exception {
-        var response = send(request(repoPath() + "/issues?state=open&access_token=someoneelse")
-                .GET()
+    void refusesAWriteCarryingACredentialParameter() throws Exception {
+        var body = "{\"title\":\"e2e cred\",\"head\":\"e2e-query\",\"base\":\"main\"}";
+        var response = send(request(repoPath() + "/pulls?access_token=someoneelse")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build());
         assertEquals(400, response.statusCode(), response.body());
     }

@@ -14,6 +14,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.List;
 import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hc.client5.http.fluent.Request;
@@ -28,6 +29,13 @@ import org.apache.hc.core5.http.ContentType;
  */
 @Slf4j
 public class ScmApiRestForwardServlet extends HttpServlet {
+
+    /**
+     * The pagination headers the two REST APIs answer a list with, relayed because the CLIs read them: {@code fj} fails
+     * a search or list that arrives without {@code X-Total-Count}. Nothing else upstream sent is passed on.
+     */
+    private static final List<String> PAGINATION_HEADERS = List.of(
+            "X-Total-Count", "Link", "X-Total", "X-Total-Pages", "X-Page", "X-Per-Page", "X-Next-Page", "X-Prev-Page");
 
     private final URI upstreamApiBaseUri;
     private final ScmApiRestPathPolicy.EncodedSeparators encodedSeparators;
@@ -207,6 +215,12 @@ public class ScmApiRestForwardServlet extends HttpServlet {
                     .execute(FogwallHttpExecutor.instance())
                     .handleResponse(upstream -> {
                         response.setStatus(upstream.getCode());
+                        for (String name : PAGINATION_HEADERS) {
+                            var header = upstream.getFirstHeader(name);
+                            if (header != null) {
+                                response.setHeader(name, header.getValue());
+                            }
+                        }
                         var entity = upstream.getEntity();
                         if (entity != null && entity.getContentType() != null) {
                             response.setContentType(entity.getContentType());

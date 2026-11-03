@@ -28,7 +28,35 @@ public final class GitLabRestAllowlist {
             new Rule("POST", Pattern.compile("^/projects/([^/]+)/merge_requests/\\d+/notes$"), "merge_requests.note"),
             new Rule("PUT", Pattern.compile("^/projects/([^/]+)/merge_requests/\\d+/merge$"), "merge_requests.merge"));
 
+    private static final String PROJECT = "^/projects/[^/]+";
+
+    /**
+     * The {@code GET} paths {@code glab} issues to list, view and prepare issue and merge request changes, from live
+     * captures. Reads carry no per-repository check, so this is what bounds them to the contribution surface.
+     */
+    private static final List<Pattern> READ_PATHS = List.of(
+            Pattern.compile("^/user$"),
+            // `glab` resolves an --assignee, --author or --reviewer login to a numeric id before it can filter.
+            Pattern.compile("^/users$"),
+            // The project itself: by path before every create, and by numeric id when a fork's upstream is followed.
+            Pattern.compile(PROJECT + "$"),
+            Pattern.compile(PROJECT + "/(issues|merge_requests)$"),
+            Pattern.compile(PROJECT + "/(issues|merge_requests)/\\d+$"),
+            Pattern.compile(PROJECT + "/(issues|merge_requests)/\\d+/notes$"),
+            Pattern.compile(PROJECT + "/merge_requests/\\d+/versions(/\\d+)?$"),
+            Pattern.compile(PROJECT + "/merge_requests/\\d+/(approval_state|discussions)$"),
+            Pattern.compile(PROJECT + "/(labels|milestones)$"));
+
     private GitLabRestAllowlist() {}
+
+    /**
+     * Whether a {@code GET} to {@code path} (below the dialect's mount, still encoded) is one the SCM API serves. Any
+     * other read, CI and pipeline endpoints among them, is outside it.
+     */
+    public static boolean isReadAllowed(String path) {
+        return path != null
+                && READ_PATHS.stream().anyMatch(rule -> rule.matcher(path).matches());
+    }
 
     /**
      * Matches an incoming {@code method}/{@code path} (path is the request's sub-path under the SCM API mount point,

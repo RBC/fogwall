@@ -123,6 +123,27 @@ class ScmApiGitHubGateFilterTest {
         assertNull(context.getMutationField());
     }
 
+    /** The two query shapes {@code gh issue list --search} sends: feature-detection introspection, then the search. */
+    @Test
+    void searchTypeIntrospectionAndSearchQueries_forwardAsReads() throws Exception {
+        String introspection = "{\"operationName\":\"SearchType_enumValues\",\"query\":\"query SearchType_enumValues"
+                + " { SearchType: __type(name: \\\"SearchType\\\") { enumValues(includeDeprecated: true) { name } } }\"}";
+        String search = "{\"operationName\":\"IssueSearch\",\"query\":\"query IssueSearch($q: String!) {"
+                + " search(type: ISSUE_ADVANCED, query: $q, first: 30) { issueCount nodes { ... on Issue { number } } } }\","
+                + "\"variables\":{\"q\":\"repo:acme/widgets is:issue label:bug\"}}";
+        for (String body : new String[] {introspection, search}) {
+            var context = new ScmApiRequestContext();
+            HttpServletRequest req = mockRequest(body, context);
+            HttpServletResponse resp = mockResponse(new ByteArrayOutputStream());
+            FilterChain chain = mock(FilterChain.class);
+
+            filter().doFilter(req, resp, chain);
+
+            verify(chain).doFilter(any(), eq(resp));
+            assertNull(context.getMutationField(), body);
+        }
+    }
+
     @Test
     void unallowlistedMutation_returns403_deniesWithReason() throws Exception {
         var context = new ScmApiRequestContext();
