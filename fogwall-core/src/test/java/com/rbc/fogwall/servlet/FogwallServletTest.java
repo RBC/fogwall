@@ -1,11 +1,16 @@
 package com.rbc.fogwall.servlet;
 
 import static com.rbc.fogwall.servlet.FogwallServlet.APPROVED_PUSH_ID_ATTR;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -13,6 +18,16 @@ import static org.mockito.Mockito.when;
 
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.model.PushStatus;
+import com.rbc.fogwall.git.GitRequestDetails;
+import com.rbc.fogwall.observability.FogwallTelemetry;
+import com.rbc.fogwall.observability.InMemoryTelemetry;
+import com.rbc.fogwall.observability.StageOutcome;
+import com.rbc.fogwall.observability.StageTimer;
+import com.rbc.fogwall.provider.GitHubProvider;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.sdk.trace.data.SpanData;
 import jakarta.servlet.AsyncContext;
 import jakarta.servlet.ServletConfig;
 import jakarta.servlet.ServletContext;
@@ -25,6 +40,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import org.eclipse.jetty.client.Request;
 import org.eclipse.jetty.client.Response;
 import org.eclipse.jetty.http.HttpFields;
 import org.eclipse.jetty.http.HttpHeader;
@@ -198,5 +214,98 @@ class FogwallServletTest {
         servlet.onProxyResponseSuccess(request, response, serverResponse);
 
         verify(pushStore, never()).updateForwardStatus(anyString(), any(), any());
+    }
+
+    // ---- the upstream forward as a pipeline stage ----
+
+    private final InMemoryTelemetry otel = new InMemoryTelemetry();
+
+    /** Starts a push's forward under a request span, as ObservabilityFilter leaves the request. */
+    private Span startForward() {
+        when(request.getContentType()).thenReturn("application/x-git-receive-pack-request");
+        when(request.getRequestURI()).thenReturn("/proxy/github.com/owner/repo.git/git-receive-pack");
+        Span requestSpan =
+                otel.telemetry().tracer().spanBuilder("git.push proxy").startSpan();
+        attributes.put(FogwallTelemetry.REQUEST_ATTR, otel.telemetry());
+        attributes.put(FogwallServlet.OTEL_CONTEXT_ATTR, Context.root().with(requestSpan));
+        var details = new GitRequestDetails();
+        details.setProvider(new GitHubProvider("/proxy"));
+        attributes.put(FogwallServlet.GIT_REQUEST_ATTR, details);
+        servlet.sendProxyRequest(request, response, mock(Request.class));
+        return requestSpan;
+    }
+
+    private long forwards(StageOutcome outcome) {
+        return otel.stageCount(FogwallTelemetry.FORWARD_STAGE, FogwallTelemetry.MODE_PROXY, "github", outcome);
+    }
+
+    @Test
+    void forward_isAClientSpanUnderTheRequestSpan() {
+        Span requestSpan = startForward();
+
+        servlet.onProxyResponseSuccess(request, response, upstream(200));
+
+        SpanData forward = otel.span(FogwallTelemetry.FORWARD_STAGE);
+        assertEquals(SpanKind.CLIENT, forward.getKind());
+        assertEquals(requestSpan.getSpanContext().getSpanId(), forward.getParentSpanId());
+        assertEquals(1, forwards(StageOutcome.PASS));
+    }
+
+    @Test
+    void upstreamServerError_isAnErrorForward() {
+        startForward();
+
+        servlet.onProxyResponseSuccess(request, response, upstream(500));
+
+        assertEquals(1, forwards(StageOutcome.ERROR));
+    }
+
+    @Test
+    void refusedRefOnARePush_isAnErrorForward() throws IOException {
+        startForward();
+        attributes.put(APPROVED_PUSH_ID_ATTR, PUSH_ID);
+        Response serverResponse = upstream(200);
+        relay(serverResponse, ReceivePackReportScannerTest.plainReport("unpack ok", "ng refs/heads/main declined"));
+
+        servlet.onProxyResponseSuccess(request, response, serverResponse);
+
+        assertEquals(1, forwards(StageOutcome.ERROR));
+    }
+
+    @Test
+    void failedExchange_isAnErrorForward() {
+        startForward();
+
+        servlet.onProxyResponseFailure(request, response, null, new IOException("connection reset"));
+
+        assertEquals(1, forwards(StageOutcome.ERROR));
+        assertEquals(
+                "exception",
+                otel.span(FogwallTelemetry.FORWARD_STAGE).getEvents().get(0).getName());
+    }
+
+    @Test
+    void forwardStage_ends_evenWhenRecordingTheOutcomeFails() {
+        startForward();
+        attributes.put(APPROVED_PUSH_ID_ATTR, PUSH_ID);
+        doThrow(new IllegalStateException("database down")).when(pushStore).updateForwardStatus(any(), any(), any());
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> servlet.onProxyResponseFailure(request, response, null, new IOException("reset")));
+
+        assertEquals(1, forwards(StageOutcome.ERROR));
+    }
+
+    @Test
+    void withoutTelemetry_theForwardIsNotTimed() {
+        when(request.getContentType()).thenReturn("application/x-git-receive-pack-request");
+        when(request.getRequestURI()).thenReturn("/proxy/github.com/owner/repo.git/git-receive-pack");
+
+        servlet.sendProxyRequest(request, response, mock(Request.class));
+        servlet.onProxyResponseSuccess(request, response, upstream(200));
+
+        assertTrue(otel.spans().isEmpty());
+        assertFalse(attributes.values().stream().anyMatch(StageTimer.class::isInstance));
     }
 }

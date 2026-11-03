@@ -1,6 +1,7 @@
 package com.rbc.fogwall.db;
 
 import com.rbc.fogwall.db.model.Attestation;
+import com.rbc.fogwall.db.model.ForwardablePush;
 import com.rbc.fogwall.db.model.PushQuery;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
@@ -113,10 +114,10 @@ public interface PushStore {
     boolean completeForward(String id, String claimant, PushStatus outcome, String errorMessage);
 
     /**
-     * Returns the ids of APPROVED deferred pushes that no instance holds an unexpired claim on, oldest first: approvals
-     * whose forward never started, and forwards whose instance died.
+     * Returns the APPROVED deferred pushes that no instance holds an unexpired claim on, oldest first: approvals whose
+     * forward never started, and forwards whose instance died ({@link ForwardablePush#claimLapsed()}).
      */
-    List<String> findForwardable(Instant now, int limit);
+    List<ForwardablePush> findForwardable(Instant now, int limit);
 
     /** Initialize the store (create tables, indexes, etc.). Called once at startup. */
     void initialize();

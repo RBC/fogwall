@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -13,8 +14,10 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.rbc.fogwall.db.PushStore;
+import com.rbc.fogwall.db.model.Attestation;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
+import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
@@ -140,5 +143,60 @@ class MeteringPushStoreTest {
 
         verify(telemetry, never()).recordDecision(anyString(), anyString());
         verify(telemetry, never()).recordForward(anyString(), anyBoolean());
+    }
+
+    @Test
+    void completeForward_forwarded_recordsTheTimeSinceApproval() {
+        Instant approvedAt = Instant.parse("2026-11-03T10:00:00Z");
+        PushRecord forwarded = record("github", PushStatus.FORWARDED);
+        forwarded.setAttestation(Attestation.builder()
+                .type(Attestation.Type.APPROVAL)
+                .timestamp(approvedAt)
+                .build());
+        forwarded.setForwardedAt(approvedAt.plusSeconds(90));
+        PushStore delegate = mock(PushStore.class);
+        when(delegate.completeForward("id1", "instance-a", PushStatus.FORWARDED, null))
+                .thenReturn(true);
+        when(delegate.findById("id1")).thenReturn(Optional.of(forwarded));
+        FogwallTelemetry telemetry = mock(FogwallTelemetry.class);
+        when(telemetry.isEnabled()).thenReturn(true);
+
+        new MeteringPushStore(delegate, telemetry).completeForward("id1", "instance-a", PushStatus.FORWARDED, null);
+
+        verify(telemetry).recordApprovalToForward(90.0, "github");
+    }
+
+    @Test
+    void completeForward_failed_recordsNoApprovalDelay() {
+        PushRecord failed = record("github", PushStatus.ERROR);
+        failed.setAttestation(
+                Attestation.builder().type(Attestation.Type.APPROVAL).build());
+        failed.setForwardedAt(Instant.now());
+        PushStore delegate = mock(PushStore.class);
+        when(delegate.completeForward("id1", "instance-a", PushStatus.ERROR, "refused"))
+                .thenReturn(true);
+        when(delegate.findById("id1")).thenReturn(Optional.of(failed));
+        FogwallTelemetry telemetry = mock(FogwallTelemetry.class);
+        when(telemetry.isEnabled()).thenReturn(true);
+
+        new MeteringPushStore(delegate, telemetry).completeForward("id1", "instance-a", PushStatus.ERROR, "refused");
+
+        verify(telemetry, never()).recordApprovalToForward(anyDouble(), anyString());
+    }
+
+    @Test
+    void completeForward_withoutAnApprovalTimestamp_recordsNoApprovalDelay() {
+        PushRecord forwarded = record("github", PushStatus.FORWARDED);
+        forwarded.setForwardedAt(Instant.now());
+        PushStore delegate = mock(PushStore.class);
+        when(delegate.completeForward("id1", "instance-a", PushStatus.FORWARDED, null))
+                .thenReturn(true);
+        when(delegate.findById("id1")).thenReturn(Optional.of(forwarded));
+        FogwallTelemetry telemetry = mock(FogwallTelemetry.class);
+        when(telemetry.isEnabled()).thenReturn(true);
+
+        new MeteringPushStore(delegate, telemetry).completeForward("id1", "instance-a", PushStatus.FORWARDED, null);
+
+        verify(telemetry, never()).recordApprovalToForward(anyDouble(), anyString());
     }
 }

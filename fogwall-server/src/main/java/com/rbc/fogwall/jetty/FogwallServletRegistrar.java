@@ -26,6 +26,7 @@ import com.rbc.fogwall.git.ServerUploadPackFactory;
 import com.rbc.fogwall.git.UpstreamAuthProbe;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.net.ResolvedOutboundProxy;
+import com.rbc.fogwall.observability.FogwallTelemetry;
 import com.rbc.fogwall.observability.ObservabilityFilter;
 import com.rbc.fogwall.observability.ScmApiObservabilityFilter;
 import com.rbc.fogwall.permission.RepoPermissionService;
@@ -195,11 +196,11 @@ public final class FogwallServletRegistrar {
         // default push path has no extra filter.
         if (fogwallContext.telemetry().isEnabled()) {
             var proxyObservabilityHolder =
-                    new FilterHolder(new ObservabilityFilter(fogwallContext.telemetry(), "proxy"));
+                    new FilterHolder(new ObservabilityFilter(fogwallContext.telemetry(), FogwallTelemetry.MODE_PROXY));
             proxyObservabilityHolder.setAsyncSupported(true);
             context.addFilter(proxyObservabilityHolder, PROXY_PATH_PREFIX + "/*", EnumSet.of(DispatcherType.REQUEST));
             var serverObservabilityHolder =
-                    new FilterHolder(new ObservabilityFilter(fogwallContext.telemetry(), "server"));
+                    new FilterHolder(new ObservabilityFilter(fogwallContext.telemetry(), FogwallTelemetry.MODE_SERVER));
             serverObservabilityHolder.setAsyncSupported(true);
             for (String serverPrefix : SERVER_PATH_PREFIXES) {
                 context.addFilter(serverObservabilityHolder, serverPrefix + "/*", EnumSet.of(DispatcherType.REQUEST));
@@ -265,7 +266,8 @@ public final class FogwallServletRegistrar {
                         configBuilder.isDeferredForwarding(provider.getName())
                                 ? Optional.of(new ServerReceivePackFactory.DeferredForwarding(
                                         configBuilder.buildParkedPushStore(), fogwallContext.deferredForwarder()))
-                                : Optional.empty());
+                                : Optional.empty(),
+                        fogwallContext.telemetry());
                 registerProxyServlet(
                         context,
                         provider,
@@ -338,6 +340,7 @@ public final class FogwallServletRegistrar {
         factory.setScmOAuthConfig(configBuilder.buildScmOAuthConfig());
         factory.setMaxPackBytes(fogwallContext.maxPushBytes());
         factory.setMaxObjectSizeBytes(fogwallContext.maxObjectSizeBytes());
+        factory.setTelemetry(fogwallContext.telemetry());
         return factory;
     }
 
@@ -366,7 +369,8 @@ public final class FogwallServletRegistrar {
             UrlRuleRegistry urlRuleRegistry,
             FetchActivityRecorder fetchActivity,
             FogwallCredentialFilter credentialFilter,
-            Optional<ServerReceivePackFactory.DeferredForwarding> deferredForwarding) {
+            Optional<ServerReceivePackFactory.DeferredForwarding> deferredForwarding,
+            FogwallTelemetry telemetry) {
         // A configured GitServlet is built fresh per path prefix rather than shared: mapping one servlet instance
         // under two holders would init() it twice. The resolver/factory are cheap, and both share the one repo cache.
         Supplier<GitServlet> gitServletFactory = () -> {
@@ -396,6 +400,7 @@ public final class FogwallServletRegistrar {
             factory.setMaxPackBytes(maxPushBytes);
             factory.setMaxObjectSizeBytes(maxObjectSizeBytes);
             deferredForwarding.ifPresent(factory::setDeferredForwarding);
+            factory.setTelemetry(telemetry);
 
             var gitServlet = new GitServlet();
             gitServlet.setRepositoryResolver(resolver);

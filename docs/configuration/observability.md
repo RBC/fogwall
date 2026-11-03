@@ -46,6 +46,13 @@ span. An SCM API request also gets a child `CLIENT` span for fogwall's outbound 
 upstream `http.response.status_code` and that leg's own timing — fogwall cannot propagate the trace into the provider,
 but it measures the call from its own side.
 
+Under a push's parent span, each pipeline stage is a child span: every validation step, the approval wait (`approval`,
+server mode) and the upstream forward (`forward`, a `CLIENT` span on the transparent proxy). A stage span is named by
+its step key (`url-rule`, `push-permission`, `secret-scan`, …), the same key in both proxy modes, and carries `stage`,
+`mode`, `provider` and `stage.outcome` (`pass`, `block` or `error`). The forward of a parked push (deferred forwarding)
+runs after the receiving request has ended, so its `forward` span starts its own trace and carries `push.id` to join it
+to the push. SSH pushes record the per-stage metrics but no stage spans.
+
 **Metrics**
 
 | Instrument                | Type          | Attributes                              | Notes                                                    |
@@ -57,18 +64,32 @@ but it measures the call from its own side.
 | `fogwall.scmapi.duration` | histogram (s) | `provider`, `operation`                 | Wall-clock duration of an SCM API proxy request.         |
 | `fogwall.scmapi.actions`  | counter       | `provider`, `operation`, `outcome`      | SCM API mutations and refusals by operation and outcome. |
 | `fogwall.fetch.decisions` | counter       | `provider`, `mode`, `result`, `refusal` | Clones and fetches by decision and refusal reason.       |
+| `fogwall.stage.duration`  | histogram (s) | `stage`, `mode`, `provider`             | Wall-clock duration of one pipeline stage of a push.     |
+| `fogwall.stage.outcomes`  | counter       | `stage`, `mode`, `provider`, `outcome`  | Pipeline stages run, by `pass`, `block` or `error`.      |
 
-`mode` is `server` or `proxy`, and for fetch decisions also `ssh`. `refusal` is `none` for an allowed fetch. Decision
-and forward counts are transport-agnostic and so cover SSH pushes too; the push duration and in-flight gauge are
-HTTP-only. `operation` is a provider-agnostic name where the operation flattens cleanly — `pull_request.create`,
-`pull_request.update`, `pull_request.merge`, `issue.create`, `comment.create`, … (`pull_request` covers a GitHub/Forgejo
-pull request and a GitLab merge request) — and the dialect's own operation name where it does not, such as a label or
-assignee edit whose subject the raw op does not name. A read is classified by resource too — `issue.read`,
-`pull_request.read`, `comment.read`, or the GraphQL query's root field (`repository.read`), with `other.read` for
-anything unrecognized — so a read names what was read, not a bare `read`; an action with no operation is `unknown`.
-`outcome` is the action's result (`FORWARDED`, `DENIED`, `REJECTED`, `ERROR`). Reads are traced and timed but not
-counted in `fogwall.scmapi.actions`, which tracks mutations and refusals to match the audit trail. Repository slug is
-recorded on spans only, never on a metric, to keep metric cardinality bounded.
+Deferred forwarding adds:
+
+| Instrument                          | Type          | Attributes | Notes                                                      |
+| ----------------------------------- | ------------- | ---------- | ---------------------------------------------------------- |
+| `fogwall.deferred.parked`           | gauge         | —          | Parked pushes whose pack is stored, as of the last sweep.  |
+| `fogwall.deferred.parked.size`      | gauge (By)    | —          | Bytes held by those stored packs.                          |
+| `fogwall.deferred.forward.restarts` | counter       | —          | Forwards a sweep restarted because their instance stopped. |
+| `fogwall.deferred.forward.delay`    | histogram (s) | `provider` | Time from a parked push's approval to its forward.         |
+
+The parked-push gauges are read on the pending-push sweep, which every instance runs against the shared database, so
+every instance reports the same backlog: aggregate them across instances with max, not sum.
+
+`mode` is `server` or `proxy`, and for fetch decisions and stage metrics also `ssh`. `refusal` is `none` for an allowed
+fetch. Decision and forward counts are transport-agnostic and so cover SSH pushes too; the push duration and in-flight
+gauge are HTTP-only. `operation` is a provider-agnostic name where the operation flattens cleanly —
+`pull_request.create`, `pull_request.update`, `pull_request.merge`, `issue.create`, `comment.create`, … (`pull_request`
+covers a GitHub/Forgejo pull request and a GitLab merge request) — and the dialect's own operation name where it does
+not, such as a label or assignee edit whose subject the raw op does not name. A read is classified by resource too —
+`issue.read`, `pull_request.read`, `comment.read`, or the GraphQL query's root field (`repository.read`), with
+`other.read` for anything unrecognized — so a read names what was read, not a bare `read`; an action with no operation
+is `unknown`. `outcome` is the action's result (`FORWARDED`, `DENIED`, `REJECTED`, `ERROR`). Reads are traced and timed
+but not counted in `fogwall.scmapi.actions`, which tracks mutations and refusals to match the audit trail. Repository
+slug is recorded on spans only, never on a metric, to keep metric cardinality bounded.
 
 ## Logs
 

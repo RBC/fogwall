@@ -2,6 +2,7 @@ package com.rbc.fogwall.observability;
 
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.model.Attestation;
+import com.rbc.fogwall.db.model.ForwardablePush;
 import com.rbc.fogwall.db.model.PushQuery;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
@@ -74,16 +75,29 @@ public class MeteringPushStore implements PushStore {
     public boolean completeForward(String id, String claimant, PushStatus outcome, String errorMessage) {
         boolean recorded = delegate.completeForward(id, claimant, outcome, errorMessage);
         if (recorded && telemetry.isEnabled()) {
-            String provider = providerLabel(
-                    delegate.findById(id).map(PushRecord::getProvider).orElse(null));
+            Optional<PushRecord> record = delegate.findById(id);
+            String provider = providerLabel(record.map(PushRecord::getProvider).orElse(null));
             telemetry.recordDecision(provider, outcome.name());
             telemetry.recordForward(provider, outcome == PushStatus.FORWARDED);
+            if (outcome == PushStatus.FORWARDED) {
+                record.ifPresent(r -> recordApprovalToForward(r, provider));
+            }
         }
         return recorded;
     }
 
+    /** The time from the recorded approval to the forward the store just stamped; skipped if either is missing. */
+    private void recordApprovalToForward(PushRecord record, String provider) {
+        Attestation attestation = record.getAttestation();
+        if (attestation == null || attestation.getTimestamp() == null || record.getForwardedAt() == null) {
+            return;
+        }
+        Duration delay = Duration.between(attestation.getTimestamp(), record.getForwardedAt());
+        telemetry.recordApprovalToForward(delay.toNanos() / 1_000_000_000.0, provider);
+    }
+
     private static String providerLabel(String provider) {
-        return provider == null || provider.isBlank() ? "unknown" : provider;
+        return FogwallTelemetry.providerLabel(provider);
     }
 
     // --- straight delegation below ---
@@ -129,7 +143,7 @@ public class MeteringPushStore implements PushStore {
     }
 
     @Override
-    public List<String> findForwardable(Instant now, int limit) {
+    public List<ForwardablePush> findForwardable(Instant now, int limit) {
         return delegate.findForwardable(now, limit);
     }
 

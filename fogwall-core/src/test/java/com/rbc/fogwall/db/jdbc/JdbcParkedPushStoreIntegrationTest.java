@@ -3,6 +3,7 @@ package com.rbc.fogwall.db.jdbc;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.rbc.fogwall.db.PackChunks;
+import com.rbc.fogwall.db.model.ParkedBacklog;
 import com.rbc.fogwall.db.model.ParkedPush;
 import com.rbc.fogwall.db.model.ParkedRefUpdate;
 import com.rbc.fogwall.db.model.PushRecord;
@@ -97,6 +98,17 @@ class JdbcParkedPushStoreIntegrationTest {
 
         assertTrue(store.find("push-1").isEmpty());
         assertThrows(IOException.class, () -> store.openPack("push-1"));
+    }
+
+    @Test
+    void backlog_countsStoredPacksAndTheirBytes() throws IOException {
+        assertEquals(new ParkedBacklog(0, 0), store.backlog());
+
+        park("push-1", pack(1024));
+        park("push-2", pack(300));
+        park("push-3", new byte[0]);
+
+        assertEquals(new ParkedBacklog(3, 1324), store.backlog());
     }
 
     @Test

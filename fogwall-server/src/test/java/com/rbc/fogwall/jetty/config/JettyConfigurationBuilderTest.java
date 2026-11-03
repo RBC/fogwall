@@ -46,6 +46,25 @@ class JettyConfigurationBuilderTest {
         assertInstanceOf(AutoApprovalGateway.class, gateway);
     }
 
+    // ---- getServiceUrl ----
+
+    @Test
+    void serviceUrl_unset_defaultsToTheBareLocalOrigin() {
+        var config = new FogwallConfig();
+        config.getServer().setPort(9090);
+
+        // Links append their own path (/dashboard/push/<id>), so a path here would double it.
+        assertEquals("http://localhost:9090", new JettyConfigurationBuilder(config).getServiceUrl());
+    }
+
+    @Test
+    void serviceUrl_configured_isUsedAsGiven() {
+        var config = new FogwallConfig();
+        config.getServer().setServiceUrl("https://fogwall.example.com");
+
+        assertEquals("https://fogwall.example.com", new JettyConfigurationBuilder(config).getServiceUrl());
+    }
+
     // ---- buildPushIdentityResolver ----
 
     @Test

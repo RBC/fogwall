@@ -109,6 +109,8 @@ dependencies {
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:${junitVersion}"
     testRuntimeOnly "com.h2database:h2:${h2Version}"
     testImplementation "org.mockito:mockito-core:${mockitoVersion}"
+    // In-memory span exporter and metric reader, versioned by the OpenTelemetry BOM above.
+    testImplementation "io.opentelemetry:opentelemetry-sdk-testing"
     testImplementation "org.junit.jupiter:junit-jupiter-params:${junitVersion}"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher:${junitVersion}"
     testImplementation "org.mongodb:mongodb-driver-sync:${mongoVersion}"

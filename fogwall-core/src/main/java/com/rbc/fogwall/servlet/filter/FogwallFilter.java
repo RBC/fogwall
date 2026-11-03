@@ -10,6 +10,9 @@ import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.HttpOperation;
 import com.rbc.fogwall.git.LifecycleStage;
 import com.rbc.fogwall.git.PushStepKind;
+import com.rbc.fogwall.observability.FogwallTelemetry;
+import com.rbc.fogwall.observability.StageOutcome;
+import com.rbc.fogwall.observability.StageTimer;
 // import org.springframework.core.Ordered;
 import com.rbc.fogwall.servlet.FogwallServlet;
 import jakarta.servlet.*;
@@ -19,6 +22,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
@@ -172,7 +176,7 @@ public sealed interface FogwallFilter extends Filter permits MandatoryFogwallFil
             var details = (GitRequestDetails) httpRequest.getAttribute(GIT_REQUEST_ATTR);
             int stepsBefore = details != null ? details.getSteps().size() : 0;
             // Execute filter logic
-            doHttpFilter(httpRequest, httpResponse);
+            runTimed(httpRequest, httpResponse, stepsBefore);
 
             // If response was committed (blockAndSendError), stop the chain immediately
             if (httpResponse.isCommitted()) {
@@ -196,6 +200,60 @@ public sealed interface FogwallFilter extends Filter permits MandatoryFogwallFil
             }
         }
         chain.doFilter(request, response);
+    }
+
+    /**
+     * Runs {@link #doHttpFilter}, timed as a pipeline stage when the request carries telemetry
+     * ({@link FogwallTelemetry#REQUEST_ATTR}) and is a push, and this filter is a pipeline step: one with a
+     * {@link #stepKind()}, or a custom filter. Request plumbing with no step identity is not timed. The stage covers
+     * this filter alone, not the rest of the chain it hands on to. Its outcome is {@code error} when this filter threw,
+     * recorded a failed step (the check could not run) or moved the request to
+     * {@link GitRequestDetails.GitResult#ERROR}; {@code block} when it rejected the push or recorded a blocked step;
+     * and {@code pass} otherwise.
+     */
+    private void runTimed(HttpServletRequest request, HttpServletResponse response, int stepsBefore)
+            throws IOException, ServletException {
+        if (!(request.getAttribute(FogwallTelemetry.REQUEST_ATTR) instanceof FogwallTelemetry telemetry)
+                || !GitSmartHttpTools.isReceivePack(request)
+                || !(this instanceof CustomFogwallFilter || stepKind().isPresent())) {
+            doHttpFilter(request, response);
+            return;
+        }
+        var detailsBefore = (GitRequestDetails) request.getAttribute(GIT_REQUEST_ATTR);
+        GitRequestDetails.GitResult resultBefore = detailsBefore != null ? detailsBefore.getResult() : null;
+        String providerBefore = detailsBefore != null && detailsBefore.getProvider() != null
+                ? detailsBefore.getProvider().getName()
+                : null;
+        StageTimer stage = telemetry.startStage(getStepName(), FogwallTelemetry.MODE_PROXY, providerBefore);
+        try {
+            doHttpFilter(request, response);
+        } catch (IOException | ServletException | RuntimeException e) {
+            stage.fail(e);
+            throw e;
+        }
+        var details = (GitRequestDetails) request.getAttribute(GIT_REQUEST_ATTR);
+        if (details == null) {
+            stage.end(StageOutcome.PASS);
+            return;
+        }
+        if (details.getProvider() != null) {
+            stage.setProvider(details.getProvider().getName());
+        }
+        GitRequestDetails.GitResult result = details.getResult();
+        boolean resultChanged = result != resultBefore;
+        List<PushStep> newSteps = details.getSteps()
+                .subList(
+                        Math.min(stepsBefore, details.getSteps().size()),
+                        details.getSteps().size());
+        boolean failedStep = newSteps.stream().anyMatch(step -> step.getStatus() == StepStatus.FAIL);
+        boolean blockedStep = newSteps.stream().anyMatch(step -> step.getStatus() == StepStatus.BLOCKED);
+        if ((resultChanged && result == GitRequestDetails.GitResult.ERROR) || failedStep) {
+            stage.end(StageOutcome.ERROR);
+        } else if ((resultChanged && result == GitRequestDetails.GitResult.REJECTED) || blockedStep) {
+            stage.end(StageOutcome.BLOCK);
+        } else {
+            stage.end(StageOutcome.PASS);
+        }
     }
 
     /**

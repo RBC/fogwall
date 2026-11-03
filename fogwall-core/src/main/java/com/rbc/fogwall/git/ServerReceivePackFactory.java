@@ -12,6 +12,11 @@ import com.rbc.fogwall.config.SecretScanConfig;
 import com.rbc.fogwall.db.ParkedPushStore;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.UrlRuleRegistry;
+import com.rbc.fogwall.db.model.PushStep;
+import com.rbc.fogwall.db.model.StepStatus;
+import com.rbc.fogwall.observability.FogwallTelemetry;
+import com.rbc.fogwall.observability.StageOutcome;
+import com.rbc.fogwall.observability.StageTimer;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.BitbucketProvider;
 import com.rbc.fogwall.provider.FogwallProvider;
@@ -96,6 +101,9 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
     /** Present on a provider with deferred forwarding: pushes made with a fogwall credential are parked. */
     private Optional<DeferredForwarding> deferredForwarding = Optional.empty();
 
+    /** Times each hook and the upstream forward as a pipeline stage; disabled unless set. */
+    private FogwallTelemetry telemetry = FogwallTelemetry.disabled();
+
     /** What parking a push needs: somewhere to store it, and the forwarder that sends it on once approved. */
     public record DeferredForwarding(ParkedPushStore parkedPushStore, DeferredForwarder forwarder) {}
 
@@ -122,6 +130,11 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
     /** Set the per-object decompressed size limit ({@code server.max-object-size-bytes}). */
     public void setMaxObjectSizeBytes(long maxObjectSizeBytes) {
         this.maxObjectSizeBytes = maxObjectSizeBytes;
+    }
+
+    /** Set the telemetry stages are recorded through. Call before the factory handles any requests. */
+    public void setTelemetry(FogwallTelemetry telemetry) {
+        this.telemetry = Objects.requireNonNull(telemetry, "telemetry is required; pass FogwallTelemetry.disabled()");
     }
 
     /** Set the local repository cache for invalidation on forward failure. */
@@ -432,8 +445,9 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
             }
         };
 
-        rp.setPreReceiveHook(
-                chainPreReceiveHooks(heartbeatInterval, validationContext, failFast, disconnectCallback, preHooks));
+        HookStages stages = HookStages.of(telemetry, transport, provider.getName());
+        rp.setPreReceiveHook(chainPreReceiveHooks(
+                heartbeatInterval, validationContext, failFast, disconnectCallback, stages, preHooks));
 
         if (parking.isPresent()) {
             // Post-receive runs before the response completes, so the forward itself is never done here. Starting it
@@ -448,7 +462,8 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
         } else {
             // Post-receive: forward to upstream, then record final status
             var forwardingHook = new ForwardingPostReceiveHook(creds, pushContext, connectTimeoutSeconds, cache);
-            rp.setPostReceiveHook(chainPostReceiveHooks(forwardingHook, persistenceHook.postReceiveHook()));
+            rp.setPostReceiveHook(chainPostReceiveHooks(
+                    timedForward(forwardingHook, stages, pushContext), persistenceHook.postReceiveHook()));
         }
 
         log.debug("Created ReceivePack for {} with {} auth", provider.getName(), creds != null ? "credentials" : "no");
@@ -522,11 +537,40 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
         return validationHooks;
     }
 
+    /**
+     * Times the stages of one push. A validation hook is timed under its step name and the approval hook as
+     * {@link FogwallTelemetry#APPROVAL_STAGE}; the persistence and promotion hooks are lifecycle plumbing and are not.
+     * Over HTTP each stage's span is a child of the request span; over SSH there is no request span, so stages record
+     * metrics only.
+     */
+    record HookStages(FogwallTelemetry telemetry, String mode, String provider, boolean traced) {
+
+        static HookStages of(FogwallTelemetry telemetry, PushTransport transport, String provider) {
+            return transport instanceof PushTransport.Ssh
+                    ? new HookStages(telemetry, FogwallTelemetry.MODE_SSH, provider, false)
+                    : new HookStages(telemetry, FogwallTelemetry.MODE_SERVER, provider, true);
+        }
+
+        StageTimer start(PreReceiveHook hook) {
+            if (!telemetry.isEnabled()) return StageTimer.NOOP;
+            if (hook instanceof FogwallHook fogwallHook) return start(fogwallHook.getStepName());
+            if (hook instanceof ApprovalPreReceiveHook) return start(FogwallTelemetry.APPROVAL_STAGE);
+            return StageTimer.NOOP;
+        }
+
+        StageTimer start(String stage) {
+            return traced
+                    ? telemetry.startStage(stage, mode, provider)
+                    : telemetry.startUntracedStage(stage, mode, provider);
+        }
+    }
+
     private static PreReceiveHook chainPreReceiveHooks(
             Duration heartbeatInterval,
             ValidationContext validationContext,
             boolean failFast,
             Runnable disconnectCallback,
+            HookStages stages,
             PreReceiveHook... hooks) {
         return (ReceivePack rp, Collection<ReceiveCommand> commands) -> {
             try (HeartbeatSender heartbeat = new HeartbeatSender(rp, heartbeatInterval, disconnectCallback)) {
@@ -549,13 +593,21 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
                         heartbeat.pause();
                     }
                     int issuesBefore = validationContext.getIssues().size();
+                    StageTimer stage = stages.start(hook);
                     try {
                         hook.onPreReceive(rp, commands);
+                    } catch (RuntimeException e) {
+                        stage.fail(e);
+                        throw e;
                     } finally {
                         if (isApprovalHook) {
                             heartbeat.resume();
                         }
                     }
+                    boolean addedIssue = validationContext.getIssues().size() > issuesBefore;
+                    boolean commandRejected =
+                            commands.stream().anyMatch(cmd -> cmd.getResult() != ReceiveCommand.Result.NOT_ATTEMPTED);
+                    stage.end(hookOutcome(validationContext, issuesBefore, addedIssue || commandRejected));
                     // Flush sideband after each hook so messages stream to the client in real time
                     // (JGit's sendMessage() doesn't flush - without this, all output batches up)
                     try {
@@ -564,11 +616,10 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
                         log.warn("Failed to flush sideband stream", e);
                     }
                     // Stop chain if a pinned lifecycle hook (persistence verifier, approval) rejected a command.
-                    if (commands.stream().anyMatch(cmd -> cmd.getResult() != ReceiveCommand.Result.NOT_ATTEMPTED)) {
+                    if (commandRejected) {
                         return;
                     }
                     if (hook instanceof FogwallHook fogwallHook) {
-                        boolean addedIssue = validationContext.getIssues().size() > issuesBefore;
                         // A hook that declares it ends the chain and recorded an issue: the runner applies the
                         // rejection and stops before the pinned verifier — so these structural rejections persist no
                         // push record, as when the hook set the command result itself.
@@ -592,6 +643,43 @@ public class ServerReceivePackFactory implements ReceivePackFactory<HttpServletR
                     }
                 }
             }
+        };
+    }
+
+    /**
+     * A hook's stage outcome: {@code error} when an issue it added is an error (the check could not run), {@code block}
+     * when it refused the push, {@code pass} otherwise.
+     */
+    static StageOutcome hookOutcome(ValidationContext validationContext, int issuesBefore, boolean refused) {
+        if (!refused) return StageOutcome.PASS;
+        List<ValidationContext.ValidationIssue> issues = validationContext.getIssues();
+        boolean errored =
+                issues.subList(issuesBefore, issues.size()).stream().anyMatch(ValidationContext.ValidationIssue::error);
+        return errored ? StageOutcome.ERROR : StageOutcome.BLOCK;
+    }
+
+    /**
+     * Times the upstream forward as {@link FogwallTelemetry#FORWARD_STAGE}. The forwarding hook reports a failed
+     * forward as a {@link StepStatus#FAIL} step rather than by throwing.
+     */
+    static PostReceiveHook timedForward(
+            ForwardingPostReceiveHook forwardingHook, HookStages stages, PushContext pushContext) {
+        if (!stages.telemetry().isEnabled()) {
+            return forwardingHook;
+        }
+        return (rp, commands) -> {
+            int stepsBefore = pushContext.getSteps().size();
+            StageTimer stage = stages.start(FogwallTelemetry.FORWARD_STAGE);
+            try {
+                forwardingHook.onPostReceive(rp, commands);
+            } catch (RuntimeException e) {
+                stage.fail(e);
+                throw e;
+            }
+            List<PushStep> steps = pushContext.getSteps();
+            boolean failed = steps.subList(stepsBefore, steps.size()).stream()
+                    .anyMatch(step -> step.getStatus() == StepStatus.FAIL);
+            stage.end(failed ? StageOutcome.ERROR : StageOutcome.PASS);
         };
     }
 

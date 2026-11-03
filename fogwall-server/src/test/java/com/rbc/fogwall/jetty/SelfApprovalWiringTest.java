@@ -27,6 +27,7 @@ import com.rbc.fogwall.db.model.PushStatus;
 import com.rbc.fogwall.git.GitRequestDetails;
 import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.git.PushContext;
+import com.rbc.fogwall.observability.FogwallTelemetry;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.GitHubProvider;
 import com.rbc.fogwall.service.PushIdentityResolver;
@@ -74,6 +75,7 @@ class SelfApprovalWiringTest {
         when(context.approvalGateway()).thenReturn(mock(ApprovalGateway.class));
         when(context.selfApprovalPolicy()).thenReturn(policy);
         when(context.pushIdentityResolver()).thenReturn(mock(PushIdentityResolver.class));
+        when(context.telemetry()).thenReturn(FogwallTelemetry.disabled());
         var factory = FogwallServletRegistrar.buildReceivePackFactory(
                 context, new JettyConfigurationBuilder(new FogwallConfig()), provider);
 

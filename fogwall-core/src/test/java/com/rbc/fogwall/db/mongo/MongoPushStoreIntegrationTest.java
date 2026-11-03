@@ -515,9 +515,9 @@ class MongoPushStoreIntegrationTest {
         Instant now = Instant.now();
         store.claimForward(claimed, "instance-a", now, CLAIM_TTL, false);
 
-        assertEquals(List.of(unclaimed), store.findForwardable(now, 10));
+        assertEquals(List.of(new ForwardablePush(unclaimed, false)), store.findForwardable(now, 10));
         assertEquals(
-                Set.of(unclaimed, claimed),
+                Set.of(new ForwardablePush(unclaimed, false), new ForwardablePush(claimed, true)),
                 Set.copyOf(store.findForwardable(now.plus(CLAIM_TTL).plusSeconds(1), 10)));
     }
 }

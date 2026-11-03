@@ -196,16 +196,17 @@ public class MongoPushStore implements PushStore {
     }
 
     @Override
-    public List<String> findForwardable(Instant now, int limit) {
-        List<String> ids = new ArrayList<>();
+    public List<ForwardablePush> findForwardable(Instant now, int limit) {
+        List<ForwardablePush> forwardable = new ArrayList<>();
         getCollection()
                 .find(Filters.and(
                         Filters.eq("status", PushStatus.APPROVED.name()), Filters.eq("deferred", true), unclaimed(now)))
-                .projection(Projections.include("_id"))
+                .projection(Projections.include("_id", "forwardClaimedBy"))
                 .sort(Sorts.ascending("timestamp"))
                 .limit(limit)
-                .forEach(doc -> ids.add(doc.getString("_id")));
-        return ids;
+                .forEach(doc -> forwardable.add(
+                        new ForwardablePush(doc.getString("_id"), doc.getString("forwardClaimedBy") != null)));
+        return forwardable;
     }
 
     /** No claim, or one whose holder let it lapse. A missing field and an explicit null both count as no claim. */
