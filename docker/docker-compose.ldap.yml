@@ -5,8 +5,11 @@
 #   bash docker/gitea-setup.sh    # (first time only — creates Gitea admin + test repo)
 #
 # Log in at http://localhost:8080 with:
-#   username: testuser      password: testpass123
-#   username: admin         password: admin
+#   username: testuser             password: testpass123
+#   username: fogwall_ldap_admin   password: ldapadmin123
+#
+# The directory admin is deliberately not named "admin": that is the shipped local-auth default user, and a directory
+# user of the same name would collide with it.
 #
 # To add more users, edit docker/ldap-bootstrap.ldif and recreate the openldap container.
 

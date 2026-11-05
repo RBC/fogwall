@@ -1,8 +1,8 @@
 # fogwall LDAP auth configuration.
 # Loaded when FOGWALL_CONFIG_PROFILES includes "ldap" (after "docker-default").
 #
-# Credentials: testuser / testpass123  (authenticated by OpenLDAP)
-#              admin    / admin         (authenticated by OpenLDAP)
+# Credentials: testuser           / testpass123   (authenticated by OpenLDAP)
+#              fogwall_ldap_admin / ldapadmin123  (authenticated by OpenLDAP)
 #
 # The password-hash field is ignored when auth.provider=ldap; it is a placeholder so the user
 # record is seeded into the DB (required for /api/me to return profile data).
