@@ -3,6 +3,8 @@ package com.rbc.fogwall.dashboard.controller;
 import com.rbc.fogwall.approval.SelfApprovalPolicy;
 import com.rbc.fogwall.config.AttestationQuestion;
 import com.rbc.fogwall.config.FogwallConfig;
+import com.rbc.fogwall.dashboard.export.ExportFields;
+import com.rbc.fogwall.dashboard.export.ExportFormat;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.model.Attestation;
 import com.rbc.fogwall.db.model.PushQuery;
@@ -10,6 +12,7 @@ import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
 import com.rbc.fogwall.db.model.PushStep;
 import com.rbc.fogwall.db.model.PushSummary;
+import com.rbc.fogwall.db.model.RecordCursor;
 import com.rbc.fogwall.git.DeferredForwarder;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.permission.RepoPermission;
@@ -18,19 +21,20 @@ import com.rbc.fogwall.provider.ProviderRegistry;
 import com.rbc.fogwall.user.Roles;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import java.time.Instant;
-import java.time.format.DateTimeParseException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 @Tag(name = "Push", description = "Push records and the approval workflow")
 @RestController
@@ -67,10 +71,11 @@ public class PushController {
             operationId = "listPushes",
             summary = "List push records",
             description =
-                    "Returns push records ordered by most recent first. Filter by status (PENDING, APPROVED, REJECTED, FORWARDED, BLOCKED, CANCELED), project slug, repo, provider, branch, author email, username, or a timestamp window (from/to, ISO-8601). Paginate with limit/offset.")
+                    "Returns push records ordered by most recent first. Filter by status (PENDING, APPROVED, REJECTED, FORWARDED, BLOCKED, CANCELED), provider, owner (formerly project), repo, branch, author email, user, free-text search, or a timestamp window (from inclusive, to exclusive, ISO-8601). Paginate with limit/offset, or pass the X-Next-Cursor response header back as after to read the next page.")
     @GetMapping
-    public List<PushSummary> list(
+    public ResponseEntity<List<PushSummary>> list(
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) String owner,
             @RequestParam(required = false) String project,
             @RequestParam(required = false) String repo,
             @RequestParam(required = false) String provider,
@@ -80,28 +85,58 @@ public class PushController {
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String from,
             @RequestParam(required = false) String to,
+            @RequestParam(required = false) String after,
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") int offset,
             @RequestParam(defaultValue = "true") boolean newestFirst) {
 
+        ListingParams.checkPage(limit, offset);
         PushQuery.PushQueryBuilder query =
                 PushQuery.builder().limit(limit).offset(offset).newestFirst(newestFirst);
+        ListingParams.enumValue("status", status, PushStatus.class).ifPresent(query::status);
+        ListingParams.cursor(after).ifPresent(query::after);
+        applyFilters(query, owner, project, repo, provider, branch, authorEmail, user, search, from, to);
 
-        if (status != null && !status.isBlank()) {
-            try {
-                query.status(PushStatus.valueOf(status.toUpperCase()));
-            } catch (IllegalArgumentException e) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Unknown status: " + status + ". Valid values: " + List.of(PushStatus.values()),
-                        e);
-            }
-        }
-        applyFilters(query, project, repo, provider, branch, authorEmail, user, search, from, to);
-
-        return pushStore.findSummaries(query.build()).stream()
+        List<PushSummary> rows = pushStore.findSummaries(query.build()).stream()
                 .map(this::enrichUrls)
                 .toList();
+        return ListingParams.page(rows, limit, s -> new RecordCursor(s.getTimestamp(), s.getId()));
+    }
+
+    @Operation(
+            operationId = "exportPushes",
+            summary = "Export push records",
+            description =
+                    "Every push record matching the same filters listPushes takes, as a zip of parts of at most 100,000 rows and a manifest naming the filters, the generation time, and each part's row count and SHA-256. format is CSV (default) or JSON (JSON Lines, full records). columns chooses and orders CSV columns. Requires ROLE_AUDITOR or ROLE_ADMIN.")
+    @GetMapping("/export")
+    @PreAuthorize("hasAnyRole('ADMIN', 'AUDITOR')")
+    public void export(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String owner,
+            @RequestParam(required = false) String project,
+            @RequestParam(required = false) String repo,
+            @RequestParam(required = false) String provider,
+            @RequestParam(required = false) String branch,
+            @RequestParam(required = false) String authorEmail,
+            @RequestParam(required = false) String user,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to,
+            @RequestParam(defaultValue = "true") boolean newestFirst,
+            @RequestParam(required = false) String format,
+            @RequestParam(required = false) String columns,
+            HttpServletRequest request,
+            HttpServletResponse response)
+            throws IOException {
+
+        PushQuery.PushQueryBuilder query = PushQuery.builder().newestFirst(newestFirst);
+        ListingParams.enumValue("status", status, PushStatus.class).ifPresent(query::status);
+        applyFilters(query, owner, project, repo, provider, branch, authorEmail, user, search, from, to);
+        ExportFormat exportFormat = ExportResponses.format(format);
+        List<String> chosen = ExportFields.columns(columns, ExportFields.PUSHES, "push");
+
+        ExportResponses.stream(
+                request, response, "pushes", List.of(ExportSources.pushes(pushStore, query, chosen)), exportFormat);
     }
 
     /**
@@ -110,6 +145,7 @@ public class PushController {
      */
     private void applyFilters(
             PushQuery.PushQueryBuilder query,
+            String owner,
             String project,
             String repo,
             String provider,
@@ -119,28 +155,15 @@ public class PushController {
             String search,
             String from,
             String to) {
-        if (project != null && !project.isBlank()) query.project(project);
-        if (repo != null && !repo.isBlank()) query.repoName(repo);
-        if (provider != null && !provider.isBlank()) query.provider(provider);
-        if (branch != null && !branch.isBlank()) query.branch(branch);
-        if (authorEmail != null && !authorEmail.isBlank()) query.authorEmail(authorEmail);
-        if (user != null && !user.isBlank()) query.user(user);
-        if (search != null && !search.isBlank()) query.search(search);
-        Instant newerThan = parseInstant(from, "from");
-        if (newerThan != null) query.newerThan(newerThan);
-        Instant olderThan = parseInstant(to, "to");
-        if (olderThan != null) query.olderThan(olderThan);
-    }
-
-    /** Parses an ISO-8601 instant param, returning null when blank and a 400 when malformed. */
-    private static Instant parseInstant(String value, String param) {
-        if (value == null || value.isBlank()) return null;
-        try {
-            return Instant.parse(value);
-        } catch (DateTimeParseException e) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "Invalid " + param + " timestamp (expected ISO-8601): " + value, e);
-        }
+        ListingParams.aliased("owner", owner, "project", project).ifPresent(query::project);
+        ListingParams.text(repo).ifPresent(query::repoName);
+        ListingParams.text(provider).ifPresent(query::provider);
+        ListingParams.text(branch).ifPresent(query::branch);
+        ListingParams.text(authorEmail).ifPresent(query::authorEmail);
+        ListingParams.text(user).ifPresent(query::user);
+        ListingParams.text(search).ifPresent(query::search);
+        ListingParams.instant("from", from).ifPresent(query::newerThan);
+        ListingParams.instant("to", to).ifPresent(query::olderThan);
     }
 
     /**
@@ -195,6 +218,7 @@ public class PushController {
                     "Returns a map of status → count. Supports the same project/repo/provider/branch/author-email/user/search/date-window filters as listPushes but excludes the status filter.")
     @GetMapping("/counts")
     public Map<String, Long> counts(
+            @RequestParam(required = false) String owner,
             @RequestParam(required = false) String project,
             @RequestParam(required = false) String repo,
             @RequestParam(required = false) String provider,
@@ -206,7 +230,7 @@ public class PushController {
             @RequestParam(required = false) String to) {
 
         PushQuery.PushQueryBuilder query = PushQuery.builder();
-        applyFilters(query, project, repo, provider, branch, authorEmail, user, search, from, to);
+        applyFilters(query, owner, project, repo, provider, branch, authorEmail, user, search, from, to);
 
         return pushStore.countByStatus(query.build());
     }

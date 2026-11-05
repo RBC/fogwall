@@ -4,6 +4,9 @@ import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -28,8 +31,11 @@ public class JdbcRepoPermissionStore implements PermissionStore<RepoPermission> 
         // We only insert — never update — so existing DB users' roles are not touched.
         ensureUserRow(p.getUsername());
         jdbc.update("""
-                INSERT INTO repo_permissions (id, username, provider, target, match_value, match_type, operation, source)
-                VALUES (:id, :username, :provider, :target, :matchValue, :matchType, :operation, :source)
+                INSERT INTO repo_permissions
+                    (id, username, provider, target, match_value, match_type, operation, source, granted_by, granted_at)
+                VALUES
+                    (:id, :username, :provider, :target, :matchValue, :matchType, :operation, :source, :grantedBy,
+                     :grantedAt)
                 """, params(p));
     }
 
@@ -85,7 +91,12 @@ public class JdbcRepoPermissionStore implements PermissionStore<RepoPermission> 
                 .addValue("matchValue", p.getValue())
                 .addValue("matchType", p.getMatchType().name())
                 .addValue("operation", p.getGrant().name())
-                .addValue("source", p.getSource().name());
+                .addValue("source", p.getSource().name())
+                .addValue("grantedBy", p.getGrantedBy())
+                .addValue(
+                        "grantedAt",
+                        p.getGrantedAt() == null ? null : Timestamp.from(p.getGrantedAt()),
+                        Types.TIMESTAMP);
     }
 
     private static final RowMapper<RepoPermission> ROW_MAPPER = JdbcRepoPermissionStore::mapRow;
@@ -102,6 +113,12 @@ public class JdbcRepoPermissionStore implements PermissionStore<RepoPermission> 
                 .matchType(MatchType.valueOf(rs.getString("match_type")))
                 .grant(RepoPermission.Grant.valueOf(rs.getString("operation")))
                 .source(RepoPermission.Source.valueOf(rs.getString("source")))
+                .grantedBy(rs.getString("granted_by"))
+                .grantedAt(instantOrNull(rs.getTimestamp("granted_at")))
                 .build();
+    }
+
+    static Instant instantOrNull(Timestamp ts) {
+        return ts == null ? null : ts.toInstant();
     }
 }

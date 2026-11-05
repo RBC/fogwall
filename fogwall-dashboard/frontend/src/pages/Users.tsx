@@ -148,7 +148,7 @@ function AddUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
             >
               <option value="READER">Reader — sees pushes, repositories and activity</option>
               <option value="USER">User</option>
-              <option value="AUDITOR">Auditor — reads users, groups and permissions</option>
+              <option value="AUDITOR">Auditor — reads and exports the audit record</option>
               <option value="ADMIN">Admin</option>
             </select>
           </div>

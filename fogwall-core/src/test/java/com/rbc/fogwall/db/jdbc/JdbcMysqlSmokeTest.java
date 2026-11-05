@@ -7,9 +7,23 @@ import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.PushStoreFactory;
 import com.rbc.fogwall.db.model.FetchActivity;
 import com.rbc.fogwall.db.model.FetchActivityQuery;
+import com.rbc.fogwall.db.model.MatchTarget;
+import com.rbc.fogwall.db.model.MatchType;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
 import com.rbc.fogwall.git.ProxyMode;
+import com.rbc.fogwall.permission.ChangeOrigin;
+import com.rbc.fogwall.permission.JdbcMembershipChangeStore;
+import com.rbc.fogwall.permission.JdbcPermissionChangeStore;
+import com.rbc.fogwall.permission.JdbcRepoPermissionStore;
+import com.rbc.fogwall.permission.JdbcRoleChangeStore;
+import com.rbc.fogwall.permission.MembershipChangeEvent;
+import com.rbc.fogwall.permission.MembershipChangeQuery;
+import com.rbc.fogwall.permission.PermissionChangeEvent;
+import com.rbc.fogwall.permission.PermissionChangeQuery;
+import com.rbc.fogwall.permission.RepoPermission;
+import com.rbc.fogwall.permission.RoleChangeEvent;
+import com.rbc.fogwall.permission.RoleChangeQuery;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -154,5 +168,99 @@ class JdbcMysqlSmokeTest {
         assertEquals(3, row.getFetchCount());
         assertEquals(hour, row.getBucketStart());
         assertEquals(hour.plusSeconds(20), row.getLastSeen());
+    }
+
+    /** V23 (mysql variant) keeps milliseconds, which the cursor compares on; a bare TIMESTAMP keeps whole seconds. */
+    @Test
+    void migrate_permissionChangeEvents_keepMillisecondsForTheCursor() {
+        var changes = new JdbcPermissionChangeStore(dataSource);
+        String subject = "user-" + UUID.randomUUID();
+        Instant at = Instant.parse("2026-11-05T14:00:00.123Z");
+        PermissionChangeEvent first = permissionChange(subject, at);
+        PermissionChangeEvent second = permissionChange(subject, at.plusMillis(1));
+        changes.record(first);
+        changes.record(second);
+
+        var query = PermissionChangeQuery.builder().subject(subject);
+        assertEquals(List.of(second, first), changes.find(query.build()));
+        assertEquals(List.of(first), changes.find(query.after(second.cursor()).build()));
+    }
+
+    /**
+     * V23 (mysql variant) declares {@code granted_at} NULL explicitly, so a grant without one stores no timestamp, and
+     * a stamped one keeps its milliseconds; role lists round-trip through {@code role_change_events}.
+     */
+    @Test
+    void migrate_grantStampsAndRoleChanges_roundTrip() {
+        var grants = new JdbcRepoPermissionStore(dataSource);
+        String user = "user-" + UUID.randomUUID();
+        RepoPermission stamped = RepoPermission.builder()
+                .username(user)
+                .provider("github")
+                .value("/acme/a")
+                .grantedBy("admin")
+                .grantedAt(Instant.parse("2026-11-05T14:00:00.123Z"))
+                .build();
+        RepoPermission bare = RepoPermission.builder()
+                .username(user)
+                .provider("github")
+                .value("/acme/b")
+                .build();
+        grants.save(stamped);
+        grants.save(bare);
+
+        assertEquals(stamped, grants.findById(stamped.getId()).orElseThrow());
+        assertNull(grants.findById(bare.getId()).orElseThrow().getGrantedAt());
+
+        var roles = new JdbcRoleChangeStore(dataSource);
+        RoleChangeEvent changed = RoleChangeEvent.builder()
+                .origin(ChangeOrigin.IDP)
+                .actor("oidc")
+                .username(user)
+                .previousRoles(List.of("USER"))
+                .roles(List.of("USER", "ADMIN"))
+                .build();
+        roles.record(changed);
+        assertEquals(
+                List.of(changed),
+                roles.find(RoleChangeQuery.builder().username(user).build()));
+    }
+
+    /** V23 (mysql variant) names the member column {@code username}: {@code MEMBER} is reserved from MySQL 8.0.17. */
+    @Test
+    void migrate_membershipChangeEvents_roundTrip() {
+        var changes = new JdbcMembershipChangeStore(dataSource);
+        String member = "user-" + UUID.randomUUID();
+        MembershipChangeEvent added = MembershipChangeEvent.builder()
+                .occurredAt(Instant.parse("2026-11-05T14:00:00.123Z"))
+                .action(MembershipChangeEvent.Action.ADDED)
+                .origin(ChangeOrigin.DASHBOARD)
+                .actor("admin")
+                .groupId(UUID.randomUUID().toString())
+                .groupName("platform-team")
+                .member(member)
+                .build();
+        changes.record(added);
+
+        assertEquals(
+                List.of(added),
+                changes.find(MembershipChangeQuery.builder().member(member).build()));
+    }
+
+    private static PermissionChangeEvent permissionChange(String subject, Instant at) {
+        return PermissionChangeEvent.builder()
+                .occurredAt(at)
+                .action(PermissionChangeEvent.Action.GRANTED)
+                .origin(ChangeOrigin.DASHBOARD)
+                .actor("admin")
+                .subjectType(PermissionChangeEvent.SubjectType.USER)
+                .subject(subject)
+                .permissionId(UUID.randomUUID().toString())
+                .provider("github/" + "a".repeat(280))
+                .target(MatchTarget.SLUG)
+                .value("/acme/widgets")
+                .matchType(MatchType.LITERAL)
+                .grant(RepoPermission.Grant.PUSH)
+                .build();
     }
 }

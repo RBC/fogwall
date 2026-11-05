@@ -23,6 +23,7 @@
   - [Repo permissions](admin/repo-permissions.md)
   - [Access rules](admin/access-rules.md)
   - [Approval mode](admin/approval-mode.md)
+  - [Audit evidence](admin/audit-evidence.md)
   - [Logging](admin/logging.md)
   - [JGit filesystem requirements](admin/filesystem-requirements.md)
   - [Externalized configuration](admin/externalized-config.md)

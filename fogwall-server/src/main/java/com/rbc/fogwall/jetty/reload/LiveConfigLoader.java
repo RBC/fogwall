@@ -6,13 +6,17 @@ import com.rbc.fogwall.config.JettyConfigurationBuilder;
 import com.rbc.fogwall.config.LoadedConfig;
 import com.rbc.fogwall.config.ReloadConfig;
 import com.rbc.fogwall.db.UrlRuleRegistry;
+import com.rbc.fogwall.permission.AccessChangeService;
+import com.rbc.fogwall.permission.ChangeContext;
 import com.rbc.fogwall.permission.RepoPermission;
-import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.user.UserStore;
 import java.io.IOException;
 import java.nio.file.*;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Comparator;
 import java.util.EnumSet;
+import java.util.HexFormat;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -25,6 +29,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 import org.github.gestalt.config.exceptions.GestaltException;
 import tools.jackson.databind.node.ObjectNode;
@@ -103,7 +108,7 @@ public class LiveConfigLoader {
     private final LoadedConfig startup;
     private final ReloadConfig reloadConfig;
     private final UrlRuleRegistry urlRuleRegistry;
-    private final RepoPermissionService repoPermissionService;
+    private final AccessChangeService accessChanges;
     private final UserStore userStore;
 
     /**
@@ -122,13 +127,13 @@ public class LiveConfigLoader {
             LoadedConfig startup,
             ReloadConfig reloadConfig,
             UrlRuleRegistry urlRuleRegistry,
-            RepoPermissionService repoPermissionService,
+            AccessChangeService accessChanges,
             UserStore userStore) {
         this.configHolder = configHolder;
         this.startup = startup;
         this.reloadConfig = reloadConfig;
         this.urlRuleRegistry = urlRuleRegistry;
-        this.repoPermissionService = repoPermissionService;
+        this.accessChanges = accessChanges;
         this.userStore = userStore;
     }
 
@@ -255,14 +260,30 @@ public class LiveConfigLoader {
             log.debug("Reload already in progress — skipping");
             return false;
         }
+        Path snapshotDir = null;
         try {
-            applyReload(FogwallConfigLoader.readReloadDocument(overrideFile), section);
+            // Parse a private copy of the bytes that were hashed, so the recorded revision is exactly what applied
+            // even if the file changes again mid-reload.
+            byte[] content = Files.readAllBytes(overrideFile);
+            snapshotDir = Files.createTempDirectory("fogwall-config-file-");
+            Path snapshot = snapshotDir.resolve(overrideFile.getFileName());
+            Files.write(snapshot, content);
+            applyReload(FogwallConfigLoader.readReloadDocument(snapshot), section, "sha256:" + sha256Hex(content));
             return true;
         } catch (Exception e) {
             log.error("Config reload from file {} failed: {}", overrideFile, e.getMessage(), e);
             return false;
         } finally {
             reloadLock.unlock();
+            deleteQuietly(snapshotDir);
+        }
+    }
+
+    private static String sha256Hex(byte[] content) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is required by the JCA spec but is unavailable", e);
         }
     }
 
@@ -305,9 +326,12 @@ public class LiveConfigLoader {
         Path cloneDir = null;
         try {
             cloneDir = Files.createTempDirectory("fogwall-config-git-");
-            Path yamlFile = fetchGitConfig(cloneDir);
-            if (yamlFile != null) {
-                applyReload(FogwallConfigLoader.readReloadDocument(yamlFile), section);
+            Optional<GitConfigSnapshot> snapshot = fetchGitConfig(cloneDir);
+            if (snapshot.isPresent()) {
+                applyReload(
+                        FogwallConfigLoader.readReloadDocument(snapshot.get().file()),
+                        section,
+                        snapshot.get().commit());
                 return true;
             }
             return false;
@@ -320,9 +344,12 @@ public class LiveConfigLoader {
         }
     }
 
+    /** The config file in a fresh clone, and the commit the clone checked out. */
+    private record GitConfigSnapshot(Path file, String commit) {}
+
     /**
-     * Clones the configured git repo into {@code cloneDir}, reads the requested YAML file, and returns its path.
-     * Returns {@code null} if the file doesn't exist in the repo.
+     * Clones the configured git repo into {@code cloneDir} and returns the requested YAML file with the commit it was
+     * read at. Empty if the file doesn't exist in the repo.
      *
      * <p>A fresh clone is performed on every call — no local state is retained between reloads. This avoids pull
      * failures caused by force-pushes on the remote branch.
@@ -330,7 +357,7 @@ public class LiveConfigLoader {
      * <p>Authentication uses {@code reload.git.auth}, resolved and checked as a pair while the configuration loaded.
      * With it unset the clone proceeds without credentials (suitable for public repos).
      */
-    private Path fetchGitConfig(Path cloneDir) throws GitAPIException, IOException {
+    private Optional<GitConfigSnapshot> fetchGitConfig(Path cloneDir) throws GitAPIException, IOException {
         ReloadConfig.GitSourceConfig gitCfg = reloadConfig.getGit();
         Optional<UsernamePasswordCredentialsProvider> creds = gitCredentials();
 
@@ -346,14 +373,17 @@ public class LiveConfigLoader {
                 .setDirectory(cloneDir.toFile())
                 .setDepth(1);
         creds.ifPresent(clone::setCredentialsProvider);
-        clone.call().close();
+        String commit;
+        try (Git git = clone.call()) {
+            commit = git.getRepository().resolve(Constants.HEAD).name();
+        }
 
         Path configFile = cloneDir.resolve(gitCfg.getFilePath());
         if (!Files.exists(configFile)) {
             log.warn("Config file {} not found in cloned repo at {}", gitCfg.getFilePath(), cloneDir);
-            return null;
+            return Optional.empty();
         }
-        return configFile;
+        return Optional.of(new GitConfigSnapshot(configFile, commit));
     }
 
     private static void deleteQuietly(Path dir) {
@@ -387,8 +417,10 @@ public class LiveConfigLoader {
      * Applies the sections {@code document} declares, narrowed to {@code requested} when a specific section was asked
      * for. A section the document is silent about keeps its current live value rather than reverting to the base
      * default, so a partial reload file patches the sections it names and leaves the rest alone.
+     *
+     * @param revision the source revision the document was read at, recorded against the access changes it applies
      */
-    private void applyReload(ObjectNode document, Section requested) throws GestaltException {
+    private void applyReload(ObjectNode document, Section requested, String revision) throws GestaltException {
         warnOnIgnoredKeys(document);
 
         Set<Section> sections = EnumSet.noneOf(Section.class);
@@ -401,7 +433,7 @@ public class LiveConfigLoader {
             }
         }
 
-        applyReload(FogwallConfigLoader.composeReload(startup, applied), sections);
+        applyReload(FogwallConfigLoader.composeReload(startup, applied), sections, revision);
     }
 
     /**
@@ -427,7 +459,7 @@ public class LiveConfigLoader {
         }
     }
 
-    private void applyReload(FogwallConfig newConfig, Set<Section> sections) {
+    private void applyReload(FogwallConfig newConfig, Set<Section> sections, String revision) {
         var builder = new JettyConfigurationBuilder(newConfig);
         // Validate all provider cross-references before applying any changes. If the new config has
         // a bad reference, this throws and the reload is aborted — the live config is not modified.
@@ -442,7 +474,7 @@ public class LiveConfigLoader {
                 case SCM_API -> reloadScmApi(builder);
                 case CONTENT_PATTERNS -> reloadContentPatterns(builder);
                 case RULES -> reloadRules(builder, newConfig);
-                case PERMISSIONS -> reloadPermissions(builder, newConfig);
+                case PERMISSIONS -> reloadPermissions(builder, newConfig, revision);
                 case ATTESTATIONS -> reloadAttestations(builder, newConfig);
                 case ALL -> throw new IllegalArgumentException("ALL must be resolved to concrete sections first");
             }
@@ -484,15 +516,15 @@ public class LiveConfigLoader {
         log.info("Rules reloaded from config");
     }
 
-    private void reloadPermissions(JettyConfigurationBuilder builder, FogwallConfig newConfig) {
-        if (repoPermissionService == null || userStore == null) {
-            log.warn("repoPermissionService or userStore not available — permissions reload skipped");
+    private void reloadPermissions(JettyConfigurationBuilder builder, FogwallConfig newConfig, String revision) {
+        if (accessChanges == null || userStore == null) {
+            log.warn("accessChanges or userStore not available — permissions reload skipped");
             return;
         }
         var configPerms = builder.buildConfigPermissions(newConfig);
         configPerms.stream().map(RepoPermission::getUsername).distinct().forEach(userStore::upsertUser);
-        repoPermissionService.seedFromConfig(configPerms);
-        log.info("Permissions reloaded from config");
+        accessChanges.reloadConfigPermissions(configPerms, ChangeContext.config(revision));
+        log.info("Permissions reloaded from config at {}", revision);
     }
 
     private void reloadAttestations(JettyConfigurationBuilder builder, FogwallConfig newConfig) {

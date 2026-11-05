@@ -12,6 +12,9 @@ import static org.mockito.Mockito.when;
 import com.rbc.fogwall.dashboard.audit.AdminAuditLog;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
+import com.rbc.fogwall.permission.AccessChangeService;
+import com.rbc.fogwall.permission.ChangeContext;
+import com.rbc.fogwall.permission.ChangeOrigin;
 import com.rbc.fogwall.permission.GroupPermissionRule;
 import com.rbc.fogwall.permission.GroupPermissionStore;
 import com.rbc.fogwall.permission.PermissionGroup;
@@ -22,6 +25,8 @@ import com.rbc.fogwall.user.UserEntry;
 import com.rbc.fogwall.user.UserStore;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -29,6 +34,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 @ExtendWith(MockitoExtension.class)
 class PermissionControllerTest {
@@ -43,7 +50,23 @@ class PermissionControllerTest {
     ReadOnlyUserStore userStore;
 
     @Mock
+    AccessChangeService accessChanges;
+
+    @Mock
     AdminAuditLog auditLog;
+
+    private static final ChangeContext BY_ADMIN = ChangeContext.by(ChangeOrigin.DASHBOARD, "admin");
+
+    @BeforeEach
+    void signIn() {
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken("admin", null, List.of()));
+    }
+
+    @AfterEach
+    void signOut() {
+        SecurityContextHolder.clearContext();
+    }
 
     private static final UserEntry ALICE = UserEntry.builder()
             .username("alice")
@@ -109,7 +132,7 @@ class PermissionControllerTest {
         var resp = controller.add("nobody", req("github", null, "/a/b", null, null));
 
         assertEquals(HttpStatus.NOT_FOUND, resp.getStatusCode());
-        verify(permissionService, never()).save(any());
+        verify(accessChanges, never()).grant(any(), any());
     }
 
     @Test
@@ -120,7 +143,7 @@ class PermissionControllerTest {
         var resp = controller.add("alice", req("github", null, "/a/b", null, "PUSH"));
 
         assertEquals(HttpStatus.BAD_REQUEST, resp.getStatusCode());
-        verify(permissionService, never()).save(any());
+        verify(accessChanges, never()).grant(any(), any());
         verify(auditLog).denied(eq("permission.grant"), any(), any());
     }
 
@@ -177,7 +200,7 @@ class PermissionControllerTest {
         var resp = controller.add("alice", req("github", null, "/a/b", null, null));
 
         assertEquals(HttpStatus.CREATED, resp.getStatusCode());
-        verify(permissionService).save(captor.capture());
+        verify(accessChanges).grant(captor.capture(), eq(BY_ADMIN));
         var saved = captor.getValue();
         assertEquals("alice", saved.getUsername());
         assertEquals("github", saved.getProvider());
@@ -196,7 +219,7 @@ class PermissionControllerTest {
         var resp = controller.add("alice", req("github", "SLUG", "/acme/repo", "LITERAL", "PUSH"));
 
         assertEquals(HttpStatus.BAD_REQUEST, resp.getStatusCode());
-        verify(permissionService, never()).save(any());
+        verify(accessChanges, never()).grant(any(), any());
     }
 
     @Test
@@ -207,7 +230,7 @@ class PermissionControllerTest {
         var resp = controller.add("alice", req("github", "OWNER", "acme", "GLOB", "PUSH"));
 
         assertEquals(HttpStatus.CREATED, resp.getStatusCode());
-        verify(permissionService).save(captor.capture());
+        verify(accessChanges).grant(captor.capture(), eq(BY_ADMIN));
         var saved = captor.getValue();
         assertEquals(MatchTarget.OWNER, saved.getTarget());
         assertEquals(MatchType.GLOB, saved.getMatchType());
@@ -219,14 +242,15 @@ class PermissionControllerTest {
         // repo_permissions has an FK to proxy_users and a config-declared user has no row there yet.
         UserStore mutableStore = mock(UserStore.class);
         when(mutableStore.findByUsername("alice")).thenReturn(Optional.of(ALICE));
-        var controllerWithMutableStore = new PermissionController(permissionService, mutableStore, auditLog);
+        var controllerWithMutableStore =
+                new PermissionController(permissionService, accessChanges, mutableStore, auditLog);
 
         var resp = controllerWithMutableStore.add("alice", req("github", null, "/a/b", null, null));
 
         assertEquals(HttpStatus.CREATED, resp.getStatusCode());
-        var inOrder = inOrder(mutableStore, permissionService);
+        var inOrder = inOrder(mutableStore, accessChanges);
         inOrder.verify(mutableStore).upsertUser("alice");
-        inOrder.verify(permissionService).save(any());
+        inOrder.verify(accessChanges).grant(any(), eq(BY_ADMIN));
     }
 
     // ── DELETE /api/users/{username}/permissions/{id} ────────────────────────────
@@ -238,7 +262,7 @@ class PermissionControllerTest {
         var resp = controller.delete("nobody", "some-id");
 
         assertEquals(HttpStatus.NOT_FOUND, resp.getStatusCode());
-        verify(permissionService, never()).delete(any());
+        verify(accessChanges, never()).revoke(any(), any());
     }
 
     @Test
@@ -267,7 +291,7 @@ class PermissionControllerTest {
         var resp = controller.delete("alice", bobPerm.getId());
 
         assertEquals(HttpStatus.FORBIDDEN, resp.getStatusCode());
-        verify(permissionService, never()).delete(any());
+        verify(accessChanges, never()).revoke(any(), any());
     }
 
     @Test
@@ -278,7 +302,7 @@ class PermissionControllerTest {
         var resp = controller.delete("alice", CONFIG_PERM.getId());
 
         assertEquals(HttpStatus.FORBIDDEN, resp.getStatusCode());
-        verify(permissionService, never()).delete(any());
+        verify(accessChanges, never()).revoke(any(), any());
     }
 
     @Test
@@ -289,7 +313,7 @@ class PermissionControllerTest {
         var resp = controller.delete("alice", DB_PERM.getId());
 
         assertEquals(HttpStatus.NO_CONTENT, resp.getStatusCode());
-        verify(permissionService).delete(DB_PERM.getId());
+        verify(accessChanges).revoke(DB_PERM, BY_ADMIN);
     }
 
     // ── GET /api/users/{username}/permissions/groups ─────────────────────────────

@@ -131,7 +131,7 @@ public class FogwallJettyApplication {
                 loaded,
                 configBuilder.getReloadConfig(),
                 ctx.urlRuleRegistry(),
-                ctx.repoPermissionService(),
+                ctx.accessChangeService(),
                 ctx.userStore());
         liveConfigLoader.start();
 

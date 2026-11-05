@@ -8,6 +8,7 @@ import com.rbc.fogwall.config.AuthConfig;
 import com.rbc.fogwall.config.FogwallConfig;
 import com.rbc.fogwall.config.LdapAuthConfig;
 import com.rbc.fogwall.config.OidcAuthConfig;
+import com.rbc.fogwall.permission.AccessChangeService;
 import com.rbc.fogwall.user.EmailConflictException;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
 import com.rbc.fogwall.user.Roles;
@@ -67,6 +68,7 @@ import org.springframework.security.ldap.authentication.BindAuthenticator;
 import org.springframework.security.ldap.authentication.LdapAuthenticationProvider;
 import org.springframework.security.ldap.search.FilterBasedLdapUserSearch;
 import org.springframework.security.ldap.userdetails.DefaultLdapAuthoritiesPopulator;
+import org.springframework.security.ldap.userdetails.LdapUserDetails;
 import org.springframework.security.oauth2.client.endpoint.NimbusJwtClientAuthenticationParametersConverter;
 import org.springframework.security.oauth2.client.endpoint.OAuth2AuthorizationCodeGrantRequest;
 import org.springframework.security.oauth2.client.endpoint.RestClientAuthorizationCodeTokenResponseClient;
@@ -116,6 +118,8 @@ public class SecurityConfig {
     private final ReadOnlyUserStore userStore;
 
     private final FogwallConfig fogwallConfig;
+
+    private final AccessChangeService accessChanges;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -592,6 +596,9 @@ public class SecurityConfig {
         } else if (auth.getPrincipal() instanceof LdapUserDetailsWithEmail ldapUser) {
             email = ldapUser.getEmail();
             authSource = "ldap";
+        } else if (auth.getPrincipal() instanceof LdapUserDetails) {
+            // A directory entry with no mail attribute: still a directory user, whose roles are synced like any other.
+            authSource = "ldap";
         }
 
         if (authSource == null) return;
@@ -601,7 +608,7 @@ public class SecurityConfig {
                 .filter(a -> a.startsWith("ROLE_"))
                 .map(a -> a.substring(5))
                 .toList();
-        jdbc.upsertUser(username, roles);
+        accessChanges.syncIdpRoles(username, roles, authSource);
         if (email != null && !email.isBlank()) {
             try {
                 jdbc.upsertLockedEmail(username, email.strip().toLowerCase(), authSource);

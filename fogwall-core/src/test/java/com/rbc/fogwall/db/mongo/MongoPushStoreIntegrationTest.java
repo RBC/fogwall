@@ -3,6 +3,7 @@ package com.rbc.fogwall.db.mongo;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.mongodb.client.MongoClients;
+import com.rbc.fogwall.db.CursorWalk;
 import com.rbc.fogwall.db.model.*;
 import java.time.Duration;
 import java.time.Instant;
@@ -54,6 +55,37 @@ class MongoPushStoreIntegrationTest {
                 .status(PushStatus.RECEIVED)
                 .timestamp(Instant.now())
                 .build();
+    }
+
+    @Test
+    void find_afterACursor_walksEveryRecordOnce_withTiesBrokenById() {
+        Instant t = Instant.parse("2026-11-05T14:00:00.123Z");
+        for (String id : List.of("id-3", "id-1", "id-2")) {
+            PushRecord r = record(id);
+            r.setTimestamp(t);
+            store.save(r);
+        }
+        PushRecord later = record("id-0");
+        later.setTimestamp(t.plusSeconds(1));
+        store.save(later);
+
+        assertEquals(
+                List.of("id-0", "id-3", "id-2", "id-1"),
+                CursorWalk.walk(
+                        after -> store.find(
+                                PushQuery.builder().after(after).limit(3).build()),
+                        r -> new RecordCursor(r.getTimestamp(), r.getId()),
+                        PushRecord::getId));
+        assertEquals(
+                List.of("id-1", "id-2", "id-3", "id-0"),
+                CursorWalk.walk(
+                        after -> store.findSummaries(PushQuery.builder()
+                                .newestFirst(false)
+                                .after(after)
+                                .limit(1)
+                                .build()),
+                        s -> new RecordCursor(s.getTimestamp(), s.getId()),
+                        PushSummary::getId));
     }
 
     @Test

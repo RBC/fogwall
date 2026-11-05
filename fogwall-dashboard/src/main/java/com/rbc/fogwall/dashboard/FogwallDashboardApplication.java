@@ -139,7 +139,7 @@ public class FogwallDashboardApplication {
                 loaded,
                 configBuilder.getReloadConfig(),
                 ctx.urlRuleRegistry(),
-                ctx.repoPermissionService(),
+                ctx.accessChangeService(),
                 ctx.userStore());
         liveConfigLoader.start();
 
@@ -243,6 +243,11 @@ public class FogwallDashboardApplication {
                     "repoPermissionService",
                     Objects.requireNonNull(
                             ctx.repoPermissionService(), "FogwallContext must always carry a RepoPermissionService"));
+            bf.registerSingleton(
+                    "accessChangeService",
+                    Objects.requireNonNull(
+                            ctx.accessChangeService(),
+                            "FogwallContext must always carry an AccessChangeService, or access changes go unrecorded"));
             // Expose the JDBC DataSource as a Spring bean so SessionStoreConfig can inject it
             // when session-store=jdbc. Null for MongoDB deployments (no JDBC DataSource available).
             if (jdbcDataSource != null) {

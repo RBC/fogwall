@@ -59,10 +59,8 @@ public class JdbcScmApiActionStore implements ScmApiActionStore {
         MapSqlParameterSource params = new MapSqlParameterSource();
         String where = buildWhere(query, params);
         String sql = "SELECT * FROM scm_api_action_records" + where
-                + " ORDER BY timestamp " + (query.isNewestFirst() ? "DESC" : "ASC")
-                + " LIMIT :limit OFFSET :offset";
-        params.addValue("limit", query.getLimit());
-        params.addValue("offset", query.getOffset());
+                + JdbcKeysetPaging.orderAndPage(
+                        params, "timestamp", query.isNewestFirst(), query.getLimit(), query.getOffset());
         return jdbc.query(sql, params, ROW_MAPPER);
     }
 
@@ -97,6 +95,15 @@ public class JdbcScmApiActionStore implements ScmApiActionStore {
             sql.append(" AND (LOWER(repo_owner) LIKE :search OR LOWER(repo_name) LIKE :search)");
             params.addValue("search", "%" + query.getSearch().toLowerCase() + "%");
         }
+        if (query.getFrom() != null) {
+            sql.append(" AND timestamp >= :from");
+            params.addValue("from", Timestamp.from(query.getFrom()));
+        }
+        if (query.getTo() != null) {
+            sql.append(" AND timestamp < :to");
+            params.addValue("to", Timestamp.from(query.getTo()));
+        }
+        JdbcKeysetPaging.appendAfter(sql, params, "timestamp", query.getAfter(), query.isNewestFirst());
 
         return sql.toString();
     }

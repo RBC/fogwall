@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.*;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * End-to-end tests for LDAP group-to-role mapping.
@@ -193,5 +194,91 @@ class LdapRoleMappingE2ETest {
                     meResp.body().contains("ROLE_READER") && !meResp.body().contains("ROLE_USER"),
                     "Expected ROLE_READER and no ROLE_USER for an unmapped user; got: " + meResp.body());
         }
+    }
+
+    /**
+     * The roles a directory asserts are compared with the stored ones at each sign-in, and a difference is recorded as
+     * a role change against the identity provider: one sign-in that gains roles, and a later one that loses a group.
+     */
+    @Test
+    @Order(5)
+    void aChangeInDirectoryGroups_isRecordedAsARoleChangeAtTheNextSignIn() throws Exception {
+        String member = "cn=" + OpenLdapContainer.TEST_USER + ",ou=users," + OpenLdapContainer.BASE_DN;
+        String adminGroup = "cn=" + OpenLdapContainer.ADMIN_GROUP + ",ou=groups," + OpenLdapContainer.BASE_DN;
+        ldap.modify("dn: cn=contributors,ou=groups," + OpenLdapContainer.BASE_DN + "\n"
+                + "changetype: add\n"
+                + "objectClass: groupOfNames\n"
+                + "cn: contributors\n"
+                + "member: " + member + "\n");
+        // A groupOfNames must keep a member, so the admin group gets a second one before the test user leaves it.
+        ldap.modify("dn: " + adminGroup + "\nchangetype: modify\nadd: member\nmember: " + OpenLdapContainer.MANAGER_DN
+                + "\n");
+
+        var config = new FogwallConfig();
+        config.getAuth().setProvider("ldap");
+        config.getAuth().getLdap().setUrl(ldap.getLdapUrl());
+        config.getAuth().getLdap().setUserDnPatterns(OpenLdapContainer.USER_DN_PATTERN);
+        config.getAuth().getLdap().setBindDn(OpenLdapContainer.MANAGER_DN);
+        config.getAuth().getLdap().setBindPassword(OpenLdapContainer.ADMIN_PASSWORD);
+        config.getAuth().getLdap().setGroupSearchBase(OpenLdapContainer.GROUP_SEARCH_BASE);
+        config.getAuth()
+                .setRoleMappings(
+                        Map.of("ADMIN", List.of(OpenLdapContainer.ADMIN_GROUP), "USER", List.of("contributors")));
+
+        try (var audited = new DashboardFixture(config)) {
+            String auditedUrl = audited.getBaseUrl();
+            HttpClient asAdmin = signIn(auditedUrl);
+
+            ldap.modify("dn: " + adminGroup + "\nchangetype: modify\ndelete: member\nmember: " + member + "\n");
+            try {
+                signIn(auditedUrl);
+            } finally {
+                ldap.modify("dn: " + adminGroup + "\nchangetype: modify\nadd: member\nmember: " + member + "\n");
+            }
+
+            // The first session still carries the ADMIN it signed in with, so it can read the record. The fixtures in
+            // this class share one in-memory database and the earlier tests sign the same user in under other
+            // mappings, so only the two newest events are this test's.
+            var events = asAdmin.send(
+                    HttpRequest.newBuilder()
+                            .uri(URI.create(auditedUrl + "/api/audit/role-changes?limit=2&subject="
+                                    + OpenLdapContainer.TEST_USER))
+                            .GET()
+                            .build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, events.statusCode(), events.body());
+            var rows = JsonMapper.builder().build().readTree(events.body());
+            assertEquals(2, rows.size(), events.body());
+            var lost = rows.get(0);
+            var gained = rows.get(1);
+            for (var row : List.of(lost, gained)) {
+                assertEquals("IDP", row.get("origin").asString());
+                assertEquals("ldap", row.get("actor").asString());
+            }
+            assertEquals("[\"ADMIN\",\"USER\"]", gained.get("roles").toString());
+            assertEquals("[\"ADMIN\",\"USER\"]", lost.get("previousRoles").toString());
+            assertEquals("[\"USER\"]", lost.get("roles").toString());
+        }
+    }
+
+    /** Signs the test user in on a fresh session and returns its client. */
+    private static HttpClient signIn(String url) throws Exception {
+        var signedIn = HttpClient.newBuilder()
+                .cookieHandler(new CookieManager(null, CookiePolicy.ACCEPT_ALL))
+                .followRedirects(HttpClient.Redirect.NORMAL)
+                .build();
+        String formBody = "username=" + OpenLdapContainer.TEST_USER + "&password=" + OpenLdapContainer.TEST_PASSWORD;
+        signedIn.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(url + "/login"))
+                        .header("Content-Type", "application/x-www-form-urlencoded")
+                        .POST(HttpRequest.BodyPublishers.ofString(formBody, StandardCharsets.UTF_8))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        var me = signedIn.send(
+                HttpRequest.newBuilder().uri(URI.create(url + "/api/me")).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, me.statusCode(), "sign-in must establish a session; got " + me.body());
+        return signedIn;
     }
 }

@@ -396,3 +396,84 @@ export interface ThirdPartyNotices {
   variant: string | null
   modules: ThirdPartyNoticeModule[]
 }
+
+/** Where an access change came from. CONFIG is a live reload, and carries the revision it was loaded from. */
+export type ChangeOrigin = 'DASHBOARD' | 'API' | 'CONFIG' | 'IDP'
+
+/** A grant or revocation of a user or group repository permission, from GET /api/audit/permission-changes. */
+export interface PermissionChangeEvent {
+  id: string
+  occurredAt: string
+  action: 'GRANTED' | 'REVOKED'
+  origin: ChangeOrigin
+  /** Who made the change. Absent on a CONFIG change. */
+  actor?: string
+  sourceRevision?: string
+  subjectType: 'USER' | 'GROUP'
+  subject: string
+  permissionId: string
+  provider: string
+  target: string
+  value: string
+  matchType: string
+  grant: string
+}
+
+/** A user added to or removed from a permission group, from GET /api/audit/membership-changes. */
+export interface MembershipChangeEvent {
+  id: string
+  occurredAt: string
+  action: 'ADDED' | 'REMOVED'
+  origin: ChangeOrigin
+  actor?: string
+  sourceRevision?: string
+  groupId: string
+  groupName: string
+  member: string
+}
+
+/** A change to a user's roles, from GET /api/audit/role-changes. */
+export interface RoleChangeEvent {
+  id: string
+  occurredAt: string
+  origin: ChangeOrigin
+  /** Who made the change; for IDP, the identity provider. */
+  actor: string
+  username: string
+  previousRoles: string[]
+  roles: string[]
+}
+
+/** A record type an export can write, with the CSV columns it can choose from in their default order. */
+export interface RecordType {
+  name: string
+  columns: string[]
+}
+
+/** One holder's current grant, directly or through a group, from GET /api/audit/grants. */
+export interface GrantHolding {
+  holder: string
+  via: 'DIRECT' | 'GROUP'
+  /** The group the grant comes through; absent for a direct grant. */
+  group?: string
+  provider: string
+  target: string
+  value: string
+  matchType: string
+  grant: string
+  /** Where the grant is defined: CONFIG or DB. */
+  source: string
+  grantedBy?: string
+  grantedAt?: string
+  /** Whether the holder's roles let the grant take effect. */
+  effective: boolean
+  permissionId: string
+}
+
+/** One member of one group, from GET /api/audit/group-members. */
+export interface GroupMembership {
+  groupId: string
+  group: string
+  groupSource: string
+  member: string
+}

@@ -104,16 +104,22 @@ public class MongoFetchStore implements FetchStore {
             String pattern = "(?i).*" + Pattern.quote(query.getSearch()) + ".*";
             filters.add(Filters.or(Filters.regex("owner", pattern), Filters.regex("repoName", pattern)));
         }
+        if (query.getFrom() != null) {
+            filters.add(Filters.gte("bucketStart", Date.from(query.getFrom())));
+        }
+        if (query.getTo() != null) {
+            filters.add(Filters.lt("bucketStart", Date.from(query.getTo())));
+        }
+        if (query.getAfter() != null) {
+            filters.add(MongoKeysetPaging.after("bucketStart", query.getAfter(), query.isNewestFirst()));
+        }
 
         Bson filter = filters.isEmpty() ? new Document() : Filters.and(filters);
-        Bson sort = query.isNewestFirst()
-                ? Sorts.descending("bucketStart", "lastSeen")
-                : Sorts.ascending("bucketStart", "lastSeen");
 
         List<FetchActivity> results = new ArrayList<>();
         getCollection()
                 .find(filter)
-                .sort(sort)
+                .sort(MongoKeysetPaging.sort("bucketStart", query.isNewestFirst()))
                 .skip(query.getOffset())
                 .limit(query.getLimit())
                 .forEach(doc -> results.add(fromDocument(doc)));

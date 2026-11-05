@@ -9,6 +9,7 @@ import com.mongodb.client.model.Sorts;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import org.bson.Document;
@@ -20,7 +21,7 @@ public class MongoGroupPermissionStore implements GroupPermissionStore {
     private static final Logger log = LoggerFactory.getLogger(MongoGroupPermissionStore.class);
     private static final String GROUPS_COLLECTION = "permission_groups";
     private static final String RULES_COLLECTION = "group_permissions";
-    private static final String MEMBERS_COLLECTION = "group_members";
+    public static final String MEMBERS_COLLECTION = "group_members";
 
     private final MongoDatabase database;
 
@@ -120,7 +121,9 @@ public class MongoGroupPermissionStore implements GroupPermissionStore {
                 .append("target", r.getTarget().name())
                 .append("value", r.getValue())
                 .append("matchType", r.getMatchType().name())
-                .append("operation", r.getGrant().name()));
+                .append("operation", r.getGrant().name())
+                .append("grantedBy", r.getGrantedBy())
+                .append("grantedAt", r.getGrantedAt() == null ? null : Date.from(r.getGrantedAt())));
     }
 
     @Override
@@ -182,6 +185,8 @@ public class MongoGroupPermissionStore implements GroupPermissionStore {
                 .value(doc.getString("value"))
                 .matchType(MatchType.valueOf(doc.getString("matchType")))
                 .grant(RepoPermission.Grant.valueOf(doc.getString("operation")))
+                .grantedBy(doc.getString("grantedBy"))
+                .grantedAt(MongoRepoPermissionStore.instantOrNull(doc.getDate("grantedAt")))
                 .build();
     }
 }

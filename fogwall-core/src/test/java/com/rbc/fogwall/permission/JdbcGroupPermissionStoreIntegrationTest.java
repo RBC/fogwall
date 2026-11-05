@@ -8,6 +8,7 @@ import com.rbc.fogwall.db.model.MatchType;
 import com.rbc.fogwall.service.JdbcScmTokenCache;
 import com.rbc.fogwall.user.JdbcUserStore;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -62,6 +63,25 @@ class JdbcGroupPermissionStoreIntegrationTest {
                 .build();
         store.saveRule(r);
         return r;
+    }
+
+    @Test
+    void saveRule_roundTripsWhoGrantedItAndWhen_andNoneOnARuleWithout() {
+        PermissionGroup g = dbGroup("devs");
+        GroupPermissionRule stamped = GroupPermissionRule.builder()
+                .groupId(g.getId())
+                .provider("github")
+                .value("/acme/a")
+                .grantedBy("admin")
+                .grantedAt(Instant.parse("2026-11-05T14:00:00.123Z"))
+                .build();
+        store.saveRule(stamped);
+        GroupPermissionRule bare = rule(g.getId(), "github", "/acme/b", RepoPermission.Grant.PUSH);
+
+        assertEquals(stamped, store.findRuleById(stamped.getId()).orElseThrow());
+        GroupPermissionRule found = store.findRuleById(bare.getId()).orElseThrow();
+        assertNull(found.getGrantedBy());
+        assertNull(found.getGrantedAt());
     }
 
     // ---- groups ----

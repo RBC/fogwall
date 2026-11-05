@@ -4,6 +4,8 @@ import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.sql.Types;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -106,8 +108,10 @@ public class JdbcGroupPermissionStore implements GroupPermissionStore {
     public void saveRule(GroupPermissionRule r) {
         jdbc.update(
                 """
-                INSERT INTO group_permissions (id, group_id, provider, target, match_value, match_type, operation)
-                VALUES (:id, :groupId, :provider, :target, :matchValue, :matchType, :operation)
+                INSERT INTO group_permissions
+                    (id, group_id, provider, target, match_value, match_type, operation, granted_by, granted_at)
+                VALUES
+                    (:id, :groupId, :provider, :target, :matchValue, :matchType, :operation, :grantedBy, :grantedAt)
                 """,
                 new MapSqlParameterSource()
                         .addValue("id", r.getId())
@@ -116,7 +120,12 @@ public class JdbcGroupPermissionStore implements GroupPermissionStore {
                         .addValue("target", r.getTarget().name())
                         .addValue("matchValue", r.getValue())
                         .addValue("matchType", r.getMatchType().name())
-                        .addValue("operation", r.getGrant().name()));
+                        .addValue("operation", r.getGrant().name())
+                        .addValue("grantedBy", r.getGrantedBy())
+                        .addValue(
+                                "grantedAt",
+                                r.getGrantedAt() == null ? null : Timestamp.from(r.getGrantedAt()),
+                                Types.TIMESTAMP));
     }
 
     @Override
@@ -172,6 +181,8 @@ public class JdbcGroupPermissionStore implements GroupPermissionStore {
                 .value(rs.getString("match_value"))
                 .matchType(MatchType.valueOf(rs.getString("match_type")))
                 .grant(RepoPermission.Grant.valueOf(rs.getString("operation")))
+                .grantedBy(rs.getString("granted_by"))
+                .grantedAt(JdbcRepoPermissionStore.instantOrNull(rs.getTimestamp("granted_at")))
                 .build();
     }
 }

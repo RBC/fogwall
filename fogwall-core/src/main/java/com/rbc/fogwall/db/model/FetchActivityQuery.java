@@ -1,5 +1,6 @@
 package com.rbc.fogwall.db.model;
 
+import java.time.Instant;
 import lombok.Builder;
 import lombok.Data;
 
@@ -15,6 +16,15 @@ public class FetchActivityQuery {
 
     /** Free-text search: matches rows where owner OR repo name contains this value (case-insensitive). */
     private String search;
+
+    /** Inclusive lower bound on the hour a row counts. */
+    private Instant from;
+
+    /** Exclusive upper bound on the hour a row counts. */
+    private Instant to;
+
+    /** Return only rows that come after this position in the requested {@code (bucketStart, id)} order. */
+    private RecordCursor after;
 
     /** Maximum number of results to return. */
     @Builder.Default

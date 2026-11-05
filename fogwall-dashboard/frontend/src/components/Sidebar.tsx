@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react'
 import { NavLink } from 'react-router'
-import { canAdminister, hasRole, isReadOnly } from '../roles'
+import { canAdminister, canAudit, hasRole, isReadOnly } from '../roles'
 import type { CurrentUser } from '../types'
 
 interface SidebarProps {
@@ -59,6 +59,26 @@ const icons: Record<string, ReactNode> = {
       <path d="M7 7.5h.01M7 16.5h.01" strokeLinecap="round" />
     </>
   ),
+  activity: <path d="M3 12h4l3-7 4 14 3-7h4" strokeLinecap="round" strokeLinejoin="round" />,
+  changes: (
+    <>
+      <path d="M4 12a8 8 0 1 0 2.3-5.6L4 8.7" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4 4v4.7h4.7M12 8v4l3 2" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+  access: (
+    <>
+      <circle cx="8" cy="15" r="4" />
+      <path d="M11 12l8-8M16 7l2.5 2.5M14 9l2 2" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+  export: (
+    <path
+      d="M12 4v11M7.5 10.5 12 15l4.5-4.5M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  ),
   users: (
     <>
       <circle cx="9" cy="8" r="3" />
@@ -102,8 +122,6 @@ interface Dest {
   disabled?: boolean // not a live route yet; renders greyed out
   /** Sub-destinations, rendered indented under this one. Hidden in the collapsed rail, which has no room for them. */
   children?: Dest[]
-  /** Shown to auditors as well as admins; the rest of the admin section is admin-only. */
-  auditorVisible?: boolean
   /** A destination that only acts, hidden from an auditor's read-only session. */
   writes?: boolean
 }
@@ -126,9 +144,17 @@ const PRIMARY: Dest[] = [
   { to: '/providers', label: 'Providers', icon: 'providers' },
 ]
 
+/** Auditors and admins: the record of what fogwall decided and of who may do what, and its export. */
+const AUDIT: Dest[] = [
+  { to: '/audit/user-activity', label: 'User activity', icon: 'activity' },
+  { to: '/audit/access-changes', label: 'Access changes', icon: 'changes' },
+  { to: '/audit/current-access', label: 'Current access', icon: 'access' },
+  { to: '/audit/export', label: 'Export', icon: 'export' },
+]
+
 const ADMIN: Dest[] = [
-  { to: '/users', label: 'Users', icon: 'users', auditorVisible: true },
-  { to: '/groups', label: 'Groups', icon: 'groups', auditorVisible: true },
+  { to: '/users', label: 'Users', icon: 'users' },
+  { to: '/groups', label: 'Groups', icon: 'groups' },
   { to: '/operations', label: 'Operations', icon: 'operations' },
   { to: '/mirror-cache', label: 'Mirror cache', icon: 'mirror' },
 ]
@@ -183,12 +209,36 @@ function NavRow({ dest, collapsed }: { dest: Dest; collapsed: boolean }) {
   )
 }
 
+/** A titled section of destinations; the collapsed rail marks it with a rule instead of the title. */
+function NavGroup({
+  title,
+  dests,
+  collapsed,
+}: {
+  title: string
+  dests: Dest[]
+  collapsed: boolean
+}) {
+  if (dests.length === 0) return null
+  return (
+    <>
+      {collapsed ? (
+        <div className="mx-2.5 my-2 border-t border-slate-700" />
+      ) : (
+        <div className="px-2.5 pb-1 pt-3 text-[10.5px] font-semibold uppercase tracking-wider text-slate-500">
+          {title}
+        </div>
+      )}
+      {dests.map((d) => (
+        <NavRow key={d.to} dest={d} collapsed={collapsed} />
+      ))}
+    </>
+  )
+}
+
 export function Sidebar({ currentUser, dark, toggleDark, collapsed }: SidebarProps) {
-  const admin = canAdminister(currentUser)
-    ? ADMIN
-    : hasRole(currentUser, 'AUDITOR')
-      ? ADMIN.filter((d) => d.auditorVisible)
-      : []
+  const audit = canAudit(currentUser) ? AUDIT : []
+  const admin = canAdminister(currentUser) ? ADMIN : []
   const readOnly = isReadOnly(currentUser)
   const roleLabel = canAdminister(currentUser)
     ? 'admin'
@@ -279,19 +329,8 @@ export function Sidebar({ currentUser, dark, toggleDark, collapsed }: SidebarPro
           ),
         )}
 
-        {admin.length > 0 && (
-          <>
-            {!collapsed && (
-              <div className="px-2.5 pb-1 pt-3 text-[10.5px] font-semibold uppercase tracking-wider text-slate-500">
-                Admin
-              </div>
-            )}
-            {collapsed && <div className="mx-2.5 my-2 border-t border-slate-700" />}
-            {admin.map((d) => (
-              <NavRow key={d.to} dest={d} collapsed={collapsed} />
-            ))}
-          </>
-        )}
+        <NavGroup title="Audit" dests={audit} collapsed={collapsed} />
+        <NavGroup title="Admin" dests={admin} collapsed={collapsed} />
       </nav>
 
       {/* Footer: preferences + profile, always visible */}

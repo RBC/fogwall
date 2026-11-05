@@ -5,7 +5,6 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Indexes;
-import com.mongodb.client.model.Sorts;
 import com.mongodb.client.model.Updates;
 import com.rbc.fogwall.db.ScmApiActionStore;
 import com.rbc.fogwall.db.model.ScmApiActionOrigin;
@@ -112,14 +111,22 @@ public class MongoScmApiActionStore implements ScmApiActionStore {
             String pattern = "(?i).*" + Pattern.quote(query.getSearch()) + ".*";
             filters.add(Filters.or(Filters.regex("repo_owner", pattern), Filters.regex("repo_name", pattern)));
         }
+        if (query.getFrom() != null) {
+            filters.add(Filters.gte("timestamp", Date.from(query.getFrom())));
+        }
+        if (query.getTo() != null) {
+            filters.add(Filters.lt("timestamp", Date.from(query.getTo())));
+        }
+        if (query.getAfter() != null) {
+            filters.add(MongoKeysetPaging.after("timestamp", query.getAfter(), query.isNewestFirst()));
+        }
 
         Bson filter = filters.isEmpty() ? new Document() : Filters.and(filters);
-        Bson sort = query.isNewestFirst() ? Sorts.descending("timestamp") : Sorts.ascending("timestamp");
 
         List<ScmApiActionRecord> results = new ArrayList<>();
         getCollection()
                 .find(filter)
-                .sort(sort)
+                .sort(MongoKeysetPaging.sort("timestamp", query.isNewestFirst()))
                 .skip(query.getOffset())
                 .limit(query.getLimit())
                 .forEach(doc -> results.add(toRecord(doc)));

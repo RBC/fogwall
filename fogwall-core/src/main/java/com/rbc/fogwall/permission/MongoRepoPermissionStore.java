@@ -8,7 +8,9 @@ import com.mongodb.client.model.Indexes;
 import com.mongodb.client.model.Sorts;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import org.bson.Document;
@@ -92,7 +94,13 @@ public class MongoRepoPermissionStore implements PermissionStore<RepoPermission>
                 .append("value", p.getValue())
                 .append("matchType", p.getMatchType().name())
                 .append("operation", p.getGrant().name())
-                .append("source", p.getSource().name());
+                .append("source", p.getSource().name())
+                .append("grantedBy", p.getGrantedBy())
+                .append("grantedAt", p.getGrantedAt() == null ? null : Date.from(p.getGrantedAt()));
+    }
+
+    static Instant instantOrNull(Date date) {
+        return date == null ? null : date.toInstant();
     }
 
     private static RepoPermission fromDocument(Document doc) {
@@ -105,6 +113,8 @@ public class MongoRepoPermissionStore implements PermissionStore<RepoPermission>
                 .matchType(MatchType.valueOf(doc.getString("matchType")))
                 .grant(RepoPermission.Grant.valueOf(doc.getString("operation")))
                 .source(RepoPermission.Source.valueOf(doc.getString("source")))
+                .grantedBy(doc.getString("grantedBy"))
+                .grantedAt(instantOrNull(doc.getDate("grantedAt")))
                 .build();
     }
 }

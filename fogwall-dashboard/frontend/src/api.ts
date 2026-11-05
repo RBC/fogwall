@@ -6,6 +6,7 @@ import type {
   IssuedGitCredential,
   ScmApiActionRecord,
   GroupPermissionRule,
+  RecordType,
   RepoPermission,
   ScmOAuthLinkStatus,
   ScmOAuthProviderInfo,
@@ -76,6 +77,37 @@ export async function fetchScmApiActions(params: URLSearchParams): Promise<ScmAp
 export async function fetchFetchActivity(params: URLSearchParams): Promise<FetchActivity[]> {
   const res = await apiFetch('/api/fetches?' + params)
   if (!res.ok) throw new Error('Failed to load fetch activity')
+  return res.json()
+}
+
+/**
+ * One page of a record listing. A history listing gives the cursor for the page after a full one; a current-state
+ * listing gives the number of rows its filters select.
+ */
+export interface RecordPage<T> {
+  rows: T[]
+  nextCursor: string | null
+  total: number | null
+}
+
+/** Reads one page of any record listing: every audit listing shares one contract. */
+export async function fetchRecordPage<T>(
+  path: string,
+  params: URLSearchParams,
+): Promise<RecordPage<T>> {
+  const res = await apiFetch(`${path}?${params}`)
+  if (!res.ok) await parseErrorResponse(res, 'Failed to load records')
+  const total = res.headers.get('X-Total-Count')
+  return {
+    rows: await res.json(),
+    nextCursor: res.headers.get('X-Next-Cursor'),
+    total: total === null ? null : Number(total),
+  }
+}
+
+export async function fetchRecordTypes(): Promise<RecordType[]> {
+  const res = await apiFetch('/api/audit/record-types')
+  if (!res.ok) await parseErrorResponse(res, 'Failed to load record types')
   return res.json()
 }
 

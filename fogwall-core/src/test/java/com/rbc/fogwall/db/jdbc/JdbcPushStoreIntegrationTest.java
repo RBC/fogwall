@@ -2,6 +2,7 @@ package com.rbc.fogwall.db.jdbc;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.rbc.fogwall.db.CursorWalk;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.PushStoreFactory;
 import com.rbc.fogwall.db.model.*;
@@ -64,6 +65,39 @@ class JdbcPushStoreIntegrationTest {
                 .reviewerUsername("reviewer")
                 .reason("LGTM")
                 .build();
+    }
+
+    // ---- cursor paging ----
+
+    @Test
+    void findAndFindSummaries_afterACursor_walkEveryRecordOnce_withTiesBrokenById() {
+        Instant t = Instant.parse("2026-11-05T14:00:00.123456Z");
+        for (String id : List.of("id-3", "id-1", "id-2")) {
+            PushRecord r = recordAt(id, t);
+            r.setId(id);
+            store.save(r);
+        }
+        PushRecord later = recordAt("later", t.plusSeconds(1));
+        later.setId("id-0");
+        store.save(later);
+
+        assertEquals(
+                List.of("id-0", "id-3", "id-2", "id-1"),
+                CursorWalk.walk(
+                        after -> store.find(
+                                PushQuery.builder().after(after).limit(3).build()),
+                        r -> new RecordCursor(r.getTimestamp(), r.getId()),
+                        PushRecord::getId));
+        assertEquals(
+                List.of("id-1", "id-2", "id-3", "id-0"),
+                CursorWalk.walk(
+                        after -> store.findSummaries(PushQuery.builder()
+                                .newestFirst(false)
+                                .after(after)
+                                .limit(1)
+                                .build()),
+                        s -> new RecordCursor(s.getTimestamp(), s.getId()),
+                        PushSummary::getId));
     }
 
     // ---- save / findById ----

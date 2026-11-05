@@ -3,6 +3,7 @@ package com.rbc.fogwall.db.memory;
 import com.rbc.fogwall.db.FetchStore;
 import com.rbc.fogwall.db.model.FetchActivity;
 import com.rbc.fogwall.db.model.FetchActivityQuery;
+import com.rbc.fogwall.db.model.RecordCursor;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.Comparator;
@@ -39,18 +40,24 @@ public class InMemoryFetchStore implements FetchStore {
 
     @Override
     public List<FetchActivity> find(FetchActivityQuery query) {
-        Comparator<FetchActivity> byTime =
-                Comparator.comparing(FetchActivity::getBucketStart).thenComparing(FetchActivity::getLastSeen);
+        Comparator<RecordCursor> order = query.isNewestFirst() ? RecordCursor.ORDER.reversed() : RecordCursor.ORDER;
         return store.values().stream()
                 .filter(matches(query))
-                .sorted(query.isNewestFirst() ? byTime.reversed() : byTime)
+                .filter(r -> query.getAfter() == null || order.compare(cursor(r), query.getAfter()) > 0)
+                .sorted(Comparator.comparing(InMemoryFetchStore::cursor, order))
                 .skip(query.getOffset())
                 .limit(query.getLimit())
                 .toList();
     }
 
+    private static RecordCursor cursor(FetchActivity r) {
+        return new RecordCursor(r.getBucketStart(), r.getId());
+    }
+
     private static Predicate<FetchActivity> matches(FetchActivityQuery q) {
         return r -> (q.getResult() == null || q.getResult() == r.getResult())
+                && (q.getFrom() == null || !r.getBucketStart().isBefore(q.getFrom()))
+                && (q.getTo() == null || r.getBucketStart().isBefore(q.getTo()))
                 && (q.getTransport() == null || q.getTransport() == r.getTransport())
                 && (q.getProvider() == null || q.getProvider().equals(r.getProvider()))
                 && (q.getOwner() == null || q.getOwner().equals(r.getOwner()))
