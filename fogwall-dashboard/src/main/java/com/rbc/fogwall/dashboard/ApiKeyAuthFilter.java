@@ -10,7 +10,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -43,9 +42,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             if (provided != null
                     && MessageDigest.isEqual(expectedKeyDigest, sha256(provided))
                     && SecurityContextHolder.getContext().getAuthentication() == null) {
-                var auth = new UsernamePasswordAuthenticationToken(
-                        "api-key",
-                        null,
+                var auth = new ApiKeyAuthenticationToken(
                         List.of(new SimpleGrantedAuthority("ROLE_USER"), new SimpleGrantedAuthority("ROLE_ADMIN")));
                 SecurityContextHolder.getContext().setAuthentication(auth);
             }

@@ -113,14 +113,16 @@ public class MongoPushStore implements PushStore {
                     Filters.regex("project", pattern),
                     Filters.regex("repoName", pattern)));
         }
+        if (query.getAfter() != null) {
+            filters.add(MongoKeysetPaging.after("timestamp", query.getAfter(), query.isNewestFirst()));
+        }
 
         Bson filter = filters.isEmpty() ? new Document() : Filters.and(filters);
-        Bson sort = query.isNewestFirst() ? Sorts.descending("timestamp") : Sorts.ascending("timestamp");
 
         List<PushRecord> results = new ArrayList<>();
         getCollection()
                 .find(filter)
-                .sort(sort)
+                .sort(MongoKeysetPaging.sort("timestamp", query.isNewestFirst()))
                 .skip(query.getOffset())
                 .limit(query.getLimit())
                 .forEach(doc -> results.add(fromDocument(doc)));

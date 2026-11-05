@@ -2,6 +2,7 @@ package com.rbc.fogwall.dashboard.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -16,12 +17,14 @@ import com.rbc.fogwall.db.model.Attestation;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
 import com.rbc.fogwall.db.model.PushSummary;
+import com.rbc.fogwall.db.model.RecordCursor;
 import com.rbc.fogwall.git.DeferredForwarder;
 import com.rbc.fogwall.jetty.reload.ConfigHolder;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.FogwallProvider;
 import com.rbc.fogwall.provider.ProviderRegistry;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -33,6 +36,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -116,35 +120,56 @@ class PushControllerTest {
 
     @Nested
     class List_ {
+
+        /** Calls the listing with only the named parameters set, as {@code name, value} pairs; the rest default. */
+        private ResponseEntity<List<PushSummary>> list(String... nameValues) {
+            Map<String, String> p = new HashMap<>();
+            for (int i = 0; i < nameValues.length; i += 2) {
+                p.put(nameValues[i], nameValues[i + 1]);
+            }
+            return controller.list(
+                    p.get("status"),
+                    p.get("owner"),
+                    p.get("project"),
+                    p.get("repo"),
+                    p.get("provider"),
+                    p.get("branch"),
+                    p.get("authorEmail"),
+                    p.get("user"),
+                    p.get("search"),
+                    p.get("from"),
+                    p.get("to"),
+                    p.get("after"),
+                    Integer.parseInt(p.getOrDefault("limit", "50")),
+                    0,
+                    true);
+        }
+
         @Test
         void noFilters_delegatesToStore() {
             when(pushStore.findSummaries(any())).thenReturn(List.of());
-            var result = controller.list(null, null, null, null, null, null, null, null, null, null, 50, 0, true);
+            var result = list().getBody();
             assertEquals(0, result.size());
             verify(pushStore).findSummaries(argThat(q -> q.getLimit() == 50 && q.getOffset() == 0));
         }
 
         @Test
         void invalidStatus_throws400() {
-            var ex = assertThrows(
-                    ResponseStatusException.class,
-                    () -> controller.list(
-                            "NONSENSE", null, null, null, null, null, null, null, null, null, 50, 0, true));
+            var ex = assertThrows(ResponseStatusException.class, () -> list("status", "NONSENSE"));
             assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
         }
 
         @Test
         void validStatus_passedToQuery() {
             when(pushStore.findSummaries(any())).thenReturn(List.of());
-            controller.list("PENDING", null, null, null, null, null, null, null, null, null, 50, 0, true);
+            list("status", "PENDING");
             verify(pushStore).findSummaries(argThat(q -> q.getStatus() == PushStatus.PENDING));
         }
 
         @Test
         void advancedFilters_passedToQuery() {
             when(pushStore.findSummaries(any())).thenReturn(List.of());
-            controller.list(
-                    null, null, null, "github", "main", "dev@example.com", "alice", null, null, null, 50, 0, true);
+            list("provider", "github", "branch", "main", "authorEmail", "dev@example.com", "user", "alice");
             verify(pushStore)
                     .findSummaries(argThat(q -> "github".equals(q.getProvider())
                             && "main".equals(q.getBranch())
@@ -153,22 +178,23 @@ class PushControllerTest {
         }
 
         @Test
+        void owner_andTheOlderProjectName_filterTheSameField() {
+            when(pushStore.findSummaries(any())).thenReturn(List.of());
+            list("owner", "acme");
+            list("project", "acme");
+            verify(pushStore, times(2)).findSummaries(argThat(q -> "acme".equals(q.getProject())));
+        }
+
+        @Test
+        void ownerAndProjectDisagreeing_throws400() {
+            var ex = assertThrows(ResponseStatusException.class, () -> list("owner", "acme", "project", "other"));
+            assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        }
+
+        @Test
         void dateRange_parsedIntoNewerAndOlderThan() {
             when(pushStore.findSummaries(any())).thenReturn(List.of());
-            controller.list(
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    "2026-09-01T00:00:00Z",
-                    "2026-09-08T00:00:00Z",
-                    50,
-                    0,
-                    true);
+            list("from", "2026-09-01T00:00:00Z", "to", "2026-09-08T00:00:00Z");
             verify(pushStore)
                     .findSummaries(
                             argThat(q -> Instant.parse("2026-09-01T00:00:00Z").equals(q.getNewerThan())
@@ -177,11 +203,39 @@ class PushControllerTest {
 
         @Test
         void malformedTimestamp_throws400() {
-            var ex = assertThrows(
-                    ResponseStatusException.class,
-                    () -> controller.list(
-                            null, null, null, null, null, null, null, null, "not-a-date", null, 50, 0, true));
+            var ex = assertThrows(ResponseStatusException.class, () -> list("from", "not-a-date"));
             assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        }
+
+        @Test
+        void aFullPage_carriesTheCursorOfItsLastRow_andAfterReadsItBack() {
+            Instant at = Instant.parse("2026-11-05T14:00:00.123456Z");
+            var summary = PushSummary.builder().id("p2").timestamp(at).build();
+            when(pushStore.findSummaries(any())).thenReturn(List.of(summary));
+
+            var page = list("limit", "1");
+            String next = page.getHeaders().getFirst(ListingParams.NEXT_CURSOR_HEADER);
+            list("after", next);
+
+            verify(pushStore).findSummaries(argThat(q -> new RecordCursor(at, "p2").equals(q.getAfter())));
+        }
+
+        @Test
+        void aShortPage_carriesNoCursor() {
+            when(pushStore.findSummaries(any())).thenReturn(List.of());
+            assertNull(list().getHeaders().getFirst(ListingParams.NEXT_CURSOR_HEADER));
+        }
+
+        @Test
+        void aCursorThisServerDidNotIssue_throws400() {
+            var ex = assertThrows(ResponseStatusException.class, () -> list("after", "not-a-cursor"));
+            assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        }
+
+        @Test
+        void aLimitOutOfRange_throws400() {
+            assertThrows(ResponseStatusException.class, () -> list("limit", "0"));
+            assertThrows(ResponseStatusException.class, () -> list("limit", "1001"));
         }
 
         @Test
@@ -200,7 +254,7 @@ class PushControllerTest {
                     .thenReturn(Optional.of("https://github.com/acme/widgets/commit/abc123"));
             when(providerRegistry.getProvider("github")).thenReturn(Optional.of(provider));
 
-            var result = controller.list(null, null, null, null, null, null, null, null, null, null, 50, 0, true);
+            var result = list().getBody();
 
             assertEquals("https://github.com/acme/widgets", result.get(0).getRepoUrl());
             assertEquals(
@@ -219,7 +273,7 @@ class PushControllerTest {
             when(pushStore.findSummaries(any())).thenReturn(List.of(summary));
             when(providerRegistry.getProvider("removed-provider")).thenReturn(Optional.empty());
 
-            var result = controller.list(null, null, null, null, null, null, null, null, null, null, 50, 0, true);
+            var result = list().getBody();
 
             assertEquals(null, result.get(0).getRepoUrl());
             assertEquals(null, result.get(0).getCommitUrl());
@@ -845,7 +899,7 @@ class PushControllerTest {
         void noFilters_delegatesToStoreWithNoStatusFilter() {
             when(pushStore.countByStatus(any())).thenReturn(Map.of("PENDING", 3L, "APPROVED", 1L));
 
-            var result = controller.counts(null, null, null, null, null, null, null, null, null);
+            var result = controller.counts(null, null, null, null, null, null, null, null, null, null);
 
             assertEquals(Map.of("PENDING", 3L, "APPROVED", 1L), result);
             verify(pushStore).countByStatus(argThat(q -> q.getStatus() == null && q.getUser() == null));
@@ -855,7 +909,7 @@ class PushControllerTest {
         void userFilter_passedToQuery() {
             when(pushStore.countByStatus(any())).thenReturn(Map.of());
 
-            controller.counts(null, null, null, null, null, "alice", null, null, null);
+            controller.counts(null, null, null, null, null, null, "alice", null, null, null);
 
             verify(pushStore).countByStatus(argThat(q -> "alice".equals(q.getUser())));
         }
@@ -864,7 +918,7 @@ class PushControllerTest {
         void searchFilter_passedToQuery() {
             when(pushStore.countByStatus(any())).thenReturn(Map.of());
 
-            controller.counts(null, null, null, null, null, null, "myrepo", null, null);
+            controller.counts(null, null, null, null, null, null, null, "myrepo", null, null);
 
             verify(pushStore).countByStatus(argThat(q -> "myrepo".equals(q.getSearch())));
         }

@@ -2,6 +2,7 @@ package com.rbc.fogwall.jetty.reload;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
@@ -13,12 +14,16 @@ import com.rbc.fogwall.config.MatchRule;
 import com.rbc.fogwall.config.ReloadConfig;
 import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.jetty.reload.LiveConfigLoader.Section;
+import com.rbc.fogwall.permission.AccessChangeService;
+import com.rbc.fogwall.permission.ChangeContext;
 import com.rbc.fogwall.permission.RepoPermission;
-import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.user.UserStore;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import org.github.gestalt.config.exceptions.GestaltException;
@@ -266,12 +271,12 @@ class LiveConfigLoaderTest {
     }
 
     @Test
-    void reload_permissions_seedsThroughTheRunningUserStore() throws IOException {
-        var repoPermissionService = mock(RepoPermissionService.class);
+    void reload_permissions_seedsThroughTheRunningUserStore_atTheFilesRevision() throws Exception {
+        var accessChanges = mock(AccessChangeService.class);
         var userStore = mock(UserStore.class);
         var permissionsLoader = new LiveConfigLoader(
-                configHolder, startup, fileReloadConfig(reloadFile), null, repoPermissionService, userStore);
-        Files.writeString(reloadFile, """
+                configHolder, startup, fileReloadConfig(reloadFile), null, accessChanges, userStore);
+        String yaml = """
                 permissions:
                   - username: someone
                     provider: github
@@ -279,15 +284,23 @@ class LiveConfigLoaderTest {
                       target: SLUG
                       value: /owner/repo
                     grant: PUSH
-                """);
+                """;
+        Files.writeString(reloadFile, yaml);
+        String revision = "sha256:"
+                + HexFormat.of()
+                        .formatHex(MessageDigest.getInstance("SHA-256").digest(yaml.getBytes(StandardCharsets.UTF_8)));
 
         String result = permissionsLoader.reload(Section.PERMISSIONS);
 
         assertTrue(result.startsWith("Reloaded"), result);
         verify(userStore).upsertUser("someone");
-        verify(repoPermissionService)
-                .seedFromConfig(argThat(perms ->
-                        perms.stream().map(RepoPermission::getUsername).toList().equals(List.of("someone"))));
+        verify(accessChanges)
+                .reloadConfigPermissions(
+                        argThat(perms -> perms.stream()
+                                .map(RepoPermission::getUsername)
+                                .toList()
+                                .equals(List.of("someone"))),
+                        eq(ChangeContext.config(revision)));
     }
 
     private Path write(String yaml) throws IOException {

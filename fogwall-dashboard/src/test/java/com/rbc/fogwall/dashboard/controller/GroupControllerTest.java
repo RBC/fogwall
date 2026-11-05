@@ -6,6 +6,9 @@ import static org.mockito.Mockito.*;
 
 import com.rbc.fogwall.dashboard.audit.AdminAuditLog;
 import com.rbc.fogwall.db.model.MatchType;
+import com.rbc.fogwall.permission.AccessChangeService;
+import com.rbc.fogwall.permission.ChangeContext;
+import com.rbc.fogwall.permission.ChangeOrigin;
 import com.rbc.fogwall.permission.GroupPermissionRule;
 import com.rbc.fogwall.permission.GroupPermissionStore;
 import com.rbc.fogwall.permission.PermissionGroup;
@@ -16,6 +19,7 @@ import com.rbc.fogwall.user.UserEntry;
 import com.rbc.fogwall.user.UserStore;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,6 +27,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 @ExtendWith(MockitoExtension.class)
 class GroupControllerTest {
@@ -40,7 +46,12 @@ class GroupControllerTest {
     GroupPermissionStore groupStore;
 
     @Mock
+    AccessChangeService accessChanges;
+
+    @Mock
     AdminAuditLog auditLog;
+
+    private static final ChangeContext BY_ADMIN = ChangeContext.by(ChangeOrigin.DASHBOARD, "admin");
 
     private static final PermissionGroup DB_GROUP = PermissionGroup.builder()
             .name("devs")
@@ -73,6 +84,13 @@ class GroupControllerTest {
     @BeforeEach
     void setUp() {
         lenient().when(permissionService.getGroupStore()).thenReturn(groupStore);
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken("admin", null, List.of()));
+    }
+
+    @AfterEach
+    void signOut() {
+        SecurityContextHolder.clearContext();
     }
 
     // ── GET /api/groups ──────────────────────────────────────────────────────────
@@ -212,7 +230,7 @@ class GroupControllerTest {
         var resp = controller.delete(CONFIG_GROUP.getId());
 
         assertEquals(HttpStatus.FORBIDDEN, resp.getStatusCode());
-        verify(groupStore, never()).deleteGroup(any());
+        verify(accessChanges, never()).deleteGroup(any(), any());
     }
 
     @Test
@@ -222,7 +240,7 @@ class GroupControllerTest {
         var resp = controller.delete(DB_GROUP.getId());
 
         assertEquals(HttpStatus.NO_CONTENT, resp.getStatusCode());
-        verify(groupStore).deleteGroup(DB_GROUP.getId());
+        verify(accessChanges).deleteGroup(DB_GROUP, BY_ADMIN);
     }
 
     // ── POST /api/groups/{id}/members ────────────────────────────────────────────
@@ -264,7 +282,7 @@ class GroupControllerTest {
         var resp = controller.addMember(DB_GROUP.getId(), new GroupController.MemberRequest("alice"));
 
         assertEquals(HttpStatus.BAD_REQUEST, resp.getStatusCode());
-        verify(groupStore, never()).addMember(any(), any());
+        verify(accessChanges, never()).addMember(any(), any(), any());
         verify(auditLog).denied(eq("group.member.add"), any(), any());
     }
 
@@ -277,7 +295,7 @@ class GroupControllerTest {
         var resp = controller.addMember(DB_GROUP.getId(), new GroupController.MemberRequest("alice"));
 
         assertEquals(HttpStatus.BAD_REQUEST, resp.getStatusCode());
-        verify(groupStore, never()).addMember(any(), any());
+        verify(accessChanges, never()).addMember(any(), any(), any());
     }
 
     @Test
@@ -289,7 +307,7 @@ class GroupControllerTest {
         var resp = controller.addMember(DB_GROUP.getId(), new GroupController.MemberRequest("alice"));
 
         assertEquals(HttpStatus.CREATED, resp.getStatusCode());
-        verify(groupStore).addMember(DB_GROUP.getId(), "alice");
+        verify(accessChanges).addMember(DB_GROUP, "alice", BY_ADMIN);
     }
 
     @Test
@@ -298,7 +316,7 @@ class GroupControllerTest {
         // dies on a referential integrity violation and the endpoint 500s.
         UserStore mutableStore = mock(UserStore.class);
         when(mutableStore.findByUsername("reviewer")).thenReturn(Optional.of(REVIEWER));
-        var controllerWithMutableStore = new GroupController(permissionService, mutableStore, auditLog);
+        var controllerWithMutableStore = new GroupController(permissionService, accessChanges, mutableStore, auditLog);
         when(groupStore.findGroupById(DB_GROUP.getId())).thenReturn(Optional.of(DB_GROUP));
         when(groupStore.findMembers(DB_GROUP.getId())).thenReturn(List.of());
 
@@ -306,9 +324,9 @@ class GroupControllerTest {
                 controllerWithMutableStore.addMember(DB_GROUP.getId(), new GroupController.MemberRequest("reviewer"));
 
         assertEquals(HttpStatus.CREATED, resp.getStatusCode());
-        var inOrder = inOrder(mutableStore, groupStore);
+        var inOrder = inOrder(mutableStore, accessChanges);
         inOrder.verify(mutableStore).upsertUser("reviewer");
-        inOrder.verify(groupStore).addMember(DB_GROUP.getId(), "reviewer");
+        inOrder.verify(accessChanges).addMember(DB_GROUP, "reviewer", BY_ADMIN);
     }
 
     // ── DELETE /api/groups/{id}/members/{username} ───────────────────────────────
@@ -320,7 +338,7 @@ class GroupControllerTest {
         var resp = controller.removeMember(CONFIG_GROUP.getId(), "alice");
 
         assertEquals(HttpStatus.FORBIDDEN, resp.getStatusCode());
-        verify(groupStore, never()).removeMember(any(), any());
+        verify(accessChanges, never()).removeMember(any(), any(), any());
     }
 
     @Test
@@ -330,7 +348,7 @@ class GroupControllerTest {
         var resp = controller.removeMember(DB_GROUP.getId(), "alice");
 
         assertEquals(HttpStatus.NO_CONTENT, resp.getStatusCode());
-        verify(groupStore).removeMember(DB_GROUP.getId(), "alice");
+        verify(accessChanges).removeMember(DB_GROUP, "alice", BY_ADMIN);
     }
 
     // ── POST /api/groups/{id}/permissions ────────────────────────────────────────
@@ -373,7 +391,7 @@ class GroupControllerTest {
         var resp = controller.addRule(DB_GROUP.getId(), ruleReq("github", "/acme/repo", "LITERAL", "PUSH"));
 
         assertEquals(HttpStatus.CREATED, resp.getStatusCode());
-        verify(groupStore).saveRule(any(GroupPermissionRule.class));
+        verify(accessChanges).addGroupRule(eq(DB_GROUP), any(GroupPermissionRule.class), eq(BY_ADMIN));
     }
 
     // ── DELETE /api/groups/{id}/permissions/{ruleId} ─────────────────────────────
@@ -385,7 +403,7 @@ class GroupControllerTest {
         var resp = controller.deleteRule(CONFIG_GROUP.getId(), "some-rule-id");
 
         assertEquals(HttpStatus.FORBIDDEN, resp.getStatusCode());
-        verify(groupStore, never()).deleteRule(any());
+        verify(accessChanges, never()).removeGroupRule(any(), any(), any());
     }
 
     @Test
@@ -413,7 +431,7 @@ class GroupControllerTest {
         var resp = controller.deleteRule(DB_GROUP.getId(), rule.getId());
 
         assertEquals(HttpStatus.FORBIDDEN, resp.getStatusCode());
-        verify(groupStore, never()).deleteRule(any());
+        verify(accessChanges, never()).removeGroupRule(any(), any(), any());
     }
 
     @Test
@@ -431,6 +449,6 @@ class GroupControllerTest {
         var resp = controller.deleteRule(DB_GROUP.getId(), rule.getId());
 
         assertEquals(HttpStatus.NO_CONTENT, resp.getStatusCode());
-        verify(groupStore).deleteRule(rule.getId());
+        verify(accessChanges).removeGroupRule(DB_GROUP, rule, BY_ADMIN);
     }
 }

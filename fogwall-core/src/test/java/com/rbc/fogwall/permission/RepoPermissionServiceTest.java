@@ -472,6 +472,58 @@ class RepoPermissionServiceTest {
         assertFalse(svc.isAllowedToPush("alice", "github", "/owner/repo"));
     }
 
+    private static RepoPermission configGrant(String username, String value) {
+        return RepoPermission.builder()
+                .username(username)
+                .provider("github")
+                .value(value)
+                .matchType(MatchType.LITERAL)
+                .grant(RepoPermission.Grant.PUSH)
+                .source(RepoPermission.Source.CONFIG)
+                .build();
+    }
+
+    @Test
+    void seedFromConfig_reportsOnlyWhatChanged_andKeepsTheRowOfAnUnchangedGrant() {
+        svc.seedFromConfig(List.of(configGrant("alice", "/acme/a"), configGrant("bob", "/acme/b")));
+        String aliceId = svc.findByUsername("alice").getFirst().getId();
+
+        // The reloaded config builds fresh objects with fresh ids, as the config loader does.
+        RepoPermissionService.ConfigSeedResult result =
+                svc.seedFromConfig(List.of(configGrant("alice", "/acme/a"), configGrant("bob", "/acme/c")));
+
+        assertEquals(
+                List.of("/acme/c"),
+                result.added().stream().map(RepoPermission::getValue).toList());
+        assertEquals(
+                List.of("/acme/b"),
+                result.removed().stream().map(RepoPermission::getValue).toList());
+        assertEquals(aliceId, svc.findByUsername("alice").getFirst().getId());
+        assertEquals(
+                List.of("/acme/c"),
+                svc.findByUsername("bob").stream().map(RepoPermission::getValue).toList());
+    }
+
+    @Test
+    void seedFromConfig_aConflict_refusesTheWholeConfigAndLeavesStoredGrantsAsTheyWere() {
+        svc.seedFromConfig(List.of(configGrant("alice", "/acme/a")));
+        List<RepoPermission> before = svc.findAll();
+        RepoPermission overlapping = RepoPermission.builder()
+                .username("bob")
+                .provider("github")
+                .value("/acme/*")
+                .matchType(MatchType.GLOB)
+                .grant(RepoPermission.Grant.PUSH)
+                .source(RepoPermission.Source.CONFIG)
+                .build();
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> svc.seedFromConfig(List.of(configGrant("bob", "/acme/b"), overlapping)));
+
+        assertEquals(before, svc.findAll());
+    }
+
     // ---- conflict detection ----
 
     @Test

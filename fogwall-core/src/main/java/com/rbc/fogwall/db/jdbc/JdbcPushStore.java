@@ -88,10 +88,8 @@ public class JdbcPushStore implements PushStore {
         MapSqlParameterSource params = new MapSqlParameterSource();
         String where = buildWhere(query, params);
         String sql = "SELECT * FROM push_records" + where
-                + " ORDER BY timestamp " + (query.isNewestFirst() ? "DESC" : "ASC")
-                + " LIMIT :limit OFFSET :offset";
-        params.addValue("limit", query.getLimit());
-        params.addValue("offset", query.getOffset());
+                + JdbcKeysetPaging.orderAndPage(
+                        params, "timestamp", query.isNewestFirst(), query.getLimit(), query.getOffset());
 
         List<PushRecord> results = jdbc.query(sql, params, PushRecordRowMapper.INSTANCE);
         results.forEach(this::hydrate);
@@ -105,10 +103,8 @@ public class JdbcPushStore implements PushStore {
         String sql =
                 "SELECT id, status, url, upstream_url, provider, project, repo_name, branch, commit_to, author, push_user, resolved_user, timestamp"
                         + " FROM push_records" + where
-                        + " ORDER BY timestamp " + (query.isNewestFirst() ? "DESC" : "ASC")
-                        + " LIMIT :limit OFFSET :offset";
-        params.addValue("limit", query.getLimit());
-        params.addValue("offset", query.getOffset());
+                        + JdbcKeysetPaging.orderAndPage(
+                                params, "timestamp", query.isNewestFirst(), query.getLimit(), query.getOffset());
         return jdbc.query(
                 sql,
                 params,
@@ -350,6 +346,7 @@ public class JdbcPushStore implements PushStore {
                     " AND (LOWER(provider) LIKE :search OR LOWER(project) LIKE :search OR LOWER(repo_name) LIKE :search)");
             params.addValue("search", "%" + query.getSearch().toLowerCase() + "%");
         }
+        JdbcKeysetPaging.appendAfter(sql, params, "timestamp", query.getAfter(), query.isNewestFirst());
 
         return sql.toString();
     }

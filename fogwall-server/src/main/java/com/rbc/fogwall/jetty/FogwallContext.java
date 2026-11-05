@@ -15,6 +15,7 @@ import com.rbc.fogwall.db.UrlRuleRegistry;
 import com.rbc.fogwall.git.DeferredForwarder;
 import com.rbc.fogwall.git.LocalRepositoryCache;
 import com.rbc.fogwall.observability.FogwallTelemetry;
+import com.rbc.fogwall.permission.AccessChangeService;
 import com.rbc.fogwall.permission.RepoPermissionService;
 import com.rbc.fogwall.provider.ProviderRegistry;
 import com.rbc.fogwall.service.GitCredentialService;
@@ -40,6 +41,7 @@ public record FogwallContext(
         UserStore userStore,
         UrlRuleRegistry urlRuleRegistry,
         RepoPermissionService repoPermissionService,
+        AccessChangeService accessChangeService,
         SelfApprovalPolicy selfApprovalPolicy,
         PushIdentityResolver pushIdentityResolver,
         ApprovalGateway approvalGateway,

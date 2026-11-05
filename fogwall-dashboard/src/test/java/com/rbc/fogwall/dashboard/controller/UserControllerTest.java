@@ -4,11 +4,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.rbc.fogwall.dashboard.audit.AdminAuditLog;
 import com.rbc.fogwall.db.PushStore;
+import com.rbc.fogwall.permission.AccessChangeService;
+import com.rbc.fogwall.permission.ChangeContext;
+import com.rbc.fogwall.permission.ChangeOrigin;
 import com.rbc.fogwall.user.LockedByConfigException;
 import com.rbc.fogwall.user.ScmIdentityConflictException;
 import com.rbc.fogwall.user.UserEntry;
@@ -21,6 +25,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @ExtendWith(MockitoExtension.class)
@@ -39,6 +45,9 @@ class UserControllerTest {
     PasswordEncoder passwordEncoder;
 
     @Mock
+    AccessChangeService accessChanges;
+
+    @Mock
     AdminAuditLog auditLog;
 
     private static final UserEntry ALICE = UserEntry.builder()
@@ -48,6 +57,43 @@ class UserControllerTest {
             .scmIdentities(List.of())
             .roles(List.of("USER"))
             .build();
+
+    // ── DELETE /api/users/{username} ───────────────────────────────────────────
+
+    @Test
+    void delete_goesThroughTheRecordedPath() {
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken("admin", null, List.of()));
+        try {
+            when(userStore.findByUsername("alice")).thenReturn(Optional.of(ALICE));
+
+            var resp = controller.delete("alice");
+
+            assertEquals(HttpStatus.NO_CONTENT, resp.getStatusCode());
+            verify(accessChanges).deleteUser(ALICE, ChangeContext.by(ChangeOrigin.DASHBOARD, "admin"));
+            verify(userStore, never()).deleteUser(any());
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    void delete_lastAdmin_revokesNothing() {
+        UserEntry admin = UserEntry.builder()
+                .username("alice")
+                .emails(List.of())
+                .scmIdentities(List.of())
+                .roles(List.of("ADMIN"))
+                .build();
+        when(userStore.findByUsername("alice")).thenReturn(Optional.of(admin));
+        when(userStore.findAll()).thenReturn(List.of(admin));
+
+        var resp = controller.delete("alice");
+
+        assertEquals(HttpStatus.CONFLICT, resp.getStatusCode());
+        verify(accessChanges, never()).deleteUser(any(), any());
+        verify(userStore, never()).deleteUser(any());
+    }
 
     // ── POST /api/users/provision ──────────────────────────────────────────────
 

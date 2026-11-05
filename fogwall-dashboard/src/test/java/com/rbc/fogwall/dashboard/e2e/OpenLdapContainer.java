@@ -120,6 +120,33 @@ class OpenLdapContainer extends GenericContainer<OpenLdapContainer> {
         }
     }
 
+    /** Applies {@code ldif} as the directory manager: {@code ldapmodify} with {@code -a}, so it may add entries too. */
+    void modify(String ldif) {
+        try {
+            copyFileToContainer(Transferable.of(ldif), "/tmp/modify.ldif");
+            var result = execInContainer(
+                    "ldapmodify",
+                    "-a",
+                    "-x",
+                    "-H",
+                    "ldap://localhost",
+                    "-D",
+                    "cn=admin," + BASE_DN,
+                    "-w",
+                    ADMIN_PASSWORD,
+                    "-f",
+                    "/tmp/modify.ldif");
+            if (result.getExitCode() != 0) {
+                throw new RuntimeException(
+                        "ldapmodify failed (exit " + result.getExitCode() + "): " + result.getStderr());
+            }
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to modify the LDAP directory", e);
+        }
+    }
+
     /**
      * LDAP URL (with base DN) for use in Spring Security config, e.g. {@code ldap://localhost:12345/dc=example,dc=com}.
      */

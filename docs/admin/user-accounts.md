@@ -63,7 +63,7 @@ Roles control what a user can do in the dashboard and REST API:
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `READER`         | View push records, repositories, providers, and fetch and SCM API activity. Changes nothing                                                                      |
 | `USER` (default) | View push records; approve or reject pushes they have `REVIEW` permission on; manage their own profile (emails, SCM identities)                                  |
-| `AUDITOR`        | View push records, plus read-only access to users, groups and their permissions. Changes nothing, even alongside `ADMIN`                                         |
+| `AUDITOR`        | View push records, plus the Audit section: every record type, the current grants and group membership, and their export. Changes nothing, even alongside `ADMIN` |
 | `ADMIN`          | Everything USER can do, plus: create/delete users, reset passwords, manage any user's profile, view all push records                                             |
 | `SELF_CERTIFY`   | Grants the **capability** to self-approve pushes. This is the prerequisite gate — it must be present before any per-repo `SELF_CERTIFY` permission takes effect. |
 
@@ -79,7 +79,8 @@ does nothing for a user who holds neither `USER` nor `ADMIN`, and Test Permissio
 `AUDITOR` lets someone read the evidence of who was permitted to do what without being able to change it. An auditor's
 session is read-only: every change answers 403, including approving, rejecting, cancelling or forwarding a push, filing
 an issue, and editing their own profile, and the pages render without those controls. This holds even for a user who is
-also `ADMIN`.
+also `ADMIN`. An auditor's dashboard has the primary pages and Audit; Users and Groups are admin pages. The API still
+answers an auditor's reads of users, groups and permissions. See [Audit evidence](audit-evidence.md).
 
 An auditor holds no repository permission: entries naming them, directly or through a group, are ignored, so they cannot
 push, propose or merge. The dashboard refuses to grant an auditor a permission or add them to a group, and startup fails

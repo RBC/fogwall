@@ -69,12 +69,9 @@ public class JdbcFetchStore implements FetchStore {
     public List<FetchActivity> find(FetchActivityQuery query) {
         MapSqlParameterSource params = new MapSqlParameterSource();
         String where = buildWhere(query, params);
-        String direction = query.isNewestFirst() ? "DESC" : "ASC";
         String sql = "SELECT * FROM fetch_activity" + where
-                + " ORDER BY bucket_start " + direction + ", last_seen " + direction
-                + " LIMIT :limit OFFSET :offset";
-        params.addValue("limit", query.getLimit());
-        params.addValue("offset", query.getOffset());
+                + JdbcKeysetPaging.orderAndPage(
+                        params, "bucket_start", query.isNewestFirst(), query.getLimit(), query.getOffset());
         return jdbc.query(sql, params, FetchActivityRowMapper.INSTANCE);
     }
 
@@ -105,6 +102,15 @@ public class JdbcFetchStore implements FetchStore {
             sql.append(" AND (LOWER(owner) LIKE :search OR LOWER(repo_name) LIKE :search)");
             params.addValue("search", "%" + query.getSearch().toLowerCase() + "%");
         }
+        if (query.getFrom() != null) {
+            sql.append(" AND bucket_start >= :from");
+            params.addValue("from", Timestamp.from(query.getFrom()));
+        }
+        if (query.getTo() != null) {
+            sql.append(" AND bucket_start < :to");
+            params.addValue("to", Timestamp.from(query.getTo()));
+        }
+        JdbcKeysetPaging.appendAfter(sql, params, "bucket_start", query.getAfter(), query.isNewestFirst());
 
         return sql.toString();
     }

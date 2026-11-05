@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.mongodb.client.MongoClients;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.*;
@@ -39,6 +40,21 @@ class MongoRepoPermissionStoreIntegrationTest {
                 .value(value)
                 .matchType(MatchType.LITERAL)
                 .build();
+    }
+
+    @Test
+    void save_roundTripsWhoGrantedItAndWhen_andNoneOnAGrantWithout() {
+        RepoPermission stamped = perm("alice", "github", "/acme/a");
+        stamped.setGrantedBy("admin");
+        stamped.setGrantedAt(Instant.parse("2026-11-05T14:00:00.123Z"));
+        RepoPermission bare = perm("alice", "github", "/acme/b");
+        store.save(stamped);
+        store.save(bare);
+
+        assertEquals(stamped, store.findById(stamped.getId()).orElseThrow());
+        RepoPermission found = store.findById(bare.getId()).orElseThrow();
+        assertNull(found.getGrantedBy());
+        assertNull(found.getGrantedAt());
     }
 
     @Test

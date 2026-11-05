@@ -14,10 +14,16 @@ import com.rbc.fogwall.db.mongo.MongoScmTokenCache;
 import com.rbc.fogwall.db.mongo.MongoSshFingerprintCache;
 import com.rbc.fogwall.db.mongo.MongoUrlRuleRegistry;
 import com.rbc.fogwall.permission.GroupPermissionStore;
+import com.rbc.fogwall.permission.MembershipChangeStore;
 import com.rbc.fogwall.permission.MongoGroupPermissionStore;
+import com.rbc.fogwall.permission.MongoMembershipChangeStore;
+import com.rbc.fogwall.permission.MongoPermissionChangeStore;
 import com.rbc.fogwall.permission.MongoRepoPermissionStore;
+import com.rbc.fogwall.permission.MongoRoleChangeStore;
+import com.rbc.fogwall.permission.PermissionChangeStore;
 import com.rbc.fogwall.permission.PermissionStore;
 import com.rbc.fogwall.permission.RepoPermission;
+import com.rbc.fogwall.permission.RoleChangeStore;
 import com.rbc.fogwall.service.ScmTokenCache;
 import com.rbc.fogwall.service.SshFingerprintCache;
 import com.rbc.fogwall.user.GitCredentialStore;
@@ -98,6 +104,27 @@ public final class MongoStoreFactory implements AutoCloseable {
     /** Create and initialize a {@link GroupPermissionStore} backed by this factory's client. */
     public GroupPermissionStore groupPermissionStore() {
         MongoGroupPermissionStore store = new MongoGroupPermissionStore(client, databaseName);
+        store.initialize();
+        return store;
+    }
+
+    /** Create and initialize a {@link PermissionChangeStore} backed by this factory's client. */
+    public PermissionChangeStore permissionChangeStore() {
+        MongoPermissionChangeStore store = new MongoPermissionChangeStore(client, databaseName);
+        store.initialize();
+        return store;
+    }
+
+    /** Create and initialize a {@link MembershipChangeStore} backed by this factory's client. */
+    public MembershipChangeStore membershipChangeStore() {
+        MongoMembershipChangeStore store = new MongoMembershipChangeStore(client, databaseName);
+        store.initialize();
+        return store;
+    }
+
+    /** Create and initialize a {@link RoleChangeStore} backed by this factory's client. */
+    public RoleChangeStore roleChangeStore() {
+        MongoRoleChangeStore store = new MongoRoleChangeStore(client, databaseName);
         store.initialize();
         return store;
     }

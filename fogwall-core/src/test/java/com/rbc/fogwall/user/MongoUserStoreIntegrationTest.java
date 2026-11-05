@@ -6,7 +6,9 @@ import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.rbc.fogwall.db.mongo.MongoGitCredentialStore;
 import com.rbc.fogwall.db.mongo.MongoScmOAuthTokenStore;
+import com.rbc.fogwall.permission.MongoGroupPermissionStore;
 import com.rbc.fogwall.permission.MongoRepoPermissionStore;
+import com.rbc.fogwall.permission.PermissionGroup;
 import com.rbc.fogwall.permission.RepoPermission;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -31,6 +33,7 @@ class MongoUserStoreIntegrationTest {
     MongoRepoPermissionStore permissionStore;
     MongoScmOAuthTokenStore tokenStore;
     MongoGitCredentialStore credentialStore;
+    MongoGroupPermissionStore groupStore;
 
     @BeforeEach
     void setUp() {
@@ -44,6 +47,8 @@ class MongoUserStoreIntegrationTest {
         tokenStore.initialize();
         credentialStore = new MongoGitCredentialStore(client, dbName);
         credentialStore.initialize();
+        groupStore = new MongoGroupPermissionStore(client, dbName);
+        groupStore.initialize();
     }
 
     // ── basic CRUD ──────────────────────────────────────────────────────────────
@@ -464,6 +469,22 @@ class MongoUserStoreIntegrationTest {
         assertTrue(credentialStore.findById("id-alice").isEmpty());
         assertTrue(tokenStore.findToken("bob", "github").isPresent());
         assertTrue(credentialStore.findById("id-bob").isPresent());
+    }
+
+    /** What the JDBC schema does by foreign-key cascade: a later user of the same name is in no group. */
+    @Test
+    void deleteUser_removesTheirGroupMemberships_leavingOtherMembers() {
+        store.createUser("alice", null, "USER");
+        store.createUser("bob", null, "USER");
+        PermissionGroup group = PermissionGroup.builder().name("platform-team").build();
+        groupStore.saveGroup(group);
+        groupStore.addMember(group.getId(), "alice");
+        groupStore.addMember(group.getId(), "bob");
+
+        store.deleteUser("alice");
+
+        assertEquals(List.of("bob"), groupStore.findMembers(group.getId()));
+        assertTrue(groupStore.findGroupIdsForUser("alice").isEmpty());
     }
 
     private static byte[] bytes(String s) {

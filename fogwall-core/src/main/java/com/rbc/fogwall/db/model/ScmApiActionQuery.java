@@ -1,5 +1,6 @@
 package com.rbc.fogwall.db.model;
 
+import java.time.Instant;
 import lombok.Builder;
 import lombok.Data;
 
@@ -21,6 +22,15 @@ public class ScmApiActionQuery {
 
     /** Free-text search: matches records where repo owner OR repo name contains this value (case-insensitive LIKE). */
     private String search;
+
+    /** Inclusive lower bound on the record's timestamp. */
+    private Instant from;
+
+    /** Exclusive upper bound on the record's timestamp. */
+    private Instant to;
+
+    /** Return only records that come after this position in the requested {@code (timestamp, id)} order. */
+    private RecordCursor after;
 
     /** Maximum number of results to return. */
     @Builder.Default
