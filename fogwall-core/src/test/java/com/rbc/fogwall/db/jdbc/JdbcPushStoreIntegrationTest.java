@@ -35,6 +35,28 @@ class JdbcPushStoreIntegrationTest {
         store = PushStoreFactory.h2InMemory("test-" + UUID.randomUUID());
     }
 
+    @Test
+    void userFilter_matchesTheResolvedUser_notTheUsernameTheClientSent() {
+        PushRecord alices = record("aaa", "refs/heads/main", "repo");
+        alices.setUser("me");
+        alices.setResolvedUser("alice");
+        store.save(alices);
+        PushRecord bobs = record("bbb", "refs/heads/main", "repo");
+        bobs.setUser("alice");
+        bobs.setResolvedUser("bob");
+        store.save(bobs);
+
+        List<PushRecord> found = store.find(PushQuery.builder().user("alice").build());
+        assertEquals(
+                List.of(alices.getId()), found.stream().map(PushRecord::getId).toList());
+        assertTrue(store.find(PushQuery.builder().user("me").build()).isEmpty());
+        assertEquals(
+                1L,
+                store.countByStatus(PushQuery.builder().user("alice").build()).values().stream()
+                        .mapToLong(Long::longValue)
+                        .sum());
+    }
+
     // ---- helpers ----
 
     private static PushRecord record(String commitTo, String branch, String repoName) {

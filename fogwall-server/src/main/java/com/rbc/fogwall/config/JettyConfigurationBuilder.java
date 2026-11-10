@@ -339,11 +339,9 @@ public class JettyConfigurationBuilder {
         }
 
         config.getUsers()
-                .forEach(uc -> uc.getScmIdentities().forEach(s -> {
-                    if (!"proxy".equals(s.getProvider())) {
-                        resolveProviderName("User '" + uc.getUsername() + "' scm-identity", s.getProvider());
-                    }
-                }));
+                .forEach(uc -> uc.getScmIdentities()
+                        .forEach(s ->
+                                resolveProviderName("User '" + uc.getUsername() + "' scm-identity", s.getProvider())));
 
         config.getPermissions()
                 .forEach(p -> resolveProviderName("Permission for user '" + p.getUsername() + "'", p.getProvider()));
@@ -1081,24 +1079,10 @@ public class JettyConfigurationBuilder {
                 .map(uc -> {
                     List<ScmIdentity> scmIdentities = new ArrayList<>();
                     uc.getScmIdentities().stream()
-                            .map(s -> {
-                                // "proxy" is a synthetic provider for push-username lookup — no resolution needed
-                                String resolvedProvider = "proxy".equals(s.getProvider())
-                                        ? "proxy"
-                                        : resolveProviderName(
-                                                "User '" + uc.getUsername() + "' scm-identity", s.getProvider());
-                                return ScmIdentity.builder()
-                                        .provider(resolvedProvider)
-                                        .username(s.getUsername())
-                                        .build();
-                            })
-                            .forEach(scmIdentities::add);
-                    // push-usernames are stored as SCM identities under the synthetic "proxy" provider.
-                    // Reserved for SCM providers (e.g. Bitbucket) that cannot return a login from a token alone.
-                    uc.getPushUsernames().stream()
-                            .map(pushName -> ScmIdentity.builder()
-                                    .provider("proxy")
-                                    .username(pushName)
+                            .map(s -> ScmIdentity.builder()
+                                    .provider(resolveProviderName(
+                                            "User '" + uc.getUsername() + "' scm-identity", s.getProvider()))
+                                    .username(s.getUsername())
                                     .build())
                             .forEach(scmIdentities::add);
                     List<String> roles = uc.getRoles().isEmpty() ? List.of("USER") : uc.getRoles();

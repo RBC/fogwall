@@ -73,13 +73,13 @@ public class PushRecord {
     /** Git committer email. */
     private String committerEmail;
 
-    /** Authenticated user performing the push. */
+    /**
+     * Same value as {@link #resolvedUser}, kept so the stored and REST shapes stay stable. Read {@link #resolvedUser}.
+     * Never the username the git client sent, which identifies nobody.
+     */
     private String user;
 
-    /**
-     * SCM identity resolved for this push (proxy username after successful identity resolution). Null if resolution
-     * failed.
-     */
+    /** The fogwall user the push resolved to. Null if identity resolution failed. */
     private String resolvedUser;
 
     /**

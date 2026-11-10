@@ -85,6 +85,19 @@ class PushRecordMapperTest {
     }
 
     @Test
+    void fromRequestDetails_userMirrorsTheResolvedUser() {
+        GitRequestDetails resolved = new GitRequestDetails();
+        resolved.setResolvedUser("alice");
+        PushRecord record = PushRecordMapper.fromRequestDetails(resolved);
+        assertEquals("alice", record.getResolvedUser());
+        assertEquals("alice", record.getUser());
+
+        PushRecord unresolved = PushRecordMapper.fromRequestDetails(new GitRequestDetails());
+        assertNull(unresolved.getResolvedUser());
+        assertNull(unresolved.getUser());
+    }
+
+    @Test
     void fromRequestDetails_errorResult_setsErrorMessage() {
         GitRequestDetails details = new GitRequestDetails();
         details.setResult(GitRequestDetails.GitResult.ERROR);

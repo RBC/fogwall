@@ -74,13 +74,6 @@ users:
       - ADMIN # optional; defaults to [USER] if omitted
     emails:
       - alice@example.com
-    # push-usernames: HTTP Basic-auth usernames accepted for this user when pushing.
-    # The proxy username is always implicitly valid; these are additional aliases.
-    # Useful when git clients send a fixed username (e.g. "git") that differs from
-    # the proxy username. Stored internally as SCM identities under the "proxy" provider.
-    push-usernames:
-      - git
-      - alice-bot
     scm-identities:
       - provider: github
         username: alice-gh

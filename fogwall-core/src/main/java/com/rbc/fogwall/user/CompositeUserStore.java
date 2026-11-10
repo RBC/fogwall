@@ -135,20 +135,18 @@ public class CompositeUserStore implements UserStore {
         }
 
         // Config identities are always included as locked
-        configUser.ifPresent(u -> u.getScmIdentities().stream()
-                .filter(id -> !"proxy".equals(id.getProvider()))
-                .forEach(id -> {
-                    Map<String, Object> row = jdbcByKey.get(id.getProvider() + ":" + id.getUsername());
-                    result.add(Map.of(
-                            "provider",
-                            id.getProvider(),
-                            "username",
-                            id.getUsername(),
-                            "verified",
-                            row != null && Boolean.TRUE.equals(row.get("verified")),
-                            "source",
-                            "config"));
-                }));
+        configUser.ifPresent(u -> u.getScmIdentities().forEach(id -> {
+            Map<String, Object> row = jdbcByKey.get(id.getProvider() + ":" + id.getUsername());
+            result.add(Map.of(
+                    "provider",
+                    id.getProvider(),
+                    "username",
+                    id.getUsername(),
+                    "verified",
+                    row != null && Boolean.TRUE.equals(row.get("verified")),
+                    "source",
+                    "config"));
+        }));
 
         // Supplemental JDBC identities (skip any that overlap with config)
         Set<String> configKeys = configUser

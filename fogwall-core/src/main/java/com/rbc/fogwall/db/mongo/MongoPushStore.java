@@ -1,5 +1,6 @@
 package com.rbc.fogwall.db.mongo;
 
+import com.mongodb.MongoCommandException;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
@@ -53,13 +54,40 @@ public class MongoPushStore implements PushStore {
         collection.createIndex(Indexes.ascending("status"));
         collection.createIndex(Indexes.ascending("project"));
         collection.createIndex(Indexes.ascending("repoName"));
-        collection.createIndex(Indexes.ascending("user"));
+        collection.createIndex(Indexes.ascending("resolvedUser"));
         collection.createIndex(Indexes.descending("timestamp"));
         // Repo-agnostic on purpose: a fork pull/merge request's head commit was pushed to the fork, not the upstream
         // this
         // record's repoName/project name, so require-validated-head's lookup is keyed on the SHA alone.
         collection.createIndex(Indexes.ascending("commitTo"));
+        dropClientUsernameIndex(collection);
         log.info("MongoDB push store initialized");
+    }
+
+    /** The index earlier versions kept on the client-sent username, which no query reads. */
+    static final String CLIENT_USERNAME_INDEX = "user_1";
+
+    /** MongoDB's IndexNotFound error code. */
+    private static final int INDEX_NOT_FOUND = 27;
+
+    /**
+     * Drops {@link #CLIENT_USERNAME_INDEX}: pushes are filtered by the user they resolved to, so the index only costs
+     * writes. Instances starting together may race to drop it, so one already gone is not an error; any other failure
+     * leaves the index in place and startup continues.
+     */
+    private static void dropClientUsernameIndex(MongoCollection<Document> collection) {
+        try {
+            boolean present = collection.listIndexes().into(new ArrayList<>()).stream()
+                    .anyMatch(index -> CLIENT_USERNAME_INDEX.equals(index.getString("name")));
+            if (present) {
+                collection.dropIndex(CLIENT_USERNAME_INDEX);
+                log.info("Dropped unused push index {}", CLIENT_USERNAME_INDEX);
+            }
+        } catch (MongoCommandException e) {
+            if (e.getErrorCode() != INDEX_NOT_FOUND) {
+                log.warn("Could not drop unused push index {}: {}", CLIENT_USERNAME_INDEX, e.getErrorMessage());
+            }
+        }
     }
 
     @Override
@@ -114,7 +142,7 @@ public class MongoPushStore implements PushStore {
             filters.add(Filters.eq("branch", query.getBranch()));
         }
         if (query.getUser() != null) {
-            filters.add(Filters.eq("user", query.getUser()));
+            filters.add(Filters.eq("resolvedUser", query.getUser()));
         }
         if (query.getAuthorEmail() != null) {
             filters.add(Filters.eq("authorEmail", query.getAuthorEmail()));

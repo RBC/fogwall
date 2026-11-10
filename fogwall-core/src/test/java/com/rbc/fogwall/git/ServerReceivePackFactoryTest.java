@@ -171,6 +171,7 @@ class ServerReceivePackFactoryTest {
         ArgumentCaptor<PushRecord> record = ArgumentCaptor.forClass(PushRecord.class);
         verify(pushStore).save(record.capture());
         assertEquals("alice", record.getValue().getResolvedUser());
+        assertEquals("alice", record.getValue().getUser(), "user mirrors the resolved user, never the client's 'me'");
         assertTrue(record.getValue().getSteps().stream()
                 .flatMap(step -> step.getLogs().stream())
                 .anyMatch(l -> l.equals("Authenticated by fogwall credential 'laptop' (abcdefghijklmnop) of alice")));

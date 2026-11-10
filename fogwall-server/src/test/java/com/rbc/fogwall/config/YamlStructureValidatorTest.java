@@ -2,6 +2,7 @@ package com.rbc.fogwall.config;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -41,5 +42,21 @@ class YamlStructureValidatorTest {
         Files.writeString(file, "not-a-real-top-level-key: true\n");
 
         assertThrows(IllegalStateException.class, () -> YamlStructureValidator.validateFile(file));
+    }
+
+    /** A Basic-auth username identifies nobody, so a user entry cannot list usernames to accept as aliases. */
+    @Test
+    void pushUsernames_isRejected(@TempDir Path tempDir) throws IOException {
+        Path file = tempDir.resolve("fogwall.yml");
+        Files.writeString(file, """
+                users:
+                  - username: alice
+                    push-usernames:
+                      - git
+                """);
+
+        IllegalStateException e =
+                assertThrows(IllegalStateException.class, () -> YamlStructureValidator.validateFile(file));
+        assertTrue(e.getMessage().contains("'push-usernames'"), e.getMessage());
     }
 }

@@ -13,7 +13,13 @@ public class PushQuery {
     private String project;
     private String repoName;
     private String branch;
+
+    /**
+     * The fogwall user the push resolved to ({@link PushRecord#getResolvedUser()}), not the username the client sent,
+     * which for an HTTP push is whatever was typed into Basic auth.
+     */
     private String user;
+
     private String authorEmail;
     private String commitTo;
 
