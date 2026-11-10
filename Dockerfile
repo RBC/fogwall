@@ -67,10 +67,18 @@ RUN sed -i \
 # Lighter footprint: no React/Node build step, no Spring/dashboard dependencies.
 FROM docker.io/eclipse-temurin:25-jre-noble@sha256:a98128a57de944a72bd31fbc79b898edd5a5864d3652071d5bbd2160ab7d7dce AS server
 
+# Packages to upgrade beyond what the base image ships, space-separated. Patches CVEs that are fixed in Ubuntu's
+# repos but not yet in the upstream temurin rebuild. Changing the value re-runs the layer; clear it once the base
+# image catches up.
+ARG SECURITY_UPGRADE_PKGS="apt libapt-pkg6.0t64"
+
 WORKDIR /app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git \
+    && if [ -n "${SECURITY_UPGRADE_PKGS}" ]; then \
+         apt-get install -y --only-upgrade ${SECURITY_UPGRADE_PKGS}; \
+       fi \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder \
@@ -107,10 +115,16 @@ ENTRYPOINT ["/app/bin/fogwall-server"]
 # ── Runtime stage: dashboard (default) ──────────────────────────────────────────
 FROM docker.io/eclipse-temurin:25-jre-noble@sha256:a98128a57de944a72bd31fbc79b898edd5a5864d3652071d5bbd2160ab7d7dce AS dashboard
 
+# See the server stage: packages to upgrade beyond what the base image ships.
+ARG SECURITY_UPGRADE_PKGS="apt libapt-pkg6.0t64"
+
 WORKDIR /app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git \
+    && if [ -n "${SECURITY_UPGRADE_PKGS}" ]; then \
+         apt-get install -y --only-upgrade ${SECURITY_UPGRADE_PKGS}; \
+       fi \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the built distribution

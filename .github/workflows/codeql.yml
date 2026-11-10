@@ -29,7 +29,7 @@ jobs:
 
       - name: Set up Java
         if: matrix.language == 'java-kotlin'
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # ratchet:actions/setup-java@v6.1.0
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # ratchet:actions/setup-java@v6.2.0
         with:
           distribution: temurin
           java-version: 25
@@ -47,7 +47,7 @@ jobs:
           cache-dependency-path: fogwall-dashboard/frontend/package-lock.json
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # ratchet:github/codeql-action/init@v4
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # ratchet:github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.language == 'java-kotlin' && 'manual' || 'none' }}
@@ -57,6 +57,6 @@ jobs:
         run: ./gradlew classes testClasses --no-build-cache
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # ratchet:github/codeql-action/analyze@v4
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # ratchet:github/codeql-action/analyze@v4
         with:
           category: "/language:${{matrix.language}}"

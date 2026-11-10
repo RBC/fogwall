@@ -14,10 +14,10 @@ buildscript {
 }
 
 plugins {
-    id 'com.diffplug.spotless' version '8.10.4' apply false
+    id 'com.diffplug.spotless' version '8.11.0' apply false
     id 'org.cyclonedx.bom' version '3.5.1'
     id 'com.github.node-gradle.node' version '7.1.0' apply false
-    id 'com.github.jk1.dependency-license-report' version '3.1.4' apply false
+    id 'com.github.jk1.dependency-license-report' version '3.1.5' apply false
 }
 
 ext {
@@ -26,7 +26,7 @@ ext {
     pmdVersion = '7.27.0'
 
     // JGit
-    jgitVersion = '7.8.0.202609011348-r'
+    jgitVersion = '7.8.1.202611041320-r'
 
     // HTTP
     apacheHttpClientVersion = '5.6.5'
@@ -87,7 +87,7 @@ ext {
 
     // OpenAPI spec generation
     swaggerCoreVersion = '2.2.55'
-    swaggerUiVersion = '5.34.0'
+    swaggerUiVersion = '5.34.1'
 
     // OpenTelemetry
     opentelemetryBomVersion = '1.67.0'
