@@ -3,6 +3,8 @@ package com.rbc.fogwall.db.mongo;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.model.Accumulators;
+import com.mongodb.client.model.Aggregates;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Indexes;
 import com.mongodb.client.model.Projections;
@@ -58,6 +60,26 @@ public class MongoPushStore implements PushStore {
         // record's repoName/project name, so require-validated-head's lookup is keyed on the SHA alone.
         collection.createIndex(Indexes.ascending("commitTo"));
         log.info("MongoDB push store initialized");
+    }
+
+    @Override
+    public List<PushActivityCount> summarizeActivity(ActivityQuery query) {
+        MongoActivityPipeline pipeline = new MongoActivityPipeline(
+                query, new MongoActivityPipeline.Fields("provider", "project", "repoName", "resolvedUser"));
+        List<PushActivityCount> counts = new ArrayList<>();
+        getCollection()
+                .aggregate(List.of(
+                        Aggregates.match(pipeline.match()),
+                        Aggregates.group(pipeline.groupKey("status", "$status"), Accumulators.sum("total", 1))))
+                .allowDiskUse(true)
+                .forEach(doc -> {
+                    Document id = doc.get("_id", Document.class);
+                    counts.add(new PushActivityCount(
+                            pipeline.key(id),
+                            PushStatus.valueOf(id.getString("status")),
+                            ((Number) doc.get("total")).longValue()));
+                });
+        return counts;
     }
 
     @Override

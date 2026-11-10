@@ -29,7 +29,12 @@ test.describe('profile self-service', () => {
   test('add and remove an SSH key; the config key stays locked', async ({ asRole }) => {
     const page = await asRole('dev')
     await page.goto('/dashboard/profile')
-    await page.getByRole('button', { name: 'SSH Keys' }).click()
+    await page.getByRole('link', { name: 'SSH Keys' }).click()
+    // The tabs are links: wait for the tab to render, which the URL alone runs ahead of.
+    await expect(page.getByRole('link', { name: 'SSH Keys' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
 
     await page.getByPlaceholder('ssh-ed25519 AAAA... or ssh-rsa AAAA...').fill(EXTRA_KEY)
     await page.getByPlaceholder('Label (optional)').fill('playwright laptop')
@@ -49,7 +54,12 @@ test.describe('profile self-service', () => {
   test('rejects a malformed SSH key', async ({ asRole }) => {
     const page = await asRole('dev')
     await page.goto('/dashboard/profile')
-    await page.getByRole('button', { name: 'SSH Keys' }).click()
+    await page.getByRole('link', { name: 'SSH Keys' }).click()
+    // The tabs are links: wait for the tab to render, which the URL alone runs ahead of.
+    await expect(page.getByRole('link', { name: 'SSH Keys' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
     await page.getByPlaceholder('ssh-ed25519 AAAA... or ssh-rsa AAAA...').fill('not a key')
     await page.getByRole('button', { name: 'Add', exact: true }).click()
     await expect(page.getByText(/invalid|malformed|not a valid|could not parse/i)).toBeVisible()
@@ -60,7 +70,12 @@ test.describe('profile self-service', () => {
   }) => {
     const page = await asRole('dev')
     await page.goto('/dashboard/profile')
-    await page.getByRole('button', { name: 'SCM Identities' }).click()
+    await page.getByRole('link', { name: 'SCM Identities' }).click()
+    // The tabs are links: wait for the tab to render, which the URL alone runs ahead of.
+    await expect(page.getByRole('link', { name: 'SCM Identities' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
 
     const username = `pw-${Date.now()}`
     const form = page.locator('form').filter({ has: page.getByPlaceholder('your-username') })
@@ -96,7 +111,12 @@ test.describe('profile self-service', () => {
     // reviewer holds github:fixture-reviewer (seeded via the API during capture)
     const page = await asRole('newcomer')
     await page.goto('/dashboard/profile')
-    await page.getByRole('button', { name: 'SCM Identities' }).click()
+    await page.getByRole('link', { name: 'SCM Identities' }).click()
+    // The tabs are links: wait for the tab to render, which the URL alone runs ahead of.
+    await expect(page.getByRole('link', { name: 'SCM Identities' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
     const form = page.locator('form').filter({ has: page.getByPlaceholder('your-username') })
     await form.getByRole('combobox').selectOption('github')
     await page.getByPlaceholder('your-username').fill('fixture-reviewer')

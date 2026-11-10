@@ -1,13 +1,13 @@
 import { test, expect, requireCapture } from './fixtures'
 
-// The Audit group: user activity, access changes and current access, each a page of record-type tabs with the shared
+// The Audit group: decisions, access changes and current access, each a page of record-type tabs with the shared
 // filters and an export of what they select, and an export of everything. Read-only; the auditor login is the primary
 // audience.
 test.describe('audit', () => {
-  test('Audit opens on user activity', async ({ asRole }) => {
+  test('Audit opens on decisions', async ({ asRole }) => {
     const page = await asRole('auditor')
     await page.goto('/dashboard/audit')
-    await expect(page).toHaveURL(/\/dashboard\/audit\/user-activity$/)
+    await expect(page).toHaveURL(/\/dashboard\/audit\/decisions$/)
     for (const label of ['Pushes', 'SCM API actions', 'Fetch activity']) {
       await expect(page.getByRole('tab', { name: label, exact: true })).toBeVisible()
     }
@@ -16,7 +16,7 @@ test.describe('audit', () => {
   test('an auditor reads the push record with the shared filters', async ({ asRole }) => {
     requireCapture()
     const page = await asRole('auditor')
-    await page.goto('/dashboard/audit/user-activity')
+    await page.goto('/dashboard/audit/decisions')
     await expect(page.getByRole('tab', { name: 'Pushes', selected: true })).toBeVisible()
 
     const rows = page.locator('tbody tr')
@@ -129,7 +129,7 @@ test.describe('audit', () => {
 
   test('a reader has no Audit pages', async ({ asRole }) => {
     const page = await asRole('observer')
-    await page.goto('/dashboard/audit/user-activity')
+    await page.goto('/dashboard/audit/decisions')
     await expect(page).toHaveURL(/\/dashboard\/?$/)
   })
 })

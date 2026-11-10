@@ -1,8 +1,10 @@
 package com.rbc.fogwall.observability;
 
 import com.rbc.fogwall.db.PushStore;
+import com.rbc.fogwall.db.model.ActivityQuery;
 import com.rbc.fogwall.db.model.Attestation;
 import com.rbc.fogwall.db.model.ForwardablePush;
+import com.rbc.fogwall.db.model.PushActivityCount;
 import com.rbc.fogwall.db.model.PushQuery;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
@@ -170,5 +172,10 @@ public class MeteringPushStore implements PushStore {
     @Override
     public Map<String, Map<String, Long>> countPushStatusByUser() {
         return delegate.countPushStatusByUser();
+    }
+
+    @Override
+    public List<PushActivityCount> summarizeActivity(ActivityQuery query) {
+        return delegate.summarizeActivity(query);
     }
 }

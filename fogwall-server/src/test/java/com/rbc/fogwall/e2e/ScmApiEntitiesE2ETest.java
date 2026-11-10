@@ -8,11 +8,14 @@ import com.rbc.fogwall.config.MatchRule;
 import com.rbc.fogwall.config.SecretScanConfig;
 import com.rbc.fogwall.db.ScmApiActionStore;
 import com.rbc.fogwall.db.ScmApiEntityStore;
+import com.rbc.fogwall.db.model.ActivityQuery;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
+import com.rbc.fogwall.db.model.ProposalOutcomeCount;
 import com.rbc.fogwall.db.model.ScmApiActionQuery;
 import com.rbc.fogwall.db.model.ScmApiActionRecord;
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
+import com.rbc.fogwall.db.model.ScmApiActivityCount;
 import com.rbc.fogwall.db.model.ScmApiEntityRecord;
 import com.rbc.fogwall.git.GitleaksRunner;
 import com.rbc.fogwall.jetty.FogwallServletRegistrar;
@@ -150,6 +153,16 @@ class ScmApiEntitiesE2ETest {
         @Override
         public List<ScmApiActionRecord> find(ScmApiActionQuery query) {
             return List.copyOf(saved);
+        }
+
+        @Override
+        public List<ScmApiActivityCount> summarizeActivity(ActivityQuery query) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public List<ProposalOutcomeCount> summarizeOutcomes(ActivityQuery query) {
+            throw new UnsupportedOperationException();
         }
 
         @Override

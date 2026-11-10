@@ -4,13 +4,15 @@ import {
   deleteUrlRule,
   fetchFetchActivity,
   fetchProviders,
+  fetchRepoPushActivity,
   testUrlRules,
 } from '../api'
 import type { RuleTestResponse } from '../api'
+import { formatPeriod } from '../activity'
 import { StatusBadge } from '../components/StatusBadge'
 import { canAdminister } from '../roles'
 import { useToast } from '../components/Toast'
-import type { FetchActivity, Provider, CurrentUser } from '../types'
+import type { FetchActivity, Provider, CurrentUser, RepoPushActivity } from '../types'
 
 interface ActiveRepo {
   provider: string
@@ -105,6 +107,68 @@ function FetchHistory({ repo }: { repo: ActiveRepo }) {
                     rule {r.ruleId}
                   </span>
                 )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/** One repository's pushes by period and status, from the push records. */
+function PushHistory({ repo }: { repo: ActiveRepo }) {
+  const [activity, setActivity] = useState<RepoPushActivity | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const params = new URLSearchParams({
+      provider: repo.provider,
+      owner: repo.owner,
+      repo: repo.repoName,
+      from: new Date(Date.now() - 90 * 86_400_000).toISOString(),
+    })
+    fetchRepoPushActivity(params)
+      .then(setActivity)
+      .catch((e: Error) => setError(e.message))
+  }, [repo.provider, repo.owner, repo.repoName])
+
+  if (error) return <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+  if (!activity) return <p className="text-sm text-gray-400 dark:text-gray-500">Loading…</p>
+  const periods = activity.periods.filter((p) => Object.keys(p.pushes).length > 0).reverse()
+  if (periods.length === 0)
+    return (
+      <p className="text-sm text-gray-400 dark:text-gray-500">No pushes in the last 90 days.</p>
+    )
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs text-gray-400 dark:text-gray-500">
+            <th className="py-1 pr-4 font-medium">Period</th>
+            <th className="py-1 pr-4 font-medium text-right">Pushes</th>
+            <th className="py-1 font-medium">By status</th>
+          </tr>
+        </thead>
+        <tbody className="text-gray-700 dark:text-gray-300">
+          {periods.map((p) => (
+            <tr key={p.start} className="border-t border-gray-100 dark:border-slate-700">
+              <td className="py-1.5 pr-4 whitespace-nowrap">
+                {formatPeriod(p.start, activity.window.granularity)}
+              </td>
+              <td className="py-1.5 pr-4 text-right tabular-nums">
+                {Object.values(p.pushes).reduce((a, b) => a + b, 0)}
+              </td>
+              <td className="py-1.5">
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(p.pushes).map(([status, count]) => (
+                    <span key={status} className="flex items-center gap-1">
+                      <StatusBadge status={status} />
+                      <span className="tabular-nums text-xs">{count}</span>
+                    </span>
+                  ))}
+                </div>
               </td>
             </tr>
           ))}
@@ -723,6 +787,7 @@ export function Repos({ currentUser }: { currentUser: CurrentUser | null }) {
   const [tab, setTab] = useState<Tab>('active')
   const [activeRepos, setActiveRepos] = useState<ActiveRepo[]>([])
   const [openFetches, setOpenFetches] = useState<string | null>(null)
+  const [openPushes, setOpenPushes] = useState<string | null>(null)
   const [rules, setRules] = useState<Rule[]>([])
   const [loadedTab, setLoadedTab] = useState<Tab | null>(null)
   const [showAddRule, setShowAddRule] = useState(false)
@@ -841,12 +906,40 @@ export function Repos({ currentUser }: { currentUser: CurrentUser | null }) {
                       </div>
                       <div className="flex items-center gap-6">
                         <div className="flex gap-6 text-sm text-gray-600 dark:text-gray-400">
-                          <div className="text-center">
-                            <div className="font-semibold text-gray-900 dark:text-gray-100">
-                              {repo.pushCount}
+                          <button
+                            type="button"
+                            onClick={() => setOpenPushes(openPushes === repoKey ? null : repoKey)}
+                            aria-expanded={openPushes === repoKey}
+                            disabled={repo.pushCount === 0}
+                            className="group flex items-center gap-2 rounded px-2 py-1 -mx-2 -my-1 hover:bg-gray-50 disabled:hover:bg-transparent dark:hover:bg-slate-700 disabled:cursor-default"
+                            title={repo.pushCount > 0 ? 'Show push activity' : undefined}
+                          >
+                            <div className="text-center">
+                              <div className="font-semibold text-gray-900 dark:text-gray-100">
+                                {repo.pushCount}
+                              </div>
+                              <div className="text-xs text-gray-400 dark:text-gray-500">pushes</div>
                             </div>
-                            <div className="text-xs text-gray-400 dark:text-gray-500">pushes</div>
-                          </div>
+                            {repo.pushCount > 0 && (
+                              <svg
+                                className={
+                                  'h-4 w-4 shrink-0 text-gray-400 transition-transform group-hover:text-gray-600 dark:group-hover:text-gray-300 ' +
+                                  (openPushes === repoKey ? 'rotate-90' : '')
+                                }
+                                fill="none"
+                                viewBox="0 0 20 20"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                aria-hidden="true"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M7 5l6 5-6 5"
+                                />
+                              </svg>
+                            )}
+                          </button>
                           <button
                             type="button"
                             onClick={() => setOpenFetches(openFetches === repoKey ? null : repoKey)}
@@ -910,6 +1003,11 @@ export function Repos({ currentUser }: { currentUser: CurrentUser | null }) {
                         })()}
                       </div>
                     </div>
+                    {openPushes === repoKey && (
+                      <div className="mt-4 border-t border-gray-100 pt-3 dark:border-slate-700">
+                        <PushHistory repo={repo} />
+                      </div>
+                    )}
                     {openFetches === repoKey && (
                       <div className="mt-4 border-t border-gray-100 pt-3 dark:border-slate-700">
                         <FetchHistory repo={repo} />

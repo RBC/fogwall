@@ -119,8 +119,10 @@ dependencies {
     testImplementation "org.testcontainers:testcontainers-mongodb:${testContainersVersion}"
     testImplementation "org.testcontainers:testcontainers-mysql:${testContainersVersion}"
     testImplementation "org.testcontainers:testcontainers-mariadb:${testContainersVersion}"
+    testImplementation "org.testcontainers:testcontainers-postgresql:${testContainersVersion}"
     testRuntimeOnly "com.mysql:mysql-connector-j:${mysqlVersion}"
     testRuntimeOnly "org.mariadb.jdbc:mariadb-java-client:${mariadbVersion}"
+    testRuntimeOnly "org.postgresql:postgresql:${postgresVersion}"
     testCompileOnly "org.projectlombok:lombok:${lombokVersion}"
     testAnnotationProcessor "org.projectlombok:lombok:${lombokVersion}"
 }

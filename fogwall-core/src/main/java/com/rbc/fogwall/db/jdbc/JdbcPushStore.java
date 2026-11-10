@@ -183,6 +183,20 @@ public class JdbcPushStore implements PushStore {
     }
 
     @Override
+    public List<PushActivityCount> summarizeActivity(ActivityQuery query) {
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        JdbcActivitySql sql = new JdbcActivitySql(query, params);
+        String inner = "SELECT " + sql.keyColumns("p", "project", "resolved_user") + ", p.status AS status"
+                + " FROM push_records p" + sql.where("p", "project", "resolved_user");
+        return jdbc.query(
+                "SELECT " + sql.groupedColumns() + JdbcActivitySql.DERIVED + ".status, COUNT(*) AS total FROM (" + inner
+                        + ") " + JdbcActivitySql.DERIVED + sql.groupBy("status"),
+                params,
+                (rs, rowNum) -> new PushActivityCount(
+                        sql.key(rs), PushStatus.valueOf(rs.getString("status")), rs.getLong("total")));
+    }
+
+    @Override
     public void delete(String id) {
         // CASCADE handles child tables
         jdbc.update("DELETE FROM push_records WHERE id = :id", Map.of("id", id));

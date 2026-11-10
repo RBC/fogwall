@@ -4,8 +4,10 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Fail-closed allowlist of {@code glab}'s mutating REST v4 calls, verified from live traffic — see the GitLab section
@@ -48,6 +50,11 @@ public final class GitLabRestAllowlist {
             Pattern.compile(PROJECT + "/(labels|milestones)$"));
 
     private GitLabRestAllowlist() {}
+
+    /** Every operation name a forwarded mutation can be recorded under. */
+    public static Set<String> operations() {
+        return RULES.stream().map(Rule::operation).collect(Collectors.toUnmodifiableSet());
+    }
 
     /**
      * Whether a {@code GET} to {@code path} (below the dialect's mount, still encoded) is one the SCM API serves. Any

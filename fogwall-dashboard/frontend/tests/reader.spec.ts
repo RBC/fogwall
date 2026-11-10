@@ -8,14 +8,19 @@ test.describe('reader', () => {
     const side = page.locator('aside')
     await expect(side.getByText('reader', { exact: true })).toBeVisible()
     await expect(side.getByRole('link', { name: 'Pushes', exact: true })).toBeVisible()
-    await expect(side.getByRole('link', { name: 'Report an issue', exact: true })).toHaveCount(0)
+    await expect(side.getByRole('link', { name: 'Issues', exact: true })).toHaveCount(0)
   })
 
   test('profile shows the READER badge and no edit controls', async ({ asRole }) => {
     const page = await asRole('observer')
     await page.goto('/dashboard/profile')
     await expect(page.getByText('READER', { exact: true })).toBeVisible()
-    await page.getByRole('button', { name: 'SCM Identities' }).click()
+    await page.getByRole('link', { name: 'SCM Identities' }).click()
+    // The tabs are links: wait for the tab to render, which the URL alone runs ahead of.
+    await expect(page.getByRole('link', { name: 'SCM Identities' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
     await expect(page.getByPlaceholder('your-username')).toHaveCount(0)
   })
 

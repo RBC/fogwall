@@ -1,6 +1,7 @@
 import type {
   CacheListResponse,
   CacheRef,
+  ContributionActivity,
   FetchActivity,
   GitCredential,
   IssuedGitCredential,
@@ -8,6 +9,7 @@ import type {
   GroupPermissionRule,
   RecordType,
   RepoPermission,
+  RepoPushActivity,
   ScmOAuthLinkStatus,
   ScmOAuthProviderInfo,
   SetupInfo,
@@ -103,6 +105,34 @@ export async function fetchRecordPage<T>(
     nextCursor: res.headers.get('X-Next-Cursor'),
     total: total === null ? null : Number(total),
   }
+}
+
+/**
+ * Contribution activity: own (`me`), one user's, everyone's (`all`, auditors and admins), or the summary of everyone's
+ * every user sees (`summary`).
+ */
+export async function fetchContributionActivity(
+  scope:
+    { kind: 'me' } | { kind: 'user'; username: string } | { kind: 'all' } | { kind: 'summary' },
+  params: URLSearchParams,
+): Promise<ContributionActivity> {
+  const path =
+    scope.kind === 'me'
+      ? '/api/activity/me'
+      : scope.kind === 'user'
+        ? `/api/activity/users/${encodeURIComponent(scope.username)}`
+        : scope.kind === 'summary'
+          ? '/api/activity/summary'
+          : '/api/activity'
+  const res = await apiFetch(`${path}?${params}`)
+  if (!res.ok) await parseErrorResponse(res, 'Failed to load activity')
+  return res.json()
+}
+
+export async function fetchRepoPushActivity(params: URLSearchParams): Promise<RepoPushActivity> {
+  const res = await apiFetch('/api/activity/repo-pushes?' + params)
+  if (!res.ok) await parseErrorResponse(res, 'Failed to load push activity')
+  return res.json()
 }
 
 export async function fetchRecordTypes(): Promise<RecordType[]> {

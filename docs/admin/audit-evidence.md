@@ -5,11 +5,12 @@ records and take them out of the system as an export. Every endpoint here requir
 
 ## Dashboard
 
-The Audit group in the sidebar has four pages:
+The Audit group in the sidebar has five pages:
 
-- **User activity**: pushes, SCM API actions and fetch activity.
+- **Decisions**: each push, SCM API action and hour of fetch activity, and what fogwall decided for it.
 - **Access changes**: permission, membership and role changes.
 - **Current access**: the current grants and group membership.
+- **Participation**: contribution volume by period, provider and repository; see [Participation](participation.md).
 - **Export**: the chosen record types in one zip, bounded by one time window, with each type's columns chosen
   separately.
 

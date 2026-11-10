@@ -16,20 +16,22 @@ const LABELS: Record<string, string> = {
   operations: 'Operations',
   'mirror-cache': 'Mirror cache',
   profile: 'Profile',
+  me: 'Activity & permissions',
   setup: 'Setup',
   legal: 'Legal',
 }
 
 // Second segment → label for the contribution surfaces, which share the Contributions crumb above them.
 const CONTRIBUTION_LABELS: Record<string, string> = {
-  issues: 'Report an issue',
+  issues: 'Issues',
 }
 
 // Second segment → label for the Audit pages.
 const AUDIT_LABELS: Record<string, string> = {
-  'user-activity': 'User activity',
+  decisions: 'Decisions',
   'access-changes': 'Access changes',
   'current-access': 'Current access',
+  participation: 'Participation',
   export: 'Export',
 }
 
@@ -68,8 +70,8 @@ function buildTrail(pathname: string): Crumb[] {
   }
 
   if (first === 'contributions') {
-    trail.push({ label: 'Contributions', to: second ? '/contributions' : undefined })
-    if (second) trail.push({ label: CONTRIBUTION_LABELS[second] ?? second })
+    trail.push({ label: 'PRs & Issues', to: '/contributions' })
+    trail.push({ label: second ? (CONTRIBUTION_LABELS[second] ?? second) : 'Contributions' })
     return trail
   }
 

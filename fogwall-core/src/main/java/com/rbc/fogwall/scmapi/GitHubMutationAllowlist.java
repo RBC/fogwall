@@ -38,6 +38,11 @@ public final class GitHubMutationAllowlist {
 
     private GitHubMutationAllowlist() {}
 
+    /** Every mutation field the allowlist forwards. */
+    public static Set<String> operations() {
+        return ALLOWED_MUTATION_FIELDS;
+    }
+
     public static boolean isAllowed(String mutationField) {
         return ALLOWED_MUTATION_FIELDS.contains(mutationField);
     }

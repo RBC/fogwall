@@ -244,8 +244,8 @@ Every proxied **mutation** produces one audit record — who, the resolved repo,
 payload (GitHub's GraphQL variables, or the REST body on the other dialects), and the allow/deny outcome — following the
 same auditability bar as the push path. The payload is dropped from a record whose content inspection refused the
 request, so a secret fogwall blocked is not kept by fogwall; the reason names the rule and field instead. These are
-viewable in the dashboard under **Contributions → Activity**, or queryable directly from the `scm_api_action_records`
-table/collection.
+viewable in the dashboard under **PRs & Issues → Contributions**, or queryable directly from the
+`scm_api_action_records` table/collection.
 
 Each record also names the **surface** that ran it: `SCM_API` for a mutation this proxy forwarded, `DASHBOARD` for one
 the dashboard's own issue form ran on a signed-in user's behalf. Fogwall sets it from the entry point the request

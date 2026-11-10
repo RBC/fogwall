@@ -477,3 +477,70 @@ export interface GroupMembership {
   groupSource: string
   member: string
 }
+
+/** The window an activity report covers, split into whole periods in UTC. */
+export interface ActivityWindow {
+  from: string
+  to: string
+  granularity: 'DAY' | 'WEEK' | 'MONTH'
+  periodStarts: string[]
+}
+
+/** Pull/merge requests or issues opened through fogwall, by the state fogwall last saw. */
+export interface OpenedOutcomes {
+  opened: number
+  open: number
+  closed: number
+  merged: number
+  unknown: number
+  /** Attempts that never reached the provider: denied, rejected for content, or failed. */
+  refused: number
+}
+
+/** Each person's contribution to one pull/merge request or issue counts once. */
+export interface ProposalActivity {
+  pullRequests: OpenedOutcomes
+  issues: OpenedOutcomes
+  edited: number
+  commented: number
+  merged: number
+  denied: number
+  rejected: number
+}
+
+export interface ActivityPeriod {
+  start: string
+  pushes: Record<string, number>
+  proposals?: ProposalActivity
+}
+
+/** One provider's or repository's activity; owner and repo are absent on a provider row. */
+export interface ActivityGroup {
+  provider: string
+  owner?: string
+  repo?: string
+  pushes: Record<string, number>
+  proposals?: ProposalActivity
+  contributors?: number
+}
+
+/** From GET /api/activity, /api/activity/me and /api/activity/users/{username}. */
+export interface ContributionActivity {
+  user?: string
+  window: ActivityWindow
+  proposalsAvailable: boolean
+  totals: { pushes: Record<string, number>; proposals?: ProposalActivity }
+  contributors?: number
+  periods: ActivityPeriod[]
+  providers: ActivityGroup[]
+  /** Most active first; on the summary, only the most active. */
+  repos: ActivityGroup[]
+  /** How many repositories had activity, whether or not `repos` lists them all. */
+  activeRepos: number
+}
+
+/** From GET /api/activity/repo-pushes. */
+export interface RepoPushActivity {
+  window: ActivityWindow
+  periods: ActivityPeriod[]
+}

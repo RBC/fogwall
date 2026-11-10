@@ -3,14 +3,21 @@ package com.rbc.fogwall.db.mongo;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.model.Accumulators;
+import com.mongodb.client.model.Aggregates;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Indexes;
 import com.mongodb.client.model.Updates;
 import com.rbc.fogwall.db.ScmApiActionStore;
+import com.rbc.fogwall.db.model.ActivityQuery;
+import com.rbc.fogwall.db.model.ProposalOutcomeCount;
 import com.rbc.fogwall.db.model.ScmApiActionOrigin;
 import com.rbc.fogwall.db.model.ScmApiActionQuery;
 import com.rbc.fogwall.db.model.ScmApiActionRecord;
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
+import com.rbc.fogwall.db.model.ScmApiActivity;
+import com.rbc.fogwall.db.model.ScmApiActivityCount;
+import com.rbc.fogwall.db.model.ScmApiEntityRecord;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -38,6 +45,83 @@ public class MongoScmApiActionStore implements ScmApiActionStore {
         // Serves the Activity view's "my actions on this surface" filter.
         col.createIndex(Indexes.ascending("origin", "resolved_user"));
         backfillOrigin(col);
+    }
+
+    private static final MongoActivityPipeline.Fields ACTIVITY_FIELDS =
+            new MongoActivityPipeline.Fields("provider", "repo_owner", "repo_name", "resolved_user");
+
+    /** The entity registry's collection, joined to read an opened entity's state. */
+    private static final String ENTITY_COLLECTION_NAME = "scm_api_entities";
+
+    @Override
+    public List<ScmApiActivityCount> summarizeActivity(ActivityQuery query) {
+        MongoActivityPipeline pipeline = new MongoActivityPipeline(query, ACTIVITY_FIELDS);
+        Document target = new Document("user", "$resolved_user")
+                .append(
+                        "target",
+                        new Document(
+                                "$ifNull",
+                                List.of("$entity_id", new Document("$ifNull", List.of("$node_id", "$_id")))));
+        List<ScmApiActivityCount> counts = new ArrayList<>();
+        getCollection()
+                .aggregate(List.of(
+                        Aggregates.match(pipeline.match()),
+                        Aggregates.group(
+                                pipeline.groupKey(
+                                        "status",
+                                        "$status",
+                                        "activity",
+                                        MongoActivityPipeline.activity("mutation_field")),
+                                Accumulators.sum("actions", 1),
+                                Accumulators.addToSet("targets", target)),
+                        Aggregates.project(
+                                new Document("actions", 1).append("targets", new Document("$size", "$targets")))))
+                .allowDiskUse(true)
+                .forEach(doc -> {
+                    Document id = doc.get("_id", Document.class);
+                    counts.add(new ScmApiActivityCount(
+                            pipeline.key(id),
+                            ScmApiActionStatus.valueOf(id.getString("status")),
+                            ScmApiActivity.valueOf(id.getString("activity")),
+                            ((Number) doc.get("actions")).longValue(),
+                            ((Number) doc.get("targets")).longValue()));
+                });
+        return counts;
+    }
+
+    @Override
+    public List<ProposalOutcomeCount> summarizeOutcomes(ActivityQuery query) {
+        MongoActivityPipeline pipeline = new MongoActivityPipeline(query, ACTIVITY_FIELDS);
+        List<String> openFields = ScmApiActivity.classified().stream()
+                .filter(ScmApiActivity::opens)
+                .flatMap(a -> a.mutationFields().stream())
+                .toList();
+        List<ProposalOutcomeCount> counts = new ArrayList<>();
+        getCollection()
+                .aggregate(List.of(
+                        Aggregates.match(Filters.and(
+                                pipeline.match(),
+                                Filters.eq("status", ScmApiActionStatus.FORWARDED.name()),
+                                Filters.in("mutation_field", openFields))),
+                        Aggregates.lookup(ENTITY_COLLECTION_NAME, "entity_id", "_id", "entity"),
+                        Aggregates.group(
+                                pipeline.groupKey(
+                                        "activity",
+                                        MongoActivityPipeline.activity("mutation_field"),
+                                        "state",
+                                        new Document("$arrayElemAt", List.of("$entity.state", 0))),
+                                Accumulators.sum("total", 1))))
+                .allowDiskUse(true)
+                .forEach(doc -> {
+                    Document id = doc.get("_id", Document.class);
+                    String state = id.getString("state");
+                    counts.add(new ProposalOutcomeCount(
+                            pipeline.key(id),
+                            ScmApiActivity.valueOf(id.getString("activity")),
+                            state == null ? null : ScmApiEntityRecord.State.valueOf(state),
+                            ((Number) doc.get("total")).longValue()));
+                });
+        return counts;
     }
 
     /**

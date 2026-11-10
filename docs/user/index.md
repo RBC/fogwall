@@ -54,6 +54,7 @@ identity is registered.
 - [Identity verification](identity-verification.md) — how fogwall works out who you are, over HTTP and SSH
 - [Contributions (PRs, MRs & issues through fogwall)](contributions.md) — opening PRs, MRs and issues with `gh`, `glab`,
   `tea` and `fj`
+- [Your activity](activity.md) — what you contributed through fogwall, on your profile's Activity tab
 - [User permissions vs access rules](permissions-vs-access-rules.md) — why a repo can be blocked even when you have push
   rights
 - [Common problems](troubleshooting.md) — credential prompts, TLS errors, rejected pushes
