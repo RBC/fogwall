@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
+import { Navigate, NavLink, useLocation, useParams } from 'react-router'
 import {
   addEmail,
   addScmIdentity,
   addSshKey,
   fetchConfig,
   fetchMe,
-  fetchMyPermissions,
   fetchMySshKeys,
   fetchProviders,
   fetchScmOAuthLinks,
@@ -14,15 +14,14 @@ import {
   removeSshKey,
   unlinkScmOAuth,
 } from '../api'
-import type { UserGroupView } from '../api'
-import { OperationsBadge, PathTypeBadge } from '../components/PermissionBadges'
 import { GitCredentials } from '../components/GitCredentials'
+import { LockedBadge, RoleBadges, VerifiedBadge } from '../components/SourceBadges'
 import { useToast } from '../components/Toast'
 import { isReadOnly } from '../roles'
+import { tabLinkClass } from '../tabs'
 import type {
   CurrentUser,
   EmailEntry,
-  RepoPermission,
   ScmIdentity,
   ScmOAuthLinkStatus,
   ScmOAuthProviderInfo,
@@ -96,43 +95,30 @@ function providerLinkLabel(hostname: string): string {
   return hostname ? `Link with ${hostname}` : 'Link via OAuth'
 }
 
-function VerifiedBadge({ source }: { source?: string }) {
-  return (
-    <span
-      className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-300"
-      title="Confirmed via OAuth account linking"
-    >
-      verified{source ? ` (${source})` : ''}
-    </span>
-  )
+type ProfileTab = 'emails' | 'identities' | 'ssh-keys' | 'credentials'
+
+const TAB_LABELS: Record<ProfileTab, string> = {
+  emails: 'Email Addresses',
+  identities: 'SCM Identities',
+  'ssh-keys': 'SSH Keys',
+  credentials: 'Git Credentials',
 }
 
-function LockedBadge({ source }: { source: string }) {
-  const title =
-    source === 'config'
-      ? 'Defined in server configuration and cannot be removed'
-      : `Managed by your ${source.toUpperCase()} identity provider and cannot be removed`
-  return (
-    <span
-      className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600 dark:bg-blue-900/30 dark:text-blue-300"
-      title={title}
-    >
-      locked ({source})
-    </span>
-  )
+/** `/profile` and the tabs that moved to `/me`, redirected; the query string survives for the OAuth callback. */
+export function ProfileRedirect() {
+  const { pathname, search } = useLocation()
+  const moved = pathname.match(/^\/profile\/(permissions|activity)$/)
+  return <Navigate to={moved ? `/me/${moved[1]}` : `/profile/emails${search}`} replace />
 }
 
+/** Setting up the signed-in user's account: emails, SCM identities, SSH keys and git credentials. */
 export function Profile() {
   const [profile, setProfile] = useState<CurrentUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const toast = useToast()
 
-  const [tab, setTab] = useState<
-    'emails' | 'identities' | 'sshkeys' | 'credentials' | 'permissions'
-  >('emails')
-  const [permissions, setPermissions] = useState<RepoPermission[]>([])
-  const [groups, setGroups] = useState<UserGroupView[]>([])
+  const tab = useParams().tab as ProfileTab
 
   const [sshKeys, setSshKeys] = useState<SshKeyEntry[]>([])
   const [newSshKey, setNewSshKey] = useState('')
@@ -192,12 +178,6 @@ export function Profile() {
       .finally(() => setLoading(false))
     fetchScmOAuthLinks()
       .then(setLinkStatuses)
-      .catch(() => {})
-    fetchMyPermissions()
-      .then((data) => {
-        setPermissions(data.direct)
-        setGroups(data.groups)
-      })
       .catch(() => {})
     fetchProviders()
       .then((list: { name: string; id: string; host: string }[]) => {
@@ -314,61 +294,35 @@ export function Profile() {
 
   if (loading)
     return (
-      <div className="max-w-2xl mx-auto px-4 py-16 text-center text-gray-400 dark:text-gray-500">
+      <div className="max-w-7xl px-6 py-16 text-center text-gray-400 dark:text-gray-500">
         Loading…
       </div>
     )
   if (error)
     return (
-      <div className="max-w-2xl mx-auto px-4 py-16 text-center text-red-500 dark:text-red-400">
-        {error}
-      </div>
+      <div className="max-w-7xl px-6 py-16 text-center text-red-500 dark:text-red-400">{error}</div>
     )
   if (!profile) return null
 
   // A reader's or auditor's session is read-only: their own profile included.
   const readOnly = isReadOnly(profile)
+  const tabs: ProfileTab[] = [
+    'emails',
+    'identities',
+    'ssh-keys',
+    ...(brokeredPushProviders.length > 0 && !readOnly ? (['credentials'] as const) : []),
+  ]
+  if (!(tab in TAB_LABELS)) return <Navigate to="/profile/emails" replace />
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-7xl px-6 py-6 space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Profile</h2>
+        <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-200">Profile</h1>
         <p className="text-sm text-gray-500 mt-1 dark:text-gray-400">
           Signed in as{' '}
           <span className="font-medium text-gray-700 dark:text-gray-300">{profile.username}</span>
         </p>
-        <div className="flex flex-wrap gap-1 mt-2">
-          {profile.authorities
-            .filter((a: string) => a.startsWith('ROLE_'))
-            .map((a: string) => {
-              const label = a.replace('ROLE_', '')
-              const colour =
-                label === 'ADMIN'
-                  ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
-                  : label === 'AUDITOR'
-                    ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300'
-                    : label === 'SELF_CERTIFY'
-                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
-                      : 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-300'
-              const isSelfCertify = label === 'SELF_CERTIFY'
-              return (
-                <span key={a} className="relative group inline-flex">
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${colour}`}
-                  >
-                    {label}
-                  </span>
-                  {isSelfCertify && (
-                    <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-56 rounded bg-gray-800 px-2 py-1.5 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                      This role allows you to self-approve your own pushes, but an admin must also
-                      grant the Self-certify permission on each individual repository.
-                      <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
-                    </span>
-                  )}
-                </span>
-              )
-            })}
-        </div>
+        <RoleBadges authorities={profile.authorities} />
       </div>
 
       {/* Connected accounts */}
@@ -455,38 +409,16 @@ export function Profile() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200 dark:border-slate-700">
-        {(
-          [
-            'emails',
-            'identities',
-            'sshkeys',
-            ...(brokeredPushProviders.length > 0 && !readOnly ? (['credentials'] as const) : []),
-            'permissions',
-          ] as const
-        ).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={
-              'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ' +
-              (tab === t
-                ? 'border-slate-700 text-slate-800 dark:border-slate-400 dark:text-slate-200'
-                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300')
-            }
-          >
-            {t === 'emails'
-              ? 'Email Addresses'
-              : t === 'identities'
-                ? 'SCM Identities'
-                : t === 'sshkeys'
-                  ? 'SSH Keys'
-                  : t === 'credentials'
-                    ? 'Git Credentials'
-                    : 'Permissions'}
-          </button>
+      <nav
+        aria-label="Profile"
+        className="flex gap-1 overflow-x-auto border-b border-gray-200 dark:border-slate-700"
+      >
+        {tabs.map((t) => (
+          <NavLink key={t} to={`/profile/${t}`} className={tabLinkClass}>
+            {TAB_LABELS[t]}
+          </NavLink>
         ))}
-      </div>
+      </nav>
 
       {/* Emails tab */}
       {tab === 'emails' && (
@@ -554,7 +486,7 @@ export function Profile() {
       {tab === 'credentials' && !readOnly && <GitCredentials providers={brokeredPushProviders} />}
 
       {/* SSH Keys tab */}
-      {tab === 'sshkeys' && (
+      {tab === 'ssh-keys' && (
         <div className="space-y-4">
           <p className="text-sm text-gray-500 dark:text-gray-400">
             SSH public keys used to authenticate git push over SSH. Register the same key you use
@@ -650,127 +582,6 @@ export function Profile() {
                 </button>
               </div>
             </form>
-          )}
-        </div>
-      )}
-
-      {/* Permissions tab */}
-      {tab === 'permissions' && (
-        <div className="space-y-4">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Repository access permissions granted to your account.
-          </p>
-          {loading ? (
-            <p className="text-sm text-gray-400 dark:text-gray-500">Loading…</p>
-          ) : permissions.length === 0 ? (
-            <p className="text-sm text-gray-400 italic dark:text-gray-500">
-              No permissions configured.
-            </p>
-          ) : (
-            <div className="rounded-lg border border-gray-200 bg-white overflow-hidden dark:bg-slate-800 dark:border-slate-700">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide dark:bg-slate-700/50 dark:border-slate-700 dark:text-gray-400">
-                    <th className="px-4 py-3">Provider</th>
-                    <th className="px-4 py-3">Type</th>
-                    <th className="px-4 py-3">Path</th>
-                    <th className="px-4 py-3">Grant</th>
-                    <th className="px-4 py-3">Source</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                  {permissions.map((p) => (
-                    <tr
-                      key={p.id}
-                      className="hover:bg-gray-50 transition-colors dark:hover:bg-gray-700/50"
-                    >
-                      <td className="px-4 py-3">
-                        <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-                          {p.provider}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <PathTypeBadge matchType={p.matchType} />
-                      </td>
-                      <td className="px-4 py-3 font-mono text-gray-700 text-xs dark:text-gray-300">
-                        {p.value}
-                      </td>
-                      <td className="px-4 py-3">
-                        <OperationsBadge operations={p.grant} />
-                      </td>
-                      <td className="px-4 py-3">
-                        {p.source === 'CONFIG' ? (
-                          <LockedBadge source="config" />
-                        ) : (
-                          <span className="text-xs text-gray-400 dark:text-gray-500">local</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          {groups.length > 0 && (
-            <div className="space-y-3 mt-6">
-              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                Group memberships
-              </h3>
-              {groups.map((g) => (
-                <div
-                  key={g.id}
-                  className="rounded-lg border border-gray-200 bg-white dark:bg-slate-800 dark:border-slate-700 overflow-hidden"
-                >
-                  <div className="px-4 py-3 flex items-center gap-2 border-b border-gray-100 dark:border-slate-700">
-                    <span className="text-sm font-medium text-gray-800 dark:text-gray-100">
-                      {g.name}
-                    </span>
-                    <span className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded px-1.5 py-0.5">
-                      {g.source.toLowerCase()}
-                    </span>
-                    {g.description && (
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        — {g.description}
-                      </span>
-                    )}
-                  </div>
-                  {g.rules.length === 0 ? (
-                    <p className="px-4 py-3 text-xs text-gray-400 italic">
-                      No rules in this group.
-                    </p>
-                  ) : (
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-left text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-slate-700/50">
-                          <th className="px-4 py-2">Provider</th>
-                          <th className="px-4 py-2">Type</th>
-                          <th className="px-4 py-2">Path</th>
-                          <th className="px-4 py-2">Grant</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
-                        {g.rules.map((r) => (
-                          <tr key={r.id} className="text-gray-700 dark:text-gray-300">
-                            <td className="px-4 py-2">
-                              <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-                                {r.provider}
-                              </span>
-                            </td>
-                            <td className="px-4 py-2">
-                              <PathTypeBadge matchType={r.matchType} />
-                            </td>
-                            <td className="px-4 py-2 font-mono text-xs">{r.value}</td>
-                            <td className="px-4 py-2">
-                              <OperationsBadge operations={r.grant} />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              ))}
-            </div>
           )}
         </div>
       )}

@@ -1,7 +1,9 @@
 package com.rbc.fogwall.db;
 
+import com.rbc.fogwall.db.model.ActivityQuery;
 import com.rbc.fogwall.db.model.Attestation;
 import com.rbc.fogwall.db.model.ForwardablePush;
+import com.rbc.fogwall.db.model.PushActivityCount;
 import com.rbc.fogwall.db.model.PushQuery;
 import com.rbc.fogwall.db.model.PushRecord;
 import com.rbc.fogwall.db.model.PushStatus;
@@ -181,6 +183,12 @@ public interface PushStore {
         }
         return result;
     }
+
+    /**
+     * Push counts in {@code query}'s window, grouped by its dimensions and by status. The user dimension is the fogwall
+     * user the push resolved to; the owner is the push's project.
+     */
+    List<PushActivityCount> summarizeActivity(ActivityQuery query);
 
     /** Per-repo aggregate returned by {@link #summarizeByRepo()}. */
     record RepoPushSummary(String provider, String owner, String repoName, long total) {}

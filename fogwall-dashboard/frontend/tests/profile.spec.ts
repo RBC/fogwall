@@ -18,7 +18,12 @@ test.describe('profile', () => {
 
     await expect(page.getByText(FIXTURE.email)).toBeVisible()
 
-    await page.getByRole('button', { name: 'SCM Identities' }).click()
+    await page.getByRole('link', { name: 'SCM Identities' }).click()
+    // The tabs are links: wait for the tab to render, which the URL alone runs ahead of.
+    await expect(page.getByRole('link', { name: 'SCM Identities' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
     for (const provider of ['github', 'gitlab', 'gitea']) {
       // "Connected accounts" also lists providers, so match the identity row by provider + handle together
       await expect(
@@ -30,7 +35,12 @@ test.describe('profile', () => {
       ).toBeVisible()
     }
 
-    await page.getByRole('button', { name: 'SSH Keys' }).click()
+    await page.getByRole('link', { name: 'SSH Keys' }).click()
+    // The tabs are links: wait for the tab to render, which the URL alone runs ahead of.
+    await expect(page.getByRole('link', { name: 'SSH Keys' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
     // keys render as fingerprint + label, not the raw blob
     await expect(page.getByText(FIXTURE.sshFingerprint)).toBeVisible()
   })
@@ -52,13 +62,23 @@ test.describe('profile', () => {
     await expect(email.getByText(/verified \(\w+\)/)).toBeVisible()
 
     // Identities: github identity verified
-    await page.getByRole('button', { name: 'SCM Identities' }).click()
+    await page.getByRole('link', { name: 'SCM Identities' }).click()
+    // The tabs are links: wait for the tab to render, which the URL alone runs ahead of.
+    await expect(page.getByRole('link', { name: 'SCM Identities' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
     await expect(
       page.getByRole('listitem').filter({ hasText: 'github' }).getByText('verified'),
     ).toBeVisible()
 
     // SSH key: config-declared; carries a verified-by-provider badge only if the linked provider also reported it
-    await page.getByRole('button', { name: 'SSH Keys' }).click()
+    await page.getByRole('link', { name: 'SSH Keys' }).click()
+    // The tabs are links: wait for the tab to render, which the URL alone runs ahead of.
+    await expect(page.getByRole('link', { name: 'SSH Keys' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
     const key = page.getByRole('listitem').filter({ hasText: FIXTURE.sshFingerprint })
     await expect(key.getByText(/verified \(\w+\)|locked \(config\)/)).toBeVisible()
   })

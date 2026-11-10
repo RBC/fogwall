@@ -1,10 +1,15 @@
 package com.rbc.fogwall.db.jdbc;
 
 import com.rbc.fogwall.db.ScmApiActionStore;
+import com.rbc.fogwall.db.model.ActivityQuery;
+import com.rbc.fogwall.db.model.ProposalOutcomeCount;
 import com.rbc.fogwall.db.model.ScmApiActionOrigin;
 import com.rbc.fogwall.db.model.ScmApiActionQuery;
 import com.rbc.fogwall.db.model.ScmApiActionRecord;
 import com.rbc.fogwall.db.model.ScmApiActionStatus;
+import com.rbc.fogwall.db.model.ScmApiActivity;
+import com.rbc.fogwall.db.model.ScmApiActivityCount;
+import com.rbc.fogwall.db.model.ScmApiEntityRecord;
 import java.sql.Timestamp;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +67,56 @@ public class JdbcScmApiActionStore implements ScmApiActionStore {
                 + JdbcKeysetPaging.orderAndPage(
                         params, "timestamp", query.isNewestFirst(), query.getLimit(), query.getOffset());
         return jdbc.query(sql, params, ROW_MAPPER);
+    }
+
+    @Override
+    public List<ScmApiActivityCount> summarizeActivity(ActivityQuery query) {
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        JdbcActivitySql sql = new JdbcActivitySql(query, params);
+        String inner = "SELECT " + sql.keyColumns("a", "repo_owner", "resolved_user") + ", a.status AS status, "
+                + sql.activity("a.mutation_field") + " AS activity,"
+                + " CONCAT(COALESCE(a.resolved_user, ''), '|', COALESCE(a.entity_id, a.node_id, a.id)) AS target"
+                + " FROM scm_api_action_records a" + sql.where("a", "repo_owner", "resolved_user");
+        String t = JdbcActivitySql.DERIVED;
+        return jdbc.query(
+                "SELECT " + sql.groupedColumns() + t + ".status, " + t + ".activity, COUNT(*) AS actions,"
+                        + " COUNT(DISTINCT " + t + ".target) AS targets FROM (" + inner + ") " + t
+                        + sql.groupBy("status", "activity"),
+                params,
+                (rs, rowNum) -> new ScmApiActivityCount(
+                        sql.key(rs),
+                        ScmApiActionStatus.valueOf(rs.getString("status")),
+                        ScmApiActivity.valueOf(rs.getString("activity")),
+                        rs.getLong("actions"),
+                        rs.getLong("targets")));
+    }
+
+    @Override
+    public List<ProposalOutcomeCount> summarizeOutcomes(ActivityQuery query) {
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        JdbcActivitySql sql = new JdbcActivitySql(query, params);
+        params.addValue("forwarded", ScmApiActionStatus.FORWARDED.name());
+        params.addValue(
+                "openFields",
+                ScmApiActivity.classified().stream()
+                        .filter(ScmApiActivity::opens)
+                        .flatMap(a -> a.mutationFields().stream())
+                        .toList());
+        String inner = "SELECT " + sql.keyColumns("a", "repo_owner", "resolved_user") + ", "
+                + sql.activity("a.mutation_field") + " AS activity, e.state AS state"
+                + " FROM scm_api_action_records a LEFT JOIN scm_api_entities e ON e.id = a.entity_id"
+                + sql.where("a", "repo_owner", "resolved_user")
+                + " AND a.status = :forwarded AND a.mutation_field IN (:openFields)";
+        String t = JdbcActivitySql.DERIVED;
+        return jdbc.query(
+                "SELECT " + sql.groupedColumns() + t + ".activity, " + t + ".state, COUNT(*) AS total FROM (" + inner
+                        + ") " + t + sql.groupBy("activity", "state"),
+                params,
+                (rs, rowNum) -> new ProposalOutcomeCount(
+                        sql.key(rs),
+                        ScmApiActivity.valueOf(rs.getString("activity")),
+                        rs.getString("state") == null ? null : ScmApiEntityRecord.State.valueOf(rs.getString("state")),
+                        rs.getLong("total")));
     }
 
     private static String buildWhere(ScmApiActionQuery query, MapSqlParameterSource params) {

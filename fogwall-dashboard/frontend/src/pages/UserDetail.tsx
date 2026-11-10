@@ -19,6 +19,7 @@ import {
 } from '../api'
 import type { PermissionTestResponse } from '../api'
 import { OperationsBadge, PathTypeBadge } from '../components/PermissionBadges'
+import { ContributionActivityView } from '../components/ContributionActivityView'
 import { UserGitCredentials } from '../components/GitCredentials'
 import { canAdminister } from '../roles'
 import { useToast } from '../components/Toast'
@@ -47,7 +48,7 @@ interface UserDetailProps {
   currentUser: CurrentUser | null
 }
 
-type Tab = 'overview' | 'pushes' | 'permissions'
+type Tab = 'overview' | 'pushes' | 'activity' | 'permissions'
 
 function LockedBadge({ source }: { source: string }) {
   return (
@@ -1156,6 +1157,7 @@ export function UserDetail({ authProvider, currentUser }: UserDetailProps) {
   const tabs: { id: Tab; label: string }[] = [
     { id: 'overview', label: 'Overview' },
     { id: 'pushes', label: 'Pushes' },
+    { id: 'activity', label: 'Activity' },
     { id: 'permissions', label: 'Permissions' },
   ]
 
@@ -1206,6 +1208,9 @@ export function UserDetail({ authProvider, currentUser }: UserDetailProps) {
         />
       )}
       {tab === 'pushes' && <PushesTab username={user.username} />}
+      {tab === 'activity' && (
+        <ContributionActivityView scope={{ kind: 'user', username: user.username }} drillDown />
+      )}
       {tab === 'permissions' && <PermissionsTab username={user.username} isAdmin={isAdmin} />}
     </div>
   )

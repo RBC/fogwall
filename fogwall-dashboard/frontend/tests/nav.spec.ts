@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures'
 
-const AUDIT_PAGES = ['User activity', 'Access changes', 'Current access', 'Export']
+const AUDIT_PAGES = ['Decisions', 'Access changes', 'Current access', 'Participation', 'Export']
 
 // Dashboard navigation (#548): a left sidebar with a primary group and, for admins, an Admin group.
 // Collapsible to an icon rail; breadcrumbs at the top of the content area. Read-only.
@@ -15,9 +15,9 @@ test.describe('navigation', () => {
       await expect(side.getByRole('link', { name: label, exact: true })).toBeVisible()
     }
 
-    // Contributions is a category: the label names what its sub-destinations have in common, and they carry the links.
-    await expect(side.getByText('Contributions', { exact: true })).toBeVisible()
-    for (const label of ['Activity', 'Report an issue']) {
+    // PRs & Issues is a category: the label names what its sub-destinations have in common, and they carry the links.
+    await expect(side.getByText('PRs & Issues', { exact: true })).toBeVisible()
+    for (const label of ['Contributions', 'Issues']) {
       await expect(side.getByRole('link', { name: label, exact: true })).toBeVisible()
     }
 

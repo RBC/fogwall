@@ -1,8 +1,11 @@
 package com.rbc.fogwall.observability;
 
 import com.rbc.fogwall.db.ScmApiActionStore;
+import com.rbc.fogwall.db.model.ActivityQuery;
+import com.rbc.fogwall.db.model.ProposalOutcomeCount;
 import com.rbc.fogwall.db.model.ScmApiActionQuery;
 import com.rbc.fogwall.db.model.ScmApiActionRecord;
+import com.rbc.fogwall.db.model.ScmApiActivityCount;
 import java.util.List;
 import java.util.Optional;
 
@@ -47,6 +50,16 @@ public class MeteringScmApiActionStore implements ScmApiActionStore {
     @Override
     public List<ScmApiActionRecord> find(ScmApiActionQuery query) {
         return delegate.find(query);
+    }
+
+    @Override
+    public List<ScmApiActivityCount> summarizeActivity(ActivityQuery query) {
+        return delegate.summarizeActivity(query);
+    }
+
+    @Override
+    public List<ProposalOutcomeCount> summarizeOutcomes(ActivityQuery query) {
+        return delegate.summarizeOutcomes(query);
     }
 
     @Override

@@ -164,13 +164,16 @@ export function RecordListing<T>({
   type,
   columns,
   suggestions,
+  initial = {},
 }: {
   type: ListedType<T>
   columns: string[]
   suggestions: Suggestions
+  /** Filters the listing opens with, as a link into it carries them. */
+  initial?: Values
 }) {
-  const [draft, setDraft] = useState<Values>({})
-  const [applied, setApplied] = useState<Values>({})
+  const [draft, setDraft] = useState<Values>(initial)
+  const [applied, setApplied] = useState<Values>(initial)
   const [newestFirst, setNewestFirst] = useState(true)
   // cursors[i] is the `after` that reads page i of a history; page 0 reads from the start.
   const [cursors, setCursors] = useState<(string | null)[]>([null])

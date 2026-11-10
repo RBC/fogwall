@@ -4,8 +4,10 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Fail-closed allowlist of the mutating REST v1 calls made by {@code fj} and {@code tea} — see the Forgejo section of
@@ -72,6 +74,11 @@ public final class ForgejoRestAllowlist {
             Pattern.compile(REPO_PATH + "/raw/[^/]+$"));
 
     private ForgejoRestAllowlist() {}
+
+    /** Every operation name a forwarded mutation can be recorded under. */
+    public static Set<String> operations() {
+        return RULES.stream().map(Rule::operation).collect(Collectors.toUnmodifiableSet());
+    }
 
     /**
      * Whether a {@code GET} to {@code path} (below the dialect's mount, still encoded) is one the SCM API serves. Any

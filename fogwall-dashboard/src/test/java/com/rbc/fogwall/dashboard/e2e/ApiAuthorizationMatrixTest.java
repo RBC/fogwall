@@ -193,7 +193,9 @@ class ApiAuthorizationMatrixTest {
             "/api/audit/group-members",
             "/api/push/export",
             "/api/fetches/export",
-            "/api/scm-api-actions/export");
+            "/api/scm-api-actions/export",
+            "/api/activity",
+            "/api/activity/users/user");
 
     /** Admin reads that are operational or credential-bearing rather than access records. */
     private static final List<String> ADMIN_ONLY_READS =
@@ -235,7 +237,15 @@ class ApiAuthorizationMatrixTest {
 
     /** Reads every session role is allowed: pushes, repositories, providers, activity and its own profile. */
     private static final List<String> SESSION_READS = List.of(
-            "/api/me", "/api/push", "/api/repos/rules", "/api/providers", "/api/fetches", "/api/scm-api-actions");
+            "/api/me",
+            "/api/push",
+            "/api/repos/rules",
+            "/api/providers",
+            "/api/fetches",
+            "/api/scm-api-actions",
+            "/api/activity/me",
+            "/api/activity/summary",
+            "/api/activity/repo-pushes?provider=github&owner=acme&repo=widgets");
 
     @Test
     void readerSeesActivityAndChangesNothing() throws Exception {

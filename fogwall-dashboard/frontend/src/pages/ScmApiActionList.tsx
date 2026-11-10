@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchScmApiActions } from '../api'
-import { ContributionsTabs } from '../components/ContributionsTabs'
-import { isReadOnly } from '../roles'
 import { StatusBadge } from '../components/StatusBadge'
 import type {
   ScmApiActionOrigin,
@@ -126,13 +124,10 @@ export function ScmApiActionList({ currentUser }: ScmApiActionListProps) {
   return (
     <div>
       <div className="max-w-6xl px-6 pt-6 pb-3">
-        <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-200">Activity</h1>
+        <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-200">Contributions</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           Every SCM API record, from the dashboard and the proxy alike.
         </p>
-      </div>
-      <div className="max-w-6xl px-6">
-        <ContributionsTabs readOnly={isReadOnly(currentUser)} />
       </div>
 
       {/* Status filter chips */}

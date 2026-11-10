@@ -9,7 +9,6 @@ import {
   setIssueState,
 } from '../api'
 import type { IssueDetails, IssueResult } from '../api'
-import { ContributionsTabs } from '../components/ContributionsTabs'
 import { useToast } from '../components/Toast'
 import { ExtIcon } from '../components/ExtIcon'
 import { parseRepoUrl } from '../repoUrl'
@@ -281,10 +280,7 @@ export function Issues() {
 
   return (
     <div className="max-w-6xl px-6 py-8 space-y-6">
-      <div className="space-y-3">
-        <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-200">Report an issue</h1>
-        <ContributionsTabs />
-      </div>
+      <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-200">Issues</h1>
 
       {providers.length === 0 ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">

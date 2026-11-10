@@ -72,6 +72,9 @@ const icons: Record<string, ReactNode> = {
       <path d="M11 12l8-8M16 7l2.5 2.5M14 9l2 2" strokeLinecap="round" strokeLinejoin="round" />
     </>
   ),
+  participation: (
+    <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" strokeLinecap="round" strokeLinejoin="round" />
+  ),
   export: (
     <path
       d="M12 4v11M7.5 10.5 12 15l4.5-4.5M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"
@@ -131,13 +134,13 @@ const PRIMARY: Dest[] = [
   { to: '/pushes', label: 'Pushes', icon: 'pushes' },
   {
     to: '/contributions',
-    label: 'Contributions',
+    label: 'PRs & Issues',
     icon: 'contributions',
     // Acting on an issue and reviewing what was acted on are the same category of work, so they sit together rather
     // than the form being a destination of its own alongside Pushes.
     children: [
-      { to: '/contributions', label: 'Activity', end: true },
-      { to: '/contributions/issues', label: 'Report an issue', writes: true },
+      { to: '/contributions', label: 'Contributions', end: true },
+      { to: '/contributions/issues', label: 'Issues', writes: true },
     ],
   },
   { to: '/repos', label: 'Repos', icon: 'repos' },
@@ -146,9 +149,10 @@ const PRIMARY: Dest[] = [
 
 /** Auditors and admins: the record of what fogwall decided and of who may do what, and its export. */
 const AUDIT: Dest[] = [
-  { to: '/audit/user-activity', label: 'User activity', icon: 'activity' },
+  { to: '/audit/decisions', label: 'Decisions', icon: 'activity' },
   { to: '/audit/access-changes', label: 'Access changes', icon: 'changes' },
   { to: '/audit/current-access', label: 'Current access', icon: 'access' },
+  { to: '/audit/participation', label: 'Participation', icon: 'participation' },
   { to: '/audit/export', label: 'Export', icon: 'export' },
 ]
 
@@ -381,6 +385,63 @@ export function Sidebar({ currentUser, dark, toggleDark, collapsed }: SidebarPro
               <path d="M10 14 21 3" strokeLinecap="round" />
             </svg>
           </a>
+        </div>
+
+        {/* Account: the name and role open what you have done and may do; the wrench opens your settings. */}
+        {currentUser && (
+          <div className={'mt-2 flex items-center gap-1.5 ' + (collapsed ? 'flex-col' : '')}>
+            <NavLink
+              to="/me"
+              title={`${currentUser.username}: activity and permissions`}
+              className={({ isActive }) =>
+                'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 ' +
+                (isActive ? 'bg-slate-700 ' : 'hover:bg-slate-700 ') +
+                (collapsed ? 'justify-center px-0' : '')
+              }
+            >
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-gradient-to-br from-blue-600 to-sky-500 text-[13px] font-bold text-white">
+                {currentUser.username.charAt(0).toUpperCase()}
+              </span>
+              {!collapsed && (
+                <span className="min-w-0">
+                  <span className="block truncate text-[13px] font-semibold text-white">
+                    {currentUser.username}
+                  </span>
+                  <span className="block truncate text-[11px] text-slate-400">{roleLabel}</span>
+                </span>
+              )}
+            </NavLink>
+            <NavLink
+              to="/profile"
+              title="Profile settings"
+              aria-label="Profile settings"
+              className={({ isActive }) =>
+                'grid h-9 w-9 shrink-0 place-items-center rounded-md border border-slate-700 transition-colors ' +
+                (isActive
+                  ? 'bg-slate-700 text-white'
+                  : 'text-slate-400 hover:bg-slate-700 hover:text-white')
+              }
+            >
+              <svg
+                className="h-[15px] w-[15px]"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                aria-hidden="true"
+              >
+                <path
+                  d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </NavLink>
+          </div>
+        )}
+
+        {/* Theme and sign out. */}
+        <div className={'mt-1.5 flex gap-1.5 ' + (collapsed ? 'flex-col' : '')}>
           <button
             onClick={toggleDark}
             title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -412,57 +473,31 @@ export function Sidebar({ currentUser, dark, toggleDark, collapsed }: SidebarPro
             )}
             {!collapsed && <span>{dark ? 'Light' : 'Dark'}</span>}
           </button>
-        </div>
-
-        {/* Profile — name and role (admin, auditor, user or reader, from the mapped authorities), links to the profile page. */}
-        {currentUser && (
-          <NavLink
-            to="/profile"
-            title={currentUser.username}
-            className={
-              'mt-2 flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 hover:bg-slate-700 ' +
-              (collapsed ? 'justify-center px-0' : '')
-            }
-          >
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-gradient-to-br from-blue-600 to-sky-500 text-[13px] font-bold text-white">
-              {currentUser.username.charAt(0).toUpperCase()}
-            </span>
-            {!collapsed && (
-              <span className="min-w-0">
-                <span className="block truncate text-[13px] font-semibold text-white">
-                  {currentUser.username}
-                </span>
-                <span className="block truncate text-[11px] text-slate-400">{roleLabel}</span>
-              </span>
-            )}
-          </NavLink>
-        )}
-
-        {/* Sign out — full width at the very bottom, away from the theme toggle so it isn't a mis-click. */}
-        {currentUser && (
-          <button
-            onClick={logout}
-            title="Sign out"
-            aria-label="Sign out"
-            className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-md border border-slate-700 px-2 py-1.5 text-xs font-medium text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
-          >
-            <svg
-              className="h-[15px] w-[15px]"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              aria-hidden="true"
+          {currentUser && (
+            <button
+              onClick={logout}
+              title="Sign out"
+              aria-label="Sign out"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-slate-700 px-2 py-1.5 text-xs font-medium text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
             >
-              <path
-                d="M15 12H4M8 8l-4 4 4 4M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            {!collapsed && <span>Sign out</span>}
-          </button>
-        )}
+              <svg
+                className="h-[15px] w-[15px]"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                aria-hidden="true"
+              >
+                <path
+                  d="M15 12H4M8 8l-4 4 4 4M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              {!collapsed && <span>Sign out</span>}
+            </button>
+          )}
+        </div>
 
         {/* Compact legal/attribution line — always reachable in the persistent rail, costs no content height. */}
         {!collapsed && (

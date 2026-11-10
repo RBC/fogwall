@@ -13,7 +13,11 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Configuration
 @EnableWebMvc
-@ComponentScan({"com.rbc.fogwall.dashboard.controller", "com.rbc.fogwall.dashboard.audit"})
+@ComponentScan({
+    "com.rbc.fogwall.dashboard.controller",
+    "com.rbc.fogwall.dashboard.audit",
+    "com.rbc.fogwall.dashboard.activity"
+})
 public class SpringWebConfig implements WebMvcConfigurer {
 
     @Override

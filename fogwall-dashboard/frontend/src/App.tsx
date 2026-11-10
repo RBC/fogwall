@@ -14,7 +14,8 @@ import { Providers } from './pages/Providers'
 import { PushDetail } from './pages/PushDetail'
 import { PushDiff } from './pages/PushDiff'
 import { PushList } from './pages/PushList'
-import { Profile } from './pages/Profile'
+import { Me } from './pages/Me'
+import { Profile, ProfileRedirect } from './pages/Profile'
 import { Repos } from './pages/Repos'
 import { Setup } from './pages/Setup'
 import { Groups } from './pages/Groups'
@@ -25,8 +26,9 @@ import { UserDetail } from './pages/UserDetail'
 import {
   AuditAccessChanges,
   AuditCurrentAccess,
+  AuditDecisions,
   AuditExport,
-  AuditUserActivity,
+  AuditParticipation,
 } from './pages/Audit'
 import { canAdminister, canAudit, isReadOnly } from './roles'
 import type { CurrentUser } from './types'
@@ -93,11 +95,17 @@ export default function App() {
                     isReadOnly(currentUser) ? <Navigate to="/contributions" replace /> : <Issues />
                   }
                 />
-                <Route path="/profile" element={<Profile />} />
-                <Route path="/audit" element={<Navigate to="/audit/user-activity" replace />} />
-                <Route path="/audit/user-activity" element={auditOnly(<AuditUserActivity />)} />
+                <Route path="/me" element={<Navigate to="/me/activity" replace />} />
+                <Route path="/me/:tab" element={<Me />} />
+                <Route path="/profile" element={<ProfileRedirect />} />
+                <Route path="/profile/permissions" element={<ProfileRedirect />} />
+                <Route path="/profile/activity" element={<ProfileRedirect />} />
+                <Route path="/profile/:tab" element={<Profile />} />
+                <Route path="/audit" element={<Navigate to="/audit/decisions" replace />} />
+                <Route path="/audit/decisions" element={auditOnly(<AuditDecisions />)} />
                 <Route path="/audit/access-changes" element={auditOnly(<AuditAccessChanges />)} />
                 <Route path="/audit/current-access" element={auditOnly(<AuditCurrentAccess />)} />
+                <Route path="/audit/participation" element={auditOnly(<AuditParticipation />)} />
                 <Route path="/audit/export" element={auditOnly(<AuditExport />)} />
                 <Route
                   path="/users"
