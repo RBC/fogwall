@@ -220,13 +220,13 @@ the token.
 `auth.role-mappings` applies to LDAP, AD, and OIDC. Keys are role names (without the `ROLE_` prefix); values are lists
 of group names or claim values from the IdP.
 
-| Role           | Dashboard access                                                                   |
-| -------------- | ---------------------------------------------------------------------------------- |
-| `READER`       | View pushes, repositories, providers, and fetch and SCM API activity               |
-| `USER`         | View and act on pushes awaiting approval                                           |
-| `AUDITOR`      | View pushes + read users, groups and permissions; changes nothing, even with ADMIN |
-| `ADMIN`        | All USER permissions + create/delete users, reset passwords, manage identities     |
-| `SELF_CERTIFY` | The capability to self-approve; admits no one on its own                           |
+| Role           | Dashboard access                                                                  |
+| -------------- | --------------------------------------------------------------------------------- |
+| `READER`       | View pushes, repositories, providers, and fetch and SCM API activity              |
+| `USER`         | View and act on pushes awaiting approval                                          |
+| `AUDITOR`      | View pushes + the Audit section and its exports; changes nothing, even with ADMIN |
+| `ADMIN`        | All USER permissions + create/delete users, reset passwords, manage identities    |
+| `SELF_CERTIFY` | The capability to self-approve; admits no one on its own                          |
 
 A mapping grants the role it names and nothing else, except that `ADMIN` brings `USER` with it. A user needs `USER` or
 `ADMIN` to act, so map the group whose members push and review to `USER`.
@@ -256,7 +256,7 @@ match.
 | `NONE` (default) | Is refused sign-in                                                 |
 | `READER`         | Signs in, sees what is going on and changes nothing                |
 | `USER`           | Signs in and acts, subject to repository permissions like any user |
-| `AUDITOR`        | Signs in read-only, and also reads users, groups and permissions   |
+| `AUDITOR`        | Signs in read-only, and reads and exports the audit record         |
 
 Startup fails when `role-mappings` is empty and `default-role` is `NONE`, since no one could sign in. It also warns
 about each mapping that admits no one alone, such as `SELF_CERTIFY`, unless `default-role` is `USER`.

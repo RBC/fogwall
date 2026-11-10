@@ -6,6 +6,10 @@ import com.rbc.fogwall.git.RepoPath;
 import com.rbc.fogwall.git.RepoPathMatching;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
 import com.rbc.fogwall.user.Roles;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -13,6 +17,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -185,7 +190,11 @@ public class RepoPermissionService {
      * needed for a trusted committer configuration.
      */
     public Optional<RepoPermission> findConflict(RepoPermission incoming) {
-        return store.findAll().stream()
+        return conflictIn(incoming, store.findAll());
+    }
+
+    private Optional<RepoPermission> conflictIn(RepoPermission incoming, Collection<RepoPermission> pool) {
+        return pool.stream()
                 .filter(e -> !e.getId().equals(incoming.getId()))
                 .filter(e -> e.getUsername().equals(incoming.getUsername()))
                 .filter(e -> e.getProvider().equals(incoming.getProvider()))
@@ -224,17 +233,23 @@ public class RepoPermissionService {
         return groupStore;
     }
 
+    /** The CONFIG-sourced grants a {@link #seedFromConfig} call inserted and deleted. */
+    public record ConfigSeedResult(List<RepoPermission> added, List<RepoPermission> removed) {}
+
     /**
-     * Seeds permissions from config on startup. Clears all CONFIG-sourced rows and re-inserts to keep YAML
-     * authoritative; DB-sourced rows are left untouched.
+     * Makes the CONFIG-sourced rows match {@code permissions}, keeping YAML authoritative; DB-sourced rows are left
+     * untouched. A grant already stored keeps its row and id, so only what the configuration changed is written.
+     *
+     * <p>Every grant is checked for conflicts before any row is touched: a configuration with a conflict is refused
+     * whole and leaves the stored grants as they were.
      */
-    public void seedFromConfig(List<RepoPermission> permissions) {
-        // Remove existing CONFIG rows so YAML changes take effect on restart.
-        store.findAll().stream()
-                .filter(p -> p.getSource() == RepoPermission.Source.CONFIG)
-                .forEach(p -> store.delete(p.getId()));
+    public ConfigSeedResult seedFromConfig(List<RepoPermission> permissions) {
+        List<RepoPermission> stored = store.findAll();
+        List<RepoPermission> pool = new ArrayList<>(stored.stream()
+                .filter(p -> p.getSource() != RepoPermission.Source.CONFIG)
+                .toList());
         for (RepoPermission p : permissions) {
-            Optional<RepoPermission> conflict = findConflict(p);
+            Optional<RepoPermission> conflict = conflictIn(p, pool);
             if (conflict.isPresent()) {
                 RepoPermission c = conflict.get();
                 throw new IllegalStateException(String.format(
@@ -249,9 +264,47 @@ public class RepoPermissionService {
                         c.getMatchType(),
                         c.getSource()));
             }
-            store.save(p);
+            pool.add(p);
         }
-        log.info("Seeded {} permission grant(s) from config", permissions.size());
+
+        List<RepoPermission> configRows = stored.stream()
+                .filter(p -> p.getSource() == RepoPermission.Source.CONFIG)
+                .toList();
+        Set<GrantKey> wanted = permissions.stream().map(GrantKey::of).collect(Collectors.toSet());
+        Set<GrantKey> have = configRows.stream().map(GrantKey::of).collect(Collectors.toSet());
+        List<RepoPermission> removed = configRows.stream()
+                .filter(p -> !wanted.contains(GrantKey.of(p)))
+                .toList();
+        List<RepoPermission> added =
+                permissions.stream().filter(p -> !have.contains(GrantKey.of(p))).toList();
+
+        Instant grantedAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+        added.forEach(p -> {
+            p.setGrantedBy(null);
+            p.setGrantedAt(grantedAt);
+        });
+        removed.forEach(p -> store.delete(p.getId()));
+        added.forEach(store::save);
+        log.info(
+                "Config permissions: {} declared, {} added, {} removed",
+                permissions.size(),
+                added.size(),
+                removed.size());
+        return new ConfigSeedResult(added, removed);
+    }
+
+    /** What a grant permits, without its id: two rows with the same key are the same grant. */
+    private record GrantKey(
+            String username,
+            String provider,
+            MatchTarget target,
+            String value,
+            MatchType matchType,
+            RepoPermission.Grant grant) {
+        static GrantKey of(RepoPermission p) {
+            return new GrantKey(
+                    p.getUsername(), p.getProvider(), p.getTarget(), p.getValue(), p.getMatchType(), p.getGrant());
+        }
     }
 
     // ---- internals ----
@@ -352,6 +405,14 @@ public class RepoPermissionService {
      * target column landed in the model and stores (V5/V9) but the evaluator kept comparing the whole slug. Mirrors
      * {@code UrlRuleEvaluator.matchesRepo}, which already picks the subject per target on the URL-rule side.
      */
+    /**
+     * Whether a grant of {@code value} on {@code target}, read as {@code matchType}, applies to {@code path}
+     * ({@code /owner/repo}) — the same test a permission check makes.
+     */
+    public boolean patternMatches(MatchTarget target, String value, MatchType matchType, String path) {
+        return matchesPattern(target, value, matchType, path);
+    }
+
     private boolean matchesPattern(MatchTarget target, String value, MatchType matchType, String path) {
         String subject = subjectFor(target, path);
         if (subject == null) {

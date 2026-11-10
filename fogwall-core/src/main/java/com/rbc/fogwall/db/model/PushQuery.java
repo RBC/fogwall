@@ -26,6 +26,9 @@ public class PushQuery {
     /** Free-text search: matches records where project OR repo_name contains this value (case-insensitive LIKE). */
     private String search;
 
+    /** Return only records that come after this position in the requested {@code (timestamp, id)} order. */
+    private RecordCursor after;
+
     /** Maximum number of results to return. */
     @Builder.Default
     private int limit = 100;

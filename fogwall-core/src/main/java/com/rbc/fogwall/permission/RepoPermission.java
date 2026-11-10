@@ -2,6 +2,7 @@ package com.rbc.fogwall.permission;
 
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
@@ -48,6 +49,12 @@ public class RepoPermission {
 
     @Builder.Default
     private Source source = Source.DB;
+
+    /** Who granted it. Null for a grant loaded from configuration, and for one that predates the record. */
+    private String grantedBy;
+
+    /** When it was granted. Null for a grant that predates the record. */
+    private Instant grantedAt;
 
     public enum Grant {
         /** Can submit pushes for review. */

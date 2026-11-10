@@ -25,6 +25,14 @@ const CONTRIBUTION_LABELS: Record<string, string> = {
   issues: 'Report an issue',
 }
 
+// Second segment → label for the Audit pages.
+const AUDIT_LABELS: Record<string, string> = {
+  'user-activity': 'User activity',
+  'access-changes': 'Access changes',
+  'current-access': 'Current access',
+  export: 'Export',
+}
+
 // Push/SCM API record ids are long UUIDs — show a legible prefix in the trail, not the whole thing.
 function shortId(id: string): string {
   return id.length > 10 ? id.slice(0, 8) + '…' : id
@@ -49,6 +57,13 @@ function buildTrail(pathname: string): Crumb[] {
   if (first === 'users' && second) {
     trail.push({ label: 'Users', to: '/users' })
     trail.push({ label: second })
+    return trail
+  }
+
+  // Audit is a group of pages, not a page: its crumb names the group and links nowhere.
+  if (first === 'audit') {
+    trail.push({ label: 'Audit' })
+    if (second) trail.push({ label: AUDIT_LABELS[second] ?? second })
     return trail
   }
 

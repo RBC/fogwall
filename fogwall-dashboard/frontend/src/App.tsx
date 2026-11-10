@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { type ReactElement, useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import { fetchConfig, fetchMe } from './api'
 import { Breadcrumbs } from './components/Breadcrumbs'
@@ -22,7 +22,13 @@ import { Issues } from './pages/Issues'
 import { Legal } from './pages/Legal'
 import { Users } from './pages/Users'
 import { UserDetail } from './pages/UserDetail'
-import { isReadOnly } from './roles'
+import {
+  AuditAccessChanges,
+  AuditCurrentAccess,
+  AuditExport,
+  AuditUserActivity,
+} from './pages/Audit'
+import { canAdminister, canAudit, isReadOnly } from './roles'
 import type { CurrentUser } from './types'
 
 export default function App() {
@@ -41,6 +47,12 @@ export default function App() {
       })
       .catch(console.error)
   }, [])
+
+  // Users and Groups are admin pages; an auditor reads the same records through Audit. Rendered until /api/me loads.
+  const adminOnly = (page: ReactElement) =>
+    currentUser && !canAdminister(currentUser) ? <Navigate to="/" replace /> : page
+  const auditOnly = (page: ReactElement) =>
+    currentUser && !canAudit(currentUser) ? <Navigate to="/" replace /> : page
 
   return (
     <BrowserRouter basename="/dashboard">
@@ -82,15 +94,24 @@ export default function App() {
                   }
                 />
                 <Route path="/profile" element={<Profile />} />
+                <Route path="/audit" element={<Navigate to="/audit/user-activity" replace />} />
+                <Route path="/audit/user-activity" element={auditOnly(<AuditUserActivity />)} />
+                <Route path="/audit/access-changes" element={auditOnly(<AuditAccessChanges />)} />
+                <Route path="/audit/current-access" element={auditOnly(<AuditCurrentAccess />)} />
+                <Route path="/audit/export" element={auditOnly(<AuditExport />)} />
                 <Route
                   path="/users"
-                  element={<Users authProvider={authProvider} currentUser={currentUser} />}
+                  element={adminOnly(
+                    <Users authProvider={authProvider} currentUser={currentUser} />,
+                  )}
                 />
                 <Route
                   path="/users/:username"
-                  element={<UserDetail authProvider={authProvider} currentUser={currentUser} />}
+                  element={adminOnly(
+                    <UserDetail authProvider={authProvider} currentUser={currentUser} />,
+                  )}
                 />
-                <Route path="/groups" element={<Groups currentUser={currentUser} />} />
+                <Route path="/groups" element={adminOnly(<Groups currentUser={currentUser} />)} />
                 <Route path="/operations" element={<Operations />} />
                 <Route path="/mirror-cache" element={<MirrorCache />} />
                 <Route path="/legal" element={<Legal />} />

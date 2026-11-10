@@ -178,7 +178,22 @@ class ApiAuthorizationMatrixTest {
             "/api/users/user/permissions/groups",
             "/api/groups",
             "/api/groups/probe",
-            "/api/groups/probe/permissions");
+            "/api/groups/probe/permissions",
+            "/api/audit/permission-changes",
+            "/api/audit/membership-changes",
+            "/api/audit/role-changes",
+            "/api/audit/permission-changes/export",
+            "/api/audit/membership-changes/export",
+            "/api/audit/role-changes/export",
+            "/api/audit/grants/export",
+            "/api/audit/group-members/export",
+            "/api/audit/export",
+            "/api/audit/record-types",
+            "/api/audit/grants",
+            "/api/audit/group-members",
+            "/api/push/export",
+            "/api/fetches/export",
+            "/api/scm-api-actions/export");
 
     /** Admin reads that are operational or credential-bearing rather than access records. */
     private static final List<String> ADMIN_ONLY_READS =

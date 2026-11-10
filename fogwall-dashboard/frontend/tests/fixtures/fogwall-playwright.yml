@@ -102,6 +102,7 @@ auth:
 # dev      — the pusher. SELF_CERTIFY role + grant on the primary test repo. All captured pushes resolve to this user.
 # reviewer — no roles; REVIEW grant on the fixture-dev org via permissions + a group.
 # observer — READER, no grants; the "can see but can't act" login.
+# auditor  — AUDITOR, no grants; reads and exports the audit record.
 # newcomer — no roles (so USER), no grants; the clean slate for specs that grant to or act as a plain user.
 users:
   - username: admin
@@ -133,6 +134,10 @@ users:
   - username: observer
     password-hash: '{noop}password'
     roles: [READER]
+
+  - username: auditor
+    password-hash: '{noop}password'
+    roles: [AUDITOR]
 
   - username: newcomer
     password-hash: '{noop}password'

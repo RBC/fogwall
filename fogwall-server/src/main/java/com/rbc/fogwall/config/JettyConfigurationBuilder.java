@@ -38,14 +38,21 @@ import com.rbc.fogwall.net.ResolvedOutboundProxy;
 import com.rbc.fogwall.observability.FogwallTelemetry;
 import com.rbc.fogwall.observability.MeteringPushStore;
 import com.rbc.fogwall.observability.MeteringScmApiActionStore;
+import com.rbc.fogwall.permission.AccessChangeService;
 import com.rbc.fogwall.permission.GroupPermissionRule;
 import com.rbc.fogwall.permission.GroupPermissionStore;
 import com.rbc.fogwall.permission.JdbcGroupPermissionStore;
+import com.rbc.fogwall.permission.JdbcMembershipChangeStore;
+import com.rbc.fogwall.permission.JdbcPermissionChangeStore;
 import com.rbc.fogwall.permission.JdbcRepoPermissionStore;
+import com.rbc.fogwall.permission.JdbcRoleChangeStore;
+import com.rbc.fogwall.permission.MembershipChangeStore;
+import com.rbc.fogwall.permission.PermissionChangeStore;
 import com.rbc.fogwall.permission.PermissionGroup;
 import com.rbc.fogwall.permission.PermissionStore;
 import com.rbc.fogwall.permission.RepoPermission;
 import com.rbc.fogwall.permission.RepoPermissionService;
+import com.rbc.fogwall.permission.RoleChangeStore;
 import com.rbc.fogwall.provider.*;
 import com.rbc.fogwall.service.CachingTokenPushIdentityResolver;
 import com.rbc.fogwall.service.GitCredentialService;
@@ -128,6 +135,7 @@ public class JettyConfigurationBuilder {
     private ScmTokenCache cachedTokenCache;
     private RepoPermissionService cachedRepoPermissionService;
     private GroupPermissionStore cachedGroupPermissionStore;
+    private AccessChangeService cachedAccessChangeService;
     private UrlRuleRegistry cachedUrlRuleRegistry;
     private ConfigHolder cachedConfigHolder;
     private ResolvedOutboundProxy cachedOutboundProxy;
@@ -679,6 +687,7 @@ public class JettyConfigurationBuilder {
                 us,
                 rr,
                 rps,
+                buildAccessChangeService(),
                 selfApprovalPolicy,
                 buildPushIdentityResolver(us),
                 approvalGateway,
@@ -769,6 +778,29 @@ public class JettyConfigurationBuilder {
             return requireMongoStoreFactory().groupPermissionStore();
         }
         return new JdbcGroupPermissionStore(requireJdbcDataSource());
+    }
+
+    /**
+     * Builds and caches the {@link AccessChangeService} every grant and membership change goes through, recording each
+     * to the configured database.
+     */
+    public AccessChangeService buildAccessChangeService() {
+        if (cachedAccessChangeService != null) return cachedAccessChangeService;
+        PermissionChangeStore permissionChanges;
+        MembershipChangeStore membershipChanges;
+        RoleChangeStore roleChanges;
+        if ("mongo".equals(config.getDatabase().getType())) {
+            permissionChanges = requireMongoStoreFactory().permissionChangeStore();
+            membershipChanges = requireMongoStoreFactory().membershipChangeStore();
+            roleChanges = requireMongoStoreFactory().roleChangeStore();
+        } else {
+            permissionChanges = new JdbcPermissionChangeStore(requireJdbcDataSource());
+            membershipChanges = new JdbcMembershipChangeStore(requireJdbcDataSource());
+            roleChanges = new JdbcRoleChangeStore(requireJdbcDataSource());
+        }
+        cachedAccessChangeService = new AccessChangeService(
+                buildRepoPermissionService(), buildUserStore(), permissionChanges, membershipChanges, roleChanges);
+        return cachedAccessChangeService;
     }
 
     /**

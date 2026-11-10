@@ -160,7 +160,14 @@ public class DatabaseMigrator {
                     "fetch activity (mysql/mariadb)",
                     "db/migration-mysql/V21__fetch_activity.sql",
                     Vendor.MYSQL_ONLY),
-            new Migration("22", "drop scm api id caches", "db/migration/V22__drop_scm_api_id_caches.sql", Vendor.ANY));
+            new Migration("22", "drop scm api id caches", "db/migration/V22__drop_scm_api_id_caches.sql", Vendor.ANY),
+            new Migration(
+                    "23", "access change events", "db/migration/V23__access_change_events.sql", Vendor.EXCEPT_MYSQL),
+            new Migration(
+                    "23",
+                    "access change events (mysql/mariadb)",
+                    "db/migration-mysql/V23__access_change_events.sql",
+                    Vendor.MYSQL_ONLY));
 
     // ---------------------------------------------------------------------------
 

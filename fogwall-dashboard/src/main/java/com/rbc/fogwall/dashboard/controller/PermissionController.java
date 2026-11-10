@@ -1,8 +1,10 @@
 package com.rbc.fogwall.dashboard.controller;
 
+import com.rbc.fogwall.dashboard.audit.AccessChangeContexts;
 import com.rbc.fogwall.dashboard.audit.AdminAuditLog;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
+import com.rbc.fogwall.permission.AccessChangeService;
 import com.rbc.fogwall.permission.GroupPermissionStore;
 import com.rbc.fogwall.permission.PermissionGroup;
 import com.rbc.fogwall.permission.RepoPermission;
@@ -29,6 +31,8 @@ import org.springframework.web.bind.annotation.*;
 public class PermissionController {
 
     private final RepoPermissionService permissionService;
+
+    private final AccessChangeService accessChanges;
 
     private final ReadOnlyUserStore userStore;
 
@@ -112,7 +116,7 @@ public class PermissionController {
         if (userStore instanceof UserStore mutable) {
             mutable.upsertUser(username);
         }
-        permissionService.save(permission);
+        accessChanges.grant(permission, AccessChangeContexts.current());
         auditLog.success("permission.grant", "user:" + username, "value=" + permission.getValue() + " grant=" + grant);
         return ResponseEntity.status(HttpStatus.CREATED).body(permission);
     }
@@ -137,7 +141,7 @@ public class PermissionController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("error", "Cannot delete config-defined permissions"));
         }
-        permissionService.delete(id);
+        accessChanges.revoke(existing.get(), AccessChangeContexts.current());
         auditLog.success("permission.revoke", "user:" + username, "permissionId=" + id);
         return ResponseEntity.noContent().build();
     }

@@ -6,6 +6,7 @@ import com.rbc.fogwall.db.jdbc.DataSourceFactory;
 import com.rbc.fogwall.db.jdbc.DatabaseMigrator;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
@@ -65,6 +66,21 @@ class JdbcRepoPermissionStoreIntegrationTest {
         assertEquals(MatchType.LITERAL, found.get().getMatchType());
         assertEquals(RepoPermission.Grant.PUSH_AND_REVIEW, found.get().getGrant());
         assertEquals(RepoPermission.Source.DB, found.get().getSource());
+    }
+
+    @Test
+    void save_roundTripsWhoGrantedItAndWhen_andNoneOnAGrantWithout() {
+        RepoPermission stamped = perm("alice", "github", "/acme/a");
+        stamped.setGrantedBy("admin");
+        stamped.setGrantedAt(Instant.parse("2026-11-05T14:00:00.123Z"));
+        RepoPermission bare = perm("alice", "github", "/acme/b");
+        store.save(stamped);
+        store.save(bare);
+
+        assertEquals(stamped, store.findById(stamped.getId()).orElseThrow());
+        RepoPermission found = store.findById(bare.getId()).orElseThrow();
+        assertNull(found.getGrantedBy());
+        assertNull(found.getGrantedAt());
     }
 
     @Test

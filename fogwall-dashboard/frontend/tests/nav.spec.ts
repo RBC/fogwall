@@ -1,5 +1,7 @@
 import { test, expect } from './fixtures'
 
+const AUDIT_PAGES = ['User activity', 'Access changes', 'Current access', 'Export']
+
 // Dashboard navigation (#548): a left sidebar with a primary group and, for admins, an Admin group.
 // Collapsible to an icon rail; breadcrumbs at the top of the content area. Read-only.
 test.describe('navigation', () => {
@@ -19,7 +21,7 @@ test.describe('navigation', () => {
       await expect(side.getByRole('link', { name: label, exact: true })).toBeVisible()
     }
 
-    for (const label of ['Users', 'Groups', 'Operations', 'Mirror cache']) {
+    for (const label of [...AUDIT_PAGES, 'Users', 'Groups', 'Operations', 'Mirror cache']) {
       await expect(side.getByRole('link', { name: label, exact: true })).toBeVisible()
     }
   })
@@ -30,9 +32,26 @@ test.describe('navigation', () => {
     const side = page.locator('aside')
 
     await expect(side.getByRole('link', { name: 'Pushes', exact: true })).toBeVisible()
+    for (const label of [...AUDIT_PAGES, 'Users', 'Groups', 'Operations', 'Mirror cache']) {
+      await expect(side.getByRole('link', { name: label, exact: true })).toHaveCount(0)
+    }
+  })
+
+  test('an auditor sees the primary group and Audit, and no admin destinations', async ({
+    asRole,
+  }) => {
+    const page = await asRole('auditor')
+    await page.goto('/dashboard/')
+    const side = page.locator('aside')
+
+    for (const label of ['Pushes', 'Repos', ...AUDIT_PAGES]) {
+      await expect(side.getByRole('link', { name: label, exact: true })).toBeVisible()
+    }
     for (const label of ['Users', 'Groups', 'Operations', 'Mirror cache']) {
       await expect(side.getByRole('link', { name: label, exact: true })).toHaveCount(0)
     }
+    await page.goto('/dashboard/users')
+    await expect(page).toHaveURL(/\/dashboard\/?$/)
   })
 
   test('the sidebar collapses to an icon rail and back', async ({ page }) => {

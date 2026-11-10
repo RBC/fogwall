@@ -8,7 +8,7 @@ objectClass: organizationalUnit
 ou: groups
 
 # --- Primary test users (referenced in fogwall-ldap.yml) ---
-# Login: testuser / testpass123,  admin / admin
+# Login: testuser / testpass123,  fogwall_ldap_admin / ldapadmin123
 
 dn: cn=testuser,ou=users,dc=example,dc=com
 objectClass: inetOrgPerson
@@ -17,12 +17,12 @@ sn: testuser
 mail: testuser@example.com
 userPassword: testpass123
 
-dn: cn=admin,ou=users,dc=example,dc=com
+dn: cn=fogwall_ldap_admin,ou=users,dc=example,dc=com
 objectClass: inetOrgPerson
-cn: admin
-sn: admin
-mail: admin@example.com
-userPassword: admin
+cn: fogwall_ldap_admin
+sn: fogwall_ldap_admin
+mail: fogwall_ldap_admin@example.com
+userPassword: ldapadmin123
 
 # --- Additional test users ---
 
@@ -94,7 +94,7 @@ userPassword: testpass123
 dn: cn=fogwall_admins,ou=groups,dc=example,dc=com
 objectClass: groupOfNames
 cn: fogwall_admins
-member: cn=admin,ou=users,dc=example,dc=com
+member: cn=fogwall_ldap_admin,ou=users,dc=example,dc=com
 member: cn=user2,ou=users,dc=example,dc=com
 member: cn=user5,ou=users,dc=example,dc=com
 

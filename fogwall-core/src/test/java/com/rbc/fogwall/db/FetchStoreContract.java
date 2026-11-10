@@ -6,6 +6,7 @@ import com.rbc.fogwall.db.FetchStore.RepoFetchSummary;
 import com.rbc.fogwall.db.model.FetchActivity;
 import com.rbc.fogwall.db.model.FetchActivityQuery;
 import com.rbc.fogwall.db.model.FetchRefusal;
+import com.rbc.fogwall.db.model.RecordCursor;
 import com.rbc.fogwall.git.ProxyMode;
 import java.time.Instant;
 import java.util.List;
@@ -171,6 +172,36 @@ public abstract class FetchStoreContract {
                 find(FetchActivityQuery.builder().limit(1).newestFirst(false))
                         .getFirst()
                         .getRepoName());
+    }
+
+    @Test
+    void find_afterACursor_walksEveryRowOnceInBothDirections_andHonoursTheHourWindow() {
+        // Three repositories share the second hour, so the id must break the tie.
+        Instant second = HOUR.plusSeconds(3600);
+        store().add(List.of(
+                allowed("acme", "first", 1),
+                row(second, "acme", "a", FetchActivity.Result.ALLOWED, 1, second),
+                row(second, "acme", "b", FetchActivity.Result.ALLOWED, 1, second),
+                row(second, "acme", "c", FetchActivity.Result.ALLOWED, 1, second),
+                row(HOUR.plusSeconds(7200), "acme", "last", FetchActivity.Result.ALLOWED, 1, HOUR.plusSeconds(7200))));
+
+        for (boolean newestFirst : new boolean[] {true, false}) {
+            List<FetchActivity> all = find(FetchActivityQuery.builder().newestFirst(newestFirst));
+            List<String> walked = CursorWalk.walk(
+                    after -> find(FetchActivityQuery.builder()
+                            .newestFirst(newestFirst)
+                            .after(after)
+                            .limit(2)),
+                    r -> new RecordCursor(r.getBucketStart(), r.getId()),
+                    FetchActivity::getId);
+            assertEquals(all.stream().map(FetchActivity::getId).toList(), walked);
+            assertEquals(5, walked.size());
+        }
+
+        assertEquals(
+                3,
+                find(FetchActivityQuery.builder().from(second).to(HOUR.plusSeconds(7200)))
+                        .size());
     }
 
     @Test

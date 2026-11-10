@@ -1,8 +1,10 @@
 package com.rbc.fogwall.dashboard.controller;
 
+import com.rbc.fogwall.dashboard.audit.AccessChangeContexts;
 import com.rbc.fogwall.dashboard.audit.AdminAuditLog;
 import com.rbc.fogwall.db.PushStore;
 import com.rbc.fogwall.db.model.PushQuery;
+import com.rbc.fogwall.permission.AccessChangeService;
 import com.rbc.fogwall.user.EmailConflictException;
 import com.rbc.fogwall.user.LockedByConfigException;
 import com.rbc.fogwall.user.ReadOnlyUserStore;
@@ -36,6 +38,8 @@ public class UserController {
     private final PushStore pushStore;
 
     private final PasswordEncoder passwordEncoder;
+
+    private final AccessChangeService accessChanges;
 
     private final AdminAuditLog auditLog;
 
@@ -81,8 +85,8 @@ public class UserController {
         }
         try {
             String encoded = passwordEncoder.encode(req.password());
-            String roles = (req.roles() == null || req.roles().isEmpty()) ? Roles.USER : String.join(",", req.roles());
-            jdbc.createUser(req.username(), encoded, roles);
+            List<String> roles = (req.roles() == null || req.roles().isEmpty()) ? List.of(Roles.USER) : req.roles();
+            accessChanges.createUser(req.username(), encoded, roles, AccessChangeContexts.current());
             if (req.email() != null && !req.email().isBlank()) {
                 jdbc.addEmail(req.username(), req.email());
             }
@@ -118,7 +122,7 @@ public class UserController {
     @Operation(operationId = "deleteUser", summary = "Delete a user")
     @DeleteMapping("/{username}")
     public ResponseEntity<?> delete(@PathVariable String username) {
-        if (!(userStore instanceof UserStore jdbc)) {
+        if (!(userStore instanceof UserStore)) {
             return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
                     .body(Map.of("error", "User deletion requires a JDBC user store"));
         }
@@ -136,7 +140,7 @@ public class UserController {
                         .body(Map.of("error", "Cannot delete the last admin user"));
             }
         }
-        jdbc.deleteUser(username);
+        accessChanges.deleteUser(target.get(), AccessChangeContexts.current());
         auditLog.success("user.delete", "user:" + username);
         return ResponseEntity.noContent().build();
     }

@@ -1,8 +1,10 @@
 package com.rbc.fogwall.dashboard.controller;
 
+import com.rbc.fogwall.dashboard.audit.AccessChangeContexts;
 import com.rbc.fogwall.dashboard.audit.AdminAuditLog;
 import com.rbc.fogwall.db.model.MatchTarget;
 import com.rbc.fogwall.db.model.MatchType;
+import com.rbc.fogwall.permission.AccessChangeService;
 import com.rbc.fogwall.permission.GroupPermissionRule;
 import com.rbc.fogwall.permission.GroupPermissionStore;
 import com.rbc.fogwall.permission.PermissionGroup;
@@ -31,6 +33,8 @@ import org.springframework.web.bind.annotation.*;
 public class GroupController {
 
     private final RepoPermissionService permissionService;
+
+    private final AccessChangeService accessChanges;
 
     private final ReadOnlyUserStore userStore;
 
@@ -139,7 +143,7 @@ public class GroupController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("error", "Cannot delete config-defined groups"));
         }
-        groupStore().deleteGroup(id);
+        accessChanges.deleteGroup(existing.get(), AccessChangeContexts.current());
         auditLog.success("group.delete", "group:" + id);
         return ResponseEntity.noContent().build();
     }
@@ -177,7 +181,7 @@ public class GroupController {
         if (userStore instanceof UserStore mutable) {
             mutable.upsertUser(req.username());
         }
-        groupStore().addMember(id, req.username());
+        accessChanges.addMember(group.get(), req.username(), AccessChangeContexts.current());
         auditLog.success("group.member.add", "group:" + id, "user=" + req.username());
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("username", req.username()));
     }
@@ -192,7 +196,7 @@ public class GroupController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("error", "Cannot modify members of config-defined groups"));
         }
-        groupStore().removeMember(id, username);
+        accessChanges.removeMember(group.get(), username, AccessChangeContexts.current());
         auditLog.success("group.member.remove", "group:" + id, "user=" + username);
         return ResponseEntity.noContent().build();
     }
@@ -257,7 +261,7 @@ public class GroupController {
                 .matchType(matchType)
                 .grant(grant)
                 .build();
-        groupStore().saveRule(rule);
+        accessChanges.addGroupRule(group.get(), rule, AccessChangeContexts.current());
         auditLog.success("group.rule.add", "group:" + id, "value=" + rule.getValue() + " grant=" + grant);
         return ResponseEntity.status(HttpStatus.CREATED).body(rule);
     }
@@ -278,7 +282,7 @@ public class GroupController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("error", "Rule does not belong to this group"));
         }
-        groupStore().deleteRule(ruleId);
+        accessChanges.removeGroupRule(group.get(), rule.get(), AccessChangeContexts.current());
         auditLog.success("group.rule.delete", "group:" + id, "ruleId=" + ruleId);
         return ResponseEntity.noContent().build();
     }

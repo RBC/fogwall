@@ -15,6 +15,7 @@ through the proxy, see [User Guide](../user/index.md).
 - [Repo permissions](repo-permissions.md) — who may push, approve, self-certify or propose where
 - [Access rules](access-rules.md) — which repositories fogwall will proxy at all
 - [Approval mode](approval-mode.md) — auto-approve versus human review
+- [Audit evidence](audit-evidence.md) — querying fogwall's records and exporting them
 - [Logging](logging.md) — log locations, debug profiles, and reading a failed push
 - [JGit filesystem requirements](filesystem-requirements.md) — home directory, `/tmp`, and gitleaks permissions
 - [Externalized configuration](externalized-config.md) — mounting config into a container and overriding it

@@ -2,6 +2,7 @@ package com.rbc.fogwall.db.jdbc;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.rbc.fogwall.db.ScmApiActionPagingCheck;
 import com.rbc.fogwall.db.model.ScmApiActionOrigin;
 import com.rbc.fogwall.db.model.ScmApiActionQuery;
 import com.rbc.fogwall.db.model.ScmApiActionRecord;
@@ -23,6 +24,11 @@ class JdbcScmApiActionStoreIntegrationTest {
         DataSource ds = DataSourceFactory.h2InMemory("scm-api-action-test-" + UUID.randomUUID());
         store = new JdbcScmApiActionStore(ds);
         store.initialize();
+    }
+
+    @Test
+    void find_afterACursor_walksEveryRecordOnce_andHonoursTheTimeWindow() {
+        ScmApiActionPagingCheck.check(store);
     }
 
     @Test

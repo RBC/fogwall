@@ -16,6 +16,11 @@ export function isReadOnly(user: CurrentUser | null | undefined): boolean {
   return !(hasRole(user, 'USER') || hasRole(user, 'ADMIN')) || hasRole(user, 'AUDITOR')
 }
 
+/** Whether the user may read and export the audit record: auditors and admins. */
+export function canAudit(user: CurrentUser | null | undefined): boolean {
+  return hasRole(user, 'AUDITOR') || hasRole(user, 'ADMIN')
+}
+
 /** Whether the user may change users, groups, permissions, rules and configuration. */
 export function canAdminister(user: CurrentUser | null | undefined): boolean {
   return hasRole(user, 'ADMIN') && !hasRole(user, 'AUDITOR')
