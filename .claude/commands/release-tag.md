@@ -77,7 +77,26 @@ Arguments passed: `$ARGUMENTS`
    > Local HEAD (`<sha>`) is not `origin/<base>` (`<sha>`). CI built and scanned `origin/<base>`; tagging another commit
    > breaks the promote-not-rebuild flow. Run `git switch <base> && git reset --hard origin/<base>` and re-run.
 
-7. **Create the signed annotated tag.**
+7. **Release notes — before anything is tagged.** A release is published with curated notes, written while the tag can
+   still wait for them. Look for the draft the `release-notes` skill leaves under a placeholder tag:
+
+   ```
+   DRAFT=$(gh release list --limit 50 --json tagName,isDraft \
+     --jq '.[] | select(.isDraft and (.tagName | startswith("<version>-draft-"))) | .tagName' | head -1)
+   ```
+
+   - **No draft** → invoke the `release-notes` skill for `<version>` now. It writes and uploads the draft and hands
+     back.
+   - **Draft found** → refresh it only if commits have landed on `<base>` since it was written (compare its `createdAt`
+     and body against `git log <prev tag>..origin/<base>`); otherwise use it as it is.
+
+   Then show the draft URL and its body, and ask: "Publish these notes with v<version>?" Apply any edits the user asks
+   for to the draft (`gh release edit "$DRAFT" --draft --notes-file …`) and ask again. **Do not continue to the tag
+   until the user approves the notes.** The only way past this step without a curated draft is the user saying
+   explicitly to release with GitHub's generated notes; record that answer for step 10. Writing or refreshing the draft
+   needs the `Skill`, `Write` and `Edit` tools in this command's `allowed-tools`.
+
+8. **Create the signed annotated tag.**
 
    ```
    git tag -s v<version> -m "Release v<version>"
@@ -86,25 +105,29 @@ Arguments passed: `$ARGUMENTS`
    If signing hangs, it is the passphrase prompt — wait for the user. Do not disable signing. Only if no signing key is
    configured at all, fall back to `git tag -a` and say that signing was skipped.
 
-8. **Show and confirm.** `git show v<version> --stat`, then ask: "Push the tag? This triggers the Release Publish
+9. **Show and confirm.** `git show v<version> --stat`, then ask: "Push the tag? This triggers the Release Publish
    workflow." On yes, `git push origin v<version>`. On no, remind them to push manually and stop.
 
-9. **Publish the GitHub release.** The `release-notes` skill may already have left a curated draft under a placeholder
-   tag `<version>-draft-<timestamp>`. Prefer it:
+10. **Publish the GitHub release** from the draft approved in step 7, on the real tag:
 
-   ```
-   DRAFT=$(gh release list --limit 50 --json tagName,isDraft \
-     --jq '.[] | select(.isDraft and (.tagName | startswith("<version>-draft-"))) | .tagName' | head -1)
-   ```
+    ```
+    gh release edit "$DRAFT" --tag v<version> --title "v<version>" --draft=false
+    ```
 
-   - Draft found → publish it on the real tag:
-     `gh release edit "$DRAFT" --tag v<version> --title "v<version>" --draft=false`
-   - No draft → `gh release create v<version> --title "v<version>" --generate-notes`
+    Only if the user chose GitHub's generated notes in step 7:
+    `gh release create v<version> --title "v<version>" --generate-notes`. Never fall back to it on your own.
 
-   Add `--prerelease` in either case when the version has a pre-release suffix (`-rc.N`, `-beta.N`, …). Show the release
-   URL.
+    Add `--prerelease` when the version has a pre-release suffix (`-rc.N`, `-beta.N`, …). Then check the published page:
+    the body must not contain `(DRAFT)`, and it must render without hard line breaks (this count must be `0`):
 
-10. **Start the next development iteration.** The base branch must not sit at a released version once the tag exists.
+    ```
+    gh api repos/:owner/:repo/releases/tags/v<version> -H "Accept: application/vnd.github.html+json" \
+      --jq .body_html | grep -c '<br'
+    ```
+
+    Fix either with `gh release edit v<version> --notes-file …`, then show the release URL.
+
+11. **Start the next development iteration.** The base branch must not sit at a released version once the tag exists.
     Compute the next snapshot from the base:
 
     - `main` → next **minor**: `1.5.0` → `1.6.0-SNAPSHOT`

@@ -116,8 +116,11 @@ not imitate those.
 
 Omit any section with nothing in it.
 
+The body is published verbatim by `/release-tag`, which replaces only the release title. So the draft marker lives in
+the title (`fogwall <version> (DRAFT)`, set in Step 3) and never in the body.
+
 ```markdown
-# fogwall <version> (DRAFT)
+# fogwall <version>
 
 <One or two sentences: what this release is, and — plainly — whether the default developer push workflow changes.>
 
@@ -152,7 +155,7 @@ version jumps only.>
 migration" / "no REST changes" / "pull the new images". If there IS a migration, name it (V14, V15) and say it applies
 automatically on startup.>
 
-**Full Changelog**: https://github.com/RBC/fogwall/compare/<prev tag>...<version>
+**Full Changelog**: https://github.com/RBC/fogwall/compare/<prev tag>...v<version>
 ```
 
 Judgement on where a change goes: a fix that closes an exposure is **Security**, not Bug fixes. A behavioural change an
@@ -178,5 +181,9 @@ fi
 
 `--draft` is mandatory on both commands. Confirm afterwards with `gh release list --json tagName,isDraft` that the entry
 is still a draft, and report the draft URL.
+
+`/release-tag` reads this draft before it tags and will not tag until the maintainer has approved it, so the draft is
+the release notes, not a starting point for them. When this skill runs from inside `/release-tag`, stop after reporting
+the draft URL and hand back; the approval and everything after it belong to `/release-tag`.
 
 Do not bump `version` in `build.gradle` — that is the `release` skill's job at publish time.
