@@ -10,7 +10,7 @@ import type {
 } from '../types'
 
 const PAGE_SIZE = 25
-const STATUSES: ScmApiActionStatus[] = ['FORWARDED', 'DENIED', 'REJECTED', 'ERROR']
+const STATUSES: ScmApiActionStatus[] = ['FORWARDED', 'REJECTED', 'ERROR']
 
 const ORIGINS: { value: '' | ScmApiActionOrigin; label: string }[] = [
   { value: '', label: 'All surfaces' },

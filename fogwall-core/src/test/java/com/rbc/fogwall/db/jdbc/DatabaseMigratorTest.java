@@ -28,7 +28,7 @@ class DatabaseMigratorTest {
         assertEquals(
                 Set.of(
                         "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17",
-                        "18", "19", "20", "20.1", "21", "22", "23", "24"),
+                        "18", "19", "20", "20.1", "21", "22", "23", "24", "25"),
                 appliedVersions(dataSource),
                 "H2 must never select MYSQL_ONLY entries, and the 2.1 postgres-only widening migration must not "
                         + "apply to H2 either");
@@ -60,6 +60,29 @@ class DatabaseMigratorTest {
         }
         assertTrue(indexes.contains("IDX_PUSH_RECORDS_RESOLVED_USER"), () -> "indexes: " + indexes);
         assertFalse(indexes.contains("IDX_PUSH_RECORDS_USER"), () -> "indexes: " + indexes);
+    }
+
+    /** A record written while a refusal by policy had its own status reads as rejected, its reason untouched. */
+    @Test
+    void migrate_rewritesDeniedScmApiActionsAsRejected() throws Exception {
+        DataSource dataSource = DataSourceFactory.h2InMemory("migrator-test-" + UUID.randomUUID());
+        DatabaseMigrator.migrate(dataSource);
+        try (Connection conn = dataSource.getConnection();
+                Statement st = conn.createStatement()) {
+            st.executeUpdate("INSERT INTO scm_api_action_records (id, timestamp, provider, status, reason)"
+                    + " VALUES ('a1', CURRENT_TIMESTAMP, 'github', 'DENIED', 'not allowlisted')");
+            st.executeUpdate("DELETE FROM schema_migrations WHERE version = '25'");
+        }
+
+        DatabaseMigrator.migrate(dataSource);
+
+        try (Connection conn = dataSource.getConnection();
+                Statement st = conn.createStatement();
+                ResultSet rs = st.executeQuery("SELECT status, reason FROM scm_api_action_records WHERE id = 'a1'")) {
+            assertTrue(rs.next());
+            assertEquals("REJECTED", rs.getString("status"));
+            assertEquals("not allowlisted", rs.getString("reason"));
+        }
     }
 
     /** The ID-resolution caches held only derived data; the IDs they mapped are now resolved on every request. */

@@ -9,7 +9,7 @@ The **Activity** tab shows:
 - your pushes, by status
 - pull/merge requests and issues you opened, and the state fogwall last saw them in
 - pull/merge requests and issues you edited or commented on, each counted once however many requests your CLI sent
-- requests that were refused, by policy or for their content
+- requests that were rejected, by policy or for their content
 
 The chart splits the period into days, weeks or months, and the table breaks it down by repository.
 

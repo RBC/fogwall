@@ -124,7 +124,7 @@ export const SCM_API_ACTIONS: ListedType<ScmApiActionRecord> = {
   path: '/api/scm-api-actions',
   history: true,
   filters: [
-    { name: 'status', label: 'Status', options: ['FORWARDED', 'DENIED', 'REJECTED', 'ERROR'] },
+    { name: 'status', label: 'Status', options: ['FORWARDED', 'REJECTED', 'ERROR'] },
     { name: 'origin', label: 'Surface', options: ['DASHBOARD', 'SCM_API'] },
     PROVIDER,
     OWNER,

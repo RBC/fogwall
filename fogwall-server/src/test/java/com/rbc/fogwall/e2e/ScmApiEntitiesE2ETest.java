@@ -393,7 +393,7 @@ class ScmApiEntitiesE2ETest {
                 .build());
 
         assertEquals(403, response.statusCode(), response.body());
-        assertEquals(ScmApiActionStatus.DENIED, actionStore.only().getStatus());
+        assertEquals(ScmApiActionStatus.REJECTED, actionStore.only().getStatus());
     }
 
     @Test

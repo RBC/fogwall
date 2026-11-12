@@ -90,7 +90,7 @@ class ScmApiHeadValidationFilterTest {
 
         verify(chain, never()).doFilter(any(), any());
         verify(response).setStatus(HttpServletResponse.SC_FORBIDDEN);
-        assertEquals(ScmApiActionStatus.DENIED, context.getStatus());
+        assertEquals(ScmApiActionStatus.REJECTED, context.getStatus());
         assertTrue(context.getReason().contains("push it through fogwall"));
     }
 

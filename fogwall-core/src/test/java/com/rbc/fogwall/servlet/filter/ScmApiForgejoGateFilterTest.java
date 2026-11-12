@@ -126,7 +126,7 @@ class ScmApiForgejoGateFilterTest {
 
         verify(resp).setStatus(HttpServletResponse.SC_FORBIDDEN);
         verifyNoInteractions(chain);
-        assertEquals(ScmApiActionStatus.DENIED, context.getStatus());
+        assertEquals(ScmApiActionStatus.REJECTED, context.getStatus());
     }
 
     @Test

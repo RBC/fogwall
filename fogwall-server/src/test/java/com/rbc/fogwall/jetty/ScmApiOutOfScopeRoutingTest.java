@@ -101,7 +101,7 @@ class ScmApiOutOfScopeRoutingTest {
         assertTrue(response.body().contains("\"message\""), "gh renders the message field");
         var saved = ArgumentCaptor.forClass(ScmApiActionRecord.class);
         verify(actionStore).save(saved.capture());
-        assertEquals(ScmApiActionStatus.DENIED, saved.getValue().getStatus());
+        assertEquals(ScmApiActionStatus.REJECTED, saved.getValue().getStatus());
         assertEquals("alice", saved.getValue().getResolvedUser());
     }
 

@@ -77,7 +77,7 @@ public class ScmApiAuditFilter implements Filter {
                             .nodeId(abbreviate(context.getNodeId(), MAX_NODE_ID))
                             .nodeType(context.getNodeType())
                             .reason(abbreviate(reasonOf(context), MAX_REASON))
-                            .variablesJson(variablesJsonOf(context))
+                            .variablesJson(context.getVariablesJson())
                             .userAgent(abbreviate(context.getUserAgent(), MAX_USER_AGENT))
                             .clientType(
                                     context.getClientType() == null
@@ -129,14 +129,6 @@ public class ScmApiAuditFilter implements Filter {
      */
     private static ScmApiActionStatus statusOf(ScmApiRequestContext context) {
         return context.getStatus() == null ? ScmApiActionStatus.ERROR : context.getStatus();
-    }
-
-    /**
-     * The request variables are the audit evidence, except when content inspection refused the request: storing them
-     * would put the secret fogwall just blocked into its own database. The reason still names what matched, redacted.
-     */
-    private static String variablesJsonOf(ScmApiRequestContext context) {
-        return context.getStatus() == ScmApiActionStatus.REJECTED ? null : context.getVariablesJson();
     }
 
     private static String reasonOf(ScmApiRequestContext context) {

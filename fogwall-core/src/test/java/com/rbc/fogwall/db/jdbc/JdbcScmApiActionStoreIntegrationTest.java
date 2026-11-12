@@ -83,19 +83,19 @@ class JdbcScmApiActionStoreIntegrationTest {
     }
 
     @Test
-    void save_deniedRecord_persistsReason() {
+    void save_rejectedRecord_persistsReason() {
         ScmApiActionRecord record = ScmApiActionRecord.builder()
                 .provider("github")
                 .scmUsername("octocat")
                 .mutationField("deleteRepository")
-                .status(ScmApiActionStatus.DENIED)
+                .status(ScmApiActionStatus.REJECTED)
                 .reason("mutation not allowlisted")
                 .build();
 
         store.save(record);
 
         ScmApiActionRecord found = store.findById(record.getId()).orElseThrow();
-        assertEquals(ScmApiActionStatus.DENIED, found.getStatus());
+        assertEquals(ScmApiActionStatus.REJECTED, found.getStatus());
         assertEquals("mutation not allowlisted", found.getReason());
         assertNull(found.getRepoOwner());
     }
@@ -103,12 +103,12 @@ class JdbcScmApiActionStoreIntegrationTest {
     @Test
     void find_filtersByStatus() {
         store.save(record("acme", "widgets", ScmApiActionStatus.FORWARDED));
-        store.save(record("acme", "gadgets", ScmApiActionStatus.DENIED));
+        store.save(record("acme", "gadgets", ScmApiActionStatus.REJECTED));
 
-        List<ScmApiActionRecord> denied = store.find(
-                ScmApiActionQuery.builder().status(ScmApiActionStatus.DENIED).build());
-        assertEquals(1, denied.size());
-        assertEquals(ScmApiActionStatus.DENIED, denied.get(0).getStatus());
+        List<ScmApiActionRecord> rejected = store.find(
+                ScmApiActionQuery.builder().status(ScmApiActionStatus.REJECTED).build());
+        assertEquals(1, rejected.size());
+        assertEquals(ScmApiActionStatus.REJECTED, rejected.get(0).getStatus());
     }
 
     @Test

@@ -33,8 +33,8 @@ import tools.jackson.databind.json.JsonMapper;
  * so every earlier stage in the chain says yes.
  *
  * <p>Runs after the dialect's gate filter, so it only ever inspects a request that was going to be forwarded, and the
- * audit record already names the target repository. A violation is recorded as {@link ScmApiActionStatus#REJECTED}: the
- * caller was entitled to the operation, but not to publish that content through it.
+ * audit record already names the target repository. A violation is recorded as {@link ScmApiActionStatus#REJECTED},
+ * with a reason naming what matched and without the request's variables.
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -81,6 +81,9 @@ public class ScmApiContentInspectionFilter implements Filter {
         log.debug("SCM API proxy content inspection rejected the request: {}", reason);
         context.setStatus(ScmApiActionStatus.REJECTED);
         context.setReason(reason);
+        // The variables are the audit evidence for every other outcome. Here they hold what was just blocked, and
+        // recording them would put a caught secret into fogwall's own database; the reason names the match, redacted.
+        context.setVariablesJson(null);
         ScmApiErrorResponse.write(((HttpServletResponse) response), HttpServletResponse.SC_FORBIDDEN, reason);
     }
 

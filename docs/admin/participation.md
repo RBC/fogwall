@@ -8,14 +8,14 @@ user's page.
 ## What it shows
 
 - Totals for the period: pushes by status, distinct contributors, pull/merge requests and issues opened with the state
-  fogwall last saw them in, edits, comments, and requests refused by policy or for their content.
+  fogwall last saw them in, edits, comments, and requests rejected by policy or for their content.
 - The same figures over time, by day for a window up to 45 days, by week up to a year, and by month beyond. Periods are
   in UTC.
 - A row per provider and per repository, each with its own contributor count.
 
 Narrow it to a person, a provider or a repository. Choosing a person shows that person's figures. A figure in the
 provider or repository table opens **Audit → Decisions** on the records behind it, with the same window, repository and
-person.
+person; **Rejected** also sets that status.
 
 Every signed-in user sees a summary on **Overview**: their own figures and everyone's for the last 30 days, with the
 five most active repositories. The summary names no person.

@@ -119,7 +119,7 @@ class ContributionActivityServiceTest {
                         new ScmApiActivityCount(
                                 repo("widgets", "carol"), ScmApiActionStatus.FORWARDED, ScmApiActivity.COMMENT, 3, 2),
                         new ScmApiActivityCount(
-                                repo("widgets", "dave"), ScmApiActionStatus.DENIED, ScmApiActivity.OTHER, 4, 4),
+                                repo("widgets", "dave"), ScmApiActionStatus.REJECTED, ScmApiActivity.OTHER, 4, 4),
                         new ScmApiActivityCount(
                                 repo("widgets", "alice"),
                                 ScmApiActionStatus.REJECTED,
@@ -148,8 +148,8 @@ class ContributionActivityServiceTest {
         assertEquals(2, proposals.pullRequests().merged());
         assertEquals(1, proposals.pullRequests().unknown());
         assertEquals(2, proposals.commented());
-        assertEquals(4, proposals.denied());
-        assertEquals(1, proposals.rejected());
+        // dave's four refused by policy and alice's one refused for content are both rejections.
+        assertEquals(5, proposals.rejected());
         // alice's issue create was rejected for its content: an attempt, not an opened issue.
         assertEquals(1, proposals.issues().refused());
         assertEquals(0, proposals.issues().opened());

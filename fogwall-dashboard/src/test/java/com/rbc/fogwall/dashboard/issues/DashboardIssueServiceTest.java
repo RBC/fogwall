@@ -156,7 +156,7 @@ class DashboardIssueServiceTest {
         assertFalse(outcome.ok());
         assertEquals(403, outcome.httpStatus());
         verify(client, never()).createIssue(any(), anyString(), anyString(), anyString(), anyString(), anyString());
-        assertEquals(ScmApiActionStatus.DENIED, savedStatus());
+        assertEquals(ScmApiActionStatus.REJECTED, savedStatus());
     }
 
     @Test
@@ -188,7 +188,7 @@ class DashboardIssueServiceTest {
 
         assertFalse(outcome.ok());
         assertEquals(409, outcome.httpStatus());
-        assertEquals(ScmApiActionStatus.DENIED, savedStatus());
+        assertEquals(ScmApiActionStatus.REJECTED, savedStatus());
     }
 
     @Test

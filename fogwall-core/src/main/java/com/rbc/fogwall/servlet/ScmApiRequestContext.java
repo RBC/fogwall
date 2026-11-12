@@ -64,7 +64,7 @@ public class ScmApiRequestContext {
     private String clientVersion;
 
     /**
-     * Final outcome, set once known: {@code DENIED}/{@code ERROR} by the gate filter before it short-circuits the
+     * Final outcome, set once known: {@code REJECTED}/{@code ERROR} by the gate filter before it short-circuits the
      * chain, or {@code FORWARDED}/{@code ERROR} by the forwarding servlet once the upstream response is known. The
      * audit filter reads this in its {@code finally} block, after the chain has fully unwound either way.
      */

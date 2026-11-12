@@ -35,19 +35,18 @@ public record ContributionActivity(
      * What happened to the pull/merge requests and issues, each counted once however many requests touched it.
      *
      * @param merged distinct pull/merge requests merged through fogwall, whoever opened them
-     * @param denied SCM API requests refused by policy: not allowlisted, or no grant
-     * @param rejected SCM API requests refused for their content
+     * @param rejected SCM API requests fogwall rejected, by policy or for their content
      */
     public record Proposals(
-            Opened pullRequests, Opened issues, long edited, long commented, long merged, long denied, long rejected) {
+            Opened pullRequests, Opened issues, long edited, long commented, long merged, long rejected) {
 
-        static final Proposals NONE = new Proposals(Opened.NONE, Opened.NONE, 0, 0, 0, 0, 0);
+        static final Proposals NONE = new Proposals(Opened.NONE, Opened.NONE, 0, 0, 0, 0);
     }
 
     /**
      * How many were opened through fogwall, by the state fogwall last saw, and how many attempts to open one fogwall
      * refused. {@code unknown} were opened but the provider's response named nothing fogwall could follow;
-     * {@code refused} never reached the provider: denied by policy, rejected for content, or failed.
+     * {@code refused} never reached the provider: rejected by policy or for content, or failed.
      */
     public record Opened(long opened, long open, long closed, long merged, long unknown, long refused) {
 

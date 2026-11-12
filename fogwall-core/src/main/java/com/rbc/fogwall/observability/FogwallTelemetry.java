@@ -56,7 +56,7 @@ public final class FogwallTelemetry {
      */
     public static final AttributeKey<String> SCM_API_OPERATION = AttributeKey.stringKey("fogwall.scmapi.operation");
 
-    /** SCM API action outcome: {@code FORWARDED}, {@code DENIED}, {@code REJECTED}, {@code ERROR}. Low cardinality. */
+    /** SCM API action outcome: {@code FORWARDED}, {@code REJECTED}, {@code ERROR}. Low cardinality. */
     public static final AttributeKey<String> SCM_API_OUTCOME = AttributeKey.stringKey("fogwall.scmapi.outcome");
 
     /** Fetch decision: {@code ALLOWED} or {@code BLOCKED}. Low cardinality. */

@@ -195,8 +195,9 @@ as raw text but is plain once decoded. GitHub adds a third reading, the GraphQL 
 wraps its query in JSON, so decoding the transport leaves GraphQL's own string escaping intact, and arguments inlined in
 the query text never appear as JSON values at all.
 
-A content violation is recorded as `REJECTED`. `DENIED` is for operations that are not allowlisted, or that the caller
-holds no `PROPOSE` grant for.
+A content violation is recorded as `REJECTED`, with a reason naming what matched and without the request's content. An
+operation that is not allowlisted, or that the caller holds no `PROPOSE` grant for, is also `REJECTED`, with a reason
+saying so.
 
 ```yaml
 scm-api:
