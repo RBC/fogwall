@@ -262,11 +262,9 @@ public class ContributionActivityService {
             return Proposals.NONE;
         }
         Map<ScmApiActivity, Long> contributed = new LinkedHashMap<>();
-        long denied = 0;
         long rejected = 0;
         for (ScmApiActivityCount c : actions) {
             if (contributes(c)) contributed.merge(c.activity(), c.targets(), Long::sum);
-            if (c.status() == ScmApiActionStatus.DENIED) denied += c.actions();
             if (c.status() == ScmApiActionStatus.REJECTED) rejected += c.actions();
         }
         return new Proposals(
@@ -275,7 +273,6 @@ public class ContributionActivityService {
                 contributed.getOrDefault(ScmApiActivity.EDIT, 0L),
                 contributed.getOrDefault(ScmApiActivity.COMMENT, 0L),
                 contributed.getOrDefault(ScmApiActivity.MERGE, 0L),
-                denied,
                 rejected);
     }
 

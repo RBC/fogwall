@@ -1,7 +1,7 @@
 export type PushStatus =
   'PENDING' | 'APPROVED' | 'FORWARDED' | 'REJECTED' | 'CANCELED' | 'RECEIVED' | 'ERROR'
 
-export type ScmApiActionStatus = 'FORWARDED' | 'DENIED' | 'REJECTED' | 'ERROR'
+export type ScmApiActionStatus = 'FORWARDED' | 'REJECTED' | 'ERROR'
 
 /**
  * Which fogwall surface ran the action: the dashboard acting for a signed-in user, or the SCM API proxy forwarding a
@@ -493,7 +493,7 @@ export interface OpenedOutcomes {
   closed: number
   merged: number
   unknown: number
-  /** Attempts that never reached the provider: denied, rejected for content, or failed. */
+  /** Attempts that never reached the provider: rejected, or failed. */
   refused: number
 }
 
@@ -504,7 +504,7 @@ export interface ProposalActivity {
   edited: number
   commented: number
   merged: number
-  denied: number
+  /** Requests fogwall rejected, by policy or for their content. */
   rejected: number
 }
 

@@ -144,12 +144,12 @@ class ScmApiAuditFilterTest {
      * shows an operator a CLI started calling something the allowlist does not know.
      */
     @Test
-    void deniedAuthenticatedCallerWithNoMutationField_writesRecord() throws Exception {
+    void rejectedAuthenticatedCallerWithNoMutationField_writesRecord() throws Exception {
         ScmApiActionStore store = mock(ScmApiActionStore.class);
         ScmApiRequestContext context = new ScmApiRequestContext();
         context.setProvider("gitea");
         context.setResolvedUser("alice");
-        context.setStatus(ScmApiActionStatus.DENIED);
+        context.setStatus(ScmApiActionStatus.REJECTED);
         context.setReason("Operation 'POST /repos/acme/widgets/pulls/1/reviews' is not allowlisted");
 
         HttpServletRequest req = mock(HttpServletRequest.class);
@@ -159,9 +159,26 @@ class ScmApiAuditFilterTest {
 
         ArgumentCaptor<ScmApiActionRecord> captor = ArgumentCaptor.forClass(ScmApiActionRecord.class);
         verify(store).save(captor.capture());
-        assertEquals(ScmApiActionStatus.DENIED, captor.getValue().getStatus());
+        assertEquals(ScmApiActionStatus.REJECTED, captor.getValue().getStatus());
         assertNull(captor.getValue().getMutationField(), "there was no operation to name");
         assertTrue(captor.getValue().getReason().contains("not allowlisted"));
+    }
+
+    /**
+     * A request refused by policy keeps its variables as evidence of what was attempted. Only content inspection, which
+     * clears them on the context, leaves a rejected record without them.
+     */
+    @Test
+    void rejectedByPolicy_keepsTheRequestVariables() throws Exception {
+        ScmApiRequestContext context = new ScmApiRequestContext();
+        context.setProvider("github");
+        context.setResolvedUser("alice");
+        context.setMutationField("createPullRequest");
+        context.setVariablesJson("{\"input\":{\"title\":\"t\"}}");
+        context.setStatus(ScmApiActionStatus.REJECTED);
+        context.setReason("No PROPOSE grant on acme/widgets");
+
+        assertEquals("{\"input\":{\"title\":\"t\"}}", saved(context).getVariablesJson());
     }
 
     /**
@@ -169,11 +186,11 @@ class ScmApiAuditFilterTest {
      * push writes no push record — and it is the only case an unauthenticated caller could repeat at will.
      */
     @Test
-    void deniedBeforeAuthentication_doesNotWriteRecord() throws Exception {
+    void rejectedBeforeAuthentication_doesNotWriteRecord() throws Exception {
         ScmApiActionStore store = mock(ScmApiActionStore.class);
         ScmApiRequestContext context = new ScmApiRequestContext();
         context.setProvider("gitea");
-        context.setStatus(ScmApiActionStatus.DENIED);
+        context.setStatus(ScmApiActionStatus.REJECTED);
         context.setReason("Unrecognised client");
 
         HttpServletRequest req = mock(HttpServletRequest.class);
@@ -222,7 +239,7 @@ class ScmApiAuditFilterTest {
         ScmApiRequestContext context = new ScmApiRequestContext();
         context.setProvider("gitea");
         context.setResolvedUser("alice");
-        context.setStatus(ScmApiActionStatus.DENIED);
+        context.setStatus(ScmApiActionStatus.REJECTED);
         context.setReason("Operation 'POST /repos/" + "a".repeat(9000) + "' is not allowlisted");
 
         String reason = saved(context).getReason();
@@ -243,7 +260,7 @@ class ScmApiAuditFilterTest {
         context.setNodeId("R_" + "k".repeat(900));
         context.setRepoOwner("a".repeat(900));
         context.setRepoName("b".repeat(900));
-        context.setStatus(ScmApiActionStatus.DENIED);
+        context.setStatus(ScmApiActionStatus.REJECTED);
 
         ScmApiActionRecord record = saved(context);
         assertEquals(100, record.getMutationField().length());

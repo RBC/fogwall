@@ -221,13 +221,13 @@ public class DashboardIssueService {
         FogwallProvider provider = resolved.get();
 
         if (!isIssuesEnabled(providerName)) {
-            audit(op, provider, username, owner, repo, ScmApiActionStatus.DENIED, "issue filing not enabled", null);
+            audit(op, provider, username, owner, repo, ScmApiActionStatus.REJECTED, "issue filing not enabled", null);
             return new IssueOutcome(403, null, "Issue filing is not enabled for " + providerName, List.of());
         }
 
         String repoPath = "/" + owner + "/" + repo;
         if (!permissions.isAllowedToFileIssue(username, providerName, repoPath)) {
-            audit(op, provider, username, owner, repo, ScmApiActionStatus.DENIED, "no ISSUE/PROPOSE grant", null);
+            audit(op, provider, username, owner, repo, ScmApiActionStatus.REJECTED, "no ISSUE/PROPOSE grant", null);
             return new IssueOutcome(
                     403, null, "You do not have permission to file issues on " + owner + "/" + repo, List.of());
         }
@@ -240,7 +240,7 @@ public class DashboardIssueService {
 
         Optional<String> token = accessToken(username, providerName);
         if (token.isEmpty()) {
-            audit(op, provider, username, owner, repo, ScmApiActionStatus.DENIED, "no linked OAuth token", null);
+            audit(op, provider, username, owner, repo, ScmApiActionStatus.REJECTED, "no linked OAuth token", null);
             return new IssueOutcome(
                     409, null, "Link your " + providerName + " account before filing issues", List.of());
         }

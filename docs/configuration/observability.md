@@ -87,9 +87,9 @@ covers a GitHub/Forgejo pull request and a GitLab merge request) — and the dia
 not, such as a label or assignee edit whose subject the raw op does not name. A read is classified by resource too —
 `issue.read`, `pull_request.read`, `comment.read`, or the GraphQL query's root field (`repository.read`), with
 `other.read` for anything unrecognized — so a read names what was read, not a bare `read`; an action with no operation
-is `unknown`. `outcome` is the action's result (`FORWARDED`, `DENIED`, `REJECTED`, `ERROR`). Reads are traced and timed
-but not counted in `fogwall.scmapi.actions`, which tracks mutations and refusals to match the audit trail. Repository
-slug is recorded on spans only, never on a metric, to keep metric cardinality bounded.
+is `unknown`. `outcome` is the action's result (`FORWARDED`, `REJECTED`, `ERROR`). Reads are traced and timed but not
+counted in `fogwall.scmapi.actions`, which tracks mutations and refusals to match the audit trail. Repository slug is
+recorded on spans only, never on a metric, to keep metric cardinality bounded.
 
 ## Logs
 

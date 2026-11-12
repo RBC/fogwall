@@ -43,7 +43,7 @@ public class ScmApiActionController {
             operationId = "listScmApiActions",
             summary = "List SCM API proxy audit records",
             description =
-                    "Returns SCM API proxy mutation records ordered by most recent first, each with the pull/merge request or issue it created or touched when the upstream response named one. Filter by status (FORWARDED, DENIED, REJECTED, ERROR), origin (DASHBOARD, SCM_API), provider, resolved user, owner (formerly repoOwner), repo (formerly repoName), free-text search, or a timestamp window (from inclusive, to exclusive, ISO-8601). Paginate with limit/offset, or pass the X-Next-Cursor response header back as after to read the next page.")
+                    "Returns SCM API proxy mutation records ordered by most recent first, each with the pull/merge request or issue it created or touched when the upstream response named one. Filter by status (FORWARDED, REJECTED, ERROR), origin (DASHBOARD, SCM_API), provider, resolved user, owner (formerly repoOwner), repo (formerly repoName), free-text search, or a timestamp window (from inclusive, to exclusive, ISO-8601). Paginate with limit/offset, or pass the X-Next-Cursor response header back as after to read the next page.")
     @GetMapping
     public ResponseEntity<List<ScmApiActionView>> list(
             @RequestParam(required = false) String status,

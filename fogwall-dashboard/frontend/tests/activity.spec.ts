@@ -10,6 +10,7 @@ interface Proposals {
   pullRequests: { opened: number; merged: number }
   issues: { opened: number }
   edited: number
+  rejected: number
 }
 
 interface Group {
@@ -191,6 +192,39 @@ test.describe('contribution activity', () => {
     await expect(page.getByLabel('Pusher')).toHaveValue('dev')
     await expect(page.getByLabel('Owner')).toHaveValue(FIXTURE.handle)
     await expect(page.locator('tbody tr').first()).toBeVisible()
+  })
+
+  test('a Rejected figure opens the rejected SCM API actions', async ({ asRole }) => {
+    const page = await asRole('auditor')
+    await atCaptureTime(page)
+    const everyone = nextActivity(page, '/api/activity')
+    await page.goto('/dashboard/audit/participation')
+    const a = await everyone
+    const repo = a.repos.find((g) => `${g.provider}/${g.owner}/${g.repo}` === REPO)
+    expect(repo?.proposals?.rejected).toBeGreaterThan(0)
+
+    const table = page.getByRole('region', { name: 'By repository' })
+    const headers = await table.getByRole('columnheader').allInnerTexts()
+    const column = headers.findIndex((h) => h.trim() === 'Rejected')
+    expect(column).toBeGreaterThan(0)
+    const cell = table.getByRole('row').filter({ hasText: REPO }).getByRole('cell').nth(column)
+    await expect(cell).toHaveText(String(repo?.proposals?.rejected))
+    await cell.getByRole('link').click()
+
+    await expect(page).toHaveURL(/\/dashboard\/audit\/decisions\?/)
+    const params = new URL(page.url()).searchParams
+    expect(params.get('tab')).toBe('scm-api-actions')
+    expect(params.get('status')).toBe('REJECTED')
+    expect(params.get('owner')).toBe(FIXTURE.handle)
+    expect(params.get('repo')).toBe(FIXTURE.repo)
+
+    await expect(page.getByRole('tab', { name: 'SCM API actions', selected: true })).toBeVisible()
+    await expect(page.getByLabel('Status')).toHaveValue('REJECTED')
+    const rows = page.locator('tbody tr')
+    await expect(rows.first()).toBeVisible()
+    for (const badge of await rows.locator('td:nth-child(2)').allInnerTexts()) {
+      expect(badge.trim()).toBe('REJECTED')
+    }
   })
 
   test("an admin reads a user's activity, with figures that open the records", async ({ page }) => {

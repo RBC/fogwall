@@ -46,9 +46,9 @@ class MeteringScmApiActionStoreTest {
         when(telemetry.isEnabled()).thenReturn(true);
         MeteringScmApiActionStore store = new MeteringScmApiActionStore(delegate, telemetry);
 
-        store.save(record("gitlab", null, ScmApiActionStatus.DENIED));
+        store.save(record("gitlab", null, ScmApiActionStatus.REJECTED));
 
-        verify(telemetry).recordScmApiAction("gitlab", "unknown", "DENIED");
+        verify(telemetry).recordScmApiAction("gitlab", "unknown", "REJECTED");
     }
 
     @Test

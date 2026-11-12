@@ -177,7 +177,9 @@ public class DatabaseMigrator {
                     "24",
                     "push resolved user index (mysql/mariadb)",
                     "db/migration-mysql/V24__push_resolved_user_index.sql",
-                    Vendor.MYSQL_ONLY));
+                    Vendor.MYSQL_ONLY),
+            new Migration(
+                    "25", "scm api rejected status", "db/migration/V25__scm_api_rejected_status.sql", Vendor.ANY));
 
     // ---------------------------------------------------------------------------
 

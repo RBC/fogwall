@@ -187,13 +187,13 @@ public abstract class ActivityAggregateContract {
     @Test
     void actions_keepTheOutcome_andClassifyAnUnknownMutationAsOther() {
         action("alice", "widgets", "createIssue", ScmApiActionStatus.REJECTED, DAY0.plusSeconds(1), null);
-        action("alice", "widgets", "deleteRepository", ScmApiActionStatus.DENIED, DAY0.plusSeconds(2), null);
+        action("alice", "widgets", "deleteRepository", ScmApiActionStatus.ERROR, DAY0.plusSeconds(2), null);
 
         Set<String> counts = actionStore().summarizeActivity(window().build()).stream()
                 .map(c -> c.status() + ":" + c.activity() + ":" + c.actions())
                 .collect(Collectors.toSet());
 
-        assertEquals(Set.of("REJECTED:OPEN_ISSUE:1", "DENIED:OTHER:1"), counts);
+        assertEquals(Set.of("REJECTED:OPEN_ISSUE:1", "ERROR:OTHER:1"), counts);
     }
 
     @Test

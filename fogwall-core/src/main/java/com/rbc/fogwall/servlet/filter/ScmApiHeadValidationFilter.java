@@ -104,7 +104,7 @@ public class ScmApiHeadValidationFilter implements Filter {
 
     /** A decision was reached, and it was no: the head commit resolved, but fogwall has no push record for it. */
     private static void deny(ScmApiRequestContext context, ServletResponse response, String reason) throws IOException {
-        respond(context, response, ScmApiActionStatus.DENIED, reason);
+        respond(context, response, ScmApiActionStatus.REJECTED, reason);
     }
 
     private static void respond(

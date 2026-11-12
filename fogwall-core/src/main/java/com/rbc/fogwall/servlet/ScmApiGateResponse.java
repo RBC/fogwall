@@ -18,11 +18,11 @@ public final class ScmApiGateResponse {
 
     /**
      * Refuses the request because a policy said no — not allowlisted, not enabled, or the caller lacks the grant.
-     * Recorded as {@link ScmApiActionStatus#DENIED}: fogwall reached a decision, and the decision was no.
+     * Recorded as {@link ScmApiActionStatus#REJECTED}: fogwall reached a decision, and the decision was no.
      */
     public static void deny(ScmApiRequestContext context, HttpServletResponse response, int status, String reason)
             throws IOException {
-        respond(context, response, status, ScmApiActionStatus.DENIED, reason);
+        respond(context, response, status, ScmApiActionStatus.REJECTED, reason);
     }
 
     /** A denial whose reason names a repository, told to the caller without it. */
@@ -32,7 +32,7 @@ public final class ScmApiGateResponse {
                 context,
                 response,
                 status,
-                ScmApiActionStatus.DENIED,
+                ScmApiActionStatus.REJECTED,
                 reason,
                 "Not permitted to perform this operation on its target");
     }
@@ -53,8 +53,8 @@ public final class ScmApiGateResponse {
 
     /**
      * Refuses the request because no decision was reachable — unparseable input, or a target that resolved to no
-     * repository. Recorded as {@link ScmApiActionStatus#ERROR} rather than DENIED so filtering the trail for denials
-     * shows policy violations rather than malformed requests. Fails closed either way.
+     * repository. Recorded as {@link ScmApiActionStatus#ERROR} rather than REJECTED so filtering the trail for
+     * rejections shows policy and content violations rather than malformed requests. Fails closed either way.
      */
     public static void fail(ScmApiRequestContext context, HttpServletResponse response, int status, String reason)
             throws IOException {

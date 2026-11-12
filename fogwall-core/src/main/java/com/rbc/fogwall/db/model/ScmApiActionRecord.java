@@ -58,7 +58,7 @@ public class ScmApiActionRecord {
      */
     private ScmApiActionOrigin origin;
 
-    /** Human-readable reason for a {@link ScmApiActionStatus#DENIED} or {@link ScmApiActionStatus#ERROR} outcome. */
+    /** Human-readable reason for a {@link ScmApiActionStatus#REJECTED} or {@link ScmApiActionStatus#ERROR} outcome. */
     private String reason;
 
     /** Raw {@code variables} JSON from the mutation request, for post-hoc audit. */

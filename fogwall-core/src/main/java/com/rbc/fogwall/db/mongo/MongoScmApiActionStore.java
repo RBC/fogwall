@@ -45,6 +45,16 @@ public class MongoScmApiActionStore implements ScmApiActionStore {
         // Serves the Activity view's "my actions on this surface" filter.
         col.createIndex(Indexes.ascending("origin", "resolved_user"));
         backfillOrigin(col);
+        foldDeniedIntoRejected(col);
+    }
+
+    /**
+     * Records written while a refusal by policy had its own {@code DENIED} status read as
+     * {@link ScmApiActionStatus#REJECTED}, as the JDBC migration rewrites them; their reason still says why.
+     * Idempotent.
+     */
+    private static void foldDeniedIntoRejected(MongoCollection<Document> col) {
+        col.updateMany(Filters.eq("status", "DENIED"), Updates.set("status", ScmApiActionStatus.REJECTED.name()));
     }
 
     private static final MongoActivityPipeline.Fields ACTIVITY_FIELDS =

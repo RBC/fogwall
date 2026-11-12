@@ -133,8 +133,7 @@ function Totals({ activity }: { activity: ContributionActivity }) {
     figures.push(
       { label: 'Edited', value: p.edited },
       { label: 'Commented', value: p.commented },
-      { label: 'Requests refused by policy', value: p.denied },
-      { label: 'Requests refused for content', value: p.rejected },
+      { label: 'Requests rejected', value: p.rejected },
     )
   }
   return (
@@ -290,15 +289,18 @@ function GroupTable({
   showContributors: boolean
   name: (g: ActivityGroup) => string
   /** The Decisions listing behind a row's figures; absent where the viewer cannot open it. */
-  decisions?: (g: ActivityGroup, tab: DecisionsTab) => string
+  decisions?: (g: ActivityGroup, tab: DecisionsTab, status?: 'REJECTED') => string
 }) {
   const th = 'py-1.5 pr-4 font-medium'
   const num = 'py-1.5 pr-4 text-right tabular-nums'
   // A non-zero figure opens the records it counts.
-  const figure = (g: ActivityGroup, value: number, tab: DecisionsTab) => (
+  const figure = (g: ActivityGroup, value: number, tab: DecisionsTab, status?: 'REJECTED') => (
     <td className={num}>
       {decisions && value > 0 ? (
-        <Link to={decisions(g, tab)} className="text-blue-600 hover:underline dark:text-blue-400">
+        <Link
+          to={decisions(g, tab, status)}
+          className="text-blue-600 hover:underline dark:text-blue-400"
+        >
           {value}
         </Link>
       ) : (
@@ -326,7 +328,7 @@ function GroupTable({
                     <th className={th + ' text-right'}>Issues opened</th>
                     <th className={th + ' text-right'}>Edited</th>
                     <th className={th + ' text-right'}>Commented</th>
-                    <th className={th + ' text-right'}>Refused</th>
+                    <th className={th + ' text-right'}>Rejected</th>
                   </>
                 )}
                 {showContributors && <th className={th + ' text-right'}>Contributors</th>}
@@ -347,7 +349,7 @@ function GroupTable({
                         {figure(g, p?.issues.opened ?? 0, 'scm-api-actions')}
                         {figure(g, p?.edited ?? 0, 'scm-api-actions')}
                         {figure(g, p?.commented ?? 0, 'scm-api-actions')}
-                        {figure(g, p ? p.denied + p.rejected : 0, 'scm-api-actions')}
+                        {figure(g, p?.rejected ?? 0, 'scm-api-actions', 'REJECTED')}
                       </>
                     )}
                     {showContributors && <td className={num}>{g.contributors ?? 0}</td>}
@@ -406,7 +408,7 @@ export function ContributionActivityView({
   const showProposals = activity?.proposalsAvailable ?? false
   const decisions =
     drillDown && activity
-      ? (g: ActivityGroup, tab: DecisionsTab) => {
+      ? (g: ActivityGroup, tab: DecisionsTab, status?: 'REJECTED') => {
           const params = new URLSearchParams({
             tab,
             from: activity.window.from,
@@ -416,6 +418,7 @@ export function ContributionActivityView({
           if (g.owner) params.set('owner', g.owner)
           if (g.repo) params.set('repo', g.repo)
           if (scope.kind === 'user') params.set('user', scope.username)
+          if (status) params.set('status', status)
           return `/audit/decisions?${params}`
         }
       : undefined
