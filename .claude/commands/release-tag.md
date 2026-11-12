@@ -7,6 +7,9 @@ user-invocable: true
 allowed-tools:
   - Bash
   - Read
+  - Edit
+  - Write
+  - Skill
 ---
 
 # /release-tag — Tag, publish, and start the next development iteration.
