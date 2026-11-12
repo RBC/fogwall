@@ -718,16 +718,12 @@ export function PushList({ currentUser, bulkReviewEnabled = false }: PushListPro
                 </div>
               </div>
               <div className="text-right text-sm text-gray-500 shrink-0 dark:text-gray-400">
-                <div>{push.author ?? push.user ?? '—'}</div>
-                {push.resolvedUser ? (
+                <div>{push.author ?? push.resolvedUser ?? '—'}</div>
+                {push.resolvedUser && (
                   <span className="inline-flex items-center gap-0.5 text-xs text-green-600 font-medium dark:text-green-400">
                     ● identity resolved
                   </span>
-                ) : push.user ? (
-                  <span className="inline-flex items-center gap-0.5 text-xs text-gray-400 font-medium dark:text-gray-500">
-                    ● identity unresolved
-                  </span>
-                ) : null}
+                )}
                 <div className="text-xs text-gray-400 mt-0.5 dark:text-gray-500">
                   {formatTime(push.timestamp)}
                 </div>

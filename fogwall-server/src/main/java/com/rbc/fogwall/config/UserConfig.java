@@ -24,13 +24,6 @@ public class UserConfig {
      */
     private List<SshKeyConfig> sshKeys = new ArrayList<>();
 
-    /**
-     * HTTP Basic-auth usernames that are accepted for this proxy user. Allows a user to push under an alias (e.g.
-     * {@code push-usernames: [me, alice]}). The proxy {@code username} is always implicitly valid; entries here are
-     * additional aliases only.
-     */
-    private List<String> pushUsernames = new ArrayList<>();
-
     /** Roles granted to this user. Valid values: {@code USER}, {@code ADMIN}. Defaults to {@code [USER]} if not set. */
     private List<String> roles = new ArrayList<>();
 }

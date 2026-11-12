@@ -271,7 +271,6 @@ public class UserController {
         String primaryEmail = u.getEmails().isEmpty() ? null : u.getEmails().get(0);
         List<String> scmProviders = u.getScmIdentities().stream()
                 .map(ScmIdentity::getProvider)
-                .filter(p -> !"proxy".equals(p))
                 .distinct()
                 .toList();
         return new UserSummary(u.getUsername(), primaryEmail, scmProviders, pushCounts);
@@ -283,16 +282,13 @@ public class UserController {
 
         if (userStore instanceof UserStore jdbc) {
             emails = jdbc.findEmailsWithVerified(u.getUsername());
-            scmIdentities = jdbc.findScmIdentitiesWithVerified(u.getUsername()).stream()
-                    .filter(id -> !"proxy".equals(id.get("provider")))
-                    .toList();
+            scmIdentities = jdbc.findScmIdentitiesWithVerified(u.getUsername());
         } else {
             emails = u.getEmails().stream()
                     .<Map<String, Object>>map(
                             e -> Map.of("email", e, "verified", false, "locked", false, "source", "local"))
                     .toList();
             scmIdentities = u.getScmIdentities().stream()
-                    .filter(id -> !"proxy".equals(id.getProvider()))
                     .<Map<String, Object>>map(
                             id -> Map.of("provider", id.getProvider(), "username", id.getUsername(), "verified", false))
                     .toList();

@@ -2,15 +2,21 @@ package com.rbc.fogwall.db.mongo;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.model.Indexes;
 import com.rbc.fogwall.db.CursorWalk;
 import com.rbc.fogwall.db.model.*;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import org.bson.Document;
 import org.junit.jupiter.api.*;
 import org.testcontainers.containers.MongoDBContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -169,6 +175,47 @@ class MongoPushStoreIntegrationTest {
 
         assertEquals(1, results.size());
         assertEquals(inside, results.get(0).getId());
+    }
+
+    @Test
+    void initialize_dropsTheClientUsernameIndex_andToleratesItBeingGone() {
+        MongoClient client = MongoClients.create(MONGO.getConnectionString());
+        String database = "testdb_" + UUID.randomUUID().toString().replace("-", "");
+        MongoCollection<Document> pushes = client.getDatabase(database).getCollection(MongoPushStore.COLLECTION_NAME);
+        pushes.createIndex(Indexes.ascending("user"));
+
+        MongoPushStore upgraded = new MongoPushStore(client, database);
+        upgraded.initialize();
+        Set<String> names = pushes.listIndexes().into(new ArrayList<>()).stream()
+                .map(index -> index.getString("name"))
+                .collect(Collectors.toSet());
+        assertFalse(names.contains(MongoPushStore.CLIENT_USERNAME_INDEX), () -> "indexes: " + names);
+        assertTrue(names.contains("resolvedUser_1"), () -> "indexes: " + names);
+
+        // A second instance starting against the same database finds nothing to drop.
+        assertDoesNotThrow(() -> new MongoPushStore(client, database).initialize());
+        upgraded.close();
+    }
+
+    @Test
+    void userFilter_matchesTheResolvedUser_notTheUsernameTheClientSent() {
+        PushRecord alices = record("alices");
+        alices.setUser("me");
+        alices.setResolvedUser("alice");
+        store.save(alices);
+        PushRecord bobs = record("bobs");
+        bobs.setUser("alice");
+        bobs.setResolvedUser("bob");
+        store.save(bobs);
+
+        List<PushRecord> found = store.find(PushQuery.builder().user("alice").build());
+        assertEquals(List.of("alices"), found.stream().map(PushRecord::getId).toList());
+        assertTrue(store.find(PushQuery.builder().user("me").build()).isEmpty());
+        assertEquals(
+                1L,
+                store.countByStatus(PushQuery.builder().user("alice").build()).values().stream()
+                        .mapToLong(Long::longValue)
+                        .sum());
     }
 
     private PushRecord recordAt(String id, Instant timestamp) {

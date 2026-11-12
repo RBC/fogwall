@@ -114,7 +114,7 @@ export const PUSHES: ListedType<PushRecord> = {
       ),
     },
     { header: 'Branch', cell: (p) => <span className="font-mono text-xs">{p.branch ?? '—'}</span> },
-    { header: 'Pusher', cell: (p) => p.resolvedUser ?? p.user ?? '—' },
+    { header: 'Pusher', cell: (p) => p.resolvedUser ?? '—' },
   ],
 }
 

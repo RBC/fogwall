@@ -53,8 +53,6 @@ public final class PushRecordMapper {
             }
         }
 
-        // Store the resolved proxy username — falls back to the raw HTTP Basic username if resolution
-        // didn't run.
         if (details.getResolvedUser() != null) {
             builder.user(details.getResolvedUser());
             builder.resolvedUser(details.getResolvedUser());

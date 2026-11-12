@@ -91,6 +91,7 @@ public class PushStorePersistenceHook {
                 // branches below override it to the actual decision (REJECTED or PENDING) before saving.
                 PushRecord record = buildInitialRecord(pushId, rp, commands);
                 if (resolvedUserLate != null) {
+                    record.setUser(resolvedUserLate);
                     record.setResolvedUser(resolvedUserLate);
                 }
                 if (scmUsernameLate != null) {
@@ -341,16 +342,6 @@ public class PushStorePersistenceHook {
                 .url(providerUri)
                 .project(provider.getUri().getHost());
 
-        // push_user: always the raw credential username (HTTP Basic or SSH username) — audit artefact.
-        // resolved_user: set only when identity resolution succeeded (FK → proxy_users.username).
-        String resolvedUser = repo.getConfig().getString("fogwall", null, "resolvedUser");
-        String pushUser = repo.getConfig().getString("fogwall", null, "pushUser");
-        if (pushUser != null) {
-            builder.user(pushUser);
-        }
-        if (resolvedUser != null) {
-            builder.resolvedUser(resolvedUser);
-        }
         if (pushContext != null) {
             pushContext.getTransport().auditMethod().ifPresent(builder::method);
             // Back-date the record to the handoff receipt time captured by the factory, rather than letting the

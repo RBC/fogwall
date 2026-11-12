@@ -6,6 +6,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
@@ -27,7 +28,7 @@ class DatabaseMigratorTest {
         assertEquals(
                 Set.of(
                         "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17",
-                        "18", "19", "20", "20.1", "21", "22", "23"),
+                        "18", "19", "20", "20.1", "21", "22", "23", "24"),
                 appliedVersions(dataSource),
                 "H2 must never select MYSQL_ONLY entries, and the 2.1 postgres-only widening migration must not "
                         + "apply to H2 either");
@@ -41,6 +42,24 @@ class DatabaseMigratorTest {
 
         assertDoesNotThrow(() -> DatabaseMigrator.migrate(dataSource));
         assertEquals(firstRun, appliedVersions(dataSource));
+    }
+
+    /** Pushes are filtered by the user they resolved to, so that column is indexed and the client username is not. */
+    @Test
+    void migrate_indexesPushesByResolvedUser() throws Exception {
+        DataSource dataSource = DataSourceFactory.h2InMemory("migrator-test-" + UUID.randomUUID());
+        DatabaseMigrator.migrate(dataSource);
+
+        Set<String> indexes = new HashSet<>();
+        try (Connection conn = dataSource.getConnection();
+                ResultSet rs = conn.getMetaData().getIndexInfo(null, null, "PUSH_RECORDS", false, false)) {
+            while (rs.next()) {
+                String name = rs.getString("INDEX_NAME");
+                if (name != null) indexes.add(name.toUpperCase(Locale.ROOT));
+            }
+        }
+        assertTrue(indexes.contains("IDX_PUSH_RECORDS_RESOLVED_USER"), () -> "indexes: " + indexes);
+        assertFalse(indexes.contains("IDX_PUSH_RECORDS_USER"), () -> "indexes: " + indexes);
     }
 
     /** The ID-resolution caches held only derived data; the IDs they mapped are now resolved on every request. */

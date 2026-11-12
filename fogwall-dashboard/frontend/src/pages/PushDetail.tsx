@@ -123,13 +123,6 @@ function IdentityBadge({ record }: { record: PushRecord }) {
       </span>
     )
   }
-  if (record.user) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500 dark:bg-slate-700 dark:text-gray-400">
-        identity unresolved
-      </span>
-    )
-  }
   return null
 }
 
@@ -799,8 +792,7 @@ export function PushDetail({ currentUser, dark = false }: PushDetailProps) {
                     const upstreamHost = record.upstreamUrl
                       ? new URL(record.upstreamUrl).hostname
                       : null
-                    const displayHandle =
-                      record.scmUsername ?? (record.resolvedUser ? null : record.user)
+                    const displayHandle = record.scmUsername
                     if (!displayHandle && !record.resolvedUser) return null
                     return (
                       <div className="space-y-0.5">

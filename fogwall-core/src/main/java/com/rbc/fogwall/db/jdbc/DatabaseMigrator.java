@@ -167,6 +167,16 @@ public class DatabaseMigrator {
                     "23",
                     "access change events (mysql/mariadb)",
                     "db/migration-mysql/V23__access_change_events.sql",
+                    Vendor.MYSQL_ONLY),
+            new Migration(
+                    "24",
+                    "push resolved user index",
+                    "db/migration/V24__push_resolved_user_index.sql",
+                    Vendor.EXCEPT_MYSQL),
+            new Migration(
+                    "24",
+                    "push resolved user index (mysql/mariadb)",
+                    "db/migration-mysql/V24__push_resolved_user_index.sql",
                     Vendor.MYSQL_ONLY));
 
     // ---------------------------------------------------------------------------
