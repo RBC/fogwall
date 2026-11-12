@@ -30,6 +30,18 @@ export const FIXTURE = {
   sshFingerprint: 'SHA256:0i4Mdq2XSfL9suHQSgmZ5zbEakHS29Tyv6m9h7sDND4',
 } as const
 
+/**
+ * A moment shortly after the capture run recorded the fixture's pushes and pull requests. Activity views count their
+ * window back from the browser clock, so a spec that reads them pins the clock here; the real date would slide the
+ * captured records out of every window. Move it when a re-capture changes the record dates.
+ */
+export const AFTER_CAPTURE = new Date('2026-09-20T12:00:00Z')
+
+/** Pins the page's clock to {@link AFTER_CAPTURE}; call before the first navigation. */
+export async function atCaptureTime(page: Page): Promise<void> {
+  await page.clock.setFixedTime(AFTER_CAPTURE)
+}
+
 /** Scenario name → { id, ref } as written by capture.py. */
 export type Manifest = Record<
   string,

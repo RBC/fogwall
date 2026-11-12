@@ -61,6 +61,8 @@ function Tiles({ tiles }: { tiles: Tile[] }) {
       {tiles.map((t) => (
         <div
           key={t.label}
+          role="group"
+          aria-label={t.label}
           className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800"
         >
           <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">{t.label}</div>
@@ -162,7 +164,10 @@ export function Overview({ currentUser }: OverviewProps) {
           <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">
             Most active repositories
           </div>
-          <ul className="mt-2 divide-y divide-gray-100 text-sm dark:divide-slate-700">
+          <ul
+            aria-label="Most active repositories"
+            className="mt-2 divide-y divide-gray-100 text-sm dark:divide-slate-700"
+          >
             {everyoneData.repos.map((r) => {
               const pushes = sum(r.pushes)
               const proposals = r.proposals

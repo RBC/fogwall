@@ -63,7 +63,7 @@ interface Part {
 function Breakdown({ label, parts }: { label: string; parts: Part[] }) {
   const total = parts.reduce((sum, p) => sum + p.value, 0)
   return (
-    <div className={CARD}>
+    <div role="group" aria-label={label} className={CARD}>
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{label}</span>
         <span className="text-2xl font-semibold tabular-nums text-gray-900 dark:text-gray-100">
@@ -112,7 +112,7 @@ function Figures({ figures }: { figures: { label: string; value: number }[] }) {
   return (
     <div className={CARD + ' flex flex-wrap gap-x-8 gap-y-3'}>
       {figures.map((f) => (
-        <div key={f.label}>
+        <div key={f.label} role="group" aria-label={f.label}>
           <div className="text-xs text-gray-500 dark:text-gray-400">{f.label}</div>
           <div className="text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100">
             {f.value.toLocaleString()}
@@ -307,7 +307,7 @@ function GroupTable({
     </td>
   )
   return (
-    <div className={CARD}>
+    <section aria-label={title} className={CARD}>
       <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{title}</h3>
       {groups.length === 0 ? (
         <p className="mt-2 text-sm text-gray-400 dark:text-gray-500">No activity in this period.</p>
@@ -358,7 +358,7 @@ function GroupTable({
           </table>
         </div>
       )}
-    </div>
+    </section>
   )
 }
 
