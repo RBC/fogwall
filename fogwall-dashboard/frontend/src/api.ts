@@ -207,6 +207,8 @@ export async function fetchConfig(): Promise<{
   issuesEnabled: boolean
   /** Providers that forward server-mode pushes made with a fogwall git credential with the linked OAuth token. */
   brokeredPushProviders: string[]
+  /** The brokered providers that acknowledge a push once checks pass and forward it after approval. */
+  deferredForwardingProviders: string[]
 }> {
   const res = await fetch('/api/runtime-config')
   if (!res.ok) throw new Error('Failed to fetch config')

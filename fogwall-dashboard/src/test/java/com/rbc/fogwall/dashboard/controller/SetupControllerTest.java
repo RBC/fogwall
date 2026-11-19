@@ -74,6 +74,19 @@ class SetupControllerTest {
                 "https://fogwall.example.internal/server/github.com/",
                 gh.serverUrl(),
                 "serverUrl is the /server clone/push prefix for the quick start");
+        assertEquals(
+                "git config --global credential.https://fogwall.example.internal.useHttpPath true\n",
+                info.credentialKeying(),
+                "credential keying targets the configured service URL");
+        assertTrue(
+                gh.httpClone().contains("remote.origin.pushurl=https://fogwall.example.internal/server/github.com/")
+                        && gh.httpClone().contains(" https://fogwall.example.internal/proxy/github.com/"),
+                "new clone reads via /proxy and pushes via /server:\n" + gh.httpClone());
+        assertTrue(
+                gh.httpExisting().contains("git remote set-url origin https://fogwall.example.internal/proxy/")
+                        && gh.httpExisting()
+                                .contains("git remote set-url --push origin https://fogwall.example.internal/server/"),
+                "existing clone gets the same split:\n" + gh.httpExisting());
         // Default is push-only: pushes route to /server, reads are left direct.
         assertTrue(
                 gh.httpPush().contains("https://fogwall.example.internal/server/github.com/"),

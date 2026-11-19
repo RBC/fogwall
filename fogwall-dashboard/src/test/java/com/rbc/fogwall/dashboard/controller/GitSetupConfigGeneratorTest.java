@@ -1,5 +1,6 @@
 package com.rbc.fogwall.dashboard.controller;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -45,6 +46,42 @@ class GitSetupConfigGeneratorTest {
                 cfg.contains(
                         "git remote set-url --push origin https://fw.internal/server/github.com/<owner>/<repo>.git"),
                 "points only the push URL at fogwall:\n" + cfg);
+    }
+
+    @Test
+    void httpClone_readsThroughProxyAndPushesThroughServer() {
+        String cmd = GitSetupConfigGenerator.httpClone("https://fw.internal", github);
+        assertEquals(
+                "git clone -c remote.origin.pushurl=https://fw.internal/server/github.com/<owner>/<repo>.git "
+                        + "https://fw.internal/proxy/github.com/<owner>/<repo>.git\n",
+                cmd);
+    }
+
+    @Test
+    void httpExisting_repointsFetchAndPushSeparately() {
+        String cmds = GitSetupConfigGenerator.httpExisting("https://fw.internal", github);
+        assertEquals(
+                "git remote set-url origin https://fw.internal/proxy/github.com/<owner>/<repo>.git\n"
+                        + "git remote set-url --push origin https://fw.internal/server/github.com/<owner>/<repo>.git\n",
+                cmds);
+    }
+
+    @Test
+    void credentialKeying_scopesUseHttpPathToTheFogwallBase() {
+        assertEquals(
+                "git config --global credential.https://fw.internal.useHttpPath true\n",
+                GitSetupConfigGenerator.credentialKeying("https://fw.internal"));
+    }
+
+    @Test
+    void httpClone_nonDefaultPortIsPartOfBothRoutePaths() {
+        var gitea = ForgejoProvider.builder()
+                .name("gitea")
+                .uri(URI.create("https://gitea.local:3000"))
+                .build();
+        String cmd = GitSetupConfigGenerator.httpClone("https://fw.internal", gitea);
+        assertTrue(cmd.contains("/server/gitea.local:3000/<owner>/<repo>.git "), cmd);
+        assertTrue(cmd.contains("/proxy/gitea.local:3000/<owner>/<repo>.git"), cmd);
     }
 
     @Test

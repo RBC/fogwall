@@ -218,6 +218,10 @@ export interface SetupProvider {
   upstreamUrl: string
   /** The `/server` clone/push URL prefix through fogwall, e.g. `https://fogwall/server/github.com/`. */
   serverUrl: string
+  /** New-clone command: fetches through /proxy, pushes through /server. */
+  httpClone: string
+  /** Commands that give an existing clone the same split. */
+  httpExisting: string
   /** Global push-only `~/.gitconfig` block (HTTPS): reroutes pushes to /server; clones/fetches stay direct. */
   httpPush: string
   /** Opt-in global `~/.gitconfig` block (HTTPS) to also route fetches through fogwall's /proxy. */
@@ -238,6 +242,8 @@ export interface SetupInfo {
   serviceUrl: string
   /** False when `server.service-url` is unset and the base URL was derived from the request (may be wrong behind a proxy). */
   serviceUrlConfigured: boolean
+  /** Command that makes git key stored credentials on host + path. */
+  credentialKeying: string
   providers: SetupProvider[]
 }
 

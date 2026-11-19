@@ -51,7 +51,8 @@ public class SetupController {
                 .map(p -> toSetupProvider(p, base, sshHost, sshServerEnabled, sshPort))
                 .toList();
 
-        return new SetupInfo(base, serviceUrlConfigured, setupProviders);
+        return new SetupInfo(
+                base, serviceUrlConfigured, GitSetupConfigGenerator.credentialKeying(base), setupProviders);
     }
 
     private SetupProvider toSetupProvider(
@@ -64,6 +65,8 @@ public class SetupController {
                 p.getUri().getHost(),
                 stripTrailingSlash(p.getUri().toString()),
                 GitSetupConfigGenerator.serverUrl(base, p),
+                GitSetupConfigGenerator.httpClone(base, p),
+                GitSetupConfigGenerator.httpExisting(base, p),
                 GitSetupConfigGenerator.httpPush(base, p),
                 GitSetupConfigGenerator.httpRead(base, p),
                 GitSetupConfigGenerator.httpPerRepo(base, p),
@@ -81,8 +84,11 @@ public class SetupController {
      *     request)
      * @param serviceUrlConfigured whether {@code server.service-url} was set — when false the base URL was derived from
      *     the request and may be wrong behind a reverse proxy
+     * @param credentialKeying command that makes git key stored credentials on host + path, so each provider and proxy
+     *     mode gets its own entry
      */
-    public record SetupInfo(String serviceUrl, boolean serviceUrlConfigured, List<SetupProvider> providers) {}
+    public record SetupInfo(
+            String serviceUrl, boolean serviceUrlConfigured, String credentialKeying, List<SetupProvider> providers) {}
 
     /**
      * Generated git configuration for one provider (fogwall#475). Push-only by default:
@@ -91,6 +97,8 @@ public class SetupController {
      *
      * @param serverUrl the {@code /server} clone/push URL prefix through fogwall (e.g.
      *     {@code https://fw/server/github.com/}), used by the quick-start clone command
+     * @param httpClone new-clone command: fetches through {@code /proxy}, pushes through {@code /server}
+     * @param httpExisting commands that give an existing clone the same split
      * @param httpPush global push-only {@code ~/.gitconfig} block (HTTPS) — reroutes pushes, leaves fetches direct
      * @param httpRead opt-in global block (HTTPS) to also route fetches through fogwall's proxy
      * @param httpPerRepo per-repository HTTPS commands (clone + {@code git remote set-url --push})
@@ -104,6 +112,8 @@ public class SetupController {
             String host,
             String upstreamUrl,
             String serverUrl,
+            String httpClone,
+            String httpExisting,
             String httpPush,
             String httpRead,
             String httpPerRepo,

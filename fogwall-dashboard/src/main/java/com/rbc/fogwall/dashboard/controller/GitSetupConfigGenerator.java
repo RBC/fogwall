@@ -12,6 +12,11 @@ import com.rbc.fogwall.provider.FogwallProvider;
  * developer who only reads never touches fogwall) and avoids a needless read-time dependency on fogwall. Routing
  * fetches through fogwall ({@code insteadOf} → {@code /proxy}) is offered separately as an opt-in.
  *
+ * <p><b>Recommended split.</b> {@link #httpClone} and {@link #httpExisting} read through the transparent proxy
+ * ({@code /proxy}, a pure reverse proxy with no local repository) and push through server mode ({@code /server}, which
+ * has the live push output and brokered and deferred pushes). Each repository then has two credential entries, one per
+ * path, once {@link #credentialKeying} is applied.
+ *
  * <p><b>Global vs per-repo.</b> The global form (a {@code ~/.gitconfig} block) is one paste that applies to every repo
  * under the upstream host. The per-repo form ({@code git clone} + {@code git remote set-url --push}) is explicit and
  * visible in {@code git remote -v}, and touches only the repo you run it in — the safer choice when a machine pushes to
@@ -40,6 +45,29 @@ final class GitSetupConfigGenerator {
         return "# Optional: also send " + host + " fetches through fogwall (adds a read-time dependency on fogwall).\n"
                 + "[url \"" + proxyRoute(base, p) + "\"]\n"
                 + "\tinsteadOf = " + upstream(p) + "/\n";
+    }
+
+    /**
+     * New-clone command for the recommended split: fetches go through the transparent proxy ({@code /proxy}), pushes
+     * through server mode ({@code /server}), set in one command with {@code remote.origin.pushurl}.
+     */
+    static String httpClone(String base, FogwallProvider p) {
+        return "git clone -c remote.origin.pushurl=" + serverUrl(base, p) + "<owner>/<repo>.git " + proxyRoute(base, p)
+                + "<owner>/<repo>.git\n";
+    }
+
+    /** Commands that give an existing clone the same split: fetches via {@code /proxy}, pushes via {@code /server}. */
+    static String httpExisting(String base, FogwallProvider p) {
+        return "git remote set-url origin " + proxyRoute(base, p) + "<owner>/<repo>.git\n"
+                + "git remote set-url --push origin " + serverUrl(base, p) + "<owner>/<repo>.git\n";
+    }
+
+    /**
+     * Command that makes git key stored credentials on host + path. fogwall serves every provider (and both proxy
+     * modes) under one host, so without it a credential saved for one provider or mode is offered to all the others.
+     */
+    static String credentialKeying(String base) {
+        return "git config --global credential." + base + ".useHttpPath true\n";
     }
 
     /** Per-repo HTTPS commands: clone from the upstream as usual, then point only pushes at fogwall. */
