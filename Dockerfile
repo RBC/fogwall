@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1@sha256:2780b5c3bab67f1f76c781860de469442999ed1a0d7992a5efdf2cffc0e3d769
 
 # ── Build stage ──────────────────────────────────────────────────────────────
-FROM docker.io/eclipse-temurin:25-jdk-noble@sha256:80f67fb3d6f76e2d817d98a4cc2a9cf05f054d4e6adc5e2144bde671d722e63f AS builder
+FROM docker.io/eclipse-temurin:25-jdk-noble@sha256:8599ea2d8f71696f00dcdf46213a4b65fa97ceeaa318671fccba6b0af2727792 AS builder
 
 # Install Node.js directly from the official distribution with SHA256 verification.
 # To update: download the new tarball, verify against nodejs.org/dist/vX.Y.Z/SHASUMS256.txt,
@@ -65,7 +65,7 @@ RUN sed -i \
 # ── Runtime stage: standalone server (no dashboard, no Spring, no Node) ────────
 # Not built by default — `docker build --target server .` opts in explicitly.
 # Lighter footprint: no React/Node build step, no Spring/dashboard dependencies.
-FROM docker.io/eclipse-temurin:25-jre-noble@sha256:e3b6f7887a50f20d8f07abf279d8a81a5953fb398a9555bd9edd56b9bd15968c AS server
+FROM docker.io/eclipse-temurin:25-jre-noble@sha256:3c6d7b40c2e78d4a8f4fe00af8165c706b34faf672dc21ff0924e583559ec6c2 AS server
 
 # Packages to upgrade beyond what the base image ships, space-separated. Patches CVEs that are fixed in Ubuntu's
 # repos but not yet in the upstream temurin rebuild. Changing the value re-runs the layer; clear it once the base
@@ -113,7 +113,7 @@ USER 1000
 ENTRYPOINT ["/app/bin/fogwall-server"]
 
 # ── Runtime stage: dashboard (default) ──────────────────────────────────────────
-FROM docker.io/eclipse-temurin:25-jre-noble@sha256:e3b6f7887a50f20d8f07abf279d8a81a5953fb398a9555bd9edd56b9bd15968c AS dashboard
+FROM docker.io/eclipse-temurin:25-jre-noble@sha256:3c6d7b40c2e78d4a8f4fe00af8165c706b34faf672dc21ff0924e583559ec6c2 AS dashboard
 
 # See the server stage: packages to upgrade beyond what the base image ships.
 ARG SECURITY_UPGRADE_PKGS="apt libapt-pkg6.0t64"
