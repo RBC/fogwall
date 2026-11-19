@@ -238,9 +238,6 @@ jobs:
   playwright-test:
     name: Playwright UI Tests
     runs-on: ubuntu-latest
-    if: >
-      github.ref == 'refs/heads/main' ||
-      github.event_name == 'pull_request'
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v7.0.1
