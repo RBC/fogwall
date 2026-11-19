@@ -1,7 +1,18 @@
 import { useState } from 'react'
 
-/** A labelled, copyable block of text: a command, a config snippet, or a value shown once. */
-export function ConfigBlock({ label, config }: { label: string; config: string }) {
+/**
+ * A labelled, copyable block of text: a command, a config snippet, or a value shown once. `wrap` folds long lines
+ * instead of scrolling sideways; the copied text is unchanged either way.
+ */
+export function ConfigBlock({
+  label,
+  config,
+  wrap = false,
+}: {
+  label: string
+  config: string
+  wrap?: boolean
+}) {
   const [copied, setCopied] = useState(false)
 
   const copy = () => {
@@ -30,7 +41,12 @@ export function ConfigBlock({ label, config }: { label: string; config: string }
           {copied ? 'Copied ✓' : 'Copy'}
         </button>
       </div>
-      <pre className="overflow-x-auto rounded bg-slate-50 border border-gray-200 p-3 text-xs font-mono text-gray-800 dark:bg-slate-900 dark:border-slate-700 dark:text-gray-200">
+      <pre
+        className={
+          (wrap ? 'whitespace-pre-wrap break-all' : 'overflow-x-auto') +
+          ' rounded bg-slate-50 border border-gray-200 p-3 text-xs font-mono text-gray-800 dark:bg-slate-900 dark:border-slate-700 dark:text-gray-200'
+        }
+      >
         {config}
       </pre>
     </div>

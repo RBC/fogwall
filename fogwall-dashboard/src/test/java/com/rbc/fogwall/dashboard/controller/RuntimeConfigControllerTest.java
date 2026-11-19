@@ -38,4 +38,30 @@ class RuntimeConfigControllerTest {
 
         assertEquals(List.of("github", "gitlab"), runtime.get("brokeredPushProviders"));
     }
+
+    @Test
+    void deferredForwardingProviders_listsOnlyEnabledBrokeringProvidersThatDefer() {
+        Map<String, ProviderConfig> providers = new LinkedHashMap<>();
+        providers.put("gitlab", provider(true, true, true));
+        providers.put("github", deferring(provider(true, true, true)));
+        providers.put("gitea", deferring(provider(true, false, true)));
+        providers.put("bitbucket", deferring(provider(false, true, true)));
+        providers.put("codeberg", deferring(provider(true, true, false)));
+        var config = new FogwallConfig();
+        config.setProviders(providers);
+
+        Map<String, Object> runtime = new RuntimeConfigController(
+                        config, TokenCipherProvider.unavailable(), new InMemoryProviderRegistry(List.of()))
+                .runtimeConfig();
+
+        assertEquals(
+                List.of("github"),
+                runtime.get("deferredForwardingProviders"),
+                "only an enabled, oauth-enabled, brokering provider that also defers is listed");
+    }
+
+    private static ProviderConfig deferring(ProviderConfig config) {
+        config.getOauth().setDeferredForwarding(true);
+        return config;
+    }
 }

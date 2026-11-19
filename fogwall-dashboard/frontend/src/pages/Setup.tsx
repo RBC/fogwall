@@ -4,26 +4,28 @@ import { fetchConfig, fetchSetup } from '../api'
 import type { SetupInfo, SetupProvider } from '../types'
 import { ConfigBlock } from '../components/ConfigBlock'
 
+const USER_GUIDE_URL = 'https://rbc.github.io/fogwall/user/remotes.html'
+
 /**
- * In-app developer setup guide (#475). Public page (no login required): shows generated, deployment-specific git
- * config that sends a developer's pushes through fogwall. Content is generated from the running configuration by
- * `/api/setup`, so it cannot drift from what fogwall actually serves.
- *
- * <p>Structure: a two-step quick start up top (clone through fogwall, push), then an always-visible Authentication
- * section, then an "Advanced" area of collapsed per-provider accordions for permanent {@code $HOME/.gitconfig} setup.
- * The advanced config is push-only by default (reroutes pushes, leaves clones/fetches direct), with a global-vs-per-repo
- * choice and an opt-in for routing fetches too. fogwall itself proxies both directions; push-only is just the default
- * this page recommends.
+ * In-app developer quick start. Public page (no login required): generated, deployment-specific commands that read
+ * through fogwall's transparent proxy and push through server mode. Content comes from `/api/setup`, so it cannot
+ * drift from what fogwall actually serves. Detail, tips and suggested configs live in the user guide; the only extra
+ * here is one collapsed "More options" section for routing every repository and for SSH.
  */
 export function Setup() {
   const [setup, setSetup] = useState<SetupInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
-  const [brokeredPushProviders, setBrokeredPushProviders] = useState<string[]>([])
+  const [brokered, setBrokered] = useState<string[]>([])
+  const [deferred, setDeferred] = useState<string[]>([])
+  const [selected, setSelected] = useState(0)
 
   useEffect(() => {
     fetchConfig()
-      .then((c) => setBrokeredPushProviders(c.brokeredPushProviders ?? []))
+      .then((c) => {
+        setBrokered(c.brokeredPushProviders ?? [])
+        setDeferred(c.deferredForwardingProviders ?? [])
+      })
       .catch(() => {})
   }, [])
 
@@ -34,7 +36,7 @@ export function Setup() {
       .finally(() => setLoading(false))
   }, [])
 
-  const host = setup ? safeHost(setup.serviceUrl) : ''
+  const provider = setup?.providers[selected] ?? setup?.providers[0]
 
   return (
     <div className="max-w-6xl px-6 py-6 space-y-4">
@@ -43,16 +45,8 @@ export function Setup() {
           Connect your git client
         </h2>
         <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-          fogwall is a proxy in front of your upstream git host: it validates pushes against policy
-          before they reach upstream, and can proxy and audit fetches too. This page sets up your
-          git client to route through it — by default just your{' '}
-          <span className="font-medium">pushes</span>, with clones and fetches left going direct.
-        </p>
-        <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-          The quick start below gets you pushing in two commands. The sections under it cover{' '}
-          <span className="font-medium">authentication</span> and pointing your git client at
-          fogwall permanently via <code className="font-mono">$HOME/.gitconfig</code> — for pushes,
-          and optionally fetches.
+          fogwall checks your pushes against policy before they reach the upstream host. Clones and
+          fetches go through its proxy; pushes go through server mode.
         </p>
       </header>
 
@@ -70,9 +64,8 @@ export function Setup() {
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-300">
           <span className="font-semibold">Heads up:</span>{' '}
           <code className="font-mono">server.service-url</code> is not set, so the URLs below were
-          derived from the address in your browser. If fogwall runs behind a reverse proxy, an
-          operator should set <code className="font-mono">service-url</code> so these are correct
-          for everyone.
+          derived from the address in your browser. Behind a reverse proxy an operator should set it
+          so they are correct for everyone.
         </div>
       )}
 
@@ -82,86 +75,130 @@ export function Setup() {
         </div>
       )}
 
-      {setup && setup.providers.length > 0 && <QuickStart provider={setup.providers[0]} />}
-
-      {setup && setup.providers.length > 0 && (
-        <Authentication host={host} brokeredPushProviders={brokeredPushProviders} />
-      )}
-
-      {setup && setup.providers.length > 0 && (
-        <section className="space-y-3">
-          <div className="space-y-1">
-            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-              Advanced — always route through fogwall
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-              You can point your git client at fogwall for a provider permanently — for pushes, and
-              optionally fetches — by adding a block to your{' '}
-              <code className="font-mono">$HOME/.gitconfig</code>. Expand a provider for the global
-              one-paste form and the per-repository alternative.
-            </p>
-          </div>
-          {setup.providers.map((p) => (
-            <ProviderAccordion key={p.name} provider={p} />
-          ))}
-        </section>
+      {setup && provider && (
+        <>
+          <QuickStart
+            setup={setup}
+            provider={provider}
+            selected={selected}
+            onSelect={setSelected}
+            brokered={brokered.includes(provider.name)}
+            deferred={deferred.includes(provider.name)}
+          />
+          <MoreOptions provider={provider} />
+        </>
       )}
     </div>
   )
 }
 
-/**
- * Two-step happy path shown up top: clone a repo straight through fogwall (so the remote is already fogwall, no config
- * needed), then push. Uses the first provider for a concrete, copy-pasteable clone command.
- */
-function QuickStart({ provider }: { provider: SetupProvider }) {
-  // serverUrl comes from /api/setup; fall back to a readable placeholder if an older backend omits it.
-  const serverUrl = provider.serverUrl || `https://<fogwall-host>/server/${provider.host}/`
-  const cloneCmd = `git clone ${serverUrl}<owner>/<repo>.git`
+/** What to enter as the git password when pushing, which depends on how the provider is set up. */
+function pushCredential(brokered: boolean, deferred: boolean): ReactNode {
+  if (!brokered) {
+    return <>your upstream personal access token, with write access to the repository.</>
+  }
+  return (
+    <>
+      a fogwall credential. Link your account and create one under Git Credentials on your{' '}
+      <NavLink to="/profile" className="text-blue-600 hover:underline dark:text-blue-400">
+        profile
+      </NavLink>
+      .
+      {deferred &&
+        ' fogwall acknowledges the push once its checks pass and forwards it after approval.'}
+    </>
+  )
+}
+
+function QuickStart({
+  setup,
+  provider,
+  selected,
+  onSelect,
+  brokered,
+  deferred,
+}: {
+  setup: SetupInfo
+  provider: SetupProvider
+  selected: number
+  onSelect: (index: number) => void
+  brokered: boolean
+  deferred: boolean
+}) {
   return (
     <section className="rounded-lg border border-blue-200 bg-blue-50/50 px-6 py-4 dark:border-blue-900/40 dark:bg-blue-900/10">
-      <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">Quick start</h3>
-      <ol className="space-y-3 text-sm text-gray-700 dark:text-gray-300">
+      <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3">Quick start</h3>
+      <ol className="space-y-4 text-sm text-gray-700 dark:text-gray-300">
         <li className="space-y-1.5">
           <div>
-            <span className="font-semibold">1.</span> Clone the repo through fogwall — this points
-            the remote at fogwall, no config needed:
+            <span className="font-semibold">1.</span> Once per machine, keep a separate credential
+            for each repository:
           </div>
-          <ConfigBlock label={provider.host} config={cloneCmd} />
+          <ConfigBlock label="Terminal" config={setup.credentialKeying} wrap />
+        </li>
+        <li className="space-y-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span>
+              <span className="font-semibold">2.</span> Clone
+            </span>
+            {setup.providers.length > 1 ? (
+              <select
+                aria-label="Provider"
+                value={selected}
+                onChange={(e) => onSelect(Number(e.target.value))}
+                className="rounded border border-gray-300 px-2 py-1 text-sm focus:border-slate-500 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"
+              >
+                {setup.providers.map((p, i) => (
+                  <option key={p.name} value={i}>
+                    {p.name} ({p.host})
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="font-mono text-xs">{provider.host}</span>
+            )}
+            <span>through fogwall:</span>
+          </div>
+          <ConfigBlock label="New clone" config={provider.httpClone} wrap />
+          <ConfigBlock label="Already cloned?" config={provider.httpExisting} wrap />
         </li>
         <li>
-          <span className="font-semibold">2.</span> Commit and{' '}
-          <code className="font-mono">git push</code> as usual. On the first push your credential
-          manager prompts once — enter your username and token. fogwall validates the push and
-          forwards it upstream.
+          <span className="font-semibold">3.</span> Commit and{' '}
+          <code className="font-mono">git push</code>. Git prompts once: use any username and, as
+          the password, {pushCredential(brokered, deferred)}
         </li>
       </ol>
-      <div className="mt-4 pt-3 border-t border-blue-200/70 dark:border-blue-900/40">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
-          Where to go next
-        </h4>
-        <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1 list-disc list-inside">
-          <li>
-            <NavLink to="/profile" className="text-blue-600 hover:underline dark:text-blue-400">
-              Link your SCM identity
-            </NavLink>{' '}
-            so pushes are attributed to you.
-          </li>
-          <li>
-            Watch your pushes move through review on the{' '}
-            <NavLink to="/" className="text-blue-600 hover:underline dark:text-blue-400">
-              Pushes
-            </NavLink>{' '}
-            page.
-          </li>
-        </ul>
+      <div className="mt-4 pt-3 border-t border-blue-200/70 dark:border-blue-900/40 text-sm text-gray-600 dark:text-gray-400 space-y-1">
+        <p>
+          <NavLink to="/profile" className="text-blue-600 hover:underline dark:text-blue-400">
+            Link your SCM identity
+          </NavLink>{' '}
+          so pushes are attributed to you, then follow them on the{' '}
+          <NavLink to="/" className="text-blue-600 hover:underline dark:text-blue-400">
+            Pushes
+          </NavLink>{' '}
+          page.
+        </p>
+        <p>
+          Private repositories also ask for a token on clone. For tips, token scopes and
+          troubleshooting, see the{' '}
+          <a
+            href={USER_GUIDE_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="text-blue-600 hover:underline dark:text-blue-400"
+          >
+            user guide
+          </a>
+          .
+        </p>
       </div>
     </section>
   )
 }
 
-/** Collapsible section. Collapsed by default so the page stays short and later content stays reachable. */
-function Accordion({ header, children }: { header: ReactNode; children: ReactNode }) {
+/** One collapsed section for the less common setups: routing every repository through fogwall, and SSH. */
+function MoreOptions({ provider }: { provider: SetupProvider }) {
   const [open, setOpen] = useState(false)
   return (
     <section className="rounded-lg border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-800 overflow-hidden">
@@ -169,7 +206,7 @@ function Accordion({ header, children }: { header: ReactNode; children: ReactNod
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="w-full flex items-center gap-3 px-6 py-4 text-left hover:bg-gray-50 dark:hover:bg-slate-700/40 transition-colors"
+        className="w-full flex items-center gap-3 px-6 py-3 text-left text-sm font-semibold text-gray-800 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-slate-700/40 transition-colors"
       >
         <svg
           className={
@@ -183,35 +220,33 @@ function Accordion({ header, children }: { header: ReactNode; children: ReactNod
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M7 5l6 5-6 5" />
         </svg>
-        <div className="flex-1 min-w-0">{header}</div>
+        More options for {provider.name}
+        <span className="ml-auto flex items-center gap-1">
+          <TransportBadge label="HTTPS" />
+          {provider.sshEnabled && <TransportBadge label="SSH" />}
+        </span>
       </button>
       {open && (
-        <div className="px-6 pb-4 pt-1 space-y-3 border-t border-gray-100 dark:border-slate-700">
-          {children}
+        <div className="px-6 pb-4 pt-3 space-y-3 border-t border-gray-100 dark:border-slate-700 text-sm text-gray-600 dark:text-gray-400">
+          <p>
+            Route <em>every</em> {provider.host} repository through fogwall by pasting into{' '}
+            <code className="font-mono">~/.gitconfig</code>. Pushes only:
+          </p>
+          <ConfigBlock label="Pushes" config={provider.httpPush} />
+          <p>Reads as well:</p>
+          <ConfigBlock label="Reads" config={provider.httpRead} />
+          {provider.sshEnabled && provider.sshPush && (
+            <>
+              <p>Over SSH (requires agent forwarding):</p>
+              <ConfigBlock label="SSH" config={provider.sshPush} />
+              {provider.sshPerRepo && (
+                <ConfigBlock label="SSH, one repository" config={provider.sshPerRepo} />
+              )}
+            </>
+          )}
         </div>
       )}
     </section>
-  )
-}
-
-/** A left-bordered informational callout with an info icon — for a notice pulled out of surrounding prose. */
-function Notice({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex gap-2 rounded-md border-l-4 border-blue-400 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-500/60 dark:bg-blue-900/20 dark:text-blue-200">
-      <svg
-        className="h-4 w-4 shrink-0 mt-px"
-        fill="currentColor"
-        viewBox="0 0 20 20"
-        aria-hidden="true"
-      >
-        <path
-          fillRule="evenodd"
-          d="M18 10A8 8 0 11 2 10a8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-          clipRule="evenodd"
-        />
-      </svg>
-      <div className="leading-relaxed">{children}</div>
-    </div>
   )
 }
 
@@ -221,178 +256,4 @@ function TransportBadge({ label }: { label: string }) {
       {label}
     </span>
   )
-}
-
-function ProviderAccordion({ provider }: { provider: SetupProvider }) {
-  return (
-    <Accordion
-      header={
-        <div className="flex items-center gap-3">
-          <img
-            src={`https://${provider.host}/favicon.ico`}
-            className="w-5 h-5 rounded"
-            alt=""
-            onError={(e) => (e.currentTarget.style.display = 'none')}
-          />
-          <span className="text-base font-semibold text-gray-800 dark:text-gray-200">
-            {provider.name}
-          </span>
-          <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
-            {provider.host}
-          </span>
-          <span className="ml-auto flex items-center gap-1">
-            <TransportBadge label="HTTPS" />
-            {provider.sshEnabled && <TransportBadge label="SSH" />}
-          </span>
-        </div>
-      }
-    >
-      {/* Global push-only — the one-paste recommendation. */}
-      <SectionLabel>
-        Global — reroutes your {provider.host} pushes{' '}
-        <span className="font-normal text-gray-400 dark:text-gray-500">
-          (one paste in ~/.gitconfig)
-        </span>
-      </SectionLabel>
-      <ConfigBlock label="HTTPS" config={provider.httpPush} />
-      {provider.sshEnabled && provider.sshPush && (
-        <ConfigBlock label="SSH" config={provider.sshPush} />
-      )}
-      <Notice>
-        This reroutes <em>every</em> push to {provider.host} through fogwall; clones and fetches are
-        unchanged. If you also push to {provider.host} outside fogwall, use the per-repository form
-        below instead.
-      </Notice>
-
-      {/* Per-repo — explicit, isolated. */}
-      <SectionLabel>
-        Per repository{' '}
-        <span className="font-normal text-gray-400 dark:text-gray-500">
-          (touches only the repo you run it in)
-        </span>
-      </SectionLabel>
-      <ConfigBlock label="HTTPS" config={provider.httpPerRepo} />
-      {provider.sshEnabled && provider.sshPerRepo && (
-        <ConfigBlock label="SSH" config={provider.sshPerRepo} />
-      )}
-
-      {/* Optional read routing — de-emphasized. */}
-      <SectionLabel muted>Optional — also route reads through fogwall</SectionLabel>
-      <p className="text-xs text-gray-500 dark:text-gray-500 leading-relaxed">
-        Only if your deployment wants fetches audited by fogwall too. Otherwise leave clones and
-        fetches going straight to {provider.host}. Add this alongside the global block above.
-      </p>
-      <ConfigBlock label="~/.gitconfig" config={provider.httpRead} />
-    </Accordion>
-  )
-}
-
-/** Small sub-heading inside a provider accordion. */
-function SectionLabel({ children, muted = false }: { children: ReactNode; muted?: boolean }) {
-  return (
-    <h4
-      className={
-        'text-xs font-semibold uppercase tracking-wide pt-1 ' +
-        (muted ? 'text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-300')
-      }
-    >
-      {children}
-    </h4>
-  )
-}
-
-/**
- * Authentication section. Explains the credential-helper-vs-inline-token gotcha: credential helpers are keyed by
- * hostname, and git talks to the fogwall host (not the upstream), so a helper entry stored for the upstream isn't used
- * — the thing developers most often get tripped up on. Rendered as a plain section (not an accordion) since it applies
- * to everyone regardless of which config form they chose.
- */
-function Authentication({
-  host,
-  brokeredPushProviders,
-}: {
-  host: string
-  brokeredPushProviders: string[]
-}) {
-  const fw = host || 'the fogwall host'
-  return (
-    <section className="rounded-lg border border-gray-200 bg-white px-6 py-4 dark:border-slate-700 dark:bg-slate-800">
-      <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">
-        Authentication
-      </h3>
-      <div className="text-sm text-gray-600 dark:text-gray-400 space-y-2 leading-relaxed">
-        <p>
-          Credential helpers (macOS Keychain, Windows Credential Manager,{' '}
-          <code className="font-mono">git-credential-store</code>) are keyed by hostname. Git talks
-          to fogwall at <code className="font-mono">{fw}</code>, so it needs a credential stored
-          under <code className="font-mono">{fw}</code>. If you have previously authenticated
-          directly to an upstream (e.g. <code className="font-mono">github.com</code>), that
-          credential <span className="font-semibold">won&rsquo;t</span> be used to authenticate
-          through fogwall. That mismatch is the most common thing to get tripped up on.
-        </p>
-        <p>
-          <span className="font-semibold text-gray-700 dark:text-gray-300">Easiest fix:</span> on
-          the first push git prompts once — enter your SCM username and an upstream personal access
-          token (PAT) as the password, and your helper saves it under{' '}
-          <code className="font-mono">{fw}</code> for next time.
-        </p>
-        <Notice>
-          git keys credentials by host, not path, so one entry is reused for <em>every</em> provider
-          you route through fogwall — fine for a single upstream. Pushing to more than one provider
-          through fogwall (e.g. <code className="font-mono">github.com</code> and{' '}
-          <code className="font-mono">codeberg.org</code>)? Run this once to key credentials to the
-          full URL (host + path) instead, so each provider gets its own:{' '}
-          <code className="font-mono">
-            git config --global credential.https://{fw}.useHttpPath true
-          </code>
-        </Notice>
-        <p>
-          <span className="font-semibold text-gray-700 dark:text-gray-300">
-            Prefer an explicit remote?
-          </span>{' '}
-          Put the token straight in the URL — HTTP basic auth,{' '}
-          <code className="font-mono">user:token@host</code> — handy for short-lived dev
-          environments where a keychain entry isn&rsquo;t worth it:
-        </p>
-        <pre className="overflow-x-auto rounded bg-slate-50 border border-gray-200 p-3 text-xs font-mono text-gray-800 dark:bg-slate-900 dark:border-slate-700 dark:text-gray-200">
-          {`git remote set-url --push origin https://<username>:<token>@${host || '<fogwall-host>'}/server/<provider>/<owner>/<repo>.git`}
-        </pre>
-        <p>
-          The token goes in the password position; URL-encode any special characters in it. The
-          username usually doesn&rsquo;t matter for token auth — most upstreams ignore it, so any
-          non-empty value like <code className="font-mono">git</code>,{' '}
-          <code className="font-mono">me</code>, or <code className="font-mono">token</code> works —
-          but it is provider-specific, so check your SCM provider&rsquo;s docs.
-        </p>
-        {brokeredPushProviders.length > 0 && (
-          <Notice>
-            Pushes through server mode to{' '}
-            <span className="font-medium">{brokeredPushProviders.join(', ')}</span> can use a
-            fogwall credential instead of a token of your own: create one under Git Credentials on
-            your <NavLink to="/profile">profile</NavLink>, after linking your account there. fogwall
-            forwards the push under the linked account. Keep it to server-mode remotes with{' '}
-            <code className="font-mono">
-              git config --global credential.https://{fw}/server.useHttpPath true
-            </code>
-          </Notice>
-        )}
-        <Notice>
-          Make sure your token has sufficient permissions on the target upstream repository (e.g.{' '}
-          <code className="font-mono">write</code> / <code className="font-mono">repo</code> scope
-          on a GitHub classic PAT). fogwall forwards any upstream permission error back to the git
-          client transparently — it can&rsquo;t tell you in advance whether your token has enough
-          access.
-        </Notice>
-      </div>
-    </section>
-  )
-}
-
-/** Extracts the host from a base URL for display; falls back to empty string on a malformed URL. */
-function safeHost(url: string): string {
-  try {
-    return new URL(url).host
-  } catch {
-    return ''
-  }
 }

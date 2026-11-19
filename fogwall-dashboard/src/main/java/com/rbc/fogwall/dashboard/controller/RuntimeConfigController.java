@@ -75,6 +75,15 @@ public class RuntimeConfigController {
                 .map(Map.Entry::getKey)
                 .sorted()
                 .toList();
+        // The subset whose brokered pushes are acknowledged once checks pass and forwarded after approval.
+        List<String> deferredForwardingProviders = fogwallConfig.getProviders().entrySet().stream()
+                .filter(e -> e.getValue().isEnabled()
+                        && e.getValue().getOauth().isEnabled()
+                        && e.getValue().getOauth().isBrokeredPush()
+                        && e.getValue().getOauth().isDeferredForwarding())
+                .map(Map.Entry::getKey)
+                .sorted()
+                .toList();
 
         return Map.of(
                 "allowedOrigins", allowedOrigins,
@@ -85,6 +94,7 @@ public class RuntimeConfigController {
                 "scmIdentityMode", scmIdentityMode,
                 "scmApiEnabled", scmApiEnabled,
                 "issuesEnabled", issuesEnabled,
-                "brokeredPushProviders", brokeredPushProviders);
+                "brokeredPushProviders", brokeredPushProviders,
+                "deferredForwardingProviders", deferredForwardingProviders);
     }
 }
