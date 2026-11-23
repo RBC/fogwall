@@ -59,7 +59,7 @@ ext {
     springVersion = '7.1.0'
     springSecurityVersion = '7.2.0'
     springSessionVersion = '4.2.0'
-    lettuceVersion = '6.8.2.RELEASE'
+    lettuceVersion = '7.8.0.RELEASE'
 
     // YAML
     snakeyamlVersion = '2.6'
