@@ -18,7 +18,7 @@ jobs:
           - name: dashboard
           - name: server
     env:
-      GRYPE_VERSION: "0.112.0"
+      GRYPE_VERSION: "0.122.1"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v7.0.1
