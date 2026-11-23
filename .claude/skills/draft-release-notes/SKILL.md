@@ -1,5 +1,5 @@
 ---
-name: release-notes
+name: draft-release-notes
 description:
   Draft or refresh the release notes for a milestone, starting from GitHub's auto-generated changelog and folding the
   merged PRs into summarised sections with a breaking-changes/upgrade block. Use when asked to write, update or
