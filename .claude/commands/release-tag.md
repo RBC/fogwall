@@ -14,9 +14,11 @@ allowed-tools:
 
 # /release-tag — Tag, publish, and start the next development iteration.
 
-Phase 1 (`/release`) landed the commit that sets the exact release version on the base branch. This command tags that
-commit, which triggers the Release Publish workflow, then moves the branch back to a `-SNAPSHOT` version so it is never
-mistaken for a released build.
+Phase 1 (`/release`) landed the commit that sets the exact release version on the base branch. This command tags the tip
+of that branch, which carries the release version, and triggers the Release Publish workflow, then moves the branch back
+to a `-SNAPSHOT` version so it is never mistaken for a released build. The tip is the bump commit unless later commits
+were pushed above it (a patch that picks up a late cherry-pick); the tag goes on the tip either way, and every check
+below is read for the tip.
 
 Pushing the tag makes `release-publish.yml` promote the **commit-pinned `build-<sha>` image** for the tagged commit to
 the release tags — it does not rebuild, and it does not use `:edge`, so the image released is exactly the one CI built
@@ -44,25 +46,26 @@ Arguments passed: `$ARGUMENTS`
    Everything below uses `<base>` — do not assume `main`.
 
 3. **Verify the version — and that it is not a snapshot.** Read `build.gradle` and confirm the `version` in
-   `allprojects` equals the argument exactly. If it still carries `-SNAPSHOT`, **stop**: the release commit has not
-   landed (or you are on the wrong branch). A snapshot is never tagged.
+   `allprojects` equals the argument exactly. If it still carries `-SNAPSHOT`, **stop**: the version bump has not landed
+   (or you are on the wrong branch). A snapshot is never tagged.
 
-4. **Verify checks passed on the base branch.** Run:
+4. **Verify checks passed on the tip of the base branch.** The tag ruleset named `Release gate` is the source of truth
+   for which checks are required; read it instead of relying on a list that can drift, and read the check runs for the
+   tip commit (the commit that will be tagged), not for the bump commit:
 
    ```
-   gh run list --branch <base> --limit 8 --json name,status,conclusion,headSha
+   SHA=$(git rev-parse origin/<base>)
+   RULESET=$(gh api repos/:owner/:repo/rulesets --jq '.[] | select(.name == "Release gate") | .id')
+   gh api repos/:owner/:repo/rulesets/"$RULESET" \
+     --jq '.rules[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context'
+   gh api "repos/:owner/:repo/commits/$SHA/check-runs?per_page=100" \
+     --jq '.check_runs[] | "\(.name)\t\(.status)\t\(.conclusion)"'
    ```
 
-   For the run set whose `headSha` is the release commit, all of these must show `conclusion: "success"`:
-   - `CI / Build & Test`
-   - `CI / E2E Test`
-   - `CodeQL / java-kotlin`
-   - `CodeQL / actions`
-   - `CVE / Gradle`
-   - `CVE / npm`
-   - `Container Scan`
-
-   If any is in progress or failed, tell the user and stop.
+   Every context the ruleset lists must appear in the check runs with `conclusion: "success"`. Check names are job names
+   (`Build & Test`, `E2E Test`, `Container Scan (dashboard)`), not workflow names, so `gh run list` does not show them.
+   If a required check is missing, in progress, or failed, tell the user and stop. If the ruleset cannot be read, stop
+   and ask rather than falling back to a remembered list.
 
 5. **Verify the tag doesn't already exist.** `git tag -l v<version>`. If it exists, stop — tags on this repo are
    immutable.
