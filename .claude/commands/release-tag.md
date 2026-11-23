@@ -84,15 +84,15 @@ Arguments passed: `$ARGUMENTS`
    > breaks the promote-not-rebuild flow. Run `git switch <base> && git reset --hard origin/<base>` and re-run.
 
 7. **Release notes — before anything is tagged.** A release is published with curated notes, written while the tag can
-   still wait for them. Look for the draft the `release-notes` skill leaves under a placeholder tag:
+   still wait for them. Look for the draft the `draft-release-notes` skill leaves under a placeholder tag:
 
    ```
    DRAFT=$(gh release list --limit 50 --json tagName,isDraft \
      --jq '.[] | select(.isDraft and (.tagName | startswith("<version>-draft-"))) | .tagName' | head -1)
    ```
 
-   - **No draft** → invoke the `release-notes` skill for `<version>` now. It writes and uploads the draft and hands
-     back.
+   - **No draft** → invoke the `draft-release-notes` skill for `<version>` now. It writes and uploads the draft and
+     hands back.
    - **Draft found** → refresh it only if commits have landed on `<base>` since it was written (compare its `createdAt`
      and body against `git log <prev tag>..origin/<base>`); otherwise use it as it is.
 
