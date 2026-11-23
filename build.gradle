@@ -177,9 +177,10 @@ subprojects {
     configurations.configureEach {
         resolutionStrategy.eachDependency { details ->
             def r = details.requested
-            // Netty — pulled in by lettuce-core via spring-session-data-redis (dashboard).
+            // Netty — pulled in only by lettuce-core via spring-session-data-redis (dashboard). Lettuce 7 needs the
+            // Netty 4.2 line (MultiThreadIoEventLoopGroup); do not force 4.1.x here.
             if (r.group == 'io.netty') {
-                details.useVersion '4.1.137.Final'
+                details.useVersion '4.2.21.Final'
                 details.because 'CVE fix: GHSA-3qp7-7mw8-wx86, GHSA-x4gw-5cx5-pgmh, GHSA-5pvg-856g-cp85, GHSA-676x-f7gg-47vc, GHSA-xmv7-r254-6q78, GHSA-558v-64gr-wgg4, GHSA-c4c3-7fpv-j4q5, GHSA-fccg-mwvh-qqg4'
             }
             // Jackson 2.x — pulled in by various plugins & swagger-core; fogwall itself is on the Jackson 3.x
