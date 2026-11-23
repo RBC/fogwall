@@ -1,7 +1,7 @@
 buildscript {
     configurations.configureEach {
         resolutionStrategy {
-            force 'org.codehaus.plexus:plexus-utils:3.6.2'
+            force 'org.codehaus.plexus:plexus-utils:3.6.4'
             force 'org.bouncycastle:bcpg-jdk18on:1.87'
             // Jackson 2.x on the *plugin* classpath (gradle-node-plugin, cyclonedx-gradle-plugin).
             // The runtime pin in the subprojects eachDependency table does not reach this
@@ -45,7 +45,7 @@ ext {
     postgresVersion = '42.7.14'
     mysqlVersion = '26.10.0'
     mariadbVersion = '4.0.0'
-    mongoVersion = '5.14.0'
+    mongoVersion = '5.15.0'
 
     // Jackson
     jacksonBomVersion = '3.3.0'
@@ -56,10 +56,10 @@ ext {
     graphqlJavaVersion = '0.0.0-2026-10-30T21-03-17-dde9ebd'
 
     // Spring
-    springVersion = '7.0.10'
-    springSecurityVersion = '7.1.2'
-    springSessionVersion = '4.1.1'
-    lettuceVersion = '6.8.2.RELEASE'
+    springVersion = '7.1.0'
+    springSecurityVersion = '7.2.0'
+    springSessionVersion = '4.2.0'
+    lettuceVersion = '7.8.0.RELEASE'
 
     // YAML
     snakeyamlVersion = '2.6'
@@ -86,12 +86,12 @@ ext {
     gitleaksVersion = '8.30.1'
 
     // OpenAPI spec generation
-    swaggerCoreVersion = '2.2.55'
-    swaggerUiVersion = '5.34.1'
+    swaggerCoreVersion = '2.2.56'
+    swaggerUiVersion = '5.35.1'
 
     // OpenTelemetry
     opentelemetryBomVersion = '1.67.0'
-    opentelemetryInstrumentationAlphaBomVersion = '2.33.1-alpha'
+    opentelemetryInstrumentationAlphaBomVersion = '2.34.0-alpha'
 }
 
 allprojects {
@@ -177,9 +177,10 @@ subprojects {
     configurations.configureEach {
         resolutionStrategy.eachDependency { details ->
             def r = details.requested
-            // Netty — pulled in by lettuce-core via spring-session-data-redis (dashboard).
+            // Netty — pulled in only by lettuce-core via spring-session-data-redis (dashboard). Lettuce 7 needs the
+            // Netty 4.2 line (MultiThreadIoEventLoopGroup); do not force 4.1.x here.
             if (r.group == 'io.netty') {
-                details.useVersion '4.1.137.Final'
+                details.useVersion '4.2.21.Final'
                 details.because 'CVE fix: GHSA-3qp7-7mw8-wx86, GHSA-x4gw-5cx5-pgmh, GHSA-5pvg-856g-cp85, GHSA-676x-f7gg-47vc, GHSA-xmv7-r254-6q78, GHSA-558v-64gr-wgg4, GHSA-c4c3-7fpv-j4q5, GHSA-fccg-mwvh-qqg4'
             }
             // Jackson 2.x — pulled in by various plugins & swagger-core; fogwall itself is on the Jackson 3.x
